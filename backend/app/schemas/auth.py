@@ -1,0 +1,120 @@
+from typing import Optional, List
+from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
+from enum import Enum
+
+from app.models.user import UserRole, UserStatus
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in: int
+    refresh_token: str
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    user_id: Optional[int] = None
+    role: Optional[UserRole] = None
+
+
+class UserLogin(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    full_name: str = Field(..., min_length=2, max_length=100)
+    role: UserRole = UserRole.VIEWER
+    department: Optional[str] = Field(None, max_length=100)
+    position: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    employee_id: Optional[str] = Field(None, max_length=50)
+
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    role: Optional[UserRole] = None
+    department: Optional[str] = Field(None, max_length=100)
+    position: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    employee_id: Optional[str] = Field(None, max_length=50)
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    role: UserRole
+    status: UserStatus
+    department: Optional[str] = None
+    position: Optional[str] = None
+    phone: Optional[str] = None
+    employee_id: Optional[str] = None
+    is_active: bool
+    is_verified: bool
+    last_login: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class UserListResponse(BaseModel):
+    users: List[UserResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordReset(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6)
+
+
+class UserProfile(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    role: UserRole
+    department: Optional[str] = None
+    position: Optional[str] = None
+    phone: Optional[str] = None
+    employee_id: Optional[str] = None
+    last_login: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+
+class UserSessionInfo(BaseModel):
+    user_id: int
+    username: str
+    role: UserRole
+    is_active: bool
+    session_id: str
+    created_at: datetime
+    expires_at: datetime
+
+    class Config:
+        orm_mode = True 
