@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -43,7 +43,7 @@ async def login(
         )
     
     # Check if user is locked
-    if user.locked_until and user.locked_until > timedelta(0):
+    if user.locked_until and user.locked_until > datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail="User account is locked"
@@ -62,7 +62,7 @@ async def login(
     create_user_session(db, user.id, access_token, refresh_token, ip_address, user_agent)
     
     # Update last login
-    user.last_login = timedelta(0)
+    user.last_login = datetime.utcnow()
     user.failed_login_attempts = 0
     db.commit()
     
@@ -137,7 +137,7 @@ async def refresh_token(
     if session:
         session.session_token = access_token
         session.refresh_token = new_refresh_token
-        session.expires_at = timedelta(0) + access_token_expires
+        session.expires_at = datetime.utcnow() + access_token_expires
         db.commit()
     
     return {

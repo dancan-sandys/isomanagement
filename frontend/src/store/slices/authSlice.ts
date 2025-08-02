@@ -35,7 +35,7 @@ const initialState: AuthState = {
   user: null,
   token: localStorage.getItem('access_token'),
   refreshToken: localStorage.getItem('refresh_token'),
-  isAuthenticated: !!localStorage.getItem('access_token'),
+  isAuthenticated: false, // Don't assume authentication just because token exists
   isLoading: false,
   error: null,
 };
@@ -108,6 +108,7 @@ const authSlice = createSlice({
         state.token = action.payload.access_token;
         state.refreshToken = action.payload.refresh_token;
         state.user = action.payload.user;
+        state.error = null;
         localStorage.setItem('access_token', action.payload.access_token);
         localStorage.setItem('refresh_token', action.payload.refresh_token);
       })

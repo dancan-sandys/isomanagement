@@ -45,14 +45,14 @@ class FilterParams(BaseModel):
     """Generic filter parameters"""
     search: Optional[str] = None
     sort_by: Optional[str] = None
-    sort_order: Optional[str] = Field(None, regex="^(asc|desc)$")
+    sort_order: Optional[str] = Field(None, pattern="^(asc|desc)$")
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
 
 
 class ExportParams(BaseModel):
     """Export parameters"""
-    format: str = Field("xlsx", regex="^(xlsx|csv|pdf)$")
+    format: str = Field("xlsx", pattern="^(xlsx|csv|pdf)$")
     include_headers: bool = True
     filters: Optional[Dict[str, Any]] = None
 
@@ -60,7 +60,7 @@ class ExportParams(BaseModel):
 class BulkActionParams(BaseModel):
     """Bulk action parameters"""
     ids: List[int] = Field(..., min_items=1)
-    action: str = Field(..., regex="^(delete|activate|deactivate|export)$")
+    action: str = Field(..., pattern="^(delete|activate|deactivate|export)$")
 
 
 class FileUploadResponse(BaseModel):
@@ -76,7 +76,7 @@ class NotificationParams(BaseModel):
     """Notification parameters"""
     title: str
     message: str
-    notification_type: str = Field("info", regex="^(info|success|warning|error)$")
+    notification_type: str = Field("info", pattern="^(info|success|warning|error)$")
     recipients: List[int] = []
     send_email: bool = True
     send_sms: bool = False
@@ -95,5 +95,6 @@ class AuditLogEntry(BaseModel):
     user_agent: Optional[str] = None
     timestamp: datetime
 
-    class Config:
-        orm_mode = True 
+    model_config = {
+        "from_attributes": True
+    } 

@@ -6,23 +6,23 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    QA_MANAGER = "qa_manager"
-    QA_SPECIALIST = "qa_specialist"
-    PRODUCTION_MANAGER = "production_manager"
-    PRODUCTION_OPERATOR = "production_operator"
-    MAINTENANCE = "maintenance"
-    LAB_TECHNICIAN = "lab_technician"
-    SUPPLIER = "supplier"
-    AUDITOR = "auditor"
-    VIEWER = "viewer"
+    ADMIN = "ADMIN"
+    QA_MANAGER = "QA_MANAGER"
+    QA_SPECIALIST = "QA_SPECIALIST"
+    PRODUCTION_MANAGER = "PRODUCTION_MANAGER"
+    PRODUCTION_OPERATOR = "PRODUCTION_OPERATOR"
+    MAINTENANCE = "MAINTENANCE"
+    LAB_TECHNICIAN = "LAB_TECHNICIAN"
+    SUPPLIER = "SUPPLIER"
+    AUDITOR = "AUDITOR"
+    VIEWER = "VIEWER"
 
 
 class UserStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    SUSPENDED = "suspended"
-    PENDING_APPROVAL = "pending_approval"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    SUSPENDED = "SUSPENDED"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
 
 
 class User(Base):

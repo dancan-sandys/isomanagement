@@ -29,6 +29,7 @@ const Login: React.FC = () => {
     username: '',
     password: '',
   });
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -41,6 +42,13 @@ const Login: React.FC = () => {
   useEffect(() => {
     dispatch(clearError());
   }, [dispatch]);
+
+  // Clear success message when authentication state changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      setShowSuccess(false);
+    }
+  }, [isAuthenticated]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -85,14 +93,25 @@ const Login: React.FC = () => {
     }
 
     try {
-      await dispatch(login({
+      const result = await dispatch(login({
         username: formData.username,
         password: formData.password,
       }));
       
-      // Navigation will be handled by useEffect
+      // Check if login was successful
+      if (login.fulfilled.match(result)) {
+        // Show success message briefly
+        setShowSuccess(true);
+        // Clear form data on successful login
+        setFormData({
+          username: '',
+          password: '',
+        });
+        // Navigation will be handled by useEffect when isAuthenticated changes
+      }
     } catch (error) {
       // Error is handled by the Redux slice
+      console.error('Login error:', error);
     }
   };
 
@@ -127,6 +146,12 @@ const Login: React.FC = () => {
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
               {error}
+            </Alert>
+          )}
+
+          {showSuccess && (
+            <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
+              Login successful! Redirecting...
             </Alert>
           )}
 

@@ -1,5 +1,6 @@
 from typing import List, Optional
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
 import os
 
 
@@ -58,23 +59,26 @@ class Settings(BaseSettings):
     # API Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 100
     
-    @validator("ALLOWED_FILE_TYPES")
+    @field_validator("ALLOWED_FILE_TYPES")
+    @classmethod
     def parse_allowed_file_types(cls, v):
         return [file_type.strip() for file_type in v.split(",")]
     
-    @validator("DATABASE_URL", pre=True)
-    def set_database_url(cls, v, values):
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def set_database_url(cls, v, info):
         """Set database URL based on environment"""
-        if "ENVIRONMENT" in values and values["ENVIRONMENT"] == "production":
+        if info.data and info.data.get("ENVIRONMENT") == "production":
             # Use PostgreSQL in production
             return v or "postgresql://user:password@localhost/iso22000_fsms"
         else:
             # Use SQLite in development
             return v or "sqlite:///./iso22000_fsms.db"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True
+    }
 
 
 # Create settings instance

@@ -36,7 +36,7 @@ def create_test_user_simple():
                     is_active, is_verified, created_at, updated_at
                 ) VALUES (
                     'admin', 'admin@iso22000.com', 'System Administrator', :password,
-                    'ADMIN', 'active', 'Quality Assurance', 'System Administrator',
+                    'admin', 'active', 'Quality Assurance', 'System Administrator',
                     true, true, datetime('now'), datetime('now')
                 )
             """), {"password": hashed_password})
@@ -46,7 +46,7 @@ def create_test_user_simple():
             print("Test user created successfully!")
             print("Username: admin")
             print("Password: admin123")
-            print("Role: ADMIN")
+            print("Role: admin")
             
     except Exception as e:
         print("Error creating test user: {}".format(e))

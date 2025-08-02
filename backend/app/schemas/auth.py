@@ -65,8 +65,9 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class UserListResponse(BaseModel):
@@ -103,8 +104,9 @@ class UserProfile(BaseModel):
     employee_id: Optional[str] = None
     last_login: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class UserSessionInfo(BaseModel):
@@ -116,5 +118,6 @@ class UserSessionInfo(BaseModel):
     created_at: datetime
     expires_at: datetime
 
-    class Config:
-        orm_mode = True 
+    model_config = {
+        "from_attributes": True
+    } 
