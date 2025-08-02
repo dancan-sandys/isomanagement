@@ -1,65 +1,56 @@
 #!/usr/bin/env python3
 """
-Script to fix bcrypt installation issues
+Script to fix bcrypt compatibility issues on deployment.
+This script ensures the correct versions of bcrypt and passlib are installed.
 """
 
 import subprocess
 import sys
+import os
 
 def run_command(command):
-    """Run a command and return the result"""
+    """Run a shell command and return the result"""
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
-        return result.returncode == 0, result.stdout, result.stderr
-    except Exception as e:
-        return False, "", str(e)
+        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error running command: {command}")
+        print(f"Error: {e.stderr}")
+        return None
 
-def main():
-    print("🔧 Fixing bcrypt installation...")
+def fix_bcrypt_issue():
+    """Fix bcrypt compatibility issues"""
+    print("🔧 Fixing bcrypt compatibility issues...")
     
-    # Step 1: Uninstall existing bcrypt
-    print("1. Uninstalling existing bcrypt...")
-    success, stdout, stderr = run_command("pip uninstall bcrypt -y")
-    if not success:
-        print(f"Warning: Could not uninstall bcrypt: {stderr}")
+    # Check current bcrypt version
+    bcrypt_version = run_command("pip show bcrypt")
+    if bcrypt_version:
+        print(f"Current bcrypt: {bcrypt_version.split('Version: ')[1].split()[0] if 'Version: ' in bcrypt_version else 'Unknown'}")
     
-    # Step 2: Uninstall passlib
-    print("2. Uninstalling passlib...")
-    success, stdout, stderr = run_command("pip uninstall passlib -y")
-    if not success:
-        print(f"Warning: Could not uninstall passlib: {stderr}")
+    # Uninstall current bcrypt and passlib
+    print("🗑️ Uninstalling current bcrypt and passlib...")
+    run_command("pip uninstall -y bcrypt passlib")
     
-    # Step 3: Install bcrypt first
-    print("3. Installing bcrypt...")
-    success, stdout, stderr = run_command("pip install bcrypt==4.3.0")
-    if not success:
-        print(f"Error installing bcrypt: {stderr}")
-        return False
+    # Install compatible versions
+    print("📥 Installing compatible versions...")
+    run_command("pip install bcrypt==4.3.0")
+    run_command("pip install passlib[bcrypt]==1.7.4")
     
-    # Step 4: Install passlib with bcrypt
-    print("4. Installing passlib with bcrypt...")
-    success, stdout, stderr = run_command("pip install 'passlib[bcrypt]==1.7.4'")
-    if not success:
-        print(f"Error installing passlib: {stderr}")
-        return False
+    # Verify installation
+    print("✅ Verifying installation...")
+    bcrypt_version = run_command("pip show bcrypt")
+    passlib_version = run_command("pip show passlib")
     
-    # Step 5: Test bcrypt
-    print("5. Testing bcrypt...")
-    test_code = """
-import bcrypt
-password = b"test_password"
-hashed = bcrypt.hashpw(password, bcrypt.gensalt())
-print("bcrypt test successful!")
-"""
-    
-    success, stdout, stderr = run_command(f'python -c "{test_code}"')
-    if success:
-        print("✅ bcrypt installation successful!")
-        return True
+    if bcrypt_version and passlib_version:
+        print("✅ bcrypt and passlib installed successfully!")
+        print(f"bcrypt: {bcrypt_version.split('Version: ')[1].split()[0] if 'Version: ' in bcrypt_version else 'Unknown'}")
+        print(f"passlib: {passlib_version.split('Version: ')[1].split()[0] if 'Version: ' in passlib_version else 'Unknown'}")
     else:
-        print(f"❌ bcrypt test failed: {stderr}")
-        return False
+        print("❌ Installation verification failed!")
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1) 
+    print("🚀 ISO 22000 FSMS - bcrypt Fix Script")
+    print("=" * 50)
+    fix_bcrypt_issue()
+    print("=" * 50)
+    print("✅ Fix completed! You can now restart your server.") 
