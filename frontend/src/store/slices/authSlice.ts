@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authAPI } from '../../services/api';
+import { getToken, getRefreshToken, isTokenValid, setToken as setTokenStorage, setRefreshToken as setRefreshTokenStorage, removeTokens } from '../../utils/auth';
 
 // Types
 export interface User {
@@ -30,12 +31,17 @@ export interface AuthState {
   error: string | null;
 }
 
+// Check if we have valid tokens on app startup
+const storedToken = getToken();
+const storedRefreshToken = getRefreshToken();
+const hasValidToken = storedToken ? isTokenValid(storedToken) : false;
+
 // Initial state
 const initialState: AuthState = {
   user: null,
-  token: localStorage.getItem('access_token'),
-  refreshToken: localStorage.getItem('refresh_token'),
-  isAuthenticated: false, // Don't assume authentication just because token exists
+  token: storedToken,
+  refreshToken: storedRefreshToken,
+  isAuthenticated: hasValidToken,
   isLoading: false,
   error: null,
 };
@@ -77,6 +83,25 @@ export const getCurrentUser = createAsyncThunk(
   }
 );
 
+export const refreshAuth = createAsyncThunk(
+  'auth/refresh',
+  async (_, { rejectWithValue, getState }) => {
+    try {
+      const state = getState() as { auth: AuthState };
+      const refreshToken = state.auth.refreshToken;
+      
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+      
+      const response = await authAPI.refresh(refreshToken);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Token refresh failed');
+    }
+  }
+);
+
 // Auth slice
 const authSlice = createSlice({
   name: 'auth',
@@ -88,11 +113,18 @@ const authSlice = createSlice({
     setToken: (state, action: PayloadAction<string>) => {
       state.token = action.payload;
       state.isAuthenticated = true;
-      localStorage.setItem('access_token', action.payload);
+      setTokenStorage(action.payload);
     },
     setRefreshToken: (state, action: PayloadAction<string>) => {
       state.refreshToken = action.payload;
-      localStorage.setItem('refresh_token', action.payload);
+      setRefreshTokenStorage(action.payload);
+    },
+    clearAuth: (state) => {
+      state.user = null;
+      state.token = null;
+      state.refreshToken = null;
+      state.isAuthenticated = false;
+      removeTokens();
     },
   },
   extraReducers: (builder) => {
@@ -109,8 +141,8 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refresh_token;
         state.user = action.payload.user;
         state.error = null;
-        localStorage.setItem('access_token', action.payload.access_token);
-        localStorage.setItem('refresh_token', action.payload.refresh_token);
+        setTokenStorage(action.payload.access_token);
+        setRefreshTokenStorage(action.payload.refresh_token);
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -126,8 +158,7 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.refreshToken = null;
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        removeTokens();
       })
       .addCase(logout.rejected, (state) => {
         state.isLoading = false;
@@ -136,8 +167,7 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.refreshToken = null;
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        removeTokens();
       })
       // Get current user
       .addCase(getCurrentUser.pending, (state) => {
@@ -146,22 +176,41 @@ const authSlice = createSlice({
       .addCase(getCurrentUser.fulfilled, (state, action) => {
         state.isLoading = false;
         state.user = action.payload;
+        state.isAuthenticated = true;
       })
       .addCase(getCurrentUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
         // If we can't get user info, they might not be authenticated
-        if (action.payload === 'Failed to get user info') {
-          state.isAuthenticated = false;
-          state.user = null;
-          state.token = null;
-          state.refreshToken = null;
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-        }
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
+        state.refreshToken = null;
+        removeTokens();
+      })
+      // Refresh auth
+      .addCase(refreshAuth.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(refreshAuth.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.token = action.payload.access_token;
+        state.refreshToken = action.payload.refresh_token;
+        state.isAuthenticated = true;
+        setTokenStorage(action.payload.access_token);
+        setRefreshTokenStorage(action.payload.refresh_token);
+      })
+      .addCase(refreshAuth.rejected, (state) => {
+        state.isLoading = false;
+        // If refresh fails, clear auth state
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
+        state.refreshToken = null;
+        removeTokens();
       });
   },
 });
 
-export const { clearError, setToken, setRefreshToken } = authSlice.actions;
+export const { clearError, setToken, setRefreshToken, clearAuth } = authSlice.actions;
 export default authSlice.reducer; 

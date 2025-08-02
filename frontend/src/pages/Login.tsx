@@ -194,6 +194,7 @@ const Login: React.FC = () => {
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
               disabled={isLoading}
+              onClick={handleSubmit}
             >
               {isLoading ? (
                 <CircularProgress size={24} color="inherit" />
