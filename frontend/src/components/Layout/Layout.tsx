@@ -30,6 +30,7 @@ import {
   Timeline,
   People,
   Settings,
+  Person,
   Notifications,
   AccountCircle,
   Logout,
@@ -53,6 +54,7 @@ const menuItems = [
   { text: 'Traceability', icon: <Timeline />, path: '/traceability' },
   { text: 'Users', icon: <People />, path: '/users' },
   { text: 'Settings', icon: <Settings />, path: '/settings' },
+  { text: 'Profile', icon: <Person />, path: '/profile' },
 ];
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {

@@ -16,6 +16,7 @@ import Suppliers from './pages/Suppliers';
 import Traceability from './pages/Traceability';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import Profile from './pages/Profile';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
@@ -48,9 +49,10 @@ function App() {
                   <Route path="/haccp" element={<HACCP />} />
                               <Route path="/prp" element={<PRP />} />
             <Route path="/suppliers" element={<Suppliers />} />
-            <Route path="/traceability" element={<Traceability />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/settings" element={<Settings />} />
+                                          <Route path="/traceability" element={<Traceability />} />
+                              <Route path="/users" element={<Users />} />
+                              <Route path="/settings" element={<Settings />} />
+                              <Route path="/profile" element={<Profile />} />
                   {/* Add more routes here as we implement them */}
                 </Routes>
               </Layout>

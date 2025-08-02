@@ -102,6 +102,8 @@ class UserProfile(BaseModel):
     position: Optional[str] = None
     phone: Optional[str] = None
     employee_id: Optional[str] = None
+    profile_picture: Optional[str] = None
+    bio: Optional[str] = None
     last_login: Optional[datetime] = None
 
     model_config = {

@@ -590,4 +590,48 @@ export const traceabilityAPI = {
   },
 };
 
+// Profile API
+export const profileAPI = {
+  getProfile: async () => {
+    const response = await api.get('/profile/me');
+    return response.data;
+  },
+  updateProfile: async (formData: FormData) => {
+    const response = await api.put('/profile/me', formData);
+    return response.data;
+  },
+  changePassword: async (passwordData: { current_password: string; new_password: string }) => {
+    const response = await api.post('/profile/me/change-password', passwordData);
+    return response.data;
+  },
+  uploadAvatar: async (formData: FormData) => {
+    const response = await api.post('/profile/me/upload-avatar', formData);
+    return response.data;
+  },
+  deleteAvatar: async () => {
+    const response = await api.delete('/profile/me/avatar');
+    return response.data;
+  },
+  getPreferences: async () => {
+    const response = await api.get('/profile/me/preferences');
+    return response.data;
+  },
+  createPreference: async (formData: FormData) => {
+    const response = await api.post('/profile/me/preferences', formData);
+    return response.data;
+  },
+  deletePreference: async (key: string) => {
+    const response = await api.delete(`/profile/me/preferences/${key}`);
+    return response.data;
+  },
+  getActivity: async () => {
+    const response = await api.get('/profile/me/activity');
+    return response.data;
+  },
+  getSecurityInfo: async () => {
+    const response = await api.get('/profile/me/security');
+    return response.data;
+  },
+};
+
 export default api; 
