@@ -22,36 +22,23 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Divider,
-  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Switch,
-  FormControlLabel
+  TableRow
 } from '@mui/material';
 import {
   Person as PersonIcon,
   Edit as EditIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon,
   Camera as CameraIcon,
   Delete as DeleteIcon,
   Lock as LockIcon,
   Security as SecurityIcon,
   History as HistoryIcon,
   Settings as SettingsIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  Business as BusinessIcon,
-  Work as WorkIcon,
   CalendarToday as CalendarIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
@@ -152,7 +139,7 @@ const Profile: React.FC = () => {
       fetchActivityData();
       fetchSecurityData();
     }
-  }, [currentUser]);
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // API calls
   const fetchProfile = async () => {

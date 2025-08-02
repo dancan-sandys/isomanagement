@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -34,10 +34,11 @@ import {
   Notifications,
   AccountCircle,
   Logout,
-  Home,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
+import { fetchNotificationSummary } from '../../store/slices/notificationSlice';
+import NotificationPopup from '../Notifications/NotificationPopup';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -62,9 +63,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSelector((state: RootState) => state.auth);
+  const { unreadCount } = useSelector((state: RootState) => state.notifications);
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -77,6 +80,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleProfileMenuClose = () => {
     setAnchorEl(null);
   };
+
+  const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
+    setNotificationAnchorEl(event.currentTarget);
+  };
+
+  const handleNotificationClose = () => {
+    setNotificationAnchorEl(null);
+  };
+
+  // Load notification summary on component mount
+  useEffect(() => {
+    if (user) {
+      dispatch(fetchNotificationSummary() as any);
+    }
+  }, [dispatch, user]);
 
   const handleLogout = async () => {
     try {
@@ -190,8 +208,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           {/* Notifications */}
           <Tooltip title="Notifications">
-            <IconButton color="inherit">
-              <Badge badgeContent={3} color="error">
+            <IconButton 
+              color="inherit"
+              onClick={handleNotificationClick}
+            >
+              <Badge badgeContent={unreadCount} color="error">
                 <Notifications />
               </Badge>
             </IconButton>
@@ -286,6 +307,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         {children}
       </Box>
+
+      {/* Notification Popup */}
+      <NotificationPopup
+        anchorEl={notificationAnchorEl}
+        onClose={handleNotificationClose}
+      />
     </Box>
   );
 };

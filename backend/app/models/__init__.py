@@ -6,6 +6,7 @@ from .prp import PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSch
 from .supplier import Supplier, Material, SupplierEvaluation, IncomingDelivery, SupplierDocument
 from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport
 from .settings import ApplicationSetting, UserPreference
+from .notification import Notification, NotificationType, NotificationCategory, NotificationPriority
 
 __all__ = [
     # User models
@@ -28,4 +29,6 @@ __all__ = [
     
     # Settings models
     "ApplicationSetting", "UserPreference",
+    # Notification models
+    "Notification", "NotificationType", "NotificationCategory", "NotificationPriority",
 ] 

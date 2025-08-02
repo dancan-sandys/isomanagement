@@ -634,4 +634,54 @@ export const profileAPI = {
   },
 };
 
+// Notification API
+export const notificationAPI = {
+  getNotifications: async (params?: {
+    page?: number;
+    size?: number;
+    is_read?: boolean;
+    category?: string;
+    priority?: string;
+    notification_type?: string;
+  }) => {
+    const response = await api.get('/notifications/', { params });
+    return response.data;
+  },
+
+  getUnreadNotifications: async (limit: number = 10) => {
+    const response = await api.get('/notifications/unread', { params: { limit } });
+    return response.data;
+  },
+
+  getNotificationSummary: async () => {
+    const response = await api.get('/notifications/summary');
+    return response.data;
+  },
+
+  getNotification: async (id: number) => {
+    const response = await api.get(`/notifications/${id}`);
+    return response.data;
+  },
+
+  markAsRead: async (id: number) => {
+    const response = await api.put(`/notifications/${id}/read`);
+    return response.data;
+  },
+
+  markAllAsRead: async () => {
+    const response = await api.put('/notifications/read-all');
+    return response.data;
+  },
+
+  deleteNotification: async (id: number) => {
+    const response = await api.delete(`/notifications/${id}`);
+    return response.data;
+  },
+
+  clearReadNotifications: async () => {
+    const response = await api.delete('/notifications/clear-read');
+    return response.data;
+  },
+};
+
 export default api; 

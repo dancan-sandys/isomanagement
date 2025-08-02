@@ -64,6 +64,9 @@ class User(Base):
     # non_conformances = relationship("NonConformance", back_populates="reported_by")
     # corrective_actions = relationship("CorrectiveAction", back_populates="assigned_to")
     
+    # Notifications relationship
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
 
