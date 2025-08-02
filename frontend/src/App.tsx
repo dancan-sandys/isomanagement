@@ -9,7 +9,10 @@ import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Documents from './pages/Documents';
+import HACCP from './pages/HACCP';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import PRP from './pages/PRP';
+import Suppliers from './pages/Suppliers';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
@@ -36,6 +39,9 @@ function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/documents" element={<Documents />} />
+                  <Route path="/haccp" element={<HACCP />} />
+                  <Route path="/prp" element={<PRP />} />
+                  <Route path="/suppliers" element={<Suppliers />} />
                   {/* Add more routes here as we implement them */}
                 </Routes>
               </Layout>

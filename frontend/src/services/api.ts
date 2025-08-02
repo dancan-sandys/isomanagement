@@ -233,18 +233,48 @@ export const haccpAPI = {
     return response.data;
   },
 
-  getProcessFlows: async (productId: number) => {
-    const response = await api.get(`/haccp/products/${productId}/process-flows`);
+  getProduct: async (id: number) => {
+    const response = await api.get(`/haccp/products/${id}`);
     return response.data;
   },
 
-  getHazards: async (processFlowId: number) => {
-    const response = await api.get(`/haccp/process-flows/${processFlowId}/hazards`);
+  createProduct: async (productData: any) => {
+    const response = await api.post('/haccp/products', productData);
     return response.data;
   },
 
-  getCCPs: async (processFlowId: number) => {
-    const response = await api.get(`/haccp/process-flows/${processFlowId}/ccps`);
+  createProcessFlow: async (productId: number, flowData: any) => {
+    const response = await api.post(`/haccp/products/${productId}/process-flows`, flowData);
+    return response.data;
+  },
+
+  createHazard: async (productId: number, hazardData: any) => {
+    const response = await api.post(`/haccp/products/${productId}/hazards`, hazardData);
+    return response.data;
+  },
+
+  createCCP: async (productId: number, ccpData: any) => {
+    const response = await api.post(`/haccp/products/${productId}/ccps`, ccpData);
+    return response.data;
+  },
+
+  createMonitoringLog: async (ccpId: number, logData: any) => {
+    const response = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs`, logData);
+    return response.data;
+  },
+
+  getMonitoringLogs: async (ccpId: number) => {
+    const response = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
+    return response.data;
+  },
+
+  createVerificationLog: async (ccpId: number, logData: any) => {
+    const response = await api.post(`/haccp/ccps/${ccpId}/verification-logs`, logData);
+    return response.data;
+  },
+
+  getDashboard: async () => {
+    const response = await api.get('/haccp/dashboard');
     return response.data;
   },
 };
@@ -255,16 +285,94 @@ export const prpAPI = {
     page?: number;
     size?: number;
     category?: string;
+    status?: string;
+    search?: string;
   }) => {
     const response = await api.get('/prp/programs/', { params });
     return response.data;
   },
 
-  getChecklists: async (programId: number) => {
-    const response = await api.get(`/prp/programs/${programId}/checklists`);
+  createProgram: async (programData: any) => {
+    const response = await api.post('/prp/programs', programData);
+    return response.data;
+  },
+
+  getChecklists: async (programId: number, params?: {
+    page?: number;
+    size?: number;
+    status?: string;
+  }) => {
+    const response = await api.get(`/prp/programs/${programId}/checklists`, { params });
+    return response.data;
+  },
+
+  createChecklist: async (programId: number, checklistData: any) => {
+    const response = await api.post(`/prp/programs/${programId}/checklists`, checklistData);
+    return response.data;
+  },
+
+  getDashboard: async () => {
+    const response = await api.get('/prp/dashboard');
     return response.data;
   },
 };
+
+// Supplier API
+export const supplierAPI = {
+  getSuppliers: async (params?: {
+    page?: number;
+    size?: number;
+    category?: string;
+    status?: string;
+    search?: string;
+  }) => {
+    const response = await api.get('/suppliers/suppliers/', { params });
+    return response.data;
+  },
+
+  createSupplier: async (supplierData: any) => {
+    const response = await api.post('/suppliers/suppliers', supplierData);
+    return response.data;
+  },
+
+  getSupplier: async (id: number) => {
+    const response = await api.get(`/suppliers/suppliers/${id}`);
+    return response.data;
+  },
+
+  getMaterials: async (supplierId: number, params?: {
+    page?: number;
+    size?: number;
+  }) => {
+    const response = await api.get(`/suppliers/suppliers/${supplierId}/materials`, { params });
+    return response.data;
+  },
+
+  createMaterial: async (supplierId: number, materialData: any) => {
+    const response = await api.post(`/suppliers/suppliers/${supplierId}/materials`, materialData);
+    return response.data;
+  },
+
+  getEvaluations: async (supplierId: number, params?: {
+    page?: number;
+    size?: number;
+  }) => {
+    const response = await api.get(`/suppliers/suppliers/${supplierId}/evaluations`, { params });
+    return response.data;
+  },
+
+  createEvaluation: async (supplierId: number, evaluationData: any) => {
+    const response = await api.post(`/suppliers/suppliers/${supplierId}/evaluations`, evaluationData);
+    return response.data;
+  },
+
+  getDashboard: async () => {
+    const response = await api.get('/suppliers/suppliers/dashboard');
+    return response.data;
+  },
+};
+
+
 
 // Dashboard API
 export const dashboardAPI = {
