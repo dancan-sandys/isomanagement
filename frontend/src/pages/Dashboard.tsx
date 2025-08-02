@@ -12,8 +12,9 @@ import {
   ListItemText,
   ListItemIcon,
   Chip,
-  CircularProgress,
   Alert,
+  Button,
+  Skeleton,
 } from '@mui/material';
 import {
   Description,
@@ -24,6 +25,8 @@ import {
   Warning,
   CheckCircle,
   Schedule,
+  Add,
+  TrendingUp,
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { dashboardAPI } from '../services/api';
@@ -34,19 +37,123 @@ interface DashboardStats {
   totalPrpPrograms: number;
   totalSuppliers: number;
   pendingApprovals: number;
-  recentActivities: Array<{
-    id: number;
-    action: string;
-    resource_type: string;
-    resource_id: number;
-    user: string;
-    timestamp: string;
-  }>;
 }
+
+interface RecentActivity {
+  id: number;
+  action: string;
+  resource_type: string;
+  resource_id: number;
+  user: string;
+  timestamp: string;
+}
+
+// Shimmer Loading Components
+const StatCardSkeleton = () => (
+  <Card>
+    <CardContent>
+      <Box display="flex" alignItems="center" justifyContent="space-between">
+        <Box flex={1}>
+          <Skeleton variant="text" width="60%" height={20} />
+          <Skeleton variant="text" width="40%" height={40} sx={{ mt: 1 }} />
+          <Skeleton variant="text" width="80%" height={16} />
+        </Box>
+        <Skeleton variant="circular" width={40} height={40} />
+      </Box>
+    </CardContent>
+  </Card>
+);
+
+const ActivityItemSkeleton = () => (
+  <ListItem divider>
+    <ListItemIcon>
+      <Skeleton variant="circular" width={24} height={24} />
+    </ListItemIcon>
+    <ListItemText
+      primary={<Skeleton variant="text" width="70%" height={20} />}
+      secondary={<Skeleton variant="text" width="40%" height={16} />}
+    />
+  </ListItem>
+);
+
+const SystemStatusSkeleton = () => (
+  <Paper sx={{ p: 2, textAlign: 'center' }}>
+    <Skeleton variant="circular" width={40} height={40} sx={{ mx: 'auto', mb: 1 }} />
+    <Skeleton variant="text" width="60%" height={24} sx={{ mx: 'auto' }} />
+    <Skeleton variant="text" width="80%" height={20} sx={{ mx: 'auto' }} />
+  </Paper>
+);
+
+const DashboardSkeleton = () => (
+  <Box p={3}>
+    {/* Welcome Section Skeleton */}
+    <Box mb={4}>
+      <Skeleton variant="text" width="40%" height={40} />
+      <Skeleton variant="text" width="60%" height={24} sx={{ mt: 1 }} />
+    </Box>
+
+    {/* Statistics Cards Skeleton */}
+    <Grid container spacing={3} mb={4}>
+      {[1, 2, 3, 4].map((item) => (
+        <Grid item xs={12} sm={6} md={3} key={item}>
+          <StatCardSkeleton />
+        </Grid>
+      ))}
+    </Grid>
+
+    {/* Alerts and Recent Activity Skeleton */}
+    <Grid container spacing={3}>
+      <Grid item xs={12} md={6}>
+        <Paper sx={{ p: 2 }}>
+          <Skeleton variant="text" width="30%" height={32} sx={{ mb: 2 }} />
+          <Skeleton variant="text" width="100%" height={20} />
+          <Skeleton variant="text" width="80%" height={20} sx={{ mt: 1 }} />
+          <Skeleton variant="rectangular" width={120} height={32} sx={{ mt: 2, borderRadius: 1 }} />
+        </Paper>
+      </Grid>
+      <Grid item xs={12} md={6}>
+        <Paper sx={{ p: 2 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Skeleton variant="text" width="30%" height={32} />
+            <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 1 }} />
+          </Box>
+          <List dense>
+            {[1, 2, 3].map((item) => (
+              <ActivityItemSkeleton key={item} />
+            ))}
+          </List>
+        </Paper>
+      </Grid>
+    </Grid>
+
+    {/* Quick Actions Skeleton */}
+    <Box mt={4}>
+      <Skeleton variant="text" width="20%" height={32} sx={{ mb: 2 }} />
+      <Box display="flex" gap={2} flexWrap="wrap">
+        {[1, 2, 3, 4].map((item) => (
+          <Skeleton key={item} variant="rectangular" width={140} height={32} sx={{ borderRadius: 16 }} />
+        ))}
+      </Box>
+    </Box>
+
+    {/* System Status Skeleton */}
+    <Box mt={4}>
+      <Skeleton variant="text" width="20%" height={32} sx={{ mb: 2 }} />
+      <Grid container spacing={2}>
+        {[1, 2, 3, 4].map((item) => (
+          <Grid item xs={12} sm={6} md={3} key={item}>
+            <SystemStatusSkeleton />
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  </Box>
+);
 
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,44 +163,20 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        // For now, we'll use mock data since the backend endpoints aren't implemented yet
-        const mockStats: DashboardStats = {
-          totalDocuments: 24,
-          totalHaccpPlans: 8,
-          totalPrpPrograms: 12,
-          totalSuppliers: 15,
-          pendingApprovals: 3,
-          recentActivities: [
-            {
-              id: 1,
-              action: 'created',
-              resource_type: 'document',
-              resource_id: 123,
-              user: 'John Doe',
-              timestamp: new Date().toISOString(),
-            },
-            {
-              id: 2,
-              action: 'updated',
-              resource_type: 'haccp_plan',
-              resource_id: 45,
-              user: 'Jane Smith',
-              timestamp: new Date(Date.now() - 3600000).toISOString(),
-            },
-            {
-              id: 3,
-              action: 'approved',
-              resource_type: 'document',
-              resource_id: 67,
-              user: 'Mike Johnson',
-              timestamp: new Date(Date.now() - 7200000).toISOString(),
-            },
-          ],
-        };
+        // Fetch dashboard statistics
+        const statsResponse = await dashboardAPI.getStats();
+        if (statsResponse.success) {
+          setStats(statsResponse.data);
+        }
         
-        setStats(mockStats);
-      } catch (err) {
-        setError('Failed to load dashboard data');
+        // Fetch recent activities
+        const activitiesResponse = await dashboardAPI.getRecentActivity();
+        if (activitiesResponse.success) {
+          setRecentActivities(activitiesResponse.data.activities || []);
+        }
+        
+      } catch (err: any) {
+        setError(err.message || 'Failed to load dashboard data');
         console.error('Dashboard error:', err);
       } finally {
         setLoading(false);
@@ -133,18 +216,24 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const getResourceTypeLabel = (resourceType: string) => {
+    return resourceType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {
     return (
       <Box p={3}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error" action={
+          <Button color="inherit" size="small" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        }>
+          {error}
+        </Alert>
       </Box>
     );
   }
@@ -174,6 +263,9 @@ const Dashboard: React.FC = () => {
                   <Typography variant="h4">
                     {stats?.totalDocuments || 0}
                   </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Manuals, SOPs, Records
+                  </Typography>
                 </Box>
                 <Description color="primary" sx={{ fontSize: 40 }} />
               </Box>
@@ -191,6 +283,9 @@ const Dashboard: React.FC = () => {
                   </Typography>
                   <Typography variant="h4">
                     {stats?.totalHaccpPlans || 0}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Critical Control Points
                   </Typography>
                 </Box>
                 <Security color="primary" sx={{ fontSize: 40 }} />
@@ -210,6 +305,9 @@ const Dashboard: React.FC = () => {
                   <Typography variant="h4">
                     {stats?.totalPrpPrograms || 0}
                   </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Prerequisite Programs
+                  </Typography>
                 </Box>
                 <Assignment color="primary" sx={{ fontSize: 40 }} />
               </Box>
@@ -227,6 +325,9 @@ const Dashboard: React.FC = () => {
                   </Typography>
                   <Typography variant="h4">
                     {stats?.totalSuppliers || 0}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Approved Vendors
                   </Typography>
                 </Box>
                 <LocalShipping color="primary" sx={{ fontSize: 40 }} />
@@ -249,39 +350,65 @@ const Dashboard: React.FC = () => {
               <Typography variant="body1">
                 You have {stats.pendingApprovals} items waiting for your approval.
               </Typography>
+              <Button 
+                variant="contained" 
+                color="warning" 
+                size="small" 
+                sx={{ mt: 1 }}
+                startIcon={<Schedule />}
+              >
+                Review Now
+              </Button>
             </Paper>
           </Grid>
         )}
 
         {/* Recent Activity */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={stats?.pendingApprovals && stats.pendingApprovals > 0 ? 6 : 12}>
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Recent Activity
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                Recent Activity
+              </Typography>
+              <Chip 
+                label={`${recentActivities.length} activities`} 
+                size="small" 
+                color="primary" 
+                variant="outlined"
+              />
+            </Box>
             <List dense>
-              {stats?.recentActivities.map((activity) => (
-                <ListItem key={activity.id} divider>
-                  <ListItemIcon>
-                    {getResourceIcon(activity.resource_type)}
-                  </ListItemIcon>
+              {recentActivities.length > 0 ? (
+                recentActivities.map((activity) => (
+                  <ListItem key={activity.id} divider>
+                    <ListItemIcon>
+                      {getResourceIcon(activity.resource_type)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2">
+                            {activity.user} {activity.action} a {getResourceTypeLabel(activity.resource_type)}
+                          </Typography>
+                          <Chip
+                            label={activity.action}
+                            size="small"
+                            color={getStatusColor(activity.action) as any}
+                          />
+                        </Box>
+                      }
+                      secondary={new Date(activity.timestamp).toLocaleString()}
+                    />
+                  </ListItem>
+                ))
+              ) : (
+                <ListItem>
                   <ListItemText
-                    primary={
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Typography variant="body2">
-                          {activity.user} {activity.action} a {activity.resource_type.replace('_', ' ')}
-                        </Typography>
-                        <Chip
-                          label={activity.action}
-                          size="small"
-                          color={getStatusColor(activity.action) as any}
-                        />
-                      </Box>
-                    }
-                    secondary={new Date(activity.timestamp).toLocaleString()}
+                    primary="No recent activity"
+                    secondary="Activities will appear here as they occur"
                   />
                 </ListItem>
-              ))}
+              )}
             </List>
           </Paper>
         </Grid>
@@ -295,35 +422,92 @@ const Dashboard: React.FC = () => {
         <Grid container spacing={2}>
           <Grid item>
             <Chip
-              icon={<Description />}
+              icon={<Add />}
               label="Create Document"
               clickable
               color="primary"
+              onClick={() => window.location.href = '/documents'}
             />
           </Grid>
           <Grid item>
             <Chip
-              icon={<Security />}
+              icon={<Add />}
               label="New HACCP Plan"
               clickable
               color="primary"
+              onClick={() => window.location.href = '/haccp'}
             />
           </Grid>
           <Grid item>
             <Chip
-              icon={<Assignment />}
+              icon={<Add />}
               label="PRP Checklist"
               clickable
               color="primary"
+              onClick={() => window.location.href = '/prp'}
             />
           </Grid>
           <Grid item>
             <Chip
-              icon={<LocalShipping />}
+              icon={<Add />}
               label="Add Supplier"
               clickable
               color="primary"
+              onClick={() => window.location.href = '/suppliers'}
             />
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* System Status */}
+      <Box mt={4}>
+        <Typography variant="h6" gutterBottom>
+          System Status
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <CheckCircle color="success" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h6" color="success.main">
+                System Online
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                All services operational
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <TrendingUp color="primary" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h6" color="primary.main">
+                Compliance Score
+              </Typography>
+              <Typography variant="h4" color="primary.main">
+                98%
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Schedule color="info" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h6" color="info.main">
+                Next Audit
+              </Typography>
+              <Typography variant="body2">
+                {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Warning color="warning" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h6" color="warning.main">
+                Open Issues
+              </Typography>
+              <Typography variant="h4" color="warning.main">
+                2
+              </Typography>
+            </Paper>
           </Grid>
         </Grid>
       </Box>

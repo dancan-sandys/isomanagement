@@ -179,13 +179,21 @@ export const documentsAPI = {
     return response.data;
   },
 
-  createDocument: async (documentData: any) => {
-    const response = await api.post('/documents/', documentData);
+  createDocument: async (formData: FormData) => {
+    const response = await api.post('/documents/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
-  updateDocument: async (id: number, documentData: any) => {
-    const response = await api.put(`/documents/${id}`, documentData);
+  updateDocument: async (id: number, formData: FormData) => {
+    const response = await api.put(`/documents/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
@@ -194,11 +202,18 @@ export const documentsAPI = {
     return response.data;
   },
 
-  uploadFile: async (file: File, documentId: number) => {
+  downloadDocument: async (id: number) => {
+    const response = await api.get(`/documents/${id}/download`, {
+      responseType: 'blob',
+    });
+    return response;
+  },
+
+  uploadFile: async (id: number, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await api.post(`/documents/${documentId}/upload`, formData, {
+    const response = await api.post(`/documents/${id}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -260,6 +275,16 @@ export const dashboardAPI = {
 
   getRecentActivity: async () => {
     const response = await api.get('/dashboard/recent-activity');
+    return response.data;
+  },
+
+  getComplianceMetrics: async () => {
+    const response = await api.get('/dashboard/compliance-metrics');
+    return response.data;
+  },
+
+  getSystemStatus: async () => {
+    const response = await api.get('/dashboard/system-status');
     return response.data;
   },
 };
