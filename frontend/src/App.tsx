@@ -13,6 +13,7 @@ import HACCP from './pages/HACCP';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import PRP from './pages/PRP';
 import Suppliers from './pages/Suppliers';
+import Traceability from './pages/Traceability';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
@@ -20,8 +21,11 @@ function App() {
 
   // Initialize authentication check on app load
   useEffect(() => {
-    // If we have a token but no authentication state, try to get current user
+    console.log('App.tsx - useEffect - token:', !!token, 'isAuthenticated:', isAuthenticated);
+    // Only check authentication if we have a token and are not already authenticated
+    // This prevents duplicate calls that can cause loading state issues
     if (token && !isAuthenticated) {
+      console.log('App.tsx - dispatching getCurrentUser');
       dispatch(getCurrentUser());
     }
   }, [dispatch, token, isAuthenticated]);
@@ -40,8 +44,9 @@ function App() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/documents" element={<Documents />} />
                   <Route path="/haccp" element={<HACCP />} />
-                  <Route path="/prp" element={<PRP />} />
-                  <Route path="/suppliers" element={<Suppliers />} />
+                              <Route path="/prp" element={<PRP />} />
+            <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/traceability" element={<Traceability />} />
                   {/* Add more routes here as we implement them */}
                 </Routes>
               </Layout>

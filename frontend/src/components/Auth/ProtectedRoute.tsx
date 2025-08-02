@@ -1,25 +1,16 @@
-import React, { useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import React from 'react';
+import { useSelector } from 'react-redux';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
-import { RootState, AppDispatch } from '../../store';
-import { getCurrentUser } from '../../store/slices/authSlice';
+import { RootState } from '../../store';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const dispatch = useDispatch<AppDispatch>();
   const location = useLocation();
-  const { isAuthenticated, isLoading, token } = useSelector((state: RootState) => state.auth);
-
-  useEffect(() => {
-    // If we have a token but no user data, try to get current user
-    if (token && !isAuthenticated) {
-      dispatch(getCurrentUser());
-    }
-  }, [dispatch, token, isAuthenticated]);
+  const { isAuthenticated, isLoading } = useSelector((state: RootState) => state.auth);
 
   // Show loading spinner while checking authentication
   if (isLoading) {

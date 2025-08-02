@@ -3,6 +3,8 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
 // API base configuration
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
+console.log('API Base URL:', API_BASE_URL);
+
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -86,7 +88,8 @@ export interface PaginatedResponse<T> {
 // Auth API
 export const authAPI = {
   login: async (username: string, password: string) => {
-    const formData = new FormData();
+    // Use URLSearchParams for proper form encoding
+    const formData = new URLSearchParams();
     formData.append('username', username);
     formData.append('password', password);
     
@@ -98,12 +101,17 @@ export const authAPI = {
       });
       return response.data;
     } catch (error: any) {
+      console.error('Login API Error:', error);
+      console.error('Error response:', error.response);
+      
       if (error.response?.status === 401) {
         throw new Error('Invalid username or password');
       } else if (error.response?.status === 423) {
         throw new Error('Account is locked. Please contact administrator.');
       } else if (error.response?.status === 400) {
         throw new Error('Inactive user account');
+      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        throw new Error('Cannot connect to server. Please check if the backend is running.');
       } else {
         throw new Error(error.response?.data?.detail || 'Login failed. Please try again.');
       }
@@ -393,6 +401,104 @@ export const dashboardAPI = {
 
   getSystemStatus: async () => {
     const response = await api.get('/dashboard/system-status');
+    return response.data;
+  },
+};
+
+// Traceability API
+export const traceabilityAPI = {
+  // Batch Management
+  getBatches: async (params?: {
+    skip?: number;
+    limit?: number;
+    batch_type?: string;
+    status?: string;
+    product_name?: string;
+    search?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.batch_type) queryParams.append('batch_type', params.batch_type);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.product_name) queryParams.append('product_name', params.product_name);
+    if (params?.search) queryParams.append('search', params.search);
+    
+    const response = await api.get(`/traceability/batches?${queryParams}`);
+    return response.data;
+  },
+
+  createBatch: async (batchData: any) => {
+    const response = await api.post('/traceability/batches', batchData);
+    return response.data;
+  },
+
+  getBatch: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}`);
+    return response.data;
+  },
+
+  // Traceability Links
+  createTraceabilityLink: async (batchId: number, linkData: any) => {
+    const response = await api.post(`/traceability/batches/${batchId}/links`, linkData);
+    return response.data;
+  },
+
+  // Recall Management
+  getRecalls: async (params?: {
+    skip?: number;
+    limit?: number;
+    status?: string;
+    recall_type?: string;
+    search?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.recall_type) queryParams.append('recall_type', params.recall_type);
+    if (params?.search) queryParams.append('search', params.search);
+    
+    const response = await api.get(`/traceability/recalls?${queryParams}`);
+    return response.data;
+  },
+
+  createRecall: async (recallData: any) => {
+    const response = await api.post('/traceability/recalls', recallData);
+    return response.data;
+  },
+
+  getRecall: async (recallId: number) => {
+    const response = await api.get(`/traceability/recalls/${recallId}`);
+    return response.data;
+  },
+
+  updateRecallStatus: async (recallId: number, statusData: any) => {
+    const response = await api.put(`/traceability/recalls/${recallId}/status`, statusData);
+    return response.data;
+  },
+
+  // Traceability Reports
+  createTraceabilityReport: async (traceData: any) => {
+    const response = await api.post('/traceability/trace', traceData);
+    return response.data;
+  },
+
+  getTraceabilityReports: async (params?: {
+    skip?: number;
+    limit?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    
+    const response = await api.get(`/traceability/trace/reports?${queryParams}`);
+    return response.data;
+  },
+
+  // Dashboard
+  getDashboard: async () => {
+    const response = await api.get('/traceability/dashboard');
     return response.data;
   },
 };

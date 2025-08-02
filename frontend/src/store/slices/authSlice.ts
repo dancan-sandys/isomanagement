@@ -42,7 +42,7 @@ const initialState: AuthState = {
   token: storedToken,
   refreshToken: storedRefreshToken,
   isAuthenticated: hasValidToken,
-  isLoading: false,
+  isLoading: false, // Always start with loading false
   error: null,
 };
 
@@ -131,10 +131,12 @@ const authSlice = createSlice({
     builder
       // Login
       .addCase(login.pending, (state) => {
+        console.log('Auth slice - login.pending - setting isLoading to true');
         state.isLoading = true;
         state.error = null;
       })
       .addCase(login.fulfilled, (state, action) => {
+        console.log('Auth slice - login.fulfilled - setting isLoading to false');
         state.isLoading = false;
         state.isAuthenticated = true;
         state.token = action.payload.access_token;
@@ -145,6 +147,7 @@ const authSlice = createSlice({
         setRefreshTokenStorage(action.payload.refresh_token);
       })
       .addCase(login.rejected, (state, action) => {
+        console.log('Auth slice - login.rejected - setting isLoading to false');
         state.isLoading = false;
         state.error = action.payload as string;
       })
@@ -171,14 +174,17 @@ const authSlice = createSlice({
       })
       // Get current user
       .addCase(getCurrentUser.pending, (state) => {
+        console.log('Auth slice - getCurrentUser.pending - setting isLoading to true');
         state.isLoading = true;
       })
       .addCase(getCurrentUser.fulfilled, (state, action) => {
+        console.log('Auth slice - getCurrentUser.fulfilled - setting isLoading to false');
         state.isLoading = false;
         state.user = action.payload;
         state.isAuthenticated = true;
       })
       .addCase(getCurrentUser.rejected, (state, action) => {
+        console.log('Auth slice - getCurrentUser.rejected - setting isLoading to false');
         state.isLoading = false;
         state.error = action.payload as string;
         // If we can't get user info, they might not be authenticated

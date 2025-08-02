@@ -21,6 +21,9 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const { isLoading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
 
+  // Debug logging
+  console.log('Login component - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -88,18 +91,25 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Login form submitted with:', { username: formData.username, password: '***' });
+    
     if (!validateForm()) {
+      console.log('Form validation failed');
       return;
     }
 
     try {
+      console.log('Dispatching login action...');
       const result = await dispatch(login({
         username: formData.username,
         password: formData.password,
       }));
       
+      console.log('Login result:', result);
+      
       // Check if login was successful
       if (login.fulfilled.match(result)) {
+        console.log('Login successful!');
         // Show success message briefly
         setShowSuccess(true);
         // Clear form data on successful login
@@ -108,6 +118,8 @@ const Login: React.FC = () => {
           password: '',
         });
         // Navigation will be handled by useEffect when isAuthenticated changes
+      } else if (login.rejected.match(result)) {
+        console.log('Login rejected:', result.error);
       }
     } catch (error) {
       // Error is handled by the Redux slice
@@ -194,7 +206,6 @@ const Login: React.FC = () => {
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
               disabled={isLoading}
-              onClick={handleSubmit}
             >
               {isLoading ? (
                 <CircularProgress size={24} color="inherit" />
