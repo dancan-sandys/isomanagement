@@ -143,6 +143,8 @@ export const usersAPI = {
     size?: number;
     search?: string;
     role?: string;
+    status?: string;
+    department?: string;
   }) => {
     const response = await api.get('/users/', { params });
     return response.data;
@@ -165,6 +167,91 @@ export const usersAPI = {
 
   deleteUser: async (id: number) => {
     const response = await api.delete(`/users/${id}`);
+    return response.data;
+  },
+
+  activateUser: async (id: number) => {
+    const response = await api.post(`/users/${id}/activate`);
+    return response.data;
+  },
+
+  deactivateUser: async (id: number) => {
+    const response = await api.post(`/users/${id}/deactivate`);
+    return response.data;
+  },
+
+  getDashboard: async () => {
+    const response = await api.get('/users/dashboard');
+    return response.data;
+  },
+};
+
+// Settings API
+export const settingsAPI = {
+  getSettings: async (category?: string) => {
+    const params = category ? { category } : {};
+    const response = await api.get('/settings/', { params });
+    return response.data;
+  },
+
+  getSetting: async (key: string) => {
+    const response = await api.get(`/settings/${key}`);
+    return response.data;
+  },
+
+  updateSetting: async (key: string, value: string) => {
+    const response = await api.put(`/settings/${key}`, { value });
+    return response.data;
+  },
+
+  bulkUpdateSettings: async (settings: Array<{ [key: string]: string }>) => {
+    const response = await api.post('/settings/bulk-update', { settings });
+    return response.data;
+  },
+
+  initializeSettings: async () => {
+    const response = await api.post('/settings/initialize');
+    return response.data;
+  },
+
+  resetSetting: async (key: string) => {
+    const response = await api.post(`/settings/reset/${key}`);
+    return response.data;
+  },
+
+  getCategories: async () => {
+    const response = await api.get('/settings/categories');
+    return response.data;
+  },
+
+  exportSettings: async () => {
+    const response = await api.get('/settings/export/json');
+    return response.data;
+  },
+
+  importSettings: async (settingsData: any) => {
+    const response = await api.post('/settings/import/json', settingsData);
+    return response.data;
+  },
+
+  // User Preferences
+  getUserPreferences: async () => {
+    const response = await api.get('/settings/preferences/me');
+    return response.data;
+  },
+
+  createUserPreference: async (preference: any) => {
+    const response = await api.post('/settings/preferences', preference);
+    return response.data;
+  },
+
+  updateUserPreference: async (key: string, value: string) => {
+    const response = await api.put(`/settings/preferences/${key}`, { value });
+    return response.data;
+  },
+
+  deleteUserPreference: async (key: string) => {
+    const response = await api.delete(`/settings/preferences/${key}`);
     return response.data;
   },
 };

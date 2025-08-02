@@ -5,6 +5,7 @@ from .haccp import Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerif
 from .prp import PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule
 from .supplier import Supplier, Material, SupplierEvaluation, IncomingDelivery, SupplierDocument
 from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport
+from .settings import ApplicationSetting, UserPreference
 
 __all__ = [
     # User models
@@ -24,4 +25,7 @@ __all__ = [
     
     # Traceability models
     "Batch", "TraceabilityLink", "Recall", "RecallEntry", "RecallAction", "TraceabilityReport",
+    
+    # Settings models
+    "ApplicationSetting", "UserPreference",
 ] 

@@ -14,6 +14,8 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import PRP from './pages/PRP';
 import Suppliers from './pages/Suppliers';
 import Traceability from './pages/Traceability';
+import Users from './pages/Users';
+import Settings from './pages/Settings';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
@@ -47,6 +49,8 @@ function App() {
                               <Route path="/prp" element={<PRP />} />
             <Route path="/suppliers" element={<Suppliers />} />
             <Route path="/traceability" element={<Traceability />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/settings" element={<Settings />} />
                   {/* Add more routes here as we implement them */}
                 </Routes>
               </Layout>

@@ -255,4 +255,76 @@ async def deactivate_user(
     return ResponseModel(
         success=True,
         message="User deactivated successfully"
-    ) 
+    )
+
+
+@router.get("/dashboard", response_model=ResponseModel)
+async def get_users_dashboard(
+    current_user: User = Depends(require_permission("users:read")),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user management dashboard data
+    """
+    try:
+        # Get total users count
+        total_users = db.query(User).count()
+        
+        # Get active users count
+        active_users = db.query(User).filter(User.is_active == True).count()
+        
+        # Get inactive users count
+        inactive_users = db.query(User).filter(User.is_active == False).count()
+        
+        # Get pending approval count
+        pending_approval = db.query(User).filter(User.status == UserStatus.PENDING_APPROVAL).count()
+        
+        # Get users by role
+        users_by_role = {}
+        for role in UserRole:
+            count = db.query(User).filter(User.role == role).count()
+            if count > 0:
+                users_by_role[role.value] = count
+        
+        # Get users by department
+        users_by_department = {}
+        departments = db.query(User.department).distinct().filter(User.department.isnot(None)).all()
+        for dept in departments:
+            if dept[0]:
+                count = db.query(User).filter(User.department == dept[0]).count()
+                users_by_department[dept[0]] = count
+        
+        # Get recent logins (users who logged in today)
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        recent_logins = db.query(User).filter(
+            User.last_login >= today
+        ).count()
+        
+        # Mock data for training and competency (these would come from separate tables)
+        training_overdue = 3  # Mock value
+        competencies_expiring = 5  # Mock value
+        
+        dashboard_data = {
+            "total_users": total_users,
+            "active_users": active_users,
+            "inactive_users": inactive_users,
+            "pending_approval": pending_approval,
+            "users_by_role": users_by_role,
+            "users_by_department": users_by_department,
+            "recent_logins": recent_logins,
+            "training_overdue": training_overdue,
+            "competencies_expiring": competencies_expiring
+        }
+        
+        return ResponseModel(
+            success=True,
+            message="Dashboard data retrieved successfully",
+            data=dashboard_data
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve dashboard data: {str(e)}"
+        ) 
