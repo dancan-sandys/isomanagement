@@ -2,11 +2,25 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import time
 
 from app.core.config import settings
 from app.core.database import init_db
 from app.api.v1.api_minimal import api_router
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"Environment: {settings.ENVIRONMENT}")
+    print(f"Database: {settings.DATABASE_TYPE}")
+    print("Database tables should be created manually or via Alembic")
+    
+    yield
+    
+    # Shutdown
+    print("Shutting down ISO 22000 FSMS")
 
 # Create FastAPI app
 app = FastAPI(
@@ -15,12 +29,13 @@ app = FastAPI(
     description="ISO 22000 Food Safety Management System for Dairy Processing",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=settings.ALLOWED_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,7 +44,7 @@ app.add_middleware(
 # Add Trusted Host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"]
+    allowed_hosts=["*"]
 )
 
 # Request timing middleware
@@ -74,26 +89,7 @@ async def health_check():
         "environment": settings.ENVIRONMENT
     }
 
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"Environment: {settings.ENVIRONMENT}")
-    print(f"Database: {settings.DATABASE_TYPE}")
 
-    # Initialize database - commented out to avoid model import issues
-    # try:
-    #     init_db()
-    #     print("Database initialized successfully")
-    # except Exception as e:
-    #     print(f"Database initialization error: {e}")
-    
-    print("Database tables should be created manually or via Alembic")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("Shutting down ISO 22000 FSMS")
 
 if __name__ == "__main__":
     import uvicorn
