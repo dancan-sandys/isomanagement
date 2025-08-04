@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     "http://localhost:8000",
     "http://20.186.91.25:3000"
     ]
+    ALLOWED_CREDENTIALS: bool = True
     
     # File Storage Configuration (AWS S3)
     AWS_ACCESS_KEY_ID: Optional[str] = None
