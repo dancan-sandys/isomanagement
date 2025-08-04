@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # CORS Configuration
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
-    ALLOWED_CREDENTIALS: bool = True
+    ALLOWED_ORIGINS: List[str] = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://20.186.91.25:3000"
+    ]
     
     # File Storage Configuration (AWS S3)
     AWS_ACCESS_KEY_ID: Optional[str] = None
