@@ -64,26 +64,12 @@ import {
   Email,
   Phone,
   Language,
-  LocationOn,
-  Security,
-  TrendingUp,
-  TrendingDown,
-  Dashboard,
-  List as ListIcon,
-  ViewList,
-  CalendarMonth,
-  Work,
   AddCircle,
   Inventory2,
   Build,
   Science,
   Support,
   Star,
-  StarBorder,
-  ExpandMore,
-  AttachFile,
-  Upload,
-  Download,
   Verified,
   Pending,
   Block,
@@ -155,9 +141,9 @@ interface Delivery {
 const Suppliers: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [materials] = useState<Material[]>([]);
+  const [evaluations] = useState<Evaluation[]>([]);
+  const [deliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -223,7 +209,7 @@ const Suppliers: React.FC = () => {
     follow_up_date: '',
   });
 
-  const [dashboardData, setDashboardData] = useState({
+  const [dashboardData] = useState({
     total_suppliers: 0,
     active_suppliers: 0,
     overdue_evaluations: 0,

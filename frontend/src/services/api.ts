@@ -296,13 +296,6 @@ export const documentsAPI = {
     return response.data;
   },
 
-  downloadVersion: async (documentId: number, versionId: number) => {
-    const response: AxiosResponse = await api.get(`/documents/${documentId}/versions/${versionId}/download`, {
-      responseType: 'blob',
-    });
-    return response.data;
-  },
-
   uploadDocumentFile: async (documentId: number, formData: FormData) => {
     const response: AxiosResponse = await api.post(`/documents/${documentId}/upload`, formData, {
       headers: {

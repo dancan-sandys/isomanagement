@@ -52,11 +52,10 @@ import {
   Business as BusinessIcon,
   Work as WorkIcon,
   CalendarToday as CalendarIcon,
-  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { usersAPI } from '../services/api';
 import { RootState } from '../store';
-import { canManageUsers, isSystemAdministrator } from '../store/slices/authSlice';
+import { canManageUsers } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
 
 // Interfaces

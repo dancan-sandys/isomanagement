@@ -85,7 +85,7 @@ const DocumentChangeLogDialog: React.FC<DocumentChangeLogDialogProps> = ({
       case 'file_uploaded':
         return <Timeline color="secondary" />;
       default:
-        return <Info color="default" />;
+        return <Info color="info" />;
     }
   };
 

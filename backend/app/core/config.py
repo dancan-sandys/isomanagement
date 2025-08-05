@@ -28,7 +28,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000", 
         "http://127.0.0.1:8000",
         "http://localhost:3001",
-        "http://127.0.0.1:3001"
+        "http://127.0.0.1:3001",
+        "http://20.186.91.25:8000",
+        "http://20.186.91.25:3000",
     ]
     ALLOWED_CREDENTIALS: bool = True
     
