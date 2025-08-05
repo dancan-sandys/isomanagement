@@ -1,66 +1,242 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Box } from '@mui/material';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppDispatch, RootState } from './store';
-import { getCurrentUser } from './store/slices/authSlice';
+import { Provider } from 'react-redux';
+import { store } from './store';
 
+import { ThemeProvider } from './theme/ThemeProvider';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Documents from './pages/Documents';
 import HACCP from './pages/HACCP';
-import ProtectedRoute from './components/Auth/ProtectedRoute';
 import PRP from './pages/PRP';
 import Suppliers from './pages/Suppliers';
 import Traceability from './pages/Traceability';
 import Users from './pages/Users';
-import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
+import RBAC from './pages/RBAC';
+import ComingSoon from './components/UI/ComingSoon';
+import ProtectedRoute from './components/Auth/ProtectedRoute';
+import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 
 function App() {
-  const dispatch = useDispatch<AppDispatch>();
-  const { token, isAuthenticated } = useSelector((state: RootState) => state.auth);
-
-  // Initialize authentication check on app load
-  useEffect(() => {
-    console.log('App.tsx - useEffect - token:', !!token, 'isAuthenticated:', isAuthenticated);
-    // Only check authentication if we have a token and are not already authenticated
-    // This prevents duplicate calls that can cause loading state issues
-    if (token && !isAuthenticated) {
-      console.log('App.tsx - dispatching getCurrentUser');
-      dispatch(getCurrentUser());
-    }
-  }, [dispatch, token, isAuthenticated]);
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/documents" element={<Documents />} />
-                  <Route path="/haccp" element={<HACCP />} />
-                              <Route path="/prp" element={<PRP />} />
-            <Route path="/suppliers" element={<Suppliers />} />
-                                          <Route path="/traceability" element={<Traceability />} />
-                              <Route path="/users" element={<Users />} />
-                              <Route path="/settings" element={<Settings />} />
-                              <Route path="/profile" element={<Profile />} />
-                  {/* Add more routes here as we implement them */}
-                </Routes>
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </Box>
+    <Provider store={store}>
+      <ThemeProvider>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Routes>
+                      {/* Dashboard - All authenticated users */}
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      
+                      {/* Document Control - All authenticated users */}
+                      <Route path="/documents" element={
+                        <RoleBasedRoute 
+                          allowedRoles={[
+                            'System Administrator',
+                            'QA Manager',
+                            'QA Specialist',
+                            'Production Manager',
+                            'Production Operator',
+                            'Maintenance Manager',
+                            'Maintenance Technician',
+                            'Auditor'
+                          ]}
+                          component={Documents}
+                        />
+                      } />
+                      <Route path="/documents/versions" element={
+                        <ComingSoon 
+                          title="Document Version Control"
+                          description="Advanced version control features are coming soon. Basic version management is available in the main Documents section."
+                          parentPath="/documents"
+                          parentTitle="Documents"
+                        />
+                      } />
+                      <Route path="/documents/approval" element={
+                        <ComingSoon 
+                          title="Document Approval Workflow"
+                          description="Enhanced approval workflow features are coming soon. Basic approval is available in the main Documents section."
+                          parentPath="/documents"
+                          parentTitle="Documents"
+                        />
+                      } />
+                      
+                      {/* User Management - System Administrators and QA Managers only */}
+                      <Route path="/users" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['System Administrator', 'QA Manager']}
+                          component={Users}
+                        />
+                      } />
+                      <Route path="/rbac" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['System Administrator']}
+                          component={RBAC}
+                        />
+                      } />
+                      
+                      {/* HACCP System - QA and Production roles */}
+                      <Route path="/haccp" element={
+                        <RoleBasedRoute 
+                          allowedRoles={[
+                            'System Administrator',
+                            'QA Manager',
+                            'QA Specialist',
+                            'Production Manager',
+                            'Production Operator',
+                            'Maintenance Manager',
+                            'Maintenance Technician',
+                            'Auditor'
+                          ]}
+                          component={HACCP}
+                        />
+                      } />
+                      <Route path="/haccp/ccp" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator']}
+                          component={
+                            () => (
+                              <ComingSoon 
+                                title="CCP Management"
+                                description="Advanced CCP management features are coming soon. Basic CCP information is available in the main HACCP section."
+                                parentPath="/haccp"
+                                parentTitle="HACCP"
+                              />
+                            )
+                          }
+                        />
+                      } />
+                      <Route path="/haccp/hazards" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator']}
+                          component={
+                            () => (
+                              <ComingSoon 
+                                title="Hazard Analysis"
+                                description="Detailed hazard analysis tools are coming soon. Basic hazard information is available in the main HACCP section."
+                                parentPath="/haccp"
+                                parentTitle="HACCP"
+                              />
+                            )
+                          }
+                        />
+                      } />
+                      
+                      {/* PRP Programs - Production and Maintenance roles */}
+                      <Route path="/prp" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['Production Manager', 'Production Operator', 'Maintenance', 'System Administrator']}
+                          component={PRP}
+                        />
+                      } />
+                      <Route path="/prp/cleaning" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['Production Manager', 'Production Operator', 'Maintenance', 'System Administrator']}
+                          component={
+                            () => (
+                              <ComingSoon 
+                                title="Cleaning & Sanitation"
+                                description="Detailed cleaning and sanitation management is coming soon. Basic PRP information is available in the main PRP section."
+                                parentPath="/prp"
+                                parentTitle="PRP Programs"
+                              />
+                            )
+                          }
+                        />
+                      } />
+                      <Route path="/prp/maintenance" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['Production Manager', 'Production Operator', 'Maintenance', 'System Administrator']}
+                          component={
+                            () => (
+                              <ComingSoon 
+                                title="Maintenance Management"
+                                description="Equipment maintenance tracking is coming soon. Basic PRP information is available in the main PRP section."
+                                parentPath="/prp"
+                                parentTitle="PRP Programs"
+                              />
+                            )
+                          }
+                        />
+                      } />
+                      
+                      {/* Supplier Management - QA and Management roles */}
+                      <Route path="/suppliers" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator']}
+                          component={Suppliers}
+                        />
+                      } />
+                      <Route path="/suppliers/evaluation" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator']}
+                          component={
+                            () => (
+                              <ComingSoon 
+                                title="Supplier Evaluation"
+                                description="Advanced supplier evaluation tools are coming soon. Basic supplier information is available in the main Suppliers section."
+                                parentPath="/suppliers"
+                                parentTitle="Suppliers"
+                              />
+                            )
+                          }
+                        />
+                      } />
+                      
+                      {/* Traceability - Production and QA roles */}
+                      <Route path="/traceability" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['Production Manager', 'Production Operator', 'QA Manager', 'QA Specialist', 'System Administrator']}
+                          component={Traceability}
+                        />
+                      } />
+                      <Route path="/traceability/chain" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['Production Manager', 'Production Operator', 'QA Manager', 'QA Specialist', 'System Administrator']}
+                          component={
+                            () => (
+                              <ComingSoon 
+                                title="Traceability Chain"
+                                description="Detailed traceability chain visualization is coming soon. Basic traceability information is available in the main Traceability section."
+                                parentPath="/traceability"
+                                parentTitle="Traceability"
+                              />
+                            )
+                          }
+                        />
+                      } />
+                      
+                      {/* System Settings - System Administrators only */}
+                      <Route path="/settings" element={
+                        <RoleBasedRoute 
+                          allowedRoles={['System Administrator']}
+                          component={Settings}
+                        />
+                      } />
+                      
+                      {/* Profile - All authenticated users */}
+                      <Route path="/profile" element={<Profile />} />
+                    </Routes>
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Box>
+      </ThemeProvider>
+    </Provider>
   );
 }
 

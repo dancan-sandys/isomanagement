@@ -8,6 +8,9 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.api.v1.api_minimal import api_router
 
+# Import all models to ensure they are registered with SQLAlchemy
+from app.models import user, document, haccp, prp, supplier, traceability, notification, rbac, settings as settings_model
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,

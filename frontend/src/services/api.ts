@@ -1,13 +1,8 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
-
-// API base configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
-
-console.log('API Base URL:', API_BASE_URL);
+import axios, { AxiosResponse } from 'axios';
 
 // Create axios instance
-const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,231 +22,145 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle auth errors
+// Response interceptor to handle token refresh
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
-      // Try to refresh token
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken) {
-        try {
-          const response = await api.post('/auth/refresh', {
-            refresh_token: refreshToken,
-          });
-          
-          const { access_token, refresh_token } = response.data;
+
+      try {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const response = await axios.post(
+            `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/auth/refresh`,
+            { refresh_token: refreshToken }
+          );
+
+          const { access_token } = response.data.data;
           localStorage.setItem('access_token', access_token);
-          localStorage.setItem('refresh_token', refresh_token);
-          
-          // Retry the original request
+
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return api(originalRequest);
-        } catch (refreshError) {
-          // Refresh failed, redirect to login
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
-          return Promise.reject(refreshError);
         }
-      } else {
-        // No refresh token, redirect to login
+      } catch (refreshError) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/login';
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
 
-// API response types
-export interface ApiResponse<T = any> {
-  success: boolean;
-  message: string;
-  data?: T;
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  size: number;
-  pages: number;
-}
-
 // Auth API
 export const authAPI = {
-  login: async (username: string, password: string) => {
-    // Use URLSearchParams for proper form encoding
+  login: async (credentials: { username: string; password: string }) => {
     const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
+    formData.append('username', credentials.username);
+    formData.append('password', credentials.password);
     
-    try {
-      const response = await api.post('/auth/login', formData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
-      return response.data;
-    } catch (error: any) {
-      console.error('Login API Error:', error);
-      console.error('Error response:', error.response);
-      
-      if (error.response?.status === 401) {
-        throw new Error('Invalid username or password');
-      } else if (error.response?.status === 423) {
-        throw new Error('Account is locked. Please contact administrator.');
-      } else if (error.response?.status === 400) {
-        throw new Error('Inactive user account');
-      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
-        throw new Error('Cannot connect to server. Please check if the backend is running.');
-      } else {
-        throw new Error(error.response?.data?.detail || 'Login failed. Please try again.');
-      }
-    }
-  },
-
-  logout: async () => {
-    const response = await api.post('/auth/logout');
-    return response.data;
-  },
-
-  refresh: async (refreshToken: string) => {
-    const response = await api.post('/auth/refresh', {
-      refresh_token: refreshToken,
+    const response: AxiosResponse = await api.post('/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
     });
     return response.data;
   },
 
+  signup: async (signupData: {
+    username: string;
+    email: string;
+    password: string;
+    full_name: string;
+    department?: string;
+    position?: string;
+    phone?: string;
+    employee_id?: string;
+  }) => {
+    const response: AxiosResponse = await api.post('/auth/signup', signupData);
+    return response.data;
+  },
+
+  logout: async () => {
+    const response: AxiosResponse = await api.post('/auth/logout');
+    return response.data;
+  },
+
+  refresh: async (refreshToken: string) => {
+    const response: AxiosResponse = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    return response.data;
+  },
+
   me: async () => {
-    const response = await api.get('/auth/me');
+    const response: AxiosResponse = await api.get('/auth/me');
     return response.data;
   },
 };
 
 // Users API
 export const usersAPI = {
-  getUsers: async (params?: {
-    page?: number;
-    size?: number;
+  getUsers: async (params?: { 
+    page?: number; 
+    size?: number; 
     search?: string;
-    role?: string;
+    role_id?: number;
     status?: string;
     department?: string;
   }) => {
-    const response = await api.get('/users/', { params });
+    // Filter out empty string parameters
+    const filteredParams: any = {};
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          filteredParams[key] = value;
+        }
+      });
+    }
+    const response: AxiosResponse = await api.get('/users', { params: filteredParams });
     return response.data;
   },
 
-  getUser: async (id: number) => {
-    const response = await api.get(`/users/${id}`);
+  getUser: async (userId: number) => {
+    const response: AxiosResponse = await api.get(`/users/${userId}`);
     return response.data;
   },
 
   createUser: async (userData: any) => {
-    const response = await api.post('/users/', userData);
+    const response: AxiosResponse = await api.post('/users', userData);
     return response.data;
   },
 
-  updateUser: async (id: number, userData: any) => {
-    const response = await api.put(`/users/${id}`, userData);
+  updateUser: async (userId: number, userData: any) => {
+    const response: AxiosResponse = await api.put(`/users/${userId}`, userData);
     return response.data;
   },
 
-  deleteUser: async (id: number) => {
-    const response = await api.delete(`/users/${id}`);
+  deleteUser: async (userId: number) => {
+    const response: AxiosResponse = await api.delete(`/users/${userId}`);
     return response.data;
   },
 
-  activateUser: async (id: number) => {
-    const response = await api.post(`/users/${id}/activate`);
+  activateUser: async (userId: number) => {
+    const response: AxiosResponse = await api.post(`/users/${userId}/activate`);
     return response.data;
   },
 
-  deactivateUser: async (id: number) => {
-    const response = await api.post(`/users/${id}/deactivate`);
+  deactivateUser: async (userId: number) => {
+    const response: AxiosResponse = await api.post(`/users/${userId}/deactivate`);
+    return response.data;
+  },
+
+  resetPassword: async (userId: number) => {
+    const response: AxiosResponse = await api.post(`/users/${userId}/reset-password`);
     return response.data;
   },
 
   getDashboard: async () => {
-    const response = await api.get('/users/dashboard');
-    return response.data;
-  },
-};
-
-// Settings API
-export const settingsAPI = {
-  getSettings: async (category?: string) => {
-    const params = category ? { category } : {};
-    const response = await api.get('/settings/', { params });
-    return response.data;
-  },
-
-  getSetting: async (key: string) => {
-    const response = await api.get(`/settings/${key}`);
-    return response.data;
-  },
-
-  updateSetting: async (key: string, value: string) => {
-    const response = await api.put(`/settings/${key}`, { value });
-    return response.data;
-  },
-
-  bulkUpdateSettings: async (settings: Array<{ [key: string]: string }>) => {
-    const response = await api.post('/settings/bulk-update', { settings });
-    return response.data;
-  },
-
-  initializeSettings: async () => {
-    const response = await api.post('/settings/initialize');
-    return response.data;
-  },
-
-  resetSetting: async (key: string) => {
-    const response = await api.post(`/settings/reset/${key}`);
-    return response.data;
-  },
-
-  getCategories: async () => {
-    const response = await api.get('/settings/categories');
-    return response.data;
-  },
-
-  exportSettings: async () => {
-    const response = await api.get('/settings/export/json');
-    return response.data;
-  },
-
-  importSettings: async (settingsData: any) => {
-    const response = await api.post('/settings/import/json', settingsData);
-    return response.data;
-  },
-
-  // User Preferences
-  getUserPreferences: async () => {
-    const response = await api.get('/settings/preferences/me');
-    return response.data;
-  },
-
-  createUserPreference: async (preference: any) => {
-    const response = await api.post('/settings/preferences', preference);
-    return response.data;
-  },
-
-  updateUserPreference: async (key: string, value: string) => {
-    const response = await api.put(`/settings/preferences/${key}`, { value });
-    return response.data;
-  },
-
-  deleteUserPreference: async (key: string) => {
-    const response = await api.delete(`/settings/preferences/${key}`);
+    const response: AxiosResponse = await api.get('/users/dashboard');
     return response.data;
   },
 };
@@ -264,18 +173,51 @@ export const documentsAPI = {
     search?: string;
     category?: string;
     status?: string;
+    document_type?: string;
+    department?: string;
+    product_line?: string;
+    created_by?: number;
+    date_from?: string;
+    date_to?: string;
+    review_date_from?: string;
+    review_date_to?: string;
+    keywords?: string;
   }) => {
-    const response = await api.get('/documents/', { params });
+    // Filter out empty string parameters
+    const filteredParams: any = {};
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          // For enum fields, only send if it's a valid value
+          if (['category', 'status', 'document_type'].includes(key)) {
+            if (value && typeof value === 'string' && value.trim() !== '') {
+              filteredParams[key] = value;
+            }
+          }
+          // For date fields, only send if it's a valid date string
+          else if (['date_from', 'date_to', 'review_date_from', 'review_date_to'].includes(key)) {
+            if (value && typeof value === 'string' && value.trim() !== '') {
+              filteredParams[key] = value;
+            }
+          }
+          // For other fields, send if not empty
+          else {
+            filteredParams[key] = value;
+          }
+        }
+      });
+    }
+    const response: AxiosResponse = await api.get('/documents', { params: filteredParams });
     return response.data;
   },
 
-  getDocument: async (id: number) => {
-    const response = await api.get(`/documents/${id}`);
+  getDocument: async (documentId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}`);
     return response.data;
   },
 
   createDocument: async (formData: FormData) => {
-    const response = await api.post('/documents/', formData, {
+    const response: AxiosResponse = await api.post('/documents', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -283,8 +225,8 @@ export const documentsAPI = {
     return response.data;
   },
 
-  updateDocument: async (id: number, formData: FormData) => {
-    const response = await api.put(`/documents/${id}`, formData, {
+  updateDocument: async (documentId: number, formData: FormData) => {
+    const response: AxiosResponse = await api.put(`/documents/${documentId}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -292,394 +234,512 @@ export const documentsAPI = {
     return response.data;
   },
 
-  deleteDocument: async (id: number) => {
-    const response = await api.delete(`/documents/${id}`);
+  deleteDocument: async (documentId: number) => {
+    const response: AxiosResponse = await api.delete(`/documents/${documentId}`);
     return response.data;
   },
 
-  downloadDocument: async (id: number) => {
-    const response = await api.get(`/documents/${id}/download`, {
+  downloadDocument: async (documentId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/download`, {
       responseType: 'blob',
     });
-    return response;
+    return response.data;
   },
 
-  uploadFile: async (id: number, file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await api.post(`/documents/${id}/upload`, formData, {
+  downloadVersion: async (documentId: number, versionId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/versions/${versionId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Version Control APIs
+  createNewVersion: async (documentId: number, formData: FormData) => {
+    const response: AxiosResponse = await api.post(`/documents/${documentId}/versions`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  getVersionHistory: async (documentId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/versions`);
+    return response.data;
+  },
+
+  getSpecificVersion: async (documentId: number, versionId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/versions/${versionId}`);
+    return response.data;
+  },
+
+  approveVersion: async (documentId: number, versionId: number, comments?: string) => {
+    const formData = new FormData();
+    if (comments) {
+      formData.append('comments', comments);
+    }
+    
+    const response: AxiosResponse = await api.post(
+      `/documents/${documentId}/versions/${versionId}/approve`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  },
+
+  getChangeLog: async (documentId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/change-log`);
+    return response.data;
+  },
+
+  downloadVersion: async (documentId: number, versionId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/versions/${versionId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  uploadDocumentFile: async (documentId: number, formData: FormData) => {
+    const response: AxiosResponse = await api.post(`/documents/${documentId}/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // Document Statistics
+  getDocumentStats: async () => {
+    const response: AxiosResponse = await api.get('/documents/stats/overview');
+    return response.data;
+  },
+
+  // Bulk Operations
+  bulkUpdateStatus: async (documentIds: number[], action: string, reason?: string) => {
+    const response: AxiosResponse = await api.post('/documents/bulk/status', {
+      document_ids: documentIds,
+      action,
+      reason,
+    });
+    return response.data;
+  },
+
+  // Maintenance Operations
+  archiveObsoleteDocuments: async () => {
+    const response: AxiosResponse = await api.post('/documents/maintenance/archive-obsolete');
+    return response.data;
+  },
+
+  getExpiredDocuments: async () => {
+    const response: AxiosResponse = await api.get('/documents/maintenance/expired');
+    return response.data;
+  },
+
+  // Document Templates
+  getDocumentTemplates: async (params?: {
+    page?: number;
+    size?: number;
+    document_type?: string;
+    category?: string;
+  }) => {
+    const response: AxiosResponse = await api.get('/documents/templates', { params });
+    return response.data;
+  },
+
+  getDocumentTemplate: async (templateId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/templates/${templateId}`);
+    return response.data;
+  },
+
+  createDocumentTemplate: async (templateData: any) => {
+    const response: AxiosResponse = await api.post('/documents/templates', templateData);
+    return response.data;
+  },
+
+  deleteDocumentTemplate: async (templateId: number) => {
+    const response: AxiosResponse = await api.delete(`/documents/templates/${templateId}`);
     return response.data;
   },
 };
 
 // HACCP API
 export const haccpAPI = {
-  getProducts: async (params?: {
-    page?: number;
-    size?: number;
-    search?: string;
-  }) => {
-    const response = await api.get('/haccp/products/', { params });
+  // Products
+  getProducts: async () => {
+    const response: AxiosResponse = await api.get('/haccp/products');
     return response.data;
   },
 
-  getProduct: async (id: number) => {
-    const response = await api.get(`/haccp/products/${id}`);
+  getProduct: async (productId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/products/${productId}`);
     return response.data;
   },
 
   createProduct: async (productData: any) => {
-    const response = await api.post('/haccp/products', productData);
+    const response: AxiosResponse = await api.post('/haccp/products', productData);
     return response.data;
   },
 
+  updateProduct: async (productId: number, productData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/products/${productId}`, productData);
+    return response.data;
+  },
+
+  deleteProduct: async (productId: number) => {
+    const response: AxiosResponse = await api.delete(`/haccp/products/${productId}`);
+    return response.data;
+  },
+
+  // Process Flows
   createProcessFlow: async (productId: number, flowData: any) => {
-    const response = await api.post(`/haccp/products/${productId}/process-flows`, flowData);
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/process-flows`, flowData);
     return response.data;
   },
 
+  updateProcessFlow: async (flowId: number, flowData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/process-flows/${flowId}`, flowData);
+    return response.data;
+  },
+
+  deleteProcessFlow: async (flowId: number) => {
+    const response: AxiosResponse = await api.delete(`/haccp/process-flows/${flowId}`);
+    return response.data;
+  },
+
+  // Hazards
   createHazard: async (productId: number, hazardData: any) => {
-    const response = await api.post(`/haccp/products/${productId}/hazards`, hazardData);
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/hazards`, hazardData);
     return response.data;
   },
 
+  updateHazard: async (hazardId: number, hazardData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/hazards/${hazardId}`, hazardData);
+    return response.data;
+  },
+
+  deleteHazard: async (hazardId: number) => {
+    const response: AxiosResponse = await api.delete(`/haccp/hazards/${hazardId}`);
+    return response.data;
+  },
+
+  runDecisionTree: async (hazardId: number) => {
+    const response: AxiosResponse = await api.post(`/haccp/hazards/${hazardId}/decision-tree`);
+    return response.data;
+  },
+
+  // CCPs
   createCCP: async (productId: number, ccpData: any) => {
-    const response = await api.post(`/haccp/products/${productId}/ccps`, ccpData);
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/ccps`, ccpData);
     return response.data;
   },
 
+  updateCCP: async (ccpId: number, ccpData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/ccps/${ccpId}`, ccpData);
+    return response.data;
+  },
+
+  deleteCCP: async (ccpId: number) => {
+    const response: AxiosResponse = await api.delete(`/haccp/ccps/${ccpId}`);
+    return response.data;
+  },
+
+  // Monitoring Logs
   createMonitoringLog: async (ccpId: number, logData: any) => {
-    const response = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs`, logData);
+    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs`, logData);
     return response.data;
   },
 
   getMonitoringLogs: async (ccpId: number) => {
-    const response = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
+    const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
     return response.data;
   },
 
+  // Verification Logs
   createVerificationLog: async (ccpId: number, logData: any) => {
-    const response = await api.post(`/haccp/ccps/${ccpId}/verification-logs`, logData);
+    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/verification-logs`, logData);
     return response.data;
   },
 
+  getVerificationLogs: async (ccpId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/verification-logs`);
+    return response.data;
+  },
+
+  // Dashboard and Reports
   getDashboard: async () => {
-    const response = await api.get('/haccp/dashboard');
+    const response: AxiosResponse = await api.get('/haccp/dashboard');
+    return response.data;
+  },
+
+  getEnhancedDashboard: async () => {
+    const response: AxiosResponse = await api.get('/haccp/dashboard/enhanced');
+    return response.data;
+  },
+
+  getAlertsSummary: async (days: number = 7) => {
+    const response: AxiosResponse = await api.get(`/haccp/alerts/summary?days=${days}`);
+    return response.data;
+  },
+
+  getFlowchartData: async (productId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/products/${productId}/flowchart`);
+    return response.data;
+  },
+
+  generateReport: async (productId: number, reportRequest: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/reports`, reportRequest);
     return response.data;
   },
 };
 
 // PRP API
 export const prpAPI = {
-  getPrograms: async (params?: {
-    page?: number;
-    size?: number;
-    category?: string;
-    status?: string;
-    search?: string;
-  }) => {
-    const response = await api.get('/prp/programs/', { params });
+  getPrograms: async (params?: { search?: string; category?: string }) => {
+    const response: AxiosResponse = await api.get('/prp/programs', { params });
+    return response.data;
+  },
+
+  getProgram: async (programId: number) => {
+    const response: AxiosResponse = await api.get(`/prp/programs/${programId}`);
     return response.data;
   },
 
   createProgram: async (programData: any) => {
-    const response = await api.post('/prp/programs', programData);
+    const response: AxiosResponse = await api.post('/prp/programs', programData);
     return response.data;
   },
 
-  getChecklists: async (programId: number, params?: {
-    page?: number;
-    size?: number;
-    status?: string;
-  }) => {
-    const response = await api.get(`/prp/programs/${programId}/checklists`, { params });
+  getChecklists: async (programId: number, params?: { page?: number; size?: number }) => {
+    const response: AxiosResponse = await api.get(`/prp/programs/${programId}/checklists`, { params });
     return response.data;
   },
 
   createChecklist: async (programId: number, checklistData: any) => {
-    const response = await api.post(`/prp/programs/${programId}/checklists`, checklistData);
+    const response: AxiosResponse = await api.post(`/prp/programs/${programId}/checklists`, checklistData);
     return response.data;
   },
 
   getDashboard: async () => {
-    const response = await api.get('/prp/dashboard');
+    const response: AxiosResponse = await api.get('/prp/dashboard');
     return response.data;
   },
 };
-
-// Supplier API
-export const supplierAPI = {
-  getSuppliers: async (params?: {
-    page?: number;
-    size?: number;
-    category?: string;
-    status?: string;
-    search?: string;
-  }) => {
-    const response = await api.get('/suppliers/suppliers/', { params });
-    return response.data;
-  },
-
-  createSupplier: async (supplierData: any) => {
-    const response = await api.post('/suppliers/suppliers', supplierData);
-    return response.data;
-  },
-
-  getSupplier: async (id: number) => {
-    const response = await api.get(`/suppliers/suppliers/${id}`);
-    return response.data;
-  },
-
-  getMaterials: async (supplierId: number, params?: {
-    page?: number;
-    size?: number;
-  }) => {
-    const response = await api.get(`/suppliers/suppliers/${supplierId}/materials`, { params });
-    return response.data;
-  },
-
-  createMaterial: async (supplierId: number, materialData: any) => {
-    const response = await api.post(`/suppliers/suppliers/${supplierId}/materials`, materialData);
-    return response.data;
-  },
-
-  getEvaluations: async (supplierId: number, params?: {
-    page?: number;
-    size?: number;
-  }) => {
-    const response = await api.get(`/suppliers/suppliers/${supplierId}/evaluations`, { params });
-    return response.data;
-  },
-
-  createEvaluation: async (supplierId: number, evaluationData: any) => {
-    const response = await api.post(`/suppliers/suppliers/${supplierId}/evaluations`, evaluationData);
-    return response.data;
-  },
-
-  getDashboard: async () => {
-    const response = await api.get('/suppliers/suppliers/dashboard');
-    return response.data;
-  },
-};
-
-
 
 // Dashboard API
 export const dashboardAPI = {
+  getDashboard: async () => {
+    const response: AxiosResponse = await api.get('/dashboard');
+    return response.data;
+  },
+
   getStats: async () => {
-    const response = await api.get('/dashboard/stats');
+    const response: AxiosResponse = await api.get('/dashboard/stats');
     return response.data;
   },
 
   getRecentActivity: async () => {
-    const response = await api.get('/dashboard/recent-activity');
+    const response: AxiosResponse = await api.get('/dashboard/recent-activity');
+    return response.data;
+  },
+};
+
+// Notifications API
+export const notificationAPI = {
+  getNotifications: async (params?: { page?: number; size?: number; read?: boolean }) => {
+    const response: AxiosResponse = await api.get('/notifications', { params });
     return response.data;
   },
 
-  getComplianceMetrics: async () => {
-    const response = await api.get('/dashboard/compliance-metrics');
+  getUnreadNotifications: async (limit: number = 10) => {
+    const response: AxiosResponse = await api.get(`/notifications/unread?limit=${limit}`);
     return response.data;
   },
 
-  getSystemStatus: async () => {
-    const response = await api.get('/dashboard/system-status');
+  getNotificationSummary: async () => {
+    const response: AxiosResponse = await api.get('/notifications/summary');
+    return response.data;
+  },
+
+  markAsRead: async (notificationId: number) => {
+    const response: AxiosResponse = await api.post(`/notifications/${notificationId}/read`);
+    return response.data;
+  },
+
+  markAllAsRead: async () => {
+    const response: AxiosResponse = await api.post('/notifications/read-all');
+    return response.data;
+  },
+
+  deleteNotification: async (notificationId: number) => {
+    const response: AxiosResponse = await api.delete(`/notifications/${notificationId}`);
+    return response.data;
+  },
+
+  clearReadNotifications: async () => {
+    const response: AxiosResponse = await api.delete('/notifications/clear-read');
+    return response.data;
+  },
+};
+
+// Settings API
+export const settingsAPI = {
+  getSettings: async () => {
+    const response: AxiosResponse = await api.get('/settings');
+    return response.data;
+  },
+
+  updateSetting: async (settingId: number, value: any) => {
+    const response: AxiosResponse = await api.put(`/settings/${settingId}`, { value });
+    return response.data;
+  },
+
+  createSetting: async (settingData: any) => {
+    const response: AxiosResponse = await api.post('/settings', settingData);
+    return response.data;
+  },
+
+  deleteSetting: async (settingId: number) => {
+    const response: AxiosResponse = await api.delete(`/settings/${settingId}`);
+    return response.data;
+  },
+
+  getSystemInfo: async () => {
+    const response: AxiosResponse = await api.get('/settings/system-info');
+    return response.data;
+  },
+
+  updateSystemSettings: async (settings: any) => {
+    const response: AxiosResponse = await api.put('/settings/system', settings);
+    return response.data;
+  },
+
+  getBackupStatus: async () => {
+    const response: AxiosResponse = await api.get('/settings/backup-status');
+    return response.data;
+  },
+
+  getUserPreferences: async () => {
+    const response: AxiosResponse = await api.get('/settings/user-preferences');
+    return response.data;
+  },
+
+  bulkUpdateSettings: async (settings: any[]) => {
+    const response: AxiosResponse = await api.put('/settings/bulk-update', { settings });
+    return response.data;
+  },
+
+  initializeSettings: async () => {
+    const response: AxiosResponse = await api.post('/settings/initialize');
+    return response.data;
+  },
+
+  resetSetting: async (settingKey: string) => {
+    const response: AxiosResponse = await api.post(`/settings/${settingKey}/reset`);
+    return response.data;
+  },
+
+  exportSettings: async () => {
+    const response: AxiosResponse = await api.get('/settings/export');
+    return response.data;
+  },
+
+  importSettings: async (settingsData: any) => {
+    const response: AxiosResponse = await api.post('/settings/import', settingsData);
+    return response.data;
+  },
+};
+
+// Suppliers API
+export const supplierAPI = {
+  getSuppliers: async (params?: { page?: number; size?: number; search?: string }) => {
+    const response: AxiosResponse = await api.get('/suppliers', { params });
+    return response.data;
+  },
+
+  getSupplier: async (supplierId: number) => {
+    const response: AxiosResponse = await api.get(`/suppliers/${supplierId}`);
+    return response.data;
+  },
+
+  createSupplier: async (supplierData: any) => {
+    const response: AxiosResponse = await api.post('/suppliers', supplierData);
+    return response.data;
+  },
+
+  updateSupplier: async (supplierId: number, supplierData: any) => {
+    const response: AxiosResponse = await api.put(`/suppliers/${supplierId}`, supplierData);
+    return response.data;
+  },
+
+  deleteSupplier: async (supplierId: number) => {
+    const response: AxiosResponse = await api.delete(`/suppliers/${supplierId}`);
+    return response.data;
+  },
+
+  getDashboard: async () => {
+    const response: AxiosResponse = await api.get('/suppliers/dashboard');
     return response.data;
   },
 };
 
 // Traceability API
 export const traceabilityAPI = {
-  // Batch Management
-  getBatches: async (params?: {
-    skip?: number;
-    limit?: number;
-    batch_type?: string;
-    status?: string;
-    product_name?: string;
-    search?: string;
-  }) => {
-    const queryParams = new URLSearchParams();
-    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
-    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
-    if (params?.batch_type) queryParams.append('batch_type', params.batch_type);
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.product_name) queryParams.append('product_name', params.product_name);
-    if (params?.search) queryParams.append('search', params.search);
-    
-    const response = await api.get(`/traceability/batches?${queryParams}`);
-    return response.data;
-  },
-
-  createBatch: async (batchData: any) => {
-    const response = await api.post('/traceability/batches', batchData);
+  getBatches: async (params?: { page?: number; size?: number; search?: string; batch_type?: string; status?: string }) => {
+    const response: AxiosResponse = await api.get('/traceability/batches', { params });
     return response.data;
   },
 
   getBatch: async (batchId: number) => {
-    const response = await api.get(`/traceability/batches/${batchId}`);
+    const response: AxiosResponse = await api.get(`/traceability/batches/${batchId}`);
     return response.data;
   },
 
-  // Traceability Links
-  createTraceabilityLink: async (batchId: number, linkData: any) => {
-    const response = await api.post(`/traceability/batches/${batchId}/links`, linkData);
+  createBatch: async (batchData: any) => {
+    const response: AxiosResponse = await api.post('/traceability/batches', batchData);
     return response.data;
   },
 
-  // Recall Management
-  getRecalls: async (params?: {
-    skip?: number;
-    limit?: number;
-    status?: string;
-    recall_type?: string;
-    search?: string;
-  }) => {
-    const queryParams = new URLSearchParams();
-    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
-    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.recall_type) queryParams.append('recall_type', params.recall_type);
-    if (params?.search) queryParams.append('search', params.search);
-    
-    const response = await api.get(`/traceability/recalls?${queryParams}`);
+  updateBatch: async (batchId: number, batchData: any) => {
+    const response: AxiosResponse = await api.put(`/traceability/batches/${batchId}`, batchData);
+    return response.data;
+  },
+
+  deleteBatch: async (batchId: number) => {
+    const response: AxiosResponse = await api.delete(`/traceability/batches/${batchId}`);
+    return response.data;
+  },
+
+  getTraceabilityChain: async (batchId: number) => {
+    const response: AxiosResponse = await api.get(`/traceability/batches/${batchId}/trace`);
+    return response.data;
+  },
+
+  getDashboard: async () => {
+    const response: AxiosResponse = await api.get('/traceability/dashboard');
+    return response.data;
+  },
+
+  getRecalls: async (params?: { page?: number; size?: number; search?: string; recall_type?: string; status?: string }) => {
+    const response: AxiosResponse = await api.get('/traceability/recalls', { params });
+    return response.data;
+  },
+
+  getTraceabilityReports: async (params?: { page?: number; size?: number; search?: string }) => {
+    const response: AxiosResponse = await api.get('/traceability/reports', { params });
     return response.data;
   },
 
   createRecall: async (recallData: any) => {
-    const response = await api.post('/traceability/recalls', recallData);
+    const response: AxiosResponse = await api.post('/traceability/recalls', recallData);
     return response.data;
   },
 
-  getRecall: async (recallId: number) => {
-    const response = await api.get(`/traceability/recalls/${recallId}`);
-    return response.data;
-  },
-
-  updateRecallStatus: async (recallId: number, statusData: any) => {
-    const response = await api.put(`/traceability/recalls/${recallId}/status`, statusData);
-    return response.data;
-  },
-
-  // Traceability Reports
-  createTraceabilityReport: async (traceData: any) => {
-    const response = await api.post('/traceability/trace', traceData);
-    return response.data;
-  },
-
-  getTraceabilityReports: async (params?: {
-    skip?: number;
-    limit?: number;
-  }) => {
-    const queryParams = new URLSearchParams();
-    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
-    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
-    
-    const response = await api.get(`/traceability/trace/reports?${queryParams}`);
-    return response.data;
-  },
-
-  // Dashboard
-  getDashboard: async () => {
-    const response = await api.get('/traceability/dashboard');
-    return response.data;
-  },
-};
-
-// Profile API
-export const profileAPI = {
-  getProfile: async () => {
-    const response = await api.get('/profile/me');
-    return response.data;
-  },
-  updateProfile: async (formData: FormData) => {
-    const response = await api.put('/profile/me', formData);
-    return response.data;
-  },
-  changePassword: async (passwordData: { current_password: string; new_password: string }) => {
-    const response = await api.post('/profile/me/change-password', passwordData);
-    return response.data;
-  },
-  uploadAvatar: async (formData: FormData) => {
-    const response = await api.post('/profile/me/upload-avatar', formData);
-    return response.data;
-  },
-  deleteAvatar: async () => {
-    const response = await api.delete('/profile/me/avatar');
-    return response.data;
-  },
-  getPreferences: async () => {
-    const response = await api.get('/profile/me/preferences');
-    return response.data;
-  },
-  createPreference: async (formData: FormData) => {
-    const response = await api.post('/profile/me/preferences', formData);
-    return response.data;
-  },
-  deletePreference: async (key: string) => {
-    const response = await api.delete(`/profile/me/preferences/${key}`);
-    return response.data;
-  },
-  getActivity: async () => {
-    const response = await api.get('/profile/me/activity');
-    return response.data;
-  },
-  getSecurityInfo: async () => {
-    const response = await api.get('/profile/me/security');
-    return response.data;
-  },
-};
-
-// Notification API
-export const notificationAPI = {
-  getNotifications: async (params?: {
-    page?: number;
-    size?: number;
-    is_read?: boolean;
-    category?: string;
-    priority?: string;
-    notification_type?: string;
-  }) => {
-    const response = await api.get('/notifications/', { params });
-    return response.data;
-  },
-
-  getUnreadNotifications: async (limit: number = 10) => {
-    const response = await api.get('/notifications/unread', { params: { limit } });
-    return response.data;
-  },
-
-  getNotificationSummary: async () => {
-    const response = await api.get('/notifications/summary');
-    return response.data;
-  },
-
-  getNotification: async (id: number) => {
-    const response = await api.get(`/notifications/${id}`);
-    return response.data;
-  },
-
-  markAsRead: async (id: number) => {
-    const response = await api.put(`/notifications/${id}/read`);
-    return response.data;
-  },
-
-  markAllAsRead: async () => {
-    const response = await api.put('/notifications/read-all');
-    return response.data;
-  },
-
-  deleteNotification: async (id: number) => {
-    const response = await api.delete(`/notifications/${id}`);
-    return response.data;
-  },
-
-  clearReadNotifications: async () => {
-    const response = await api.delete('/notifications/clear-read');
+  createTraceabilityReport: async (reportData: any) => {
+    const response: AxiosResponse = await api.post('/traceability/reports', reportData);
     return response.data;
   },
 };

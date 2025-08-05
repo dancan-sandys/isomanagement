@@ -1,9 +1,41 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
+  Grid,
   Typography,
+  Card,
+  CardContent,
+  CardHeader,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  ListItemSecondaryAction,
   Button,
+  Chip,
   Paper,
+  Stack,
+  Alert,
+  IconButton,
+  Tooltip,
+  Badge,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormControlLabel,
+  Checkbox,
+  LinearProgress,
+  CircularProgress,
+  Pagination,
   Table,
   TableBody,
   TableCell,
@@ -11,241 +43,305 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  IconButton,
-  Chip,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Alert,
-  Skeleton,
-  Tooltip,
-  Grid,
-  Card,
-  CardContent,
+  InputAdornment,
+  Menu,
+  MenuItem as MenuItemComponent,
 } from '@mui/material';
 import {
-  Add,
-  Edit,
-  Delete,
-  Visibility,
-  Download,
-  Search,
-  Refresh,
   Description,
   CloudUpload,
+  History,
+  Approval,
+  Visibility,
+  Edit,
+  Delete,
+  Download,
+  Share,
+  Warning,
   CheckCircle,
-  Error,
+  Schedule,
+  Add,
+  FilterList,
+  Search,
+  Refresh,
+  Archive,
+  FileCopy,
+  Lock,
+  LockOpen,
+  MoreVert,
+  Upload,
+  GetApp,
+  VisibilityOff,
+  EditNote,
+  History as HistoryIcon,
+  Timeline,
+  Assessment,
+  TrendingUp,
+  TrendingDown,
+  FilterAlt,
+  Clear,
+  CalendarToday,
+  AccessTime,
+  Person,
+  Business,
+  Category,
+  Label,
+  Compare,
 } from '@mui/icons-material';
-import { documentsAPI } from '../services/api';
-import DocumentViewer from '../components/DocumentViewer';
+import { useNavigate } from 'react-router-dom';
+import { AppDispatch, RootState } from '../store';
+import {
+  fetchDocuments,
+  fetchDocumentStats,
+  deleteDocument,
+  bulkUpdateStatus,
+  archiveObsoleteDocuments,
+  fetchExpiredDocuments,
+  setFilters,
+  clearFilters,
+  setPagination,
+  setSelectedDocument,
+  downloadDocument,
+  downloadVersion,
+  fetchDocumentVersions,
+  fetchChangeLog,
+} from '../store/slices/documentSlice';
+import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
+import PageHeader from '../components/UI/PageHeader';
+import StatusChip from '../components/UI/StatusChip';
+import DocumentUploadDialog from '../components/Documents/DocumentUploadDialog';
+import DocumentViewDialog from '../components/Documents/DocumentViewDialog';
+import DocumentVersionDialog from '../components/Documents/DocumentVersionDialog';
+import DocumentApprovalDialog from '../components/Documents/DocumentApprovalDialog';
+import DocumentChangeLogDialog from '../components/Documents/DocumentChangeLogDialog';
+import DocumentTemplatesDialog from '../components/Documents/DocumentTemplatesDialog';
+import DocumentWorkflowDialog from '../components/Documents/DocumentWorkflowDialog';
+import DocumentAnalyticsDialog from '../components/Documents/DocumentAnalyticsDialog';
+import DocumentComparisonDialog from '../components/Documents/DocumentComparisonDialog';
+import { downloadFile, formatFileSize, getFileIcon } from '../utils/downloadUtils';
 
-interface Document {
-  id: number;
-  document_number: string;
-  title: string;
-  description?: string;
-  document_type?: string;
-  category?: string;
-  status?: string;
-  version: string;
-  file_path?: string;
-  file_size?: number;
-  file_type?: string;
-  original_filename?: string;
-  department?: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`documents-tabpanel-${index}`}
+      aria-labelledby={`documents-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+    </div>
+  );
 }
 
 const Documents: React.FC = () => {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [total, setTotal] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
+  const { user: currentUser } = useSelector((state: RootState) => state.auth);
+  const { documents, stats, loading, error, pagination, filters } = useSelector((state: RootState) => state.documents);
   
-  // Dialog states
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editingDocument, setEditingDocument] = useState<Document | null>(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    document_number: '',
-    description: '',
-    document_type: '',
-    category: '',
-    department: '',
-  });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [changeLogDialogOpen, setChangeLogDialogOpen] = useState(false);
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
+  const [workflowDialogOpen, setWorkflowDialogOpen] = useState(false);
+  const [analyticsDialogOpen, setAnalyticsDialogOpen] = useState(false);
+  const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<number[]>([]);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedDocumentForMenu, setSelectedDocumentForMenu] = useState<any>(null);
 
-  const fetchDocuments = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await documentsAPI.getDocuments({
-        page: page + 1,
-        size: rowsPerPage,
-        search: searchTerm || undefined,
-        category: filterCategory || undefined,
-        status: filterStatus || undefined,
-      });
-      
-      if (response.success) {
-        setDocuments(response.data.items);
-        setTotal(response.data.total);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load documents');
-      console.error('Documents error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, rowsPerPage, searchTerm, filterCategory, filterStatus]);
+  // Role-based permissions
+  const canCreateDocuments = hasRole(currentUser, 'QA Manager') || 
+                           hasRole(currentUser, 'QA Specialist') || 
+                           hasRole(currentUser, 'Production Manager') ||
+                           isSystemAdministrator(currentUser);
+
+  const canApproveDocuments = hasRole(currentUser, 'QA Manager') || 
+                             isSystemAdministrator(currentUser);
+
+  const canDeleteDocuments = hasRole(currentUser, 'QA Manager') || 
+                            isSystemAdministrator(currentUser);
+
+  const canManageDocuments = hasRole(currentUser, 'QA Manager') || 
+                            hasRole(currentUser, 'QA Specialist') || 
+                            hasRole(currentUser, 'Production Manager') ||
+                            isSystemAdministrator(currentUser);
 
   useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
+    loadDocuments();
+    loadStats();
+  }, [pagination.page, filters]);
 
-  const handleOpenDialog = (document?: Document) => {
-    if (document) {
-      setEditingDocument(document);
-      setFormData({
-        title: document.title,
-        document_number: document.document_number,
-        description: document.description || '',
-        document_type: document.document_type || '',
-        category: document.category || '',
-        department: document.department || '',
-      });
-    } else {
-      setEditingDocument(null);
-      setFormData({
-        title: '',
-        document_number: '',
-        description: '',
-        document_type: '',
-        category: '',
-        department: '',
-      });
-    }
-    setSelectedFile(null);
-    setOpenDialog(true);
+  const loadDocuments = () => {
+    const params = {
+      page: pagination.page,
+      size: pagination.size,
+      ...filters,
+    };
+    dispatch(fetchDocuments(params));
   };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingDocument(null);
-    setFormData({
-      title: '',
-      document_number: '',
-      description: '',
-      document_type: '',
-      category: '',
-      department: '',
-    });
-    setSelectedFile(null);
+  const loadStats = () => {
+    dispatch(fetchDocumentStats());
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setSelectedTab(newValue);
   };
 
-  const handleSubmit = async () => {
-    try {
-      setUploading(true);
-      
-      const formDataToSend = new FormData();
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('document_number', formData.document_number);
-      formDataToSend.append('description', formData.description);
-      formDataToSend.append('document_type', formData.document_type);
-      formDataToSend.append('category', formData.category);
-      formDataToSend.append('department', formData.department);
-      
-      if (selectedFile) {
-        formDataToSend.append('file', selectedFile);
-      }
-      
-      if (editingDocument) {
-        await documentsAPI.updateDocument(editingDocument.id, formDataToSend);
-        setSuccess('Document updated successfully');
-      } else {
-        await documentsAPI.createDocument(formDataToSend);
-        setSuccess('Document created successfully');
-      }
-      
-      handleCloseDialog();
-      fetchDocuments();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save document');
-      console.error('Document operation error:', err);
-    } finally {
-      setUploading(false);
-    }
+  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
+    dispatch(setPagination({ page }));
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this document?')) {
-      try {
-        await documentsAPI.deleteDocument(id);
-        setSuccess('Document deleted successfully');
-        fetchDocuments();
-      } catch (err: any) {
-        setError(err.message || 'Failed to delete document');
-        console.error('Delete error:', err);
-      }
-    }
+  const handleFilterChange = (field: string, value: any) => {
+    dispatch(setFilters({ [field]: value }));
   };
 
-  const handleView = (document: Document) => {
+  const handleFilterApply = () => {
+    dispatch(setPagination({ page: 1 }));
+    loadDocuments();
+  };
+
+  const handleFilterClear = () => {
+    dispatch(clearFilters());
+    dispatch(setPagination({ page: 1 }));
+    loadDocuments();
+  };
+
+  const handleDocumentSelect = (document: any) => {
     setSelectedDocument(document);
-    setViewerOpen(true);
+    setViewDialogOpen(true);
   };
 
-  const handleDownload = async (id: number) => {
-    try {
-      const response = await documentsAPI.downloadDocument(id);
-      const blob = new Blob([response.data]);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `document_${id}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err: any) {
-      setError(err.message || 'Failed to download document');
-      console.error('Download error:', err);
+  const handleDocumentEdit = (document: any) => {
+    setSelectedDocument(document);
+    // Navigate to edit page or open edit dialog
+    console.log('Edit document:', document);
+  };
+
+  const handleDocumentDelete = async (documentId: number) => {
+    if (!canDeleteDocuments) {
+      return;
+    }
+    
+    if (window.confirm('Are you sure you want to delete this document?')) {
+      await dispatch(deleteDocument(documentId));
+      loadDocuments();
     }
   };
 
-  const getStatusColor = (status?: string) => {
-    switch (status?.toLowerCase()) {
+  const handleDownloadDocument = async (document: any) => {
+    try {
+      const blob = await dispatch(downloadDocument(document.id)).unwrap();
+      const filename = document.original_filename || `${document.title}.pdf`;
+      downloadFile(blob, filename);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const handleDownloadVersion = async (documentId: number, versionId: number, filename: string) => {
+    try {
+      const blob = await dispatch(downloadVersion({ documentId, versionId })).unwrap();
+      downloadFile(blob, filename);
+    } catch (error) {
+      console.error('Version download failed:', error);
+    }
+  };
+
+  const handleViewVersions = (document: any) => {
+    setSelectedDocument(document);
+    setVersionDialogOpen(true);
+  };
+
+  const handleViewChangeLog = (document: any) => {
+    setSelectedDocument(document);
+    setChangeLogDialogOpen(true);
+  };
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, document: any) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedDocumentForMenu(document);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedDocumentForMenu(null);
+  };
+
+  const handleBulkAction = async (action: string) => {
+    if (selectedDocuments.length === 0) {
+      return;
+    }
+
+    try {
+      await dispatch(bulkUpdateStatus({ documentIds: selectedDocuments, action }));
+      setSelectedDocuments([]);
+      loadDocuments();
+    } catch (error) {
+      console.error('Bulk action failed:', error);
+    }
+  };
+
+  const handleArchiveObsolete = async () => {
+    try {
+      await dispatch(archiveObsoleteDocuments());
+      loadDocuments();
+      loadStats();
+    } catch (error) {
+      console.error('Archive operation failed:', error);
+    }
+  };
+
+  const getDocumentTypeIcon = (type: string) => {
+    switch (type) {
+      case 'procedure':
+        return <Description color="primary" />;
+      case 'work_instruction':
+        return <Description color="secondary" />;
+      case 'form':
+        return <Description color="success" />;
+      case 'policy':
+        return <Description color="warning" />;
+      case 'manual':
+        return <Description color="error" />;
+      case 'plan':
+        return <Description color="info" />;
+      case 'checklist':
+        return <Description />;
+      default:
+        return <Description />;
+    }
+  };
+
+  const getDocumentTypeLabel = (type: string) => {
+    return type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
       case 'approved':
         return 'success';
-      case 'draft':
-        return 'warning';
       case 'under_review':
+        return 'warning';
+      case 'draft':
         return 'info';
+      case 'obsolete':
+        return 'error';
       case 'archived':
         return 'default';
       default:
@@ -253,493 +349,829 @@ const Documents: React.FC = () => {
     }
   };
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return 'N/A';
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  const handleCloseSnackbar = () => {
-    setError(null);
-    setSuccess(null);
-  };
-
-  return (
-    <Box p={3}>
-      {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Document Management</Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => handleOpenDialog()}
-        >
-          New Document
-        </Button>
-      </Box>
-
-      {/* Alerts */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={handleCloseSnackbar}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={handleCloseSnackbar}>
-          {success}
-        </Alert>
-      )}
-
-      {/* Statistics Cards */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Documents
-                  </Typography>
-                  <Typography variant="h4">
-                    {total}
-                  </Typography>
-                </Box>
-                <Description color="primary" sx={{ fontSize: 40 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Approved
-                  </Typography>
-                  <Typography variant="h4">
-                    {documents.filter(d => d.status === 'approved').length}
-                  </Typography>
-                </Box>
-                <CheckCircle color="success" sx={{ fontSize: 40 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Draft
-                  </Typography>
-                  <Typography variant="h4">
-                    {documents.filter(d => d.status === 'draft').length}
-                  </Typography>
-                </Box>
-                <Error color="warning" sx={{ fontSize: 40 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Under Review
-                  </Typography>
-                  <Typography variant="h4">
-                    {documents.filter(d => d.status === 'under_review').length}
-                  </Typography>
-                </Box>
-                <Error color="info" sx={{ fontSize: 40 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
+  const renderDocumentRegister = () => (
+    <Box>
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
-          <TextField
-            label="Search documents"
-            variant="outlined"
-            size="small"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            sx={{ minWidth: 200 }}
-            InputProps={{
-              startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-            }}
-          />
-          
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Category</InputLabel>
-            <Select
-              value={filterCategory}
-              label="Category"
-              onChange={(e) => setFilterCategory(e.target.value)}
-            >
-              <MenuItem value="">All Categories</MenuItem>
-              <MenuItem value="general">General</MenuItem>
-              <MenuItem value="haccp">HACCP</MenuItem>
-              <MenuItem value="prp">PRP</MenuItem>
-              <MenuItem value="supplier">Supplier</MenuItem>
-              <MenuItem value="quality">Quality</MenuItem>
-              <MenuItem value="safety">Safety</MenuItem>
-              <MenuItem value="training">Training</MenuItem>
-              <MenuItem value="audit">Audit</MenuItem>
-              <MenuItem value="maintenance">Maintenance</MenuItem>
-            </Select>
-          </FormControl>
-          
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={filterStatus}
-              label="Status"
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <MenuItem value="">All Statuses</MenuItem>
-              <MenuItem value="approved">Approved</MenuItem>
-              <MenuItem value="draft">Draft</MenuItem>
-              <MenuItem value="under_review">Under Review</MenuItem>
-              <MenuItem value="archived">Archived</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={fetchDocuments}
-            size="small"
-          >
-            Refresh
-          </Button>
-        </Box>
-      </Paper>
-
-      {/* Documents Table */}
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Document Number</TableCell>
-                <TableCell>Title</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Version</TableCell>
-                <TableCell>File</TableCell>
-                <TableCell>Created By</TableCell>
-                <TableCell>Last Updated</TableCell>
-                <TableCell align="center">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: rowsPerPage }).map((_, index) => (
-                  <TableRow key={index}>
-                    <TableCell><Skeleton variant="text" width="80%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="90%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="60%" /></TableCell>
-                    <TableCell><Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 1 }} /></TableCell>
-                    <TableCell><Skeleton variant="text" width="40%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="70%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="60%" /></TableCell>
-                    <TableCell><Skeleton variant="circular" width={32} height={32} /></TableCell>
-                  </TableRow>
-                ))
-              ) : documents.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No documents found
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      startIcon={<Add />}
-                      onClick={() => handleOpenDialog()}
-                      sx={{ mt: 2 }}
-                    >
-                      Create First Document
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                documents.map((document) => (
-                  <TableRow key={document.id} hover>
-                    <TableCell>{document.document_number}</TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {document.title}
-                        </Typography>
-                        {document.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {document.description.substring(0, 50)}...
-                          </Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>{document.category}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={document.status || 'Unknown'}
-                        color={getStatusColor(document.status) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{document.version}</TableCell>
-                    <TableCell>
-                      {document.file_path ? (
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Description color="primary" fontSize="small" />
-                          <Typography variant="caption">
-                            {document.original_filename}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            ({formatFileSize(document.file_size)})
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          No file
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{document.created_by}</TableCell>
-                    <TableCell>
-                      {new Date(document.updated_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell align="center">
-                      {document.file_path && (
-                        <Tooltip title="View">
-                          <IconButton size="small" onClick={() => handleView(document)}>
-                            <Visibility />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => handleOpenDialog(document)}>
-                          <Edit />
-                        </IconButton>
-                      </Tooltip>
-                      {document.file_path && (
-                        <Tooltip title="Download">
-                          <IconButton size="small" onClick={() => handleDownload(document.id)}>
-                            <Download />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => handleDelete(document.id)}>
-                          <Delete />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={total}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={(_, newPage) => setPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-        />
-      </Paper>
-
-      {/* Document Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editingDocument ? 'Edit Document' : 'New Document'}
-        </DialogTitle>
-        <DialogContent>
-          <Box display="flex" flexDirection="column" gap={3} pt={1}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
+      {showFilters && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={3}>
                 <TextField
-                  label="Document Title"
                   fullWidth
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
+                  size="small"
+                  placeholder="Search documents..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  InputProps={{
+                    startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                  }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Document Number"
-                  fullWidth
-                  value={formData.document_number}
-                  onChange={(e) => setFormData({ ...formData, document_number: e.target.value })}
-                  required
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Document Type</InputLabel>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Category</InputLabel>
                   <Select
-                    value={formData.document_type}
-                    label="Document Type"
-                    onChange={(e) => setFormData({ ...formData, document_type: e.target.value })}
+                    value={filters.category}
+                    onChange={(e) => handleFilterChange('category', e.target.value)}
                   >
+                    <MenuItem value="">All Categories</MenuItem>
+                    <MenuItem value="haccp">HACCP</MenuItem>
+                    <MenuItem value="prp">PRP</MenuItem>
+                    <MenuItem value="training">Training</MenuItem>
+                    <MenuItem value="audit">Audit</MenuItem>
+                    <MenuItem value="maintenance">Maintenance</MenuItem>
+                    <MenuItem value="supplier">Supplier</MenuItem>
+                    <MenuItem value="quality">Quality</MenuItem>
+                    <MenuItem value="safety">Safety</MenuItem>
+                    <MenuItem value="general">General</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                  >
+                    <MenuItem value="">All Statuses</MenuItem>
+                    <MenuItem value="draft">Draft</MenuItem>
+                    <MenuItem value="under_review">Under Review</MenuItem>
+                    <MenuItem value="approved">Approved</MenuItem>
+                    <MenuItem value="obsolete">Obsolete</MenuItem>
+                    <MenuItem value="archived">Archived</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    value={filters.document_type}
+                    onChange={(e) => handleFilterChange('document_type', e.target.value)}
+                  >
+                    <MenuItem value="">All Types</MenuItem>
                     <MenuItem value="policy">Policy</MenuItem>
                     <MenuItem value="procedure">Procedure</MenuItem>
                     <MenuItem value="work_instruction">Work Instruction</MenuItem>
                     <MenuItem value="form">Form</MenuItem>
-                    <MenuItem value="record">Record</MenuItem>
                     <MenuItem value="manual">Manual</MenuItem>
-                    <MenuItem value="specification">Specification</MenuItem>
                     <MenuItem value="plan">Plan</MenuItem>
                     <MenuItem value="checklist">Checklist</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Department</InputLabel>
                   <Select
-                    value={formData.category}
-                    label="Category"
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    value={filters.department}
+                    onChange={(e) => handleFilterChange('department', e.target.value)}
                   >
-                    <MenuItem value="general">General</MenuItem>
-                    <MenuItem value="haccp">HACCP</MenuItem>
-                    <MenuItem value="prp">PRP</MenuItem>
-                    <MenuItem value="supplier">Supplier</MenuItem>
-                    <MenuItem value="quality">Quality</MenuItem>
-                    <MenuItem value="safety">Safety</MenuItem>
-                    <MenuItem value="training">Training</MenuItem>
-                    <MenuItem value="audit">Audit</MenuItem>
-                    <MenuItem value="maintenance">Maintenance</MenuItem>
+                    <MenuItem value="">All Departments</MenuItem>
+                    <MenuItem value="Quality Assurance">Quality Assurance</MenuItem>
+                    <MenuItem value="Production">Production</MenuItem>
+                    <MenuItem value="Maintenance">Maintenance</MenuItem>
+                    <MenuItem value="Management">Management</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-            </Grid>
-
-            <TextField
-              label="Department"
-              fullWidth
-              value={formData.department}
-              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-            />
-
-            <TextField
-              label="Description"
-              fullWidth
-              multiline
-              rows={4}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            />
-
-            {/* File Upload Section */}
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Document File
-              </Typography>
+              <Grid item xs={12} md={1}>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleFilterApply}
+                    startIcon={<FilterAlt />}
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleFilterClear}
+                    startIcon={<Clear />}
+                  >
+                    Clear
+                  </Button>
+                </Stack>
+              </Grid>
               
-              {selectedFile ? (
-                <Box display="flex" alignItems="center" gap={2} p={2} border={1} borderColor="primary.main" borderRadius={1}>
-                  <Description color="primary" />
-                  <Box flex={1}>
-                    <Typography variant="body2" fontWeight="medium">
-                      {selectedFile.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatFileSize(selectedFile.size)}
+              {/* Advanced Filters */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2, mb: 1 }}>
+                  Advanced Filters
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  label="Created From"
+                  value={filters.date_from}
+                  onChange={(e) => handleFilterChange('date_from', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  label="Created To"
+                  value={filters.date_to}
+                  onChange={(e) => handleFilterChange('date_to', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  label="Review Date From"
+                  value={filters.review_date_from}
+                  onChange={(e) => handleFilterChange('review_date_from', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  label="Review Date To"
+                  value={filters.review_date_to}
+                  onChange={(e) => handleFilterChange('review_date_to', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Document Table */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  checked={selectedDocuments.length === documents.length && documents.length > 0}
+                  indeterminate={selectedDocuments.length > 0 && selectedDocuments.length < documents.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedDocuments(documents.map(doc => doc.id));
+                    } else {
+                      setSelectedDocuments([]);
+                    }
+                  }}
+                />
+              </TableCell>
+              <TableCell>Document</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Department</TableCell>
+              <TableCell>Created By</TableCell>
+              <TableCell>Last Modified</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {documents.map((document) => (
+              <TableRow key={document.id} hover>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    checked={selectedDocuments.includes(document.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedDocuments([...selectedDocuments, document.id]);
+                      } else {
+                        setSelectedDocuments(selectedDocuments.filter(id => id !== document.id));
+                      }
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {getDocumentTypeIcon(document.document_type)}
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {document.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {document.document_number} • v{document.version}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Chip 
+                    label={getDocumentTypeLabel(document.document_type)} 
+                    size="small" 
+                    variant="outlined"
+                  />
+                </TableCell>
+                <TableCell>
+                  <StatusChip
+                    status={document.status === 'approved' ? 'compliant' : 
+                           document.status === 'under_review' ? 'pending' : 
+                           document.status === 'draft' ? 'warning' : 
+                           document.status === 'obsolete' ? 'nonConformance' : 'info'}
+                    label={document.status.replace('_', ' ')}
+                  />
+                </TableCell>
+                <TableCell>{document.department || '-'}</TableCell>
+                <TableCell>{document.created_by}</TableCell>
+                <TableCell>
+                  {document.updated_at ? new Date(document.updated_at).toLocaleDateString() : 
+                   new Date(document.created_at).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1}>
+                    <Tooltip title="View Document">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleDocumentSelect(document)}
+                      >
+                        <Visibility />
+                      </IconButton>
+                    </Tooltip>
+                    {canManageDocuments && (
+                      <Tooltip title="Edit Document">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleDocumentEdit(document)}
+                        >
+                          <Edit />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {document.file_path && (
+                      <Tooltip title="Download">
+                        <IconButton 
+                          size="small"
+                          onClick={() => handleDownloadDocument(document)}
+                        >
+                          <Download />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="More Actions">
+                      <IconButton 
+                        size="small"
+                        onClick={(e) => handleMenuOpen(e, document)}
+                      >
+                        <MoreVert />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Pagination
+            count={pagination.pages}
+            page={pagination.page}
+            onChange={handlePageChange}
+            color="primary"
+          />
+        </Box>
+      )}
+
+      {/* Document Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItemComponent onClick={() => {
+          handleViewVersions(selectedDocumentForMenu);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
+          View Version History
+        </MenuItemComponent>
+        <MenuItemComponent onClick={() => {
+          handleViewChangeLog(selectedDocumentForMenu);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <Timeline fontSize="small" />
+          </ListItemIcon>
+          View Change Log
+        </MenuItemComponent>
+        <MenuItemComponent onClick={() => {
+          setSelectedDocument(selectedDocumentForMenu);
+          setWorkflowDialogOpen(true);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <Timeline fontSize="small" />
+          </ListItemIcon>
+          View Workflow
+        </MenuItemComponent>
+        <MenuItemComponent onClick={() => {
+          setSelectedDocument(selectedDocumentForMenu);
+          setComparisonDialogOpen(true);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <Compare fontSize="small" />
+          </ListItemIcon>
+          Compare Versions
+        </MenuItemComponent>
+        {selectedDocumentForMenu?.file_path && (
+          <MenuItemComponent onClick={() => {
+            handleDownloadDocument(selectedDocumentForMenu);
+            handleMenuClose();
+          }}>
+            <ListItemIcon>
+              <Download fontSize="small" />
+            </ListItemIcon>
+            Download Current Version
+          </MenuItemComponent>
+        )}
+        {canManageDocuments && (
+          <MenuItemComponent onClick={() => {
+            handleDocumentEdit(selectedDocumentForMenu);
+            handleMenuClose();
+          }}>
+            <ListItemIcon>
+              <Edit fontSize="small" />
+            </ListItemIcon>
+            Edit Document
+          </MenuItemComponent>
+        )}
+        {canDeleteDocuments && (
+          <MenuItemComponent 
+            onClick={() => {
+              handleDocumentDelete(selectedDocumentForMenu.id);
+              handleMenuClose();
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            <ListItemIcon>
+              <Delete fontSize="small" color="error" />
+            </ListItemIcon>
+            Delete Document
+          </MenuItemComponent>
+        )}
+      </Menu>
+    </Box>
+  );
+
+  const renderPendingApprovals = () => {
+    const pendingDocs = documents.filter(doc => doc.status === 'under_review');
+    
+    return (
+      <Grid container spacing={3}>
+        {pendingDocs.map((doc) => (
+          <Grid item xs={12} md={6} key={doc.id}>
+            <Card>
+              <CardHeader
+                title={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {getDocumentTypeIcon(doc.document_type)}
+                    <Typography variant="h6" fontWeight={600}>
+                      {doc.title}
                     </Typography>
                   </Box>
-                  <Button
-                    size="small"
-                    onClick={() => setSelectedFile(null)}
-                    color="error"
-                  >
-                    Remove
-                  </Button>
-                </Box>
-              ) : (
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    border: '2px dashed',
-                    borderColor: 'grey.300',
-                    borderRadius: 2,
-                    p: 3,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    '&:hover': { borderColor: 'primary.main' }
-                  }}
-                  onClick={() => document.getElementById('file-input')?.click()}
-                >
-                  <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="h6" gutterBottom>
-                    Upload Document File
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Click to select a file or drag and drop
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                    Supported formats: PDF, DOC, DOCX, XLS, XLSX, TXT, JPG, PNG
-                  </Typography>
-                </Paper>
-              )}
-              
-              <input
-                id="file-input"
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
+                }
+                subheader={`${doc.document_number} • v${doc.version} • ${doc.department || 'No Department'}`}
+                action={
+                  <StatusChip
+                    status="pending"
+                    label="Under Review"
+                  />
+                }
               />
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} disabled={uploading}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            variant="contained" 
-            disabled={uploading || !formData.title || !formData.document_number || !formData.document_type || !formData.category}
-          >
-            {uploading ? 'Saving...' : (editingDocument ? 'Update' : 'Create')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+              <CardContent>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Created by: {doc.created_by}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Last Modified: {doc.updated_at ? new Date(doc.updated_at).toLocaleDateString() : 
+                                     new Date(doc.created_at).toLocaleDateString()}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1}>
+                    {canApproveDocuments && (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<Approval />}
+                        onClick={() => {
+                          setSelectedDocument(doc);
+                          setApprovalDialogOpen(true);
+                        }}
+                      >
+                        Approve
+                      </Button>
+                    )}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Visibility />}
+                      onClick={() => handleDocumentSelect(doc)}
+                    >
+                      View
+                    </Button>
+                    {canManageDocuments && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<Edit />}
+                        onClick={() => handleDocumentEdit(doc)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+        {pendingDocs.length === 0 && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                <CheckCircle color="success" sx={{ fontSize: 48, mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  No Pending Approvals
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  All documents are either approved or in draft status.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+      </Grid>
+    );
+  };
 
-      {/* Document Viewer */}
-      {selectedDocument && (
-        <DocumentViewer
-          open={viewerOpen}
-          onClose={() => {
-            setViewerOpen(false);
-            setSelectedDocument(null);
-          }}
-          documentId={selectedDocument.id}
-          documentTitle={selectedDocument.title}
-        />
+  const renderVersionControl = () => (
+    <Grid container spacing={3}>
+      <Grid item xs={12}>
+        <Card>
+          <CardHeader
+            title="Document Version History"
+            titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+          />
+          <CardContent>
+            <List>
+              {documents.map((doc) => (
+                <ListItem key={doc.id} divider>
+                  <ListItemIcon>
+                    {getDocumentTypeIcon(doc.document_type)}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="body1" fontWeight={500}>
+                          {doc.title}
+                        </Typography>
+                        <Chip label={`v${doc.version}`} size="small" />
+                        <StatusChip
+                          status={doc.status === 'approved' ? 'compliant' : 
+                                 doc.status === 'under_review' ? 'pending' : 
+                                 doc.status === 'draft' ? 'warning' : 'info'}
+                          label={doc.status.replace('_', ' ')}
+                        />
+                      </Box>
+                    }
+                    secondary={
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          {doc.document_number} • Created by: {doc.created_by}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Last Modified: {doc.updated_at ? new Date(doc.updated_at).toLocaleDateString() : 
+                                         new Date(doc.created_at).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <Stack direction="row" spacing={1}>
+                      <Tooltip title="View History">
+                        <IconButton 
+                          size="small"
+                          onClick={() => handleViewVersions(doc)}
+                        >
+                          <HistoryIcon />
+                        </IconButton>
+                      </Tooltip>
+                      {doc.file_path && (
+                        <Tooltip title="Download">
+                          <IconButton size="small" onClick={() => handleDownloadDocument(doc)}>
+                            <Download />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <Tooltip title="Share">
+                        <IconButton size="small">
+                          <Share />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+  );
+
+  return (
+    <Box>
+      <PageHeader
+        title="Document Control"
+        subtitle="ISO 22000 Document Management System"
+        breadcrumbs={[
+          { label: 'Dashboard', path: '/' },
+          { label: 'Document Control', path: '/documents' }
+        ]}
+        showAdd={canCreateDocuments}
+        showExport
+        onAdd={() => setUploadDialogOpen(true)}
+        onExport={() => console.log('Export documents')}
+      />
+
+      {/* Document Statistics */}
+      {stats && (
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Description color="primary" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="h4" fontWeight={700}>
+                      {stats.total_documents}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Documents
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Approval color="warning" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="h4" fontWeight={700}>
+                      {stats.documents_requiring_approval}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Pending Approval
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <CheckCircle color="success" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="h4" fontWeight={700}>
+                      {stats.documents_by_status.approved || 0}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Approved Documents
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Warning color="error" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="h4" fontWeight={700}>
+                      {stats.expired_documents}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Expired Documents
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       )}
+
+      {/* Alerts */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => dispatch({ type: 'documents/clearError' })}>
+          {error}
+        </Alert>
+      )}
+
+      {stats?.expired_documents && stats.expired_documents > 0 && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <Typography variant="body2">
+            <strong>Expired Documents:</strong> {stats.expired_documents} document(s) require review. 
+            Please update or extend review dates to maintain compliance.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Action Bar */}
+      <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Button
+          variant="outlined"
+          startIcon={<FilterAlt />}
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          {showFilters ? 'Hide' : 'Show'} Filters
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<Refresh />}
+          onClick={loadDocuments}
+        >
+          Refresh
+        </Button>
+        {selectedDocuments.length > 0 && (
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<Archive />}
+              onClick={() => handleBulkAction('archive')}
+            >
+              Archive Selected
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Delete />}
+              onClick={() => handleBulkAction('delete')}
+              color="error"
+            >
+              Delete Selected
+            </Button>
+          </>
+        )}
+        {canApproveDocuments && (
+          <Button
+            variant="outlined"
+            startIcon={<Archive />}
+            onClick={handleArchiveObsolete}
+          >
+            Archive Obsolete
+          </Button>
+        )}
+        <Button
+          variant="outlined"
+          startIcon={<Description />}
+          onClick={() => setTemplatesDialogOpen(true)}
+        >
+          Templates
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<Assessment />}
+          onClick={() => setAnalyticsDialogOpen(true)}
+        >
+          Analytics
+        </Button>
+      </Box>
+
+      {/* Loading */}
+      {loading && <LinearProgress sx={{ mb: 3 }} />}
+
+      {/* Tabs */}
+      <Paper sx={{ mb: 3 }}>
+        <Tabs
+          value={selectedTab}
+          onChange={handleTabChange}
+          aria-label="document control tabs"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label="Document Register" />
+          <Tab label="Pending Approvals" />
+          <Tab label="Version Control" />
+        </Tabs>
+      </Paper>
+
+      <TabPanel value={selectedTab} index={0}>
+        {renderDocumentRegister()}
+      </TabPanel>
+      <TabPanel value={selectedTab} index={1}>
+        {renderPendingApprovals()}
+      </TabPanel>
+      <TabPanel value={selectedTab} index={2}>
+        {renderVersionControl()}
+      </TabPanel>
+
+      {/* Dialogs */}
+      <DocumentUploadDialog
+        open={uploadDialogOpen}
+        onClose={() => setUploadDialogOpen(false)}
+        onSuccess={() => {
+          setUploadDialogOpen(false);
+          loadDocuments();
+        }}
+      />
+
+      <DocumentViewDialog
+        open={viewDialogOpen}
+        document={selectedDocument}
+        onClose={() => setViewDialogOpen(false)}
+        onEdit={() => {
+          setViewDialogOpen(false);
+          handleDocumentEdit(selectedDocument);
+        }}
+      />
+
+      <DocumentVersionDialog
+        open={versionDialogOpen}
+        document={selectedDocument}
+        onClose={() => setVersionDialogOpen(false)}
+      />
+
+      <DocumentApprovalDialog
+        open={approvalDialogOpen}
+        document={selectedDocument}
+        onClose={() => setApprovalDialogOpen(false)}
+        onSuccess={() => {
+          setApprovalDialogOpen(false);
+          loadDocuments();
+        }}
+      />
+
+      <DocumentChangeLogDialog
+        open={changeLogDialogOpen}
+        document={selectedDocument}
+        onClose={() => setChangeLogDialogOpen(false)}
+      />
+
+      <DocumentTemplatesDialog
+        open={templatesDialogOpen}
+        onClose={() => setTemplatesDialogOpen(false)}
+        onTemplateSelect={(template) => {
+          console.log('Template selected:', template);
+          // Handle template selection - could pre-fill upload form
+        }}
+      />
+
+      <DocumentWorkflowDialog
+        open={workflowDialogOpen}
+        document={selectedDocument}
+        onClose={() => setWorkflowDialogOpen(false)}
+        onWorkflowUpdate={(workflow) => {
+          console.log('Workflow updated:', workflow);
+          // Handle workflow updates
+        }}
+      />
+
+      <DocumentAnalyticsDialog
+        open={analyticsDialogOpen}
+        onClose={() => setAnalyticsDialogOpen(false)}
+      />
+
+      <DocumentComparisonDialog
+        open={comparisonDialogOpen}
+        document={selectedDocument}
+        onClose={() => setComparisonDialogOpen(false)}
+      />
     </Box>
   );
 };

@@ -5,18 +5,19 @@ from sqlalchemy import or_
 
 from app.core.database import get_db
 from app.core.security import get_current_active_user, require_permission, get_password_hash
-from app.models.user import User, UserRole, UserStatus
+from app.models.user import User, UserStatus
+from app.models.rbac import Role
 from app.schemas.auth import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.schemas.common import ResponseModel, PaginationParams, PaginatedResponse
 
 router = APIRouter()
 
 
-@router.get("/", response_model=PaginatedResponse[UserListResponse])
+@router.get("/", response_model=PaginatedResponse[UserResponse])
 async def get_users(
     pagination: PaginationParams = Depends(),
     search: Optional[str] = Query(None, description="Search by username, email, or full name"),
-    role: Optional[UserRole] = Query(None, description="Filter by role"),
+    role_id: Optional[int] = Query(None, description="Filter by role ID"),
     status: Optional[UserStatus] = Query(None, description="Filter by status"),
     department: Optional[str] = Query(None, description="Filter by department"),
     current_user: User = Depends(require_permission("users:read")),
@@ -37,8 +38,8 @@ async def get_users(
         query = query.filter(search_filter)
     
     # Apply role filter
-    if role:
-        query = query.filter(User.role == role)
+    if role_id:
+        query = query.filter(User.role_id == role_id)
     
     # Apply status filter
     if status:
@@ -60,14 +61,39 @@ async def get_users(
     has_next = pagination.page < pages
     has_prev = pagination.page > 1
     
+    # Convert users to UserResponse objects
+    user_responses = []
+    for user in users:
+        # Get role name
+        role = db.query(Role).filter(Role.id == user.role_id).first()
+        role_name = role.name if role else None
+        
+        user_response = UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            full_name=user.full_name,
+            role_id=user.role_id,
+            role_name=role_name,
+            status=user.status,
+            department=user.department,
+            position=user.position,
+            phone=user.phone,
+            employee_id=user.employee_id,
+            is_active=user.is_active,
+            is_verified=user.is_verified,
+            last_login=user.last_login,
+            created_at=user.created_at,
+            updated_at=user.updated_at
+        )
+        user_responses.append(user_response)
+    
     return PaginatedResponse(
-        items=[UserListResponse.from_orm(user) for user in users],
+        items=user_responses,
         total=total,
         page=pagination.page,
         size=pagination.size,
-        pages=pages,
-        has_next=has_next,
-        has_prev=has_prev
+        pages=pages
     )
 
 
@@ -90,7 +116,7 @@ async def get_user(
     return UserResponse.from_orm(user)
 
 
-@router.post("/", response_model=UserResponse)
+@router.post("/", response_model=ResponseModel[UserResponse])
 async def create_user(
     user_data: UserCreate,
     current_user: User = Depends(require_permission("users:write")),
@@ -115,6 +141,23 @@ async def create_user(
             detail="Email already registered"
         )
     
+    # Check if employee_id already exists (if provided)
+    if user_data.employee_id:
+        existing_employee = db.query(User).filter(User.employee_id == user_data.employee_id).first()
+        if existing_employee:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee ID already registered"
+            )
+    
+    # Verify role exists
+    role = db.query(Role).filter(Role.id == user_data.role_id).first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role ID"
+        )
+    
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
@@ -122,7 +165,7 @@ async def create_user(
         email=user_data.email,
         full_name=user_data.full_name,
         hashed_password=hashed_password,
-        role=user_data.role or UserRole.VIEWER,
+        role_id=user_data.role_id,
         department=user_data.department,
         position=user_data.position,
         phone=user_data.phone,
@@ -134,7 +177,31 @@ async def create_user(
     db.commit()
     db.refresh(db_user)
     
-    return UserResponse.from_orm(db_user)
+    # Get role name for response
+    user_response = UserResponse(
+        id=db_user.id,
+        username=db_user.username,
+        email=db_user.email,
+        full_name=db_user.full_name,
+        role_id=db_user.role_id,
+        role_name=role.name,
+        status=db_user.status,
+        department=db_user.department,
+        position=db_user.position,
+        phone=db_user.phone,
+        employee_id=db_user.employee_id,
+        is_active=db_user.is_active,
+        is_verified=db_user.is_verified,
+        last_login=db_user.last_login,
+        created_at=db_user.created_at,
+        updated_at=db_user.updated_at
+    )
+    
+    return ResponseModel(
+        success=True,
+        message="User created successfully",
+        data=user_response
+    )
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -281,8 +348,8 @@ async def get_users_dashboard(
         
         # Get users by role
         users_by_role = {}
-        for role in UserRole:
-            count = db.query(User).filter(User.role == role).count()
+        for role in Role:
+            count = db.query(User).filter(User.role_id == role.id).count()
             if count > 0:
                 users_by_role[role.value] = count
         

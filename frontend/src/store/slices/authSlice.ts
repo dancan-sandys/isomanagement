@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authAPI } from '../../services/api';
-import { getToken, getRefreshToken, isTokenValid, setToken as setTokenStorage, setRefreshToken as setRefreshTokenStorage, removeTokens } from '../../utils/auth';
 
 // Types
 export interface User {
@@ -8,18 +7,20 @@ export interface User {
   username: string;
   email: string;
   full_name: string;
-  role: string;
+  role_id: number;
+  role_name?: string;
   status: string;
   department?: string;
   position?: string;
   phone?: string;
   employee_id?: string;
   profile_picture?: string;
+  bio?: string;
   is_active: boolean;
   is_verified: boolean;
   last_login?: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AuthState {
@@ -31,19 +32,30 @@ export interface AuthState {
   error: string | null;
 }
 
-// Check if we have valid tokens on app startup
-const storedToken = getToken();
-const storedRefreshToken = getRefreshToken();
-const hasValidToken = storedToken ? isTokenValid(storedToken) : false;
-
-// Initial state
 const initialState: AuthState = {
   user: null,
-  token: storedToken,
-  refreshToken: storedRefreshToken,
-  isAuthenticated: hasValidToken,
-  isLoading: false, // Always start with loading false
+  token: localStorage.getItem('access_token'),
+  refreshToken: localStorage.getItem('refresh_token'),
+  isAuthenticated: !!localStorage.getItem('access_token'),
+  isLoading: false,
   error: null,
+};
+
+// Helper function to check if user has specific role
+export const hasRole = (user: User | null, roleName: string): boolean => {
+  if (!user || !user.role_name) return false;
+  return user.role_name.toLowerCase() === roleName.toLowerCase();
+};
+
+// Helper function to check if user is system administrator
+export const isSystemAdministrator = (user: User | null): boolean => {
+  return hasRole(user, 'System Administrator');
+};
+
+// Helper function to check if user can manage users
+export const canManageUsers = (user: User | null): boolean => {
+  if (!user) return false;
+  return isSystemAdministrator(user) || hasRole(user, 'QA Manager');
 };
 
 // Async thunks
@@ -51,10 +63,31 @@ export const login = createAsyncThunk(
   'auth/login',
   async ({ username, password }: { username: string; password: string }, { rejectWithValue }) => {
     try {
-      const response = await authAPI.login(username, password);
+      const response = await authAPI.login({ username, password });
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Login failed');
+    }
+  }
+);
+
+export const signup = createAsyncThunk(
+  'auth/signup',
+  async (signupData: {
+    username: string;
+    email: string;
+    password: string;
+    full_name: string;
+    department?: string;
+    position?: string;
+    phone?: string;
+    employee_id?: string;
+  }, { rejectWithValue }) => {
+    try {
+      const response = await authAPI.signup(signupData);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Signup failed');
     }
   }
 );
@@ -64,7 +97,7 @@ export const logout = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       await authAPI.logout();
-      return;
+      return null;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Logout failed');
     }
@@ -78,18 +111,107 @@ export const getCurrentUser = createAsyncThunk(
       const response = await authAPI.me();
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to get user info');
+      return rejectWithValue(error.response?.data?.detail || 'Failed to get user data');
     }
   }
 );
 
-export const refreshAuth = createAsyncThunk(
-  'auth/refresh',
-  async (_, { rejectWithValue, getState }) => {
-    try {
-      const state = getState() as { auth: AuthState };
-      const refreshToken = state.auth.refreshToken;
+const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {
+    clearError: (state) => {
+      state.error = null;
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.isLoading = action.payload;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // Login
+      .addCase(login.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(login.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload.data.user;
+        state.token = action.payload.data.access_token;
+        state.refreshToken = action.payload.data.refresh_token;
+        state.error = null;
+        
+        // Store tokens in localStorage
+        localStorage.setItem('access_token', action.payload.data.access_token);
+        localStorage.setItem('refresh_token', action.payload.data.refresh_token);
+      })
+      .addCase(login.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Login failed';
+      })
       
+      // Signup
+      .addCase(signup.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(signup.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = false; // Signup doesn't automatically log in
+        state.user = action.payload.data;
+        state.error = null;
+        // Don't set tokens - user needs to login after signup
+      })
+      .addCase(signup.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Signup failed';
+      })
+      
+      // Logout
+      .addCase(logout.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(logout.fulfilled, (state) => {
+        state.isLoading = false;
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
+        state.refreshToken = null;
+        
+        // Clear tokens from localStorage
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+      })
+      .addCase(logout.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Logout failed';
+      })
+      
+      // Get current user
+      .addCase(getCurrentUser.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(getCurrentUser.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.data;
+        state.isAuthenticated = true;
+      })
+      .addCase(getCurrentUser.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Failed to get user data';
+      });
+  },
+});
+
+export const { clearError, setLoading } = authSlice.actions;
+
+// Export refreshAuth function for AuthProvider
+export const refreshAuth = createAsyncThunk(
+  'auth/refreshAuth',
+  async (_, { rejectWithValue }) => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token');
       if (!refreshToken) {
         throw new Error('No refresh token available');
       }
@@ -102,121 +224,4 @@ export const refreshAuth = createAsyncThunk(
   }
 );
 
-// Auth slice
-const authSlice = createSlice({
-  name: 'auth',
-  initialState,
-  reducers: {
-    clearError: (state) => {
-      state.error = null;
-    },
-    setToken: (state, action: PayloadAction<string>) => {
-      state.token = action.payload;
-      state.isAuthenticated = true;
-      setTokenStorage(action.payload);
-    },
-    setRefreshToken: (state, action: PayloadAction<string>) => {
-      state.refreshToken = action.payload;
-      setRefreshTokenStorage(action.payload);
-    },
-    clearAuth: (state) => {
-      state.user = null;
-      state.token = null;
-      state.refreshToken = null;
-      state.isAuthenticated = false;
-      removeTokens();
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      // Login
-      .addCase(login.pending, (state) => {
-        console.log('Auth slice - login.pending - setting isLoading to true');
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(login.fulfilled, (state, action) => {
-        console.log('Auth slice - login.fulfilled - setting isLoading to false');
-        state.isLoading = false;
-        state.isAuthenticated = true;
-        state.token = action.payload.access_token;
-        state.refreshToken = action.payload.refresh_token;
-        state.user = action.payload.user;
-        state.error = null;
-        setTokenStorage(action.payload.access_token);
-        setRefreshTokenStorage(action.payload.refresh_token);
-      })
-      .addCase(login.rejected, (state, action) => {
-        console.log('Auth slice - login.rejected - setting isLoading to false');
-        state.isLoading = false;
-        state.error = action.payload as string;
-      })
-      // Logout
-      .addCase(logout.pending, (state) => {
-        state.isLoading = true;
-      })
-      .addCase(logout.fulfilled, (state) => {
-        state.isLoading = false;
-        state.isAuthenticated = false;
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
-        removeTokens();
-      })
-      .addCase(logout.rejected, (state) => {
-        state.isLoading = false;
-        // Still clear auth state even if logout API fails
-        state.isAuthenticated = false;
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
-        removeTokens();
-      })
-      // Get current user
-      .addCase(getCurrentUser.pending, (state) => {
-        console.log('Auth slice - getCurrentUser.pending - setting isLoading to true');
-        state.isLoading = true;
-      })
-      .addCase(getCurrentUser.fulfilled, (state, action) => {
-        console.log('Auth slice - getCurrentUser.fulfilled - setting isLoading to false');
-        state.isLoading = false;
-        state.user = action.payload;
-        state.isAuthenticated = true;
-      })
-      .addCase(getCurrentUser.rejected, (state, action) => {
-        console.log('Auth slice - getCurrentUser.rejected - setting isLoading to false');
-        state.isLoading = false;
-        state.error = action.payload as string;
-        // If we can't get user info, they might not be authenticated
-        state.isAuthenticated = false;
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
-        removeTokens();
-      })
-      // Refresh auth
-      .addCase(refreshAuth.pending, (state) => {
-        state.isLoading = true;
-      })
-      .addCase(refreshAuth.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.token = action.payload.access_token;
-        state.refreshToken = action.payload.refresh_token;
-        state.isAuthenticated = true;
-        setTokenStorage(action.payload.access_token);
-        setRefreshTokenStorage(action.payload.refresh_token);
-      })
-      .addCase(refreshAuth.rejected, (state) => {
-        state.isLoading = false;
-        // If refresh fails, clear auth state
-        state.isAuthenticated = false;
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
-        removeTokens();
-      });
-  },
-});
-
-export const { clearError, setToken, setRefreshToken, clearAuth } = authSlice.actions;
 export default authSlice.reducer; 

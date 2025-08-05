@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import {
   Box,
   Typography,
@@ -30,7 +31,8 @@ import {
   LinearProgress,
   CircularProgress,
   Avatar,
-  Divider
+  Divider,
+  Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -49,9 +51,13 @@ import {
   Phone as PhoneIcon,
   Business as BusinessIcon,
   Work as WorkIcon,
-  CalendarToday as CalendarIcon
+  CalendarToday as CalendarIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { usersAPI } from '../services/api';
+import { RootState } from '../store';
+import { canManageUsers, isSystemAdministrator } from '../store/slices/authSlice';
+import PageHeader from '../components/UI/PageHeader';
 
 // Interfaces
 interface User {
@@ -59,7 +65,8 @@ interface User {
   username: string;
   email: string;
   full_name: string;
-  role: string;
+  role_id: number;
+  role_name?: string;
   status: string;
   department?: string;
   position?: string;
@@ -87,6 +94,8 @@ interface DashboardData {
 }
 
 const Users: React.FC = () => {
+  const { user: currentUser } = useSelector((state: RootState) => state.auth);
+  
   // State management
   const [activeTab, setActiveTab] = useState(0);
   const [users, setUsers] = useState<User[]>([]);
@@ -105,7 +114,7 @@ const Users: React.FC = () => {
     email: '',
     full_name: '',
     password: '',
-    role: '',
+    role_id: '',
     department: '',
     position: '',
     phone: '',
@@ -129,46 +138,56 @@ const Users: React.FC = () => {
     pages: 0
   });
 
+  // Check if user has permission to manage users
+  const hasUserManagementPermission = canManageUsers(currentUser);
+
+  // Helper function to format error messages
+  const formatErrorMessage = (error: any): string => {
+    if (typeof error === 'string') {
+      return error;
+    }
+    
+    if (error?.response?.data?.detail) {
+      const detail = error.response.data.detail;
+      
+      // Handle array of validation errors
+      if (Array.isArray(detail)) {
+        return detail.map((err: any) => 
+          typeof err === 'string' ? err : err.msg || 'Validation error'
+        ).join(', ');
+      }
+      
+      // Handle single validation error object
+      if (typeof detail === 'object' && detail.msg) {
+        return detail.msg;
+      }
+      
+      // Handle string detail
+      if (typeof detail === 'string') {
+        return detail;
+      }
+    }
+    
+    return 'An unexpected error occurred';
+  };
+
   // Load data on component mount
   useEffect(() => {
-    fetchDashboardData();
-    fetchUsers();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (hasUserManagementPermission) {
+      fetchDashboardData();
+      fetchUsers();
+    }
+  }, [hasUserManagementPermission]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // API calls
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const data = await usersAPI.getDashboard();
-      setDashboardData(data);
-    } catch (err) {
+      const response = await usersAPI.getDashboard();
+      setDashboardData(response.data);
+    } catch (err: any) {
       console.error('Failed to load dashboard data:', err);
-      // Create mock data for demonstration
-      setDashboardData({
-        total_users: 25,
-        active_users: 20,
-        inactive_users: 3,
-        pending_approval: 2,
-        users_by_role: {
-          'ADMIN': 2,
-          'QA_MANAGER': 3,
-          'QA_SPECIALIST': 5,
-          'PRODUCTION_MANAGER': 2,
-          'PRODUCTION_OPERATOR': 8,
-          'MAINTENANCE': 2,
-          'LAB_TECHNICIAN': 3
-        },
-        users_by_department: {
-          'Quality Assurance': 8,
-          'Production': 10,
-          'Maintenance': 2,
-          'Laboratory': 3,
-          'Management': 2
-        },
-        recent_logins: 18,
-        training_overdue: 3,
-        competencies_expiring: 5
-      });
+      setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -177,75 +196,37 @@ const Users: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const data = await usersAPI.getUsers({
+      // Filter out empty string parameters for enum fields
+      const params: any = {
         page: pagination.page,
         size: pagination.size,
-        ...userFilters
-      });
-      setUsers(data.items || []);
+      };
+      
+      if (userFilters.search && userFilters.search.trim() !== '') {
+        params.search = userFilters.search;
+      }
+      if (userFilters.role && userFilters.role.trim() !== '') {
+        params.role_id = parseInt(userFilters.role);
+      }
+      if (userFilters.status && userFilters.status.trim() !== '') {
+        params.status = userFilters.status;
+      }
+      if (userFilters.department && userFilters.department.trim() !== '') {
+        params.department = userFilters.department;
+      }
+      
+      const response = await usersAPI.getUsers(params);
+      
+      setUsers(response.data.items || []);
       setPagination({
-        page: data.page || 1,
-        size: data.size || 10,
-        total: data.total || 0,
-        pages: data.pages || 0
+        page: response.data.page || 1,
+        size: response.data.size || 10,
+        total: response.data.total || 0,
+        pages: response.data.pages || 0
       });
-    } catch (err) {
-      setError('Failed to load users');
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
       console.error(err);
-      // Create mock data for demonstration
-      setUsers([
-        {
-          id: 1,
-          username: 'admin',
-          email: 'admin@dairy.com',
-          full_name: 'System Administrator',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          department: 'IT',
-          position: 'System Administrator',
-          phone: '+1234567890',
-          employee_id: 'EMP001',
-          is_active: true,
-          is_verified: true,
-          last_login: '2024-01-15T10:30:00Z',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-15T10:30:00Z'
-        },
-        {
-          id: 2,
-          username: 'qa_manager',
-          email: 'qa.manager@dairy.com',
-          full_name: 'Sarah Johnson',
-          role: 'QA_MANAGER',
-          status: 'ACTIVE',
-          department: 'Quality Assurance',
-          position: 'QA Manager',
-          phone: '+1234567891',
-          employee_id: 'EMP002',
-          is_active: true,
-          is_verified: true,
-          last_login: '2024-01-15T09:15:00Z',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-15T09:15:00Z'
-        },
-        {
-          id: 3,
-          username: 'prod_operator',
-          email: 'operator@dairy.com',
-          full_name: 'Mike Chen',
-          role: 'PRODUCTION_OPERATOR',
-          status: 'ACTIVE',
-          department: 'Production',
-          position: 'Production Operator',
-          phone: '+1234567892',
-          employee_id: 'EMP003',
-          is_active: true,
-          is_verified: true,
-          last_login: '2024-01-15T08:45:00Z',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-15T08:45:00Z'
-        }
-      ]);
     } finally {
       setLoading(false);
     }
@@ -255,23 +236,15 @@ const Users: React.FC = () => {
   const handleCreateUser = async () => {
     try {
       setLoading(true);
-      await usersAPI.createUser(userForm);
-      setUserDialogOpen(false);
-      setUserForm({
-        username: '',
-        email: '',
-        full_name: '',
-        password: '',
-        role: '',
-        department: '',
-        position: '',
-        phone: '',
-        employee_id: '',
-        bio: ''
+      await usersAPI.createUser({
+        ...userForm,
+        role_id: parseInt(userForm.role_id),
       });
+      setUserDialogOpen(false);
+      resetUserForm();
       fetchUsers();
-    } catch (err) {
-      setError('Failed to create user');
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -281,11 +254,20 @@ const Users: React.FC = () => {
   const handleUpdateUser = async (userId: number) => {
     try {
       setLoading(true);
-      await usersAPI.updateUser(userId, userForm);
+      const updateData: any = { ...userForm };
+      if (userForm.role_id) {
+        updateData.role_id = parseInt(userForm.role_id);
+      }
+      if (!userForm.password) {
+        delete updateData.password;
+      }
+      
+      await usersAPI.updateUser(userId, updateData);
       setUserDialogOpen(false);
+      resetUserForm();
       fetchUsers();
-    } catch (err) {
-      setError('Failed to update user');
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -293,12 +275,16 @@ const Users: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: number) => {
+    if (!window.confirm('Are you sure you want to delete this user?')) {
+      return;
+    }
+    
     try {
       setLoading(true);
       await usersAPI.deleteUser(userId);
       fetchUsers();
-    } catch (err) {
-      setError('Failed to delete user');
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -310,8 +296,8 @@ const Users: React.FC = () => {
       setLoading(true);
       await usersAPI.activateUser(userId);
       fetchUsers();
-    } catch (err) {
-      setError('Failed to activate user');
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -323,24 +309,40 @@ const Users: React.FC = () => {
       setLoading(true);
       await usersAPI.deactivateUser(userId);
       fetchUsers();
-    } catch (err) {
-      setError('Failed to deactivate user');
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
+  const resetUserForm = () => {
+    setUserForm({
+      username: '',
+      email: '',
+      full_name: '',
+      password: '',
+      role_id: '',
+      department: '',
+      position: '',
+      phone: '',
+      employee_id: '',
+      bio: ''
+    });
+    setSelectedUser(null);
+  };
+
   // Utility functions
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'ADMIN': return 'error';
-      case 'QA_MANAGER': return 'warning';
-      case 'QA_SPECIALIST': return 'info';
-      case 'PRODUCTION_MANAGER': return 'primary';
-      case 'PRODUCTION_OPERATOR': return 'success';
-      case 'MAINTENANCE': return 'secondary';
-      case 'LAB_TECHNICIAN': return 'default';
+      case 'System Administrator': return 'error';
+      case 'QA Manager': return 'warning';
+      case 'QA Specialist': return 'info';
+      case 'Production Manager': return 'primary';
+      case 'Production Operator': return 'success';
+      case 'Maintenance': return 'secondary';
+      case 'Lab Technician': return 'default';
       default: return 'default';
     }
   };
@@ -363,11 +365,39 @@ const Users: React.FC = () => {
     return status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+  };
+
+  const handleFilterApply = () => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+    fetchUsers();
+  };
+
+  // If user doesn't have permission, show access denied
+  if (!hasUserManagementPermission) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          <Typography variant="h6">Access Denied</Typography>
+          <Typography variant="body2">
+            You don't have permission to access user management. Please contact your system administrator.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h3" gutterBottom>
-        User Management & Security
-      </Typography>
+    <Box>
+      <PageHeader
+        title="User Management & Security"
+        subtitle="Manage system users, roles, and permissions"
+        breadcrumbs={[
+          { label: 'Dashboard', path: '/' },
+          { label: 'Users', path: '/users' }
+        ]}
+      />
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -388,7 +418,7 @@ const Users: React.FC = () => {
           {loading && <LinearProgress />}
           
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
               {error}
             </Alert>
           )}
@@ -529,13 +559,13 @@ const Users: React.FC = () => {
                       onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}
                     >
                       <MenuItem value="">All Roles</MenuItem>
-                      <MenuItem value="ADMIN">Admin</MenuItem>
-                      <MenuItem value="QA_MANAGER">QA Manager</MenuItem>
-                      <MenuItem value="QA_SPECIALIST">QA Specialist</MenuItem>
-                      <MenuItem value="PRODUCTION_MANAGER">Production Manager</MenuItem>
-                      <MenuItem value="PRODUCTION_OPERATOR">Production Operator</MenuItem>
-                      <MenuItem value="MAINTENANCE">Maintenance</MenuItem>
-                      <MenuItem value="LAB_TECHNICIAN">Lab Technician</MenuItem>
+                      <MenuItem value="1">System Administrator</MenuItem>
+                      <MenuItem value="2">QA Manager</MenuItem>
+                      <MenuItem value="3">QA Specialist</MenuItem>
+                      <MenuItem value="4">Production Manager</MenuItem>
+                      <MenuItem value="5">Production Operator</MenuItem>
+                      <MenuItem value="6">Maintenance</MenuItem>
+                      <MenuItem value="7">Lab Technician</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -570,7 +600,7 @@ const Users: React.FC = () => {
                   <Button
                     variant="outlined"
                     startIcon={<FilterIcon />}
-                    onClick={fetchUsers}
+                    onClick={handleFilterApply}
                     fullWidth
                   >
                     Apply Filters
@@ -617,8 +647,8 @@ const Users: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Chip 
-                        label={getRoleDisplayName(user.role)} 
-                        color={getRoleColor(user.role)}
+                        label={getRoleDisplayName(user.role_name || 'Unknown')} 
+                        color={getRoleColor(user.role_name || '')}
                         size="small"
                       />
                     </TableCell>
@@ -651,7 +681,7 @@ const Users: React.FC = () => {
                           email: user.email,
                           full_name: user.full_name,
                           password: '',
-                          role: user.role,
+                          role_id: user.role_id.toString(),
                           department: user.department || '',
                           position: user.position || '',
                           phone: user.phone || '',
@@ -680,6 +710,18 @@ const Users: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={pagination.pages}
+                page={pagination.page}
+                onChange={handlePageChange}
+                color="primary"
+              />
+            </Box>
+          )}
         </Box>
       )}
 
@@ -742,17 +784,17 @@ const Users: React.FC = () => {
               <FormControl fullWidth>
                 <InputLabel>Role</InputLabel>
                 <Select
-                  value={userForm.role}
-                  onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                  value={userForm.role_id}
+                  onChange={(e) => setUserForm({ ...userForm, role_id: e.target.value })}
                 >
-                  <MenuItem value="ADMIN">Admin</MenuItem>
-                  <MenuItem value="QA_MANAGER">QA Manager</MenuItem>
-                  <MenuItem value="QA_SPECIALIST">QA Specialist</MenuItem>
-                  <MenuItem value="PRODUCTION_MANAGER">Production Manager</MenuItem>
-                  <MenuItem value="PRODUCTION_OPERATOR">Production Operator</MenuItem>
-                  <MenuItem value="MAINTENANCE">Maintenance</MenuItem>
-                  <MenuItem value="LAB_TECHNICIAN">Lab Technician</MenuItem>
-                  <MenuItem value="VIEWER">Viewer</MenuItem>
+                  <MenuItem value="1">System Administrator</MenuItem>
+                  <MenuItem value="2">QA Manager</MenuItem>
+                  <MenuItem value="3">QA Specialist</MenuItem>
+                  <MenuItem value="4">Production Manager</MenuItem>
+                  <MenuItem value="5">Production Operator</MenuItem>
+                  <MenuItem value="6">Maintenance</MenuItem>
+                  <MenuItem value="7">Lab Technician</MenuItem>
+                  <MenuItem value="8">Viewer</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -801,7 +843,10 @@ const Users: React.FC = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUserDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            setUserDialogOpen(false);
+            resetUserForm();
+          }}>Cancel</Button>
           <Button 
             onClick={() => selectedUser ? handleUpdateUser(selectedUser.id) : handleCreateUser()} 
             variant="contained" 
@@ -881,8 +926,8 @@ const Users: React.FC = () => {
                 <Typography variant="h6" gutterBottom>Account Status</Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   <Chip 
-                    label={getRoleDisplayName(selectedUser.role)} 
-                    color={getRoleColor(selectedUser.role)}
+                    label={getRoleDisplayName(selectedUser.role_name || 'Unknown')} 
+                    color={getRoleColor(selectedUser.role_name || '')}
                   />
                   <Chip 
                     label={getStatusDisplayName(selectedUser.status)} 

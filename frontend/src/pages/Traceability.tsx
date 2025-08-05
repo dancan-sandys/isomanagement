@@ -189,8 +189,8 @@ const Traceability: React.FC = () => {
     try {
       setLoading(true);
       const data = await traceabilityAPI.getBatches({
-        skip: 0,
-        limit: 100,
+        page: 1,
+        size: 100,
         ...batchFilters
       });
       setBatches(data.items || []);
@@ -206,8 +206,8 @@ const Traceability: React.FC = () => {
     try {
       setLoading(true);
       const data = await traceabilityAPI.getRecalls({
-        skip: 0,
-        limit: 100,
+        page: 1,
+        size: 100,
         ...recallFilters
       });
       setRecalls(data.items || []);
@@ -223,8 +223,8 @@ const Traceability: React.FC = () => {
     try {
       setLoading(true);
       const data = await traceabilityAPI.getTraceabilityReports({
-        skip: 0,
-        limit: 100
+        page: 1,
+        size: 100
       });
       setReports(data.items || []);
     } catch (err) {

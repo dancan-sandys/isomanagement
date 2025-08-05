@@ -8,16 +8,17 @@ from app.core.database import get_db
 from app.core.security import (
     authenticate_user, create_access_token, create_refresh_token,
     create_user_session, invalidate_user_session, get_current_user,
-    get_password_hash, verify_token
+    get_password_hash, verify_token, verify_password
 )
-from app.models.user import User, UserRole
-from app.schemas.auth import Token, TokenData, UserLogin, UserCreate, UserResponse
+from app.models.user import User, UserSession
+from app.models.rbac import Role
+from app.schemas.auth import Token, TokenData, UserLogin, UserCreate, UserResponse, UserSignup
 from app.schemas.common import ResponseModel
 
 router = APIRouter()
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=ResponseModel[dict])
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
@@ -66,13 +67,130 @@ async def login(
     user.failed_login_attempts = 0
     db.commit()
     
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": 1800,  # 30 minutes
-        "user": UserResponse.from_orm(user)
-    }
+    # Get role name for response
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    role_name = role.name if role else None
+    
+    # Create user response with role name
+    user_response = UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        role_name=role_name,
+        status=user.status,
+        department=user.department,
+        position=user.position,
+        phone=user.phone,
+        employee_id=user.employee_id,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
+    
+    return ResponseModel(
+        success=True,
+        message="Login successful",
+        data={
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": 1800,  # 30 minutes
+            "user": user_response
+        }
+    )
+
+
+@router.post("/signup", response_model=ResponseModel[UserResponse])
+async def signup(
+    user_data: UserSignup,
+    db: Session = Depends(get_db)
+):
+    """
+    Sign up a new user (defaults to System Administrator role)
+    """
+    # Check if username already exists
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    # Check if email already exists
+    existing_email = db.query(User).filter(User.email == user_data.email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Check if employee_id already exists (if provided)
+    if user_data.employee_id:
+        existing_employee = db.query(User).filter(User.employee_id == user_data.employee_id).first()
+        if existing_employee:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee ID already registered"
+            )
+    
+    # Get System Administrator role (ID 1)
+    admin_role = db.query(Role).filter(Role.name == "System Administrator").first()
+    if not admin_role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="System Administrator role not found"
+        )
+    
+    # Create new user
+    hashed_password = get_password_hash(user_data.password)
+    db_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        full_name=user_data.full_name,
+        hashed_password=hashed_password,
+        role_id=admin_role.id,  # Assign System Administrator role
+        status="ACTIVE",
+        department=user_data.department,
+        position=user_data.position,
+        phone=user_data.phone,
+        employee_id=user_data.employee_id,
+        is_active=True,
+        is_verified=True
+    )
+    
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    # Create user response with role name
+    user_response = UserResponse(
+        id=db_user.id,
+        username=db_user.username,
+        email=db_user.email,
+        full_name=db_user.full_name,
+        role_id=db_user.role_id,
+        role_name=admin_role.name,
+        status=db_user.status,
+        department=db_user.department,
+        position=db_user.position,
+        phone=db_user.phone,
+        employee_id=db_user.employee_id,
+        is_active=db_user.is_active,
+        is_verified=db_user.is_verified,
+        last_login=db_user.last_login,
+        created_at=db_user.created_at,
+        updated_at=db_user.updated_at
+    )
+    
+    return ResponseModel(
+        success=True,
+        message="User registered successfully",
+        data=user_response
+    )
 
 
 @router.post("/logout")
@@ -96,7 +214,7 @@ async def logout(
     )
 
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh", response_model=ResponseModel[Token])
 async def refresh_token(
     refresh_token: str,
     db: Session = Depends(get_db)
@@ -106,19 +224,31 @@ async def refresh_token(
     """
     # Verify refresh token
     payload = verify_token(refresh_token)
-    if not payload or payload.get("type") != "refresh":
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"
         )
     
-    # Get user
-    user_id = payload.get("sub")
+    user_id = int(payload.get("sub"))
     user = db.query(User).filter(User.id == user_id).first()
+    
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
+        )
+    
+    # Check if session exists and is active
+    session = db.query(UserSession).filter(
+        UserSession.refresh_token == refresh_token,
+        UserSession.is_active == True
+    ).first()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid session"
         )
     
     # Create new tokens
@@ -129,33 +259,55 @@ async def refresh_token(
     new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     # Update session
-    session = db.query(UserSession).filter(
-        UserSession.refresh_token == refresh_token,
-        UserSession.is_active == True
-    ).first()
+    session.session_token = access_token
+    session.refresh_token = new_refresh_token
+    session.expires_at = datetime.utcnow() + access_token_expires
+    db.commit()
     
-    if session:
-        session.session_token = access_token
-        session.refresh_token = new_refresh_token
-        session.expires_at = datetime.utcnow() + access_token_expires
-        db.commit()
+    # Get role name for response
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    role_name = role.name if role else None
     
-    return {
-        "access_token": access_token,
-        "refresh_token": new_refresh_token,
-        "token_type": "bearer",
-        "expires_in": 1800,
-        "user": UserResponse.from_orm(user)
-    }
+    # Create user response with role name
+    user_response = UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        role_name=role_name,
+        status=user.status,
+        department=user.department,
+        position=user.position,
+        phone=user.phone,
+        employee_id=user.employee_id,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
+    
+    return ResponseModel(
+        success=True,
+        message="Token refreshed successfully",
+        data={
+            "access_token": access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer",
+            "expires_in": 1800,
+            "user": user_response
+        }
+    )
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=ResponseModel[UserResponse])
 async def register(
     user_data: UserCreate,
     db: Session = Depends(get_db)
 ):
     """
-    Register a new user
+    Register a new user with specific role
     """
     # Check if username already exists
     existing_user = db.query(User).filter(User.username == user_data.username).first()
@@ -173,6 +325,14 @@ async def register(
             detail="Email already registered"
         )
     
+    # Verify role exists
+    role = db.query(Role).filter(Role.id == user_data.role_id).first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role ID"
+        )
+    
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
@@ -180,7 +340,7 @@ async def register(
         email=user_data.email,
         full_name=user_data.full_name,
         hashed_password=hashed_password,
-        role=user_data.role or UserRole.VIEWER,
+        role_id=user_data.role_id,
         department=user_data.department,
         position=user_data.position,
         phone=user_data.phone,
@@ -191,17 +351,70 @@ async def register(
     db.commit()
     db.refresh(db_user)
     
-    return UserResponse.from_orm(db_user)
+    # Create user response with role name
+    user_response = UserResponse(
+        id=db_user.id,
+        username=db_user.username,
+        email=db_user.email,
+        full_name=db_user.full_name,
+        role_id=db_user.role_id,
+        role_name=role.name,
+        status=db_user.status,
+        department=db_user.department,
+        position=db_user.position,
+        phone=db_user.phone,
+        employee_id=db_user.employee_id,
+        is_active=db_user.is_active,
+        is_verified=db_user.is_verified,
+        last_login=db_user.last_login,
+        created_at=db_user.created_at,
+        updated_at=db_user.updated_at
+    )
+    
+    return ResponseModel(
+        success=True,
+        message="User registered successfully",
+        data=user_response
+    )
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=ResponseModel[UserResponse])
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Get current user information
     """
-    return UserResponse.from_orm(current_user)
+    # Get role name
+    role = db.query(Role).filter(Role.id == current_user.role_id).first()
+    role_name = role.name if role else None
+    
+    # Create user response with role name
+    user_response = UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role_id=current_user.role_id,
+        role_name=role_name,
+        status=current_user.status,
+        department=current_user.department,
+        position=current_user.position,
+        phone=current_user.phone,
+        employee_id=current_user.employee_id,
+        is_active=current_user.is_active,
+        is_verified=current_user.is_verified,
+        last_login=current_user.last_login,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at
+    )
+    
+    return ResponseModel(
+        success=True,
+        message="User information retrieved successfully",
+        data=user_response
+    )
 
 
 @router.post("/change-password")

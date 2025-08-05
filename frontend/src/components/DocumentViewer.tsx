@@ -1,203 +1,271 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Box,
   Typography,
-  CircularProgress,
-  Alert,
-  IconButton,
-  Tooltip,
+  Card,
+  CardContent,
+  Grid,
+  Chip,
+  Button,
 } from '@mui/material';
 import {
-  Close,
+  Description,
   Download,
-  ZoomIn,
-  ZoomOut,
-  Fullscreen,
-  FullscreenExit,
+  Person,
+  Info,
 } from '@mui/icons-material';
-import { documentsAPI } from '../services/api';
 
-interface DocumentViewerProps {
-  open: boolean;
-  onClose: () => void;
-  documentId: number;
-  documentTitle?: string;
+interface Document {
+  id: number;
+  document_number: string;
+  title: string;
+  description?: string;
+  document_type?: string;
+  category?: string;
+  status?: string;
+  version: string;
+  file_path?: string;
+  file_size?: number;
+  file_type?: string;
+  original_filename?: string;
+  department?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
-const DocumentViewer: React.FC<DocumentViewerProps> = ({
-  open,
-  onClose,
-  documentId,
-  documentTitle = 'Document Viewer',
-}) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(100);
-  const [fullscreen, setFullscreen] = useState(false);
+interface DocumentViewerProps {
+  document: Document;
+}
 
-  useEffect(() => {
-    if (open && documentId) {
-      loadDocument();
+const DocumentViewer: React.FC<DocumentViewerProps> = ({ document }) => {
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'approved':
+        return 'success';
+      case 'draft':
+        return 'default';
+      case 'under_review':
+        return 'warning';
+      case 'obsolete':
+        return 'error';
+      default:
+        return 'default';
     }
-  }, [open, documentId]);
-
-  const loadDocument = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await documentsAPI.downloadDocument(documentId);
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      setDocumentUrl(url);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load document');
-      console.error('Document loading error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    try {
-      const response = await documentsAPI.downloadDocument(documentId);
-      const blob = new Blob([response.data]);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${documentTitle || 'document'}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err: any) {
-      setError(err.message || 'Failed to download document');
-      console.error('Download error:', err);
-    }
-  };
-
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 25, 200));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - 25, 50));
-  };
-
-  const handleFullscreen = () => {
-    setFullscreen(!fullscreen);
-  };
-
-  const handleClose = () => {
-    if (documentUrl) {
-      URL.revokeObjectURL(documentUrl);
-      setDocumentUrl(null);
-    }
-    setZoom(100);
-    setFullscreen(false);
-    setError(null);
-    onClose();
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth={fullscreen ? false : 'lg'}
-      fullWidth={!fullscreen}
-      fullScreen={fullscreen}
-      PaperProps={{
-        sx: {
-          height: fullscreen ? '100vh' : '80vh',
-          maxHeight: fullscreen ? '100vh' : '80vh',
-        },
-      }}
-    >
-      <DialogTitle sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        pb: 1
-      }}>
-        <Typography variant="h6" noWrap sx={{ flex: 1 }}>
-          {documentTitle}
-        </Typography>
-        <Box display="flex" gap={1}>
-          <Tooltip title="Zoom In">
-            <IconButton size="small" onClick={handleZoomIn}>
-              <ZoomIn />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Zoom Out">
-            <IconButton size="small" onClick={handleZoomOut}>
-              <ZoomOut />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
-            <IconButton size="small" onClick={handleFullscreen}>
-              {fullscreen ? <FullscreenExit /> : <Fullscreen />}
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Download">
-            <IconButton size="small" onClick={handleDownload}>
-              <Download />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Close">
-            <IconButton size="small" onClick={handleClose}>
-              <Close />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
-        {loading && (
-          <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-            <CircularProgress />
-          </Box>
-        )}
-        
-        {error && (
-          <Box p={2}>
-            <Alert severity="error">{error}</Alert>
-          </Box>
-        )}
-        
-        {documentUrl && !loading && !error && (
-          <Box
-            sx={{
-              flex: 1,
-              overflow: 'hidden',
-              position: 'relative',
-            }}
-          >
-            <iframe
-              src={`${documentUrl}#toolbar=1&navpanes=1&scrollbar=1&zoom=${zoom}`}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-              title={documentTitle}
-            />
-          </Box>
-        )}
-      </DialogContent>
-      
-      <DialogActions sx={{ px: 2, py: 1 }}>
-        <Typography variant="caption" color="text.secondary">
-          Zoom: {zoom}%
-        </Typography>
-        <Button onClick={handleClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+    <Box>
+      <Grid container spacing={3}>
+        {/* Document Header */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" mb={2}>
+                <Description sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h5" component="h2">
+                  {document.title}
+                </Typography>
+              </Box>
+              
+              <Typography variant="body1" color="text.secondary" paragraph>
+                {document.description || 'No description available'}
+              </Typography>
+
+              <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+                <Chip
+                  label={`Document #: ${document.document_number}`}
+                  variant="outlined"
+                  size="small"
+                />
+                <Chip
+                  label={`Version: ${document.version}`}
+                  color="primary"
+                  size="small"
+                />
+                <Chip
+                  label={document.status || 'Unknown'}
+                  color={getStatusColor(document.status) as any}
+                  size="small"
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Document Details */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                <Info sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Document Information
+              </Typography>
+              
+              <Box display="flex" flexDirection="column" gap={2}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Document Type
+                  </Typography>
+                  <Typography variant="body1">
+                    {document.document_type || 'Not specified'}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Category
+                  </Typography>
+                  <Typography variant="body1">
+                    {document.category || 'Not specified'}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Department
+                  </Typography>
+                  <Typography variant="body1">
+                    {document.department || 'Not specified'}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* File Information */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                <Download sx={{ mr: 1, verticalAlign: 'middle' }} />
+                File Information
+              </Typography>
+              
+              {document.file_path ? (
+                <Box display="flex" flexDirection="column" gap={2}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      File Name
+                    </Typography>
+                    <Typography variant="body1" noWrap>
+                      {document.original_filename || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      File Size
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatFileSize(document.file_size)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      File Type
+                    </Typography>
+                    <Typography variant="body1">
+                      {document.file_type || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  
+                  <Button
+                    variant="contained"
+                    startIcon={<Download />}
+                    fullWidth
+                  >
+                    Download File
+                  </Button>
+                </Box>
+              ) : (
+                <Typography variant="body1" color="text.secondary">
+                  No file attached to this document
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Metadata */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                <Person sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Document Metadata
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Created By
+                    </Typography>
+                    <Typography variant="body1">
+                      {document.created_by}
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Created Date
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatDate(document.created_at)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Last Modified
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatDate(document.updated_at)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Document ID
+                    </Typography>
+                    <Typography variant="body1">
+                      {document.id}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
   );
 };
 

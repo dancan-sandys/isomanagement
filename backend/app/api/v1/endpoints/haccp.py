@@ -12,6 +12,11 @@ from app.models.haccp import (
     HazardType, RiskLevel, CCPStatus
 )
 from app.schemas.common import ResponseModel
+from app.schemas.haccp import (
+    ProductCreate, ProductUpdate, ProcessFlowCreate, HazardCreate, CCPCreate,
+    MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, HACCPReportRequest
+)
+from app.services.haccp_service import HACCPService
 
 router = APIRouter()
 
@@ -638,4 +643,252 @@ async def get_haccp_dashboard(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve dashboard data: {str(e)}"
+        )
+
+
+# Decision Tree Endpoint
+@router.post("/hazards/{hazard_id}/decision-tree")
+async def run_decision_tree(
+    hazard_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Run CCP decision tree for a hazard"""
+    try:
+        haccp_service = HACCPService(db)
+        result = haccp_service.run_decision_tree(hazard_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Decision tree completed successfully",
+            data={
+                "is_ccp": result.is_ccp,
+                "justification": result.justification,
+                "steps": [
+                    {
+                        "question": step.question.value,
+                        "answer": step.answer,
+                        "explanation": step.explanation
+                    } for step in result.steps
+                ]
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to run decision tree: {str(e)}"
+        )
+
+
+# Flowchart Endpoint
+@router.get("/products/{product_id}/flowchart")
+async def get_flowchart_data(
+    product_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get flowchart data for a product"""
+    try:
+        haccp_service = HACCPService(db)
+        flowchart_data = haccp_service.get_flowchart_data(product_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Flowchart data retrieved successfully",
+            data={
+                "nodes": [
+                    {
+                        "id": node.id,
+                        "type": node.type,
+                        "label": node.label,
+                        "x": node.x,
+                        "y": node.y,
+                        "data": node.data
+                    } for node in flowchart_data.nodes
+                ],
+                "edges": [
+                    {
+                        "id": edge.id,
+                        "source": edge.source,
+                        "target": edge.target,
+                        "label": edge.label
+                    } for edge in flowchart_data.edges
+                ]
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve flowchart data: {str(e)}"
+        )
+
+
+# Enhanced Monitoring Log with Alerts
+@router.post("/ccps/{ccp_id}/monitoring-logs/enhanced")
+async def create_enhanced_monitoring_log(
+    ccp_id: int,
+    log_data: MonitoringLogCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a monitoring log with automatic alert generation"""
+    try:
+        haccp_service = HACCPService(db)
+        monitoring_log, alert_created = haccp_service.create_monitoring_log(ccp_id, log_data, current_user.id)
+        
+        response_data = {
+            "id": monitoring_log.id,
+            "is_within_limits": monitoring_log.is_within_limits,
+            "alert_created": alert_created
+        }
+        
+        if alert_created:
+            response_data["alert_message"] = "Out-of-spec alert has been generated and sent to responsible personnel"
+        
+        return ResponseModel(
+            success=True,
+            message="Monitoring log created successfully",
+            data=response_data
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create monitoring log: {str(e)}"
+        )
+
+
+# HACCP Report Generation
+@router.post("/products/{product_id}/reports")
+async def generate_haccp_report(
+    product_id: int,
+    report_request: HACCPReportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate HACCP report"""
+    try:
+        haccp_service = HACCPService(db)
+        report_data = haccp_service.generate_haccp_report(
+            product_id=product_id,
+            report_type=report_request.report_type,
+            date_from=report_request.date_from,
+            date_to=report_request.date_to
+        )
+        
+        # Generate unique report ID
+        report_id = f"haccp_report_{product_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        
+        return ResponseModel(
+            success=True,
+            message="HACCP report generated successfully",
+            data={
+                "report_id": report_id,
+                "report_data": report_data,
+                "report_type": report_request.report_type,
+                "format": report_request.format,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate report: {str(e)}"
+        )
+
+
+# Enhanced Dashboard with Alerts
+@router.get("/dashboard/enhanced")
+async def get_enhanced_haccp_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get enhanced HACCP dashboard with alerts"""
+    try:
+        haccp_service = HACCPService(db)
+        stats = haccp_service.get_haccp_dashboard_stats()
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced HACCP dashboard data retrieved successfully",
+            data=stats
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve enhanced dashboard data: {str(e)}"
+        )
+
+
+# CCP Alerts Summary
+@router.get("/alerts/summary")
+async def get_ccp_alerts_summary(
+    days: int = 7,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get summary of CCP alerts"""
+    try:
+        # Get recent out-of-spec incidents
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        
+        recent_alerts = db.query(CCPMonitoringLog).filter(
+            and_(
+                CCPMonitoringLog.is_within_limits == False,
+                CCPMonitoringLog.created_at >= cutoff_date
+            )
+        ).order_by(desc(CCPMonitoringLog.created_at)).all()
+        
+        alerts_summary = []
+        for alert in recent_alerts:
+            # Get CCP details
+            ccp = db.query(CCP).filter(CCP.id == alert.ccp_id).first()
+            if ccp:
+                alerts_summary.append({
+                    "id": alert.id,
+                    "ccp_number": ccp.ccp_number,
+                    "ccp_name": ccp.ccp_name,
+                    "batch_number": alert.batch_number,
+                    "measured_value": alert.measured_value,
+                    "unit": alert.unit,
+                    "critical_limit_min": ccp.critical_limit_min,
+                    "critical_limit_max": ccp.critical_limit_max,
+                    "created_at": alert.created_at.isoformat() if alert.created_at else None,
+                    "corrective_action_taken": alert.corrective_action_taken,
+                    "corrective_action_description": alert.corrective_action_description
+                })
+        
+        return ResponseModel(
+            success=True,
+            message="CCP alerts summary retrieved successfully",
+            data={
+                "total_alerts": len(alerts_summary),
+                "period_days": days,
+                "alerts": alerts_summary
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve alerts summary: {str(e)}"
         ) 

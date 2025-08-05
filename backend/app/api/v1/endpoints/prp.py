@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
 from datetime import datetime, timedelta
@@ -12,6 +12,12 @@ from app.models.prp import (
     PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus
 )
 from app.schemas.common import ResponseModel
+from app.schemas.prp import (
+    PRPProgramCreate, PRPProgramUpdate, ChecklistCreate, ChecklistUpdate,
+    ChecklistItemCreate, ChecklistCompletion, NonConformanceCreate,
+    ReminderCreate, ScheduleCreate, PRPReportRequest
+)
+from app.services.prp_service import PRPService
 
 router = APIRouter()
 
@@ -405,4 +411,337 @@ async def get_prp_dashboard(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve dashboard data: {str(e)}"
+        )
+
+
+# Enhanced Checklist Completion with Signature
+@router.post("/checklists/{checklist_id}/complete")
+async def complete_checklist(
+    checklist_id: int,
+    completion_data: ChecklistCompletion,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Complete a checklist with signature and timestamp logging"""
+    try:
+        prp_service = PRPService(db)
+        checklist, non_conformance_created = prp_service.complete_checklist(
+            checklist_id, completion_data, current_user.id
+        )
+        
+        response_data = {
+            "id": checklist.id,
+            "status": checklist.status.value,
+            "compliance_percentage": checklist.compliance_percentage,
+            "completed_date": checklist.completed_date.isoformat() if checklist.completed_date else None,
+            "non_conformance_created": non_conformance_created
+        }
+        
+        if non_conformance_created:
+            response_data["alert_message"] = "Non-conformance has been created due to failed items"
+        
+        return ResponseModel(
+            success=True,
+            message="Checklist completed successfully",
+            data=response_data
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete checklist: {str(e)}"
+        )
+
+
+# File Upload for Evidence
+@router.post("/checklists/{checklist_id}/upload-evidence")
+async def upload_evidence_file(
+    checklist_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Upload evidence file for a checklist"""
+    try:
+        # Read file data
+        file_data = await file.read()
+        
+        prp_service = PRPService(db)
+        upload_result = prp_service.upload_evidence_file(
+            checklist_id, file_data, file.filename, current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Evidence file uploaded successfully",
+            data=upload_result
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload evidence file: {str(e)}"
+        )
+
+
+# Overdue Checklists Check
+@router.get("/checklists/overdue")
+async def get_overdue_checklists(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all overdue checklists and create escalation notifications"""
+    try:
+        prp_service = PRPService(db)
+        overdue_checklists = prp_service.check_overdue_checklists()
+        
+        items = []
+        for checklist in overdue_checklists:
+            # Get assigned user name
+            assigned_user = db.query(User).filter(User.id == checklist.assigned_to).first()
+            assigned_name = assigned_user.full_name if assigned_user else "Unknown"
+            
+            # Get program details
+            program = db.query(PRPProgram).filter(PRPProgram.id == checklist.program_id).first()
+            program_name = program.name if program else "Unknown"
+            
+            # Calculate days overdue
+            days_overdue = (datetime.utcnow() - checklist.due_date).days
+            
+            items.append({
+                "id": checklist.id,
+                "checklist_code": checklist.checklist_code,
+                "name": checklist.name,
+                "program_name": program_name,
+                "assigned_to": assigned_name,
+                "due_date": checklist.due_date.isoformat() if checklist.due_date else None,
+                "days_overdue": days_overdue,
+                "status": checklist.status.value if checklist.status else None,
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Overdue checklists retrieved successfully",
+            data={
+                "total_overdue": len(items),
+                "checklists": items
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve overdue checklists: {str(e)}"
+        )
+
+
+# Enhanced Dashboard with Compliance Rate
+@router.get("/dashboard/enhanced")
+async def get_enhanced_prp_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get enhanced PRP dashboard with compliance rate and upcoming checklists"""
+    try:
+        prp_service = PRPService(db)
+        stats = prp_service.get_prp_dashboard_stats()
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced PRP dashboard data retrieved successfully",
+            data=stats
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve enhanced dashboard data: {str(e)}"
+        )
+
+
+# PRP Report Generation
+@router.post("/reports")
+async def generate_prp_report(
+    report_request: PRPReportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate PRP report"""
+    try:
+        prp_service = PRPService(db)
+        report_data = prp_service.generate_prp_report(
+            program_id=report_request.program_id,
+            category=report_request.category,
+            date_from=report_request.date_from,
+            date_to=report_request.date_to
+        )
+        
+        # Generate unique report ID
+        report_id = f"prp_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        
+        return ResponseModel(
+            success=True,
+            message="PRP report generated successfully",
+            data={
+                "report_id": report_id,
+                "report_data": report_data,
+                "report_type": "prp_summary",
+                "format": report_request.format,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate report: {str(e)}"
+        )
+
+
+# Non-conformance Management
+@router.get("/non-conformances")
+async def get_non_conformances(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    severity: Optional[str] = None
+):
+    """Get non-conformances from failed checklists"""
+    try:
+        # Get checklists with corrective actions required
+        query = db.query(PRPChecklist).filter(
+            PRPChecklist.corrective_actions_required == True
+        )
+        
+        if severity:
+            # Filter by severity (this would need a severity field in the model)
+            pass
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        checklists = query.order_by(desc(PRPChecklist.updated_at)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for checklist in checklists:
+            # Get assigned user name
+            assigned_user = db.query(User).filter(User.id == checklist.assigned_to).first()
+            assigned_name = assigned_user.full_name if assigned_user else "Unknown"
+            
+            # Get program details
+            program = db.query(PRPProgram).filter(PRPProgram.id == checklist.program_id).first()
+            program_name = program.name if program else "Unknown"
+            
+            # Determine severity based on failure rate
+            failure_rate = checklist.failed_items / checklist.total_items if checklist.total_items > 0 else 0
+            if failure_rate >= 0.5:
+                severity_level = "critical"
+            elif failure_rate >= 0.3:
+                severity_level = "high"
+            elif failure_rate >= 0.1:
+                severity_level = "medium"
+            else:
+                severity_level = "low"
+            
+            items.append({
+                "id": checklist.id,
+                "checklist_code": checklist.checklist_code,
+                "name": checklist.name,
+                "program_name": program_name,
+                "assigned_to": assigned_name,
+                "severity": severity_level,
+                "failed_items": checklist.failed_items,
+                "total_items": checklist.total_items,
+                "compliance_percentage": checklist.compliance_percentage,
+                "corrective_actions": checklist.corrective_actions,
+                "completed_date": checklist.completed_date.isoformat() if checklist.completed_date else None,
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Non-conformances retrieved successfully",
+            data={
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve non-conformances: {str(e)}"
+        )
+
+
+# Checklist Items Management
+@router.get("/checklists/{checklist_id}/items")
+async def get_checklist_items(
+    checklist_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all items for a checklist"""
+    try:
+        # Verify checklist exists
+        checklist = db.query(PRPChecklist).filter(PRPChecklist.id == checklist_id).first()
+        if not checklist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Checklist not found"
+            )
+        
+        items = db.query(PRPChecklistItem).filter(
+            PRPChecklistItem.checklist_id == checklist_id
+        ).order_by(PRPChecklistItem.item_number).all()
+        
+        items_data = []
+        for item in items:
+            items_data.append({
+                "id": item.id,
+                "item_number": item.item_number,
+                "question": item.question,
+                "description": item.description,
+                "response_type": item.response_type,
+                "response_options": item.response_options,
+                "expected_response": item.expected_response,
+                "is_critical": item.is_critical,
+                "points": item.points,
+                "response": item.response,
+                "response_value": item.response_value,
+                "is_compliant": item.is_compliant,
+                "comments": item.comments,
+                "evidence_files": item.evidence_files,
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Checklist items retrieved successfully",
+            data={
+                "checklist_id": checklist_id,
+                "checklist_name": checklist.name,
+                "items": items_data
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve checklist items: {str(e)}"
         ) 

@@ -10,13 +10,10 @@ import {
   IconButton,
   Button,
   Chip,
-  Divider,
   Badge,
   CircularProgress,
-  Alert,
   Tabs,
   Tab,
-  Paper,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -29,7 +26,6 @@ import {
   DoneAll as DoneAllIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
-  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -112,21 +108,6 @@ const NotificationPopup: React.FC<NotificationPopupProps> = ({ anchorEl, onClose
     }
   };
 
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'SUCCESS':
-        return 'success';
-      case 'WARNING':
-        return 'warning';
-      case 'ERROR':
-        return 'error';
-      case 'ALERT':
-        return 'error';
-      default:
-        return 'info';
-    }
-  };
-
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -195,7 +176,7 @@ const NotificationPopup: React.FC<NotificationPopupProps> = ({ anchorEl, onClose
                 label={notification.category}
                 size="small"
                 variant="outlined"
-                color="default"
+
               />
             </Box>
           </Box>

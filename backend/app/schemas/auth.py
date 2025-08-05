@@ -3,7 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from enum import Enum
 
-from app.models.user import UserRole, UserStatus
+from app.models.user import UserStatus
 
 
 class Token(BaseModel):
@@ -16,7 +16,7 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
     user_id: Optional[int] = None
-    role: Optional[UserRole] = None
+    role_id: Optional[int] = None
 
 
 class UserLogin(BaseModel):
@@ -24,12 +24,23 @@ class UserLogin(BaseModel):
     password: str = Field(..., min_length=6)
 
 
+class UserSignup(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    full_name: str = Field(..., min_length=2, max_length=100)
+    department: Optional[str] = Field(None, max_length=100)
+    position: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    employee_id: Optional[str] = Field(None, max_length=50)
+
+
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=6)
     full_name: str = Field(..., min_length=2, max_length=100)
-    role: UserRole = UserRole.VIEWER
+    role_id: int = Field(..., description="ID of the role to assign")
     department: Optional[str] = Field(None, max_length=100)
     position: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
@@ -39,7 +50,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
-    role: Optional[UserRole] = None
+    role_id: Optional[int] = None
     department: Optional[str] = Field(None, max_length=100)
     position: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
@@ -53,7 +64,8 @@ class UserResponse(BaseModel):
     username: str
     email: str
     full_name: str
-    role: UserRole
+    role_id: int # Changed from role: UserRole
+    role_name: Optional[str] = None  # Include role name for frontend
     status: UserStatus
     department: Optional[str] = None
     position: Optional[str] = None
@@ -62,12 +74,10 @@ class UserResponse(BaseModel):
     is_active: bool
     is_verified: bool
     last_login: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None # Made optional
+    updated_at: Optional[datetime] = None # Made optional
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
 
 
 class UserListResponse(BaseModel):
@@ -77,19 +87,27 @@ class UserListResponse(BaseModel):
     size: int
     pages: int
 
+    model_config = {"from_attributes": True}
+
 
 class PasswordChange(BaseModel):
     current_password: str = Field(..., min_length=6)
     new_password: str = Field(..., min_length=6)
 
+    model_config = {"from_attributes": True}
+
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+
+    model_config = {"from_attributes": True}
 
 
 class PasswordReset(BaseModel):
     token: str
     new_password: str = Field(..., min_length=6)
+
+    model_config = {"from_attributes": True}
 
 
 class UserProfile(BaseModel):
@@ -97,7 +115,8 @@ class UserProfile(BaseModel):
     username: str
     email: str
     full_name: str
-    role: UserRole
+    role_id: int
+    role_name: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     phone: Optional[str] = None
@@ -106,20 +125,16 @@ class UserProfile(BaseModel):
     bio: Optional[str] = None
     last_login: Optional[datetime] = None
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
 
 
 class UserSessionInfo(BaseModel):
     user_id: int
     username: str
-    role: UserRole
+    role_id: int
     is_active: bool
     session_id: str
     created_at: datetime
     expires_at: datetime
 
-    model_config = {
-        "from_attributes": True
-    } 
+    model_config = {"from_attributes": True} 

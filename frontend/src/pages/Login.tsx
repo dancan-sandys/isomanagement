@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -103,7 +103,7 @@ const Login: React.FC = () => {
       const result = await dispatch(login({
         username: formData.username,
         password: formData.password,
-      }));
+      }) as any);
       
       console.log('Login result:', result);
       
@@ -120,6 +120,9 @@ const Login: React.FC = () => {
         // Navigation will be handled by useEffect when isAuthenticated changes
       } else if (login.rejected.match(result)) {
         console.log('Login rejected:', result.error);
+        // Ensure error is a string
+        const errorMessage = typeof result.error === 'string' ? result.error : 'Login failed';
+        console.log('Error message:', errorMessage);
       }
     } catch (error) {
       // Error is handled by the Redux slice
@@ -157,7 +160,7 @@ const Login: React.FC = () => {
 
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
+              {typeof error === 'string' ? error : 'An error occurred during login'}
             </Alert>
           )}
 
@@ -222,6 +225,15 @@ const Login: React.FC = () => {
             <br />
             Password: admin123
           </Typography>
+
+          <Box sx={{ textAlign: 'center', mt: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Don't have an account?{' '}
+              <Link to="/signup" style={{ color: 'inherit', textDecoration: 'none' }}>
+                Sign up here
+              </Link>
+            </Typography>
+          </Box>
         </Paper>
       </Box>
     </Container>

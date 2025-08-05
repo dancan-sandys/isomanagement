@@ -384,7 +384,7 @@ const Settings: React.FC = () => {
                         <Chip label="Required" color="error" size="small" sx={{ mr: 1 }} />
                       )}
                       {!setting.is_editable && (
-                        <Chip label="Read-only" color="default" size="small" />
+                        <Chip label="Read-only" size="small" />
                       )}
                     </Box>
                   </Box>

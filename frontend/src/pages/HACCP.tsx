@@ -1,530 +1,704 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Box,
+  Grid,
   Typography,
+  Card,
+  CardContent,
+  CardHeader,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
   Button,
-  Paper,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
+  Paper,
+  Stack,
+  Alert,
   IconButton,
-  Chip,
-  TextField,
+  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Alert,
-  Skeleton,
-  Tooltip,
-  Grid,
-  Card,
-  CardContent,
+  CircularProgress,
+  Fab,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
-  Add,
-  Edit,
-  Delete,
-  Visibility,
+  ExpandMore,
   Security,
   Warning,
   CheckCircle,
-  Error,
-  Refresh,
+  Schedule,
+  Add,
+  Edit,
+  Visibility,
+  TrendingUp,
+  TrendingDown,
   Science,
-  Verified,
-  Monitor,
-  BugReport,
+  Assessment,
   Timeline,
+  BarChart,
+  Report,
+  Settings,
+  Delete,
+  Refresh,
 } from '@mui/icons-material';
-import { haccpAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { AppDispatch, RootState } from '../store';
+import {
+  fetchProducts,
+  fetchProduct,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  createProcessFlow,
+  createHazard,
+  createCCP,
+  fetchDashboard,
+  setSelectedProduct,
+  setSelectedCCP,
+  setSelectedHazard,
+  clearError,
+} from '../store/slices/haccpSlice';
+import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
+import PageHeader from '../components/UI/PageHeader';
+import StatusChip from '../components/UI/StatusChip';
 
-interface Product {
-  id: number;
-  product_code: string;
-  name: string;
-  description?: string;
-  category?: string;
-  haccp_plan_approved: boolean;
-  haccp_plan_version?: string;
-  ccp_count: number;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`haccp-tabpanel-${index}`}
+      aria-labelledby={`haccp-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+    </div>
+  );
 }
 
 const HACCP: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
+  const { user: currentUser } = useSelector((state: RootState) => state.auth);
+  const { 
+    products, 
+    selectedProduct, 
+    processFlows, 
+    hazards, 
+    ccps, 
+    dashboardStats, 
+    loading, 
+    error 
+  } = useSelector((state: RootState) => state.haccp);
   
-  // Dialog states
-  const [openProductDialog, setOpenProductDialog] = useState(false);
-  
-  // Form data
-  const [productForm, setProductForm] = useState({
-    product_code: '',
-    name: '',
-    description: '',
-    category: '',
-    formulation: '',
-    allergens: '',
-    shelf_life_days: '',
-    storage_conditions: '',
-    packaging_type: '',
-  });
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [expanded, setExpanded] = useState<string | false>('panel1');
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [processFlowDialogOpen, setProcessFlowDialogOpen] = useState(false);
+  const [hazardDialogOpen, setHazardDialogOpen] = useState(false);
+  const [ccpDialogOpen, setCcpDialogOpen] = useState(false);
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState<any>(null);
 
-  // Dashboard data
-  const [dashboardData, setDashboardData] = useState({
-    total_products: 0,
-    approved_plans: 0,
-    total_ccps: 0,
-    active_ccps: 0,
-    out_of_spec_count: 0,
-    recent_logs: [],
-  });
+  // Role-based permissions
+  const canManageHACCP = hasRole(currentUser, 'QA Manager') || 
+                         hasRole(currentUser, 'QA Specialist') || 
+                         isSystemAdministrator(currentUser);
 
-  const fetchProducts = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await haccpAPI.getProducts({
-        search: searchTerm || undefined,
-      });
-      
-      if (response.success) {
-        setProducts(response.data.items);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load products');
-      console.error('HACCP error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm]);
+  const canCreateProducts = hasRole(currentUser, 'QA Manager') || 
+                           isSystemAdministrator(currentUser);
 
-  const fetchDashboard = useCallback(async () => {
-    try {
-      const response = await haccpAPI.getDashboard();
-      if (response.success) {
-        setDashboardData(response.data);
-      }
-    } catch (err: any) {
-      console.error('Dashboard error:', err);
-    }
-  }, []);
+  const canApprovePlans = hasRole(currentUser, 'QA Manager') || 
+                         isSystemAdministrator(currentUser);
 
   useEffect(() => {
-    fetchProducts();
-    fetchDashboard();
-  }, [fetchProducts, fetchDashboard]);
+    loadDashboard();
+    loadProducts();
+  }, []);
 
-  const handleCreateProduct = async () => {
+  const loadDashboard = () => {
+    dispatch(fetchDashboard());
+  };
+
+  const loadProducts = () => {
+    dispatch(fetchProducts());
+  };
+
+  const loadProductDetails = (productId: number) => {
+    dispatch(fetchProduct(productId));
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setSelectedTab(newValue);
+  };
+
+  const handleAccordionChange = (panel: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpanded(isExpanded ? panel : false);
+  };
+
+  const handleProductSelect = (product: any) => {
+    dispatch(setSelectedProduct(product));
+    loadProductDetails(product.id);
+  };
+
+  const handleCreateProduct = async (productData: any) => {
     try {
-      const response = await haccpAPI.createProduct(productForm);
-      if (response.success) {
-        setSuccess('Product created successfully');
-        setOpenProductDialog(false);
-        setProductForm({
-          product_code: '',
-          name: '',
-          description: '',
-          category: '',
-          formulation: '',
-          allergens: '',
-          shelf_life_days: '',
-          storage_conditions: '',
-          packaging_type: '',
-        });
-        fetchProducts();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to create product');
+      await dispatch(createProduct(productData)).unwrap();
+      setProductDialogOpen(false);
+      loadProducts();
+    } catch (error) {
+      console.error('Failed to create product:', error);
     }
   };
 
-  const handleCloseSnackbar = () => {
-    setError(null);
-    setSuccess(null);
+  const handleUpdateProduct = async (productId: number, productData: any) => {
+    try {
+      await dispatch(updateProduct({ productId, productData })).unwrap();
+      setProductDialogOpen(false);
+      setSelectedProductForEdit(null);
+      loadProducts();
+    } catch (error) {
+      console.error('Failed to update product:', error);
+    }
   };
 
-  return (
-    <Box p={3}>
-      {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box>
-          <Typography variant="h4" gutterBottom>
-            HACCP Plans
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Hazard Analysis and Critical Control Points Management
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setOpenProductDialog(true)}
-          size="large"
-        >
-          New Product
-        </Button>
-      </Box>
+  const handleDeleteProduct = async (productId: number) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+    try {
+      await dispatch(deleteProduct(productId)).unwrap();
+      loadProducts();
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+    }
+  };
 
-      {/* Alerts */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={handleCloseSnackbar}>
-          {error}
-        </Alert>
-      )}
+  const handleCreateProcessFlow = async (flowData: any) => {
+    if (!selectedProduct) return;
+    try {
+      await dispatch(createProcessFlow({ productId: selectedProduct.id, flowData })).unwrap();
+      setProcessFlowDialogOpen(false);
+      loadProductDetails(selectedProduct.id);
+    } catch (error) {
+      console.error('Failed to create process flow:', error);
+    }
+  };
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={handleCloseSnackbar}>
-          {success}
-        </Alert>
-      )}
+  const handleCreateHazard = async (hazardData: any) => {
+    if (!selectedProduct) return;
+    try {
+      await dispatch(createHazard({ productId: selectedProduct.id, hazardData })).unwrap();
+      setHazardDialogOpen(false);
+      loadProductDetails(selectedProduct.id);
+    } catch (error) {
+      console.error('Failed to create hazard:', error);
+    }
+  };
 
-      {/* Dashboard Statistics */}
-      <Grid container spacing={3} mb={3}>
+  const handleCreateCCP = async (ccpData: any) => {
+    if (!selectedProduct) return;
+    try {
+      await dispatch(createCCP({ productId: selectedProduct.id, ccpData })).unwrap();
+      setCcpDialogOpen(false);
+      loadProductDetails(selectedProduct.id);
+    } catch (error) {
+      console.error('Failed to create CCP:', error);
+    }
+  };
+
+  const getRiskLevelColor = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'low': return 'success';
+      case 'medium': return 'warning';
+      case 'high': return 'error';
+      case 'critical': return 'error';
+      default: return 'default';
+    }
+  };
+
+  const getCCPStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active': return 'success';
+      case 'inactive': return 'default';
+      case 'suspended': return 'warning';
+      default: return 'default';
+    }
+  };
+
+  const getHazardTypeIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'biological': return <Science />;
+      case 'chemical': return <Warning />;
+      case 'physical': return <Security />;
+      case 'allergen': return <Warning />;
+      default: return <Security />;
+    }
+  };
+
+  const renderDashboard = () => (
+    <Box>
+      <Grid container spacing={3}>
+        {/* Statistics Cards */}
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Products
-                  </Typography>
-                  <Typography variant="h4">
-                    {dashboardData.total_products}
-                  </Typography>
-                </Box>
-                <Science color="primary" sx={{ fontSize: 40 }} />
-              </Box>
+              <Typography color="textSecondary" gutterBottom>
+                Total Products
+              </Typography>
+              <Typography variant="h4">
+                {dashboardStats?.total_products || 0}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Approved Plans
-                  </Typography>
-                  <Typography variant="h4">
-                    {dashboardData.approved_plans}
-                  </Typography>
-                </Box>
-                <Verified color="success" sx={{ fontSize: 40 }} />
-              </Box>
+              <Typography color="textSecondary" gutterBottom>
+                Approved Plans
+              </Typography>
+              <Typography variant="h4">
+                {dashboardStats?.approved_plans || 0}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Active CCPs
-                  </Typography>
-                  <Typography variant="h4">
-                    {dashboardData.active_ccps}
-                  </Typography>
-                </Box>
-                <Monitor color="info" sx={{ fontSize: 40 }} />
-              </Box>
+              <Typography color="textSecondary" gutterBottom>
+                Total CCPs
+              </Typography>
+              <Typography variant="h4">
+                {dashboardStats?.total_ccps || 0}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Out of Spec
-                  </Typography>
-                  <Typography variant="h4">
-                    {dashboardData.out_of_spec_count}
-                  </Typography>
-                </Box>
-                <Warning color="error" sx={{ fontSize: 40 }} />
-              </Box>
+              <Typography color="textSecondary" gutterBottom>
+                Active CCPs
+              </Typography>
+              <Typography variant="h4">
+                {dashboardStats?.active_ccps || 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Recent Activity */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardHeader title="Recent Activity" />
+            <CardContent>
+              <List>
+                {dashboardStats?.recent_logs?.slice(0, 5).map((log: any, index: number) => (
+                  <ListItem key={index}>
+                    <ListItemIcon>
+                      <CheckCircle color="success" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={log.description}
+                      secondary={new Date(log.created_at).toLocaleDateString()}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Alerts */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardHeader title="Out of Specification" />
+            <CardContent>
+              <Alert severity="warning">
+                {dashboardStats?.out_of_spec_count || 0} CCPs out of specification
+              </Alert>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+    </Box>
+  );
 
-      {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
-          <TextField
-            label="Search products"
-            variant="outlined"
-            size="small"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            sx={{ minWidth: 200 }}
-          />
-
+  const renderProducts = () => (
+    <Box>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h5">Products</Typography>
+        {canCreateProducts && (
           <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={fetchProducts}
-            size="small"
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setProductDialogOpen(true)}
           >
-            Refresh
+            Add Product
           </Button>
-        </Box>
-      </Paper>
+        )}
+      </Box>
 
-      {/* Products Table */}
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Product Code</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>HACCP Status</TableCell>
-                <TableCell>CCPs</TableCell>
-                <TableCell>Created By</TableCell>
-                <TableCell>Last Updated</TableCell>
-                <TableCell align="center">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: rowsPerPage }).map((_, index) => (
-                  <TableRow key={index}>
-                    <TableCell><Skeleton variant="text" width="80%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="90%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="60%" /></TableCell>
-                    <TableCell><Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 1 }} /></TableCell>
-                    <TableCell><Skeleton variant="text" width="40%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="70%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width="60%" /></TableCell>
-                    <TableCell><Skeleton variant="circular" width={32} height={32} /></TableCell>
-                  </TableRow>
-                ))
-              ) : products.length === 0 ? (
+      <Grid container spacing={3}>
+        {products.map((product) => (
+          <Grid item xs={12} sm={6} md={4} key={product.id}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                '&:hover': { boxShadow: 3 }
+              }}
+              onClick={() => handleProductSelect(product)}
+            >
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {product.name}
+                </Typography>
+                <Typography color="textSecondary" gutterBottom>
+                  {product.product_code}
+                </Typography>
+                <Typography variant="body2" paragraph>
+                  {product.description}
+                </Typography>
+                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                  <Chip
+                    label={product.haccp_plan_approved ? 'Approved' : 'Pending'}
+                    color={product.haccp_plan_approved ? 'success' : 'warning'}
+                    size="small"
+                  />
+                  <Chip
+                    label={`${product.ccp_count} CCPs`}
+                    color="primary"
+                    size="small"
+                  />
+                </Stack>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" color="textSecondary">
+                    Created by {product.created_by}
+                  </Typography>
+                  {canManageHACCP && (
+                    <Box>
+                      <IconButton size="small" onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProductForEdit(product);
+                        setProductDialogOpen(true);
+                      }}>
+                        <Edit />
+                      </IconButton>
+                      <IconButton size="small" onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProduct(product.id);
+                      }}>
+                        <Delete />
+                      </IconButton>
+                    </Box>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  );
+
+  const renderProductDetails = () => {
+    if (!selectedProduct) {
+      return (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="h6" color="textSecondary">
+            Select a product to view details
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h4" gutterBottom>
+            {selectedProduct.name}
+          </Typography>
+          <Typography color="textSecondary" gutterBottom>
+            {selectedProduct.product_code}
+          </Typography>
+          <Typography variant="body1" paragraph>
+            {selectedProduct.description}
+          </Typography>
+          <Stack direction="row" spacing={2}>
+            <Chip
+              label={selectedProduct.haccp_plan_approved ? 'Plan Approved' : 'Plan Pending'}
+              color={selectedProduct.haccp_plan_approved ? 'success' : 'warning'}
+            />
+            <Chip
+              label={`${ccps.length} CCPs`}
+              color="primary"
+            />
+            <Chip
+              label={`${hazards.length} Hazards`}
+              color="secondary"
+            />
+          </Stack>
+        </Box>
+
+        <Tabs value={selectedTab} onChange={handleTabChange}>
+          <Tab label="Process Flow" />
+          <Tab label="Hazards" />
+          <Tab label="CCPs" />
+          <Tab label="Monitoring" />
+        </Tabs>
+
+        <TabPanel value={selectedTab} index={0}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Process Flow</Typography>
+            {canManageHACCP && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setProcessFlowDialogOpen(true)}
+              >
+                Add Step
+              </Button>
+            )}
+          </Box>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No products found
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      startIcon={<Add />}
-                      onClick={() => setOpenProductDialog(true)}
-                      sx={{ mt: 2 }}
-                    >
-                      Create First Product
-                    </Button>
-                  </TableCell>
+                  <TableCell>Step</TableCell>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Equipment</TableCell>
+                  <TableCell>Temperature</TableCell>
+                  <TableCell>Time</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
-              ) : (
-                products.map((product) => (
-                  <TableRow key={product.id} hover>
-                    <TableCell>{product.product_code}</TableCell>
+              </TableHead>
+              <TableBody>
+                {processFlows.map((flow) => (
+                  <TableRow key={flow.id}>
+                    <TableCell>{flow.step_number}</TableCell>
+                    <TableCell>{flow.step_name}</TableCell>
+                    <TableCell>{flow.equipment}</TableCell>
+                    <TableCell>{flow.temperature}°C</TableCell>
+                    <TableCell>{flow.time_minutes} min</TableCell>
                     <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {product.name}
-                        </Typography>
-                        {product.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {product.description.substring(0, 50)}...
-                          </Typography>
-                        )}
-                      </Box>
+                      {canManageHACCP && (
+                        <IconButton size="small">
+                          <Edit />
+                        </IconButton>
+                      )}
                     </TableCell>
-                    <TableCell>{product.category}</TableCell>
-                    <TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+
+        <TabPanel value={selectedTab} index={1}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Hazards</Typography>
+            {canManageHACCP && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setHazardDialogOpen(true)}
+              >
+                Add Hazard
+              </Button>
+            )}
+          </Box>
+          <Grid container spacing={2}>
+            {hazards.map((hazard) => (
+              <Grid item xs={12} sm={6} md={4} key={hazard.id}>
+                <Card>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      {getHazardTypeIcon(hazard.hazard_type)}
+                      <Typography variant="h6" sx={{ ml: 1 }}>
+                        {hazard.hazard_name}
+                      </Typography>
+                    </Box>
+                    <Typography color="textSecondary" gutterBottom>
+                      {hazard.hazard_type}
+                    </Typography>
+                    <Typography variant="body2" paragraph>
+                      {hazard.description}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
                       <Chip
-                        label={product.haccp_plan_approved ? 'Approved' : 'Draft'}
-                        color={product.haccp_plan_approved ? 'success' : 'warning'}
+                        label={`Risk: ${hazard.risk_level}`}
+                        color={getRiskLevelColor(hazard.risk_level) as any}
                         size="small"
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Security color="primary" fontSize="small" />
-                        <Typography variant="body2">
-                          {product.ccp_count} CCPs
-                        </Typography>
+                      <Chip
+                        label={`Score: ${hazard.risk_score}`}
+                        color="primary"
+                        size="small"
+                      />
+                      {hazard.is_ccp && (
+                        <Chip
+                          label="CCP"
+                          color="error"
+                          size="small"
+                        />
+                      )}
+                    </Stack>
+                    {canManageHACCP && (
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <IconButton size="small">
+                          <Edit />
+                        </IconButton>
                       </Box>
-                    </TableCell>
-                    <TableCell>{product.created_by}</TableCell>
-                    <TableCell>
-                      {new Date(product.updated_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="View Details">
-                        <IconButton size="small">
-                          <Visibility />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Add Process Flow">
-                        <IconButton size="small">
-                          <Timeline />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Add Hazard">
-                        <IconButton size="small">
-                          <BugReport />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Add CCP">
-                        <IconButton size="small">
-                          <Security />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={products.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={(_, newPage) => setPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-        />
-      </Paper>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </TabPanel>
 
-      {/* Product Creation Dialog */}
-      <Dialog open={openProductDialog} onClose={() => setOpenProductDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Create New Product</DialogTitle>
-        <DialogContent>
-          <Box display="flex" flexDirection="column" gap={2} pt={1}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Product Code"
-                  fullWidth
-                  value={productForm.product_code}
-                  onChange={(e) => setProductForm({ ...productForm, product_code: e.target.value })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Product Name"
-                  fullWidth
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                  required
-                />
-              </Grid>
-            </Grid>
-            
-            <TextField
-              label="Description"
-              fullWidth
-              multiline
-              rows={3}
-              value={productForm.description}
-              onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-            />
-            
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Category</InputLabel>
-                  <Select
-                    value={productForm.category}
-                    label="Category"
-                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                  >
-                    <MenuItem value="milk">Milk</MenuItem>
-                    <MenuItem value="yogurt">Yogurt</MenuItem>
-                    <MenuItem value="cheese">Cheese</MenuItem>
-                    <MenuItem value="butter">Butter</MenuItem>
-                    <MenuItem value="cream">Cream</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Packaging Type"
-                  fullWidth
-                  value={productForm.packaging_type}
-                  onChange={(e) => setProductForm({ ...productForm, packaging_type: e.target.value })}
-                />
-              </Grid>
-            </Grid>
-            
-            <TextField
-              label="Formulation"
-              fullWidth
-              multiline
-              rows={2}
-              value={productForm.formulation}
-              onChange={(e) => setProductForm({ ...productForm, formulation: e.target.value })}
-              placeholder="List ingredients and proportions..."
-            />
-            
-            <TextField
-              label="Allergens"
-              fullWidth
-              value={productForm.allergens}
-              onChange={(e) => setProductForm({ ...productForm, allergens: e.target.value })}
-              placeholder="e.g., Milk, Soy, Nuts..."
-            />
-            
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Shelf Life (days)"
-                  fullWidth
-                  type="number"
-                  value={productForm.shelf_life_days}
-                  onChange={(e) => setProductForm({ ...productForm, shelf_life_days: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Storage Conditions"
-                  fullWidth
-                  value={productForm.storage_conditions}
-                  onChange={(e) => setProductForm({ ...productForm, storage_conditions: e.target.value })}
-                  placeholder="e.g., Refrigerated at 2-4°C"
-                />
-              </Grid>
-            </Grid>
+        <TabPanel value={selectedTab} index={2}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Critical Control Points</Typography>
+            {canManageHACCP && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setCcpDialogOpen(true)}
+              >
+                Add CCP
+              </Button>
+            )}
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenProductDialog(false)}>Cancel</Button>
-          <Button onClick={handleCreateProduct} variant="contained">
-            Create Product
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Grid container spacing={2}>
+            {ccps.map((ccp) => (
+              <Grid item xs={12} sm={6} md={4} key={ccp.id}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      {ccp.ccp_name}
+                    </Typography>
+                    <Typography color="textSecondary" gutterBottom>
+                      {ccp.ccp_number}
+                    </Typography>
+                    <Typography variant="body2" paragraph>
+                      {ccp.description}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                      <StatusChip
+                        status={ccp.status}
+                        getStatusColor={getCCPStatusColor}
+                      />
+                    </Stack>
+                    {ccp.critical_limit_min && ccp.critical_limit_max && (
+                      <Typography variant="body2" color="textSecondary">
+                        Limits: {ccp.critical_limit_min} - {ccp.critical_limit_max} {ccp.critical_limit_unit}
+                      </Typography>
+                    )}
+                    {canManageHACCP && (
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                        <IconButton size="small">
+                          <Edit />
+                        </IconButton>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </TabPanel>
+
+        <TabPanel value={selectedTab} index={3}>
+          <Typography variant="h6" gutterBottom>
+            Monitoring & Verification
+          </Typography>
+          <Typography color="textSecondary">
+            Monitoring and verification logs will be displayed here.
+          </Typography>
+        </TabPanel>
+      </Box>
+    );
+  };
+
+  if (!canManageHACCP) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          <Typography variant="h6">Access Denied</Typography>
+          <Typography variant="body2">
+            You don't have permission to access HACCP management. Please contact your system administrator.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <PageHeader
+        title="HACCP Management"
+        subtitle="Hazard Analysis and Critical Control Points"
+        showAdd={canCreateProducts}
+        onAdd={() => setProductDialogOpen(true)}
+      />
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => dispatch(clearError())}>
+          {error}
+        </Alert>
+      )}
+
+      {loading && <CircularProgress sx={{ display: 'block', margin: '20px auto' }} />}
+
+      <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 3 }}>
+        <Tab label="Dashboard" />
+        <Tab label="Products" />
+        <Tab label="Product Details" />
+      </Tabs>
+
+      <TabPanel value={selectedTab} index={0}>
+        {renderDashboard()}
+      </TabPanel>
+
+      <TabPanel value={selectedTab} index={1}>
+        {renderProducts()}
+      </TabPanel>
+
+      <TabPanel value={selectedTab} index={2}>
+        {renderProductDetails()}
+      </TabPanel>
+
+      {/* Dialogs will be added here for creating/editing products, process flows, hazards, and CCPs */}
     </Box>
   );
 };

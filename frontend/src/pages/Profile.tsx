@@ -151,7 +151,7 @@ const Profile: React.FC = () => {
         username: currentUser?.username || 'admin',
         email: currentUser?.email || 'admin@dairy.com',
         full_name: currentUser?.full_name || 'System Administrator',
-        role: currentUser?.role || 'ADMIN',
+        role: currentUser?.role_name || 'ADMIN',
         department: currentUser?.department || 'IT',
         position: currentUser?.position || 'System Administrator',
         phone: currentUser?.phone || '+1234567890',

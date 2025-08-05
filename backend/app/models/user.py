@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -33,12 +33,12 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     full_name = Column(String(100), nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.VIEWER)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     status = Column(Enum(UserStatus), nullable=False, default=UserStatus.PENDING_APPROVAL)
     department = Column(String(100))
     position = Column(String(100))
     phone = Column(String(20))
-    employee_id = Column(String(50), unique=True)
+    employee_id = Column(String(50), nullable=True)  # Removed unique=True, made nullable
     
     # Profile information
     profile_picture = Column(String(255))
@@ -57,18 +57,13 @@ class User(Base):
     created_by = Column(Integer)
     updated_by = Column(Integer)
     
-    # Relationships - Commented out until other models are implemented
-    # audit_logs = relationship("AuditLog", back_populates="user")
-    # document_approvals = relationship("DocumentApproval", back_populates="approver")
-    # training_records = relationship("TrainingRecord", back_populates="user")
-    # non_conformances = relationship("NonConformance", back_populates="reported_by")
-    # corrective_actions = relationship("CorrectiveAction", back_populates="assigned_to")
-    
-    # Notifications relationship
+    # Relationships
+    role = relationship("Role", back_populates="users")
+    custom_permissions = relationship("UserPermission", back_populates="user", cascade="all, delete-orphan", foreign_keys="UserPermission.user_id")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
+        return f"<User(id={self.id}, username='{self.username}', role_id={self.role_id})>"
 
 
 class UserSession(Base):

@@ -3,12 +3,15 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
 
+T = TypeVar('T')
 
-class ResponseModel(BaseModel):
+class ResponseModel(BaseModel, Generic[T]):
     """Base response model"""
     success: bool = True
     message: str = "Success"
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[T] = None # Changed to use TypeVar T
+
+    model_config = {"from_attributes": True}
 
 
 class PaginationParams(BaseModel):
@@ -16,8 +19,7 @@ class PaginationParams(BaseModel):
     page: int = Field(1, ge=1, description="Page number")
     size: int = Field(10, ge=1, le=100, description="Page size")
 
-
-T = TypeVar('T')
+    model_config = {"from_attributes": True}
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
@@ -27,6 +29,8 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int
     size: int
     pages: int
+
+    model_config = {"from_attributes": True}
 
 
 class BaseModelWithTimestamps(BaseModel):
