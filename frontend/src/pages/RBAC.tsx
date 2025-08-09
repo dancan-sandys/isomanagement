@@ -123,23 +123,23 @@ const RBAC: React.FC = () => {
       setFormData({
         name: role.name,
         description: role.description || '',
-        permissions: role.permissions.map((p: any) => p.id),
+        permissions: (role.permissions || []).map((p: any) => p.id),
       });
-      setSelectedRole(role);
+      dispatch(setSelectedRole(role));
     } else if (type === 'clone' && role) {
       setFormData({
         name: `${role.name} (Copy)`,
         description: role.description || '',
-        permissions: role.permissions.map((p: any) => p.id),
+        permissions: (role.permissions || []).map((p: any) => p.id),
       });
-      setSelectedRole(role);
+      dispatch(setSelectedRole(role));
     } else {
       setFormData({
         name: '',
         description: '',
         permissions: [],
       });
-      clearSelectedRole();
+      dispatch(clearSelectedRole());
     }
     setOpenDialog(true);
   };
@@ -152,7 +152,7 @@ const RBAC: React.FC = () => {
       permissions: [],
     });
     setSelectedPermissions({});
-    clearSelectedRole();
+    dispatch(clearSelectedRole());
   };
 
   const handleSubmit = async () => {
@@ -270,9 +270,9 @@ const RBAC: React.FC = () => {
             <Box display="flex" justifyContent="center" p={3}>
               <CircularProgress />
             </Box>
-          ) : (
+          ) : roles && roles.length > 0 ? (
             <Grid container spacing={2}>
-              {(roles || []).map((role) => (
+              {roles.map((role) => (
                 <Grid item xs={12} md={6} lg={4} key={role.id}>
                   <Card>
                     <CardContent>
@@ -354,6 +354,8 @@ const RBAC: React.FC = () => {
                 </Grid>
               ))}
             </Grid>
+          ) : (
+            <Typography color="text.secondary">No roles available</Typography>
           )}
         </TabPanel>
 
@@ -366,7 +368,7 @@ const RBAC: React.FC = () => {
             <Box display="flex" justifyContent="center" p={3}>
               <CircularProgress />
             </Box>
-          ) : (
+          ) : roleSummary && roleSummary.length > 0 ? (
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -382,7 +384,7 @@ const RBAC: React.FC = () => {
                     <TableRow key={summary.role_id}>
                       <TableCell>{summary.role_name}</TableCell>
                       <TableCell>{summary.user_count}</TableCell>
-                      <TableCell>{summary.permissions.length}</TableCell>
+                      <TableCell>{(summary.permissions || []).length}</TableCell>
                       <TableCell>
                         <Chip
                           label={summary.user_count > 0 ? 'Active' : 'No Users'}
@@ -395,6 +397,8 @@ const RBAC: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+          ) : (
+            <Typography color="text.secondary">No role summary available</Typography>
           )}
         </TabPanel>
 
@@ -407,7 +411,7 @@ const RBAC: React.FC = () => {
             <Box display="flex" justifyContent="center" p={3}>
               <CircularProgress />
             </Box>
-          ) : permissionMatrix ? (
+          ) : permissionMatrix && permissionMatrix.modules && permissionMatrix.modules.length > 0 ? (
             <TableContainer component={Paper}>
               <Table size="small">
                 <TableHead>
@@ -421,7 +425,7 @@ const RBAC: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {Object.entries(permissionMatrix.role_permissions).map(([roleName, modulePermissions]) => (
+                  {Object.entries(permissionMatrix.role_permissions || {}).map(([roleName, modulePermissions]) => (
                     <TableRow key={roleName}>
                       <TableCell component="th" scope="row">
                         {roleName}
@@ -484,36 +488,40 @@ const RBAC: React.FC = () => {
             </Typography>
 
             <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
-              {Object.entries(permissionsByModule).map(([module, modulePermissions]) => (
-                <Box key={module} sx={{ mb: 2 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    {module.toUpperCase()}
-                  </Typography>
-                  <Grid container spacing={1}>
-                    {modulePermissions.map((permission) => (
-                      <Grid item xs={12} sm={6} md={4} key={permission.id}>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={formData.permissions.includes(permission.id)}
-                              onChange={(e) => handlePermissionToggle(permission.id, e.target.checked)}
-                            />
-                          }
-                          label={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              {getPermissionIcon(permission.action)}
-                              <Typography variant="body2">
-                                {permission.action}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </Grid>
-                    ))}
-                  </Grid>
-                  <Divider sx={{ mt: 1 }} />
-                </Box>
-              ))}
+              {Object.keys(permissionsByModule).length > 0 ? (
+                Object.entries(permissionsByModule).map(([module, modulePermissions]) => (
+                  <Box key={module} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      {module.toUpperCase()}
+                    </Typography>
+                    <Grid container spacing={1}>
+                      {modulePermissions.map((permission) => (
+                        <Grid item xs={12} sm={6} md={4} key={permission.id}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={formData.permissions.includes(permission.id)}
+                                onChange={(e) => handlePermissionToggle(permission.id, e.target.checked)}
+                              />
+                            }
+                            label={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {getPermissionIcon(permission.action)}
+                                <Typography variant="body2">
+                                  {permission.action}
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                    <Divider sx={{ mt: 1 }} />
+                  </Box>
+                ))
+              ) : (
+                <Typography color="text.secondary">No permissions available</Typography>
+              )}
             </Box>
           </Box>
         </DialogContent>

@@ -6,7 +6,7 @@ from app.core.security import get_current_active_user, require_permission
 from app.models.user import User
 from app.models.rbac import Module, PermissionType, Role, Permission, UserPermission
 from app.schemas.rbac import (
-    RoleCreate, RoleUpdate, RoleClone, Role as RoleResponse, Permission as PermissionResponse,
+    RoleCreate, RoleUpdate, RoleClone, Role as RoleResponse,
     RoleListResponse, RoleDetailResponse, PermissionListResponse,
     RoleSummaryResponse, PermissionMatrixResponse, UserPermissionCreate, PermissionCreate
 )
@@ -35,10 +35,22 @@ async def get_permissions(
     
     permissions = query.all()
     
+    # Convert to Pydantic models manually
+    from app.schemas.rbac import Permission as PermissionResponse
+    permission_responses = []
+    for perm in permissions:
+        permission_responses.append(PermissionResponse(
+            id=perm.id,
+            module=perm.module.value,  # Convert enum to string
+            action=perm.action.value,  # Convert enum to string
+            description=perm.description,
+            created_at=perm.created_at
+        ))
+    
     return PermissionListResponse(
         success=True,
-        data=permissions,
-        total=len(permissions)
+        data=permission_responses,
+        total=len(permission_responses)
     )
 
 
@@ -166,7 +178,7 @@ async def update_role(
     
     return RoleDetailResponse(
         success=True,
-        data=role
+        data=RoleResponse.from_orm(role)
     )
 
 
@@ -185,7 +197,7 @@ async def clone_role(
     
     return RoleDetailResponse(
         success=True,
-        data=role
+        data=RoleResponse.from_orm(role)
     )
 
 
@@ -214,7 +226,28 @@ async def get_role_summary(
     """Get role summary with user counts"""
     rbac_service = RBACService(db)
     
-    summary = rbac_service.get_role_summary()
+    summary_data = rbac_service.get_role_summary()
+    
+    # Convert to proper RoleSummary objects
+    from app.schemas.rbac import RoleSummary, Permission as PermissionResponse
+    summary = []
+    for item in summary_data:
+        # Convert SQLAlchemy permission objects to Pydantic models manually
+        permission_responses = []
+        for perm in item["permissions"]:
+            permission_responses.append(PermissionResponse(
+                id=perm.id,
+                module=perm.module.value,  # Convert enum to string
+                action=perm.action.value,  # Convert enum to string
+                description=perm.description,
+                created_at=perm.created_at
+            ))
+        summary.append(RoleSummary(
+            role_id=item["role_id"],
+            role_name=item["role_name"],
+            user_count=item["user_count"],
+            permissions=permission_responses
+        ))
     
     return RoleSummaryResponse(
         success=True,
@@ -230,7 +263,15 @@ async def get_permission_matrix(
     """Get permission matrix for all roles"""
     rbac_service = RBACService(db)
     
-    matrix = rbac_service.get_permission_matrix()
+    matrix_data = rbac_service.get_permission_matrix()
+    
+    # Convert to proper PermissionMatrix object
+    from app.schemas.rbac import PermissionMatrix
+    matrix = PermissionMatrix(
+        modules=[module.value for module in matrix_data["modules"]],
+        permissions=[perm.value for perm in matrix_data["permissions"]],
+        role_permissions=matrix_data["role_permissions"]
+    )
     
     return PermissionMatrixResponse(
         success=True,

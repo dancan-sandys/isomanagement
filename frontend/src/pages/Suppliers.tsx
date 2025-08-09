@@ -29,19 +29,15 @@ import {
   Tab,
   Fab,
   Tooltip,
-  Divider,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  Badge,
-  Avatar,
   LinearProgress,
   Rating,
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  ListItemAvatar,
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
@@ -73,9 +69,7 @@ import {
   Verified,
   Pending,
   Block,
-  Warning as WarningIcon,
   Error,
-  Info,
 } from '@mui/icons-material';
 import { supplierAPI } from '../services/api';
 
@@ -141,9 +135,6 @@ interface Delivery {
 const Suppliers: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [materials] = useState<Material[]>([]);
-  const [evaluations] = useState<Evaluation[]>([]);
-  const [deliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -257,15 +248,7 @@ const Suppliers: React.FC = () => {
     return status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
   };
 
-  const getInspectionStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'passed': return 'success';
-      case 'failed': return 'error';
-      case 'pending': return 'warning';
-      case 'quarantined': return 'error';
-      default: return 'default';
-    }
-  };
+
 
   // Mock data for now - replace with actual API calls
   useEffect(() => {
@@ -840,7 +823,7 @@ const Suppliers: React.FC = () => {
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab 
-            icon={<Dashboard />} 
+            icon={<Assessment />} 
             label="Overview" 
             iconPosition="start"
           />

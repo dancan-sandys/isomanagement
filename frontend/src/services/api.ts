@@ -563,7 +563,7 @@ export const notificationAPI = {
   },
 
   markAllAsRead: async () => {
-    const response: AxiosResponse = await api.post('/notifications/read-all');
+    const response: AxiosResponse = await api.put('/notifications/read-all');
     return response.data;
   },
 

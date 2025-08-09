@@ -404,21 +404,43 @@ class DocumentService:
         if not document:
             return False
         
-        # Delete all version files
-        versions = self.db.query(DocumentVersion).filter(
-            DocumentVersion.document_id == document_id
-        ).all()
-        
-        for version in versions:
-            if version.file_path and os.path.exists(version.file_path):
-                os.remove(version.file_path)
-        
-        # Delete main document file
-        if document.file_path and os.path.exists(document.file_path):
-            os.remove(document.file_path)
-        
-        # Delete from database (cascade will handle related records)
-        self.db.delete(document)
-        self.db.commit()
-        
-        return True 
+        try:
+            # Delete all version files
+            versions = self.db.query(DocumentVersion).filter(
+                DocumentVersion.document_id == document_id
+            ).all()
+            
+            for version in versions:
+                if version.file_path and os.path.exists(version.file_path):
+                    os.remove(version.file_path)
+            
+            # Delete main document file
+            if document.file_path and os.path.exists(document.file_path):
+                os.remove(document.file_path)
+            
+            # Delete related records first to avoid foreign key issues
+            # Delete change logs
+            self.db.query(DocumentChangeLog).filter(
+                DocumentChangeLog.document_id == document_id
+            ).delete()
+            
+            # Delete approvals
+            self.db.query(DocumentApproval).filter(
+                DocumentApproval.document_id == document_id
+            ).delete()
+            
+            # Delete versions
+            self.db.query(DocumentVersion).filter(
+                DocumentVersion.document_id == document_id
+            ).delete()
+            
+            # Finally delete the document
+            self.db.delete(document)
+            self.db.commit()
+            
+            return True
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error deleting document {document_id}: {str(e)}")
+            return False 

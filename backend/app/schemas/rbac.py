@@ -1,39 +1,10 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
-from enum import Enum
+from app.models.rbac import Module, PermissionType
 
 
-class PermissionType(str, Enum):
-    VIEW = "view"
-    CREATE = "create"
-    UPDATE = "update"
-    DELETE = "delete"
-    APPROVE = "approve"
-    ASSIGN = "assign"
-    EXPORT = "export"
-    IMPORT = "import"
-
-
-class Module(str, Enum):
-    DASHBOARD = "dashboard"
-    DOCUMENTS = "documents"
-    HACCP = "haccp"
-    PRP = "prp"
-    SUPPLIERS = "suppliers"
-    TRACEABILITY = "traceability"
-    USERS = "users"
-    ROLES = "roles"
-    SETTINGS = "settings"
-    NOTIFICATIONS = "notifications"
-    AUDITS = "audits"
-    TRAINING = "training"
-    MAINTENANCE = "maintenance"
-    COMPLAINTS = "complaints"
-    NC_CAPA = "nc_capa"
-    RISK_OPPORTUNITY = "risk_opportunity"
-    MANAGEMENT_REVIEW = "management_review"
-    ALLERGEN_LABEL = "allergen_label"
+# Permission types and modules are now imported from models
 
 
 # Permission schemas

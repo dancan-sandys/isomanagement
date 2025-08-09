@@ -19,22 +19,15 @@ import {
   Alert,
   IconButton,
   Tooltip,
-  Badge,
   Tabs,
   Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  FormControlLabel,
   Checkbox,
   LinearProgress,
-  CircularProgress,
   Pagination,
   Table,
   TableBody,
@@ -42,50 +35,30 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
-  InputAdornment,
   Menu,
   MenuItem as MenuItemComponent,
 } from '@mui/material';
 import {
   Description,
-  CloudUpload,
   History,
   Approval,
   Visibility,
   Edit,
   Delete,
   Download,
-  Share,
   Warning,
   CheckCircle,
-  Schedule,
   Add,
   FilterList,
-  Search,
   Refresh,
   Archive,
-  FileCopy,
-  Lock,
-  LockOpen,
   MoreVert,
-  Upload,
-  GetApp,
-  VisibilityOff,
   EditNote,
   History as HistoryIcon,
   Timeline,
   Assessment,
-  TrendingUp,
-  TrendingDown,
   FilterAlt,
   Clear,
-  CalendarToday,
-  AccessTime,
-  Person,
-  Business,
-  Category,
-  Label,
   Compare,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -96,17 +69,13 @@ import {
   deleteDocument,
   bulkUpdateStatus,
   archiveObsoleteDocuments,
-  fetchExpiredDocuments,
   setFilters,
   clearFilters,
   setPagination,
-  setSelectedDocument,
   downloadDocument,
   downloadVersion,
-  fetchDocumentVersions,
-  fetchChangeLog,
 } from '../store/slices/documentSlice';
-import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
+import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
 import StatusChip from '../components/UI/StatusChip';
 import DocumentUploadDialog from '../components/Documents/DocumentUploadDialog';
@@ -118,7 +87,8 @@ import DocumentTemplatesDialog from '../components/Documents/DocumentTemplatesDi
 import DocumentWorkflowDialog from '../components/Documents/DocumentWorkflowDialog';
 import DocumentAnalyticsDialog from '../components/Documents/DocumentAnalyticsDialog';
 import DocumentComparisonDialog from '../components/Documents/DocumentComparisonDialog';
-import { downloadFile, formatFileSize, getFileIcon } from '../utils/downloadUtils';
+import DocumentEditDialog from '../components/Documents/DocumentEditDialog';
+import { downloadFile } from '../utils/downloadUtils';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -144,7 +114,6 @@ function TabPanel(props: TabPanelProps) {
 
 const Documents: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
   const { documents, stats, loading, error, pagination, filters } = useSelector((state: RootState) => state.documents);
   
@@ -163,6 +132,7 @@ const Documents: React.FC = () => {
   const [selectedDocuments, setSelectedDocuments] = useState<number[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedDocumentForMenu, setSelectedDocumentForMenu] = useState<any>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Role-based permissions
   const canCreateDocuments = hasRole(currentUser, 'QA Manager') || 
@@ -229,8 +199,7 @@ const Documents: React.FC = () => {
 
   const handleDocumentEdit = (document: any) => {
     setSelectedDocument(document);
-    // Navigate to edit page or open edit dialog
-    console.log('Edit document:', document);
+    setEditDialogOpen(true);
   };
 
   const handleDocumentDelete = async (documentId: number) => {
@@ -251,15 +220,6 @@ const Documents: React.FC = () => {
       downloadFile(blob, filename);
     } catch (error) {
       console.error('Download failed:', error);
-    }
-  };
-
-  const handleDownloadVersion = async (documentId: number, versionId: number, filename: string) => {
-    try {
-      const blob = await dispatch(downloadVersion({ documentId, versionId })).unwrap();
-      downloadFile(blob, filename);
-    } catch (error) {
-      console.error('Version download failed:', error);
     }
   };
 
@@ -332,23 +292,6 @@ const Documents: React.FC = () => {
     return type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'success';
-      case 'under_review':
-        return 'warning';
-      case 'draft':
-        return 'info';
-      case 'obsolete':
-        return 'error';
-      case 'archived':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
   const renderDocumentRegister = () => (
     <Box>
       {/* Filters */}
@@ -364,7 +307,7 @@ const Documents: React.FC = () => {
                   value={filters.search}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
                   InputProps={{
-                    startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                    startAdornment: <FilterAlt sx={{ mr: 1, color: 'text.secondary' }} />
                   }}
                 />
               </Grid>
@@ -893,11 +836,6 @@ const Documents: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip title="Share">
-                        <IconButton size="small">
-                          <Share />
-                        </IconButton>
-                      </Tooltip>
                     </Stack>
                   </ListItemSecondaryAction>
                 </ListItem>
@@ -1171,6 +1109,16 @@ const Documents: React.FC = () => {
         open={comparisonDialogOpen}
         document={selectedDocument}
         onClose={() => setComparisonDialogOpen(false)}
+      />
+
+      <DocumentEditDialog
+        open={editDialogOpen}
+        document={selectedDocument}
+        onClose={() => setEditDialogOpen(false)}
+        onSuccess={() => {
+          setEditDialogOpen(false);
+          loadDocuments();
+        }}
       />
     </Box>
   );

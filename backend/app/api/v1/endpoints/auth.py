@@ -214,11 +214,17 @@ async def logout(
     )
 
 
+from pydantic import BaseModel
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
 @router.post("/refresh", response_model=ResponseModel[Token])
 async def refresh_token(
-    refresh_token: str,
+    request: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):
+    refresh_token = request.refresh_token
     """
     Refresh access token using refresh token
     """

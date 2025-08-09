@@ -29,6 +29,219 @@ router = APIRouter()
 UPLOAD_DIR = "uploads/documents"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Document Templates endpoints (must come before /{document_id} routes)
+@router.get("/templates/")
+async def get_document_templates(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
+    document_type: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get document templates
+    """
+    try:
+        query = db.query(DocumentTemplate).filter(DocumentTemplate.is_active == True)
+        
+        # Handle document_type filter
+        if document_type:
+            try:
+                doc_type_enum = DocumentType(document_type)
+                query = query.filter(DocumentTemplate.document_type == doc_type_enum)
+            except ValueError:
+                # Invalid document type, return empty result
+                pass
+        
+        # Handle category filter
+        if category:
+            try:
+                category_enum = DocumentCategory(category)
+                query = query.filter(DocumentTemplate.category == category_enum)
+            except ValueError:
+                # Invalid category, return empty result
+                pass
+        
+        total = query.count()
+        templates = query.order_by(DocumentTemplate.name).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for template in templates:
+            # Get creator name
+            creator = db.query(User).filter(User.id == template.created_by).first()
+            creator_name = creator.full_name if creator else "Unknown"
+            
+            items.append({
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "document_type": template.document_type.value,
+                "category": template.category.value,
+                "template_file_path": template.template_file_path,
+                "template_content": template.template_content,
+                "is_active": template.is_active,
+                "created_by": creator_name,
+                "created_at": template.created_at.isoformat() if template.created_at else None,
+                "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Document templates retrieved successfully",
+            data={
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve document templates: {str(e)}"
+        )
+
+
+@router.post("/templates/")
+async def create_document_template(
+    template_data: DocumentTemplateCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new document template
+    """
+    try:
+        # Check permissions
+        if not current_user.role or current_user.role.name not in ["System Administrator", "QA Manager"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to create templates"
+            )
+        
+        template = DocumentTemplate(
+            name=template_data.name,
+            description=template_data.description,
+            document_type=template_data.document_type,
+            category=template_data.category,
+            template_content=template_data.template_content,
+            created_by=current_user.id
+        )
+        
+        db.add(template)
+        db.commit()
+        db.refresh(template)
+        
+        return ResponseModel(
+            success=True,
+            message="Document template created successfully",
+            data={"id": template.id}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create document template: {str(e)}"
+        )
+
+
+@router.get("/templates/{template_id}")
+async def get_document_template(
+    template_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a specific document template
+    """
+    try:
+        template = db.query(DocumentTemplate).filter(
+            DocumentTemplate.id == template_id,
+            DocumentTemplate.is_active == True
+        ).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document template not found"
+            )
+        
+        # Get creator name
+        creator = db.query(User).filter(User.id == template.created_by).first()
+        creator_name = creator.full_name if creator else "Unknown"
+        
+        return ResponseModel(
+            success=True,
+            message="Document template retrieved successfully",
+            data={
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "document_type": template.document_type.value,
+                "category": template.category.value,
+                "template_file_path": template.template_file_path,
+                "template_content": template.template_content,
+                "is_active": template.is_active,
+                "created_by": creator_name,
+                "created_at": template.created_at.isoformat() if template.created_at else None,
+                "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve document template: {str(e)}"
+        )
+
+
+@router.delete("/templates/{template_id}")
+async def delete_document_template(
+    template_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a document template (soft delete by setting is_active to False)
+    """
+    try:
+        # Check permissions
+        if not current_user.role or current_user.role.name not in ["System Administrator", "QA Manager"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to delete templates"
+            )
+        
+        template = db.query(DocumentTemplate).filter(DocumentTemplate.id == template_id).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document template not found"
+            )
+        
+        template.is_active = False
+        template.updated_at = datetime.utcnow()
+        db.commit()
+        
+        return ResponseModel(
+            success=True,
+            message="Document template deleted successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete document template: {str(e)}"
+        )
+
 
 def calculate_next_version(current_version: str) -> str:
     """Calculate the next version number based on current version"""
@@ -664,7 +877,7 @@ async def approve_version(
             )
         
         # Check if user has approval permissions
-        if current_user.role not in ["ADMIN", "QA_MANAGER"]:
+        if not current_user.role or current_user.role.name not in ["System Administrator", "QA Manager"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions to approve documents"
@@ -784,7 +997,7 @@ async def delete_document(
             )
         
         # Check permissions
-        if current_user.role not in ["ADMIN", "QA_MANAGER"]:
+        if not current_user.role or current_user.role.name not in ["System Administrator", "QA Manager"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions to delete documents"
@@ -1036,7 +1249,7 @@ async def bulk_update_document_status(
     """
     try:
         # Check permissions
-        if current_user.role not in ["ADMIN", "QA_MANAGER"]:
+        if not current_user.role or current_user.role.name not in ["System Administrator", "QA Manager"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions for bulk operations"
@@ -1056,8 +1269,12 @@ async def bulk_update_document_status(
             # Handle deletion
             deleted_count = 0
             for doc_id in action.document_ids:
-                if document_service.delete_document(doc_id):
-                    deleted_count += 1
+                try:
+                    if document_service.delete_document(doc_id):
+                        deleted_count += 1
+                except Exception as e:
+                    print(f"Error deleting document {doc_id}: {str(e)}")
+                    continue
             
             return ResponseModel(
                 success=True,
@@ -1105,7 +1322,7 @@ async def archive_obsolete_documents(
     """
     try:
         # Check permissions
-        if current_user.role not in ["ADMIN", "QA_MANAGER"]:
+        if not current_user.role or current_user.role.name not in ["System Administrator", "QA Manager"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions for maintenance operations"
@@ -1171,203 +1388,3 @@ async def get_expired_documents(
         )
 
 
-# Document Templates endpoints
-@router.get("/templates/")
-async def get_document_templates(
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    document_type: Optional[DocumentType] = Query(None),
-    category: Optional[DocumentCategory] = Query(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get document templates
-    """
-    try:
-        query = db.query(DocumentTemplate).filter(DocumentTemplate.is_active == True)
-        
-        if document_type:
-            query = query.filter(DocumentTemplate.document_type == document_type)
-        
-        if category:
-            query = query.filter(DocumentTemplate.category == category)
-        
-        total = query.count()
-        templates = query.order_by(DocumentTemplate.name).offset((page - 1) * size).limit(size).all()
-        
-        items = []
-        for template in templates:
-            # Get creator name
-            creator = db.query(User).filter(User.id == template.created_by).first()
-            creator_name = creator.full_name if creator else "Unknown"
-            
-            items.append({
-                "id": template.id,
-                "name": template.name,
-                "description": template.description,
-                "document_type": template.document_type.value,
-                "category": template.category.value,
-                "template_file_path": template.template_file_path,
-                "template_content": template.template_content,
-                "is_active": template.is_active,
-                "created_by": creator_name,
-                "created_at": template.created_at.isoformat() if template.created_at else None,
-                "updated_at": template.updated_at.isoformat() if template.updated_at else None,
-            })
-        
-        return ResponseModel(
-            success=True,
-            message="Document templates retrieved successfully",
-            data={
-                "items": items,
-                "total": total,
-                "page": page,
-                "size": size,
-                "pages": (total + size - 1) // size
-            }
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve document templates: {str(e)}"
-        )
-
-
-@router.post("/templates/")
-async def create_document_template(
-    template_data: DocumentTemplateCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Create a new document template
-    """
-    try:
-        # Check permissions
-        if current_user.role not in ["ADMIN", "QA_MANAGER"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to create templates"
-            )
-        
-        template = DocumentTemplate(
-            name=template_data.name,
-            description=template_data.description,
-            document_type=template_data.document_type,
-            category=template_data.category,
-            template_content=template_data.template_content,
-            created_by=current_user.id
-        )
-        
-        db.add(template)
-        db.commit()
-        db.refresh(template)
-        
-        return ResponseModel(
-            success=True,
-            message="Document template created successfully",
-            data={"id": template.id}
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create document template: {str(e)}"
-        )
-
-
-@router.get("/templates/{template_id}")
-async def get_document_template(
-    template_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get a specific document template
-    """
-    try:
-        template = db.query(DocumentTemplate).filter(
-            DocumentTemplate.id == template_id,
-            DocumentTemplate.is_active == True
-        ).first()
-        
-        if not template:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document template not found"
-            )
-        
-        # Get creator name
-        creator = db.query(User).filter(User.id == template.created_by).first()
-        creator_name = creator.full_name if creator else "Unknown"
-        
-        return ResponseModel(
-            success=True,
-            message="Document template retrieved successfully",
-            data={
-                "id": template.id,
-                "name": template.name,
-                "description": template.description,
-                "document_type": template.document_type.value,
-                "category": template.category.value,
-                "template_file_path": template.template_file_path,
-                "template_content": template.template_content,
-                "is_active": template.is_active,
-                "created_by": creator_name,
-                "created_at": template.created_at.isoformat() if template.created_at else None,
-                "updated_at": template.updated_at.isoformat() if template.updated_at else None,
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve document template: {str(e)}"
-        )
-
-
-@router.delete("/templates/{template_id}")
-async def delete_document_template(
-    template_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Delete a document template (soft delete by setting is_active to False)
-    """
-    try:
-        # Check permissions
-        if current_user.role not in ["ADMIN", "QA_MANAGER"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to delete templates"
-            )
-        
-        template = db.query(DocumentTemplate).filter(DocumentTemplate.id == template_id).first()
-        
-        if not template:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document template not found"
-            )
-        
-        template.is_active = False
-        template.updated_at = datetime.utcnow()
-        db.commit()
-        
-        return ResponseModel(
-            success=True,
-            message="Document template deleted successfully"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete document template: {str(e)}"
-        ) 

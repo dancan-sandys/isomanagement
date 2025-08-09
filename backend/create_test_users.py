@@ -9,7 +9,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
-from app.models.user import User, UserRole, UserStatus
+from app.models.user import User, UserStatus
+from app.models.rbac import Role
 from app.core.security import get_password_hash
 from datetime import datetime
 
@@ -25,14 +26,18 @@ def create_test_users():
             print(f"Found {existing_users} existing users. Skipping user creation.")
             return
         
+        # Get role mappings
+        roles = db.query(Role).all()
+        role_mapping = {role.name: role.id for role in roles}
+        
         # Create test users
         test_users = [
             {
                 "username": "admin",
                 "email": "admin@dairy.com",
                 "full_name": "System Administrator",
-                "password": "admin123",
-                "role": UserRole.ADMIN,
+                "password": "admin123456",
+                "role_name": "System Administrator",
                 "status": UserStatus.ACTIVE,
                 "department": "IT",
                 "position": "System Administrator",
@@ -46,8 +51,8 @@ def create_test_users():
                 "username": "qa_manager",
                 "email": "qa.manager@dairy.com",
                 "full_name": "Sarah Johnson",
-                "password": "qa123",
-                "role": UserRole.QA_MANAGER,
+                "password": "qa123456",
+                "role_name": "QA Manager",
                 "status": UserStatus.ACTIVE,
                 "department": "Quality Assurance",
                 "position": "QA Manager",
@@ -61,8 +66,8 @@ def create_test_users():
                 "username": "qa_specialist",
                 "email": "qa.specialist@dairy.com",
                 "full_name": "Michael Rodriguez",
-                "password": "qa123",
-                "role": UserRole.QA_SPECIALIST,
+                "password": "qa123456",
+                "role_name": "QA Manager",
                 "status": UserStatus.ACTIVE,
                 "department": "Quality Assurance",
                 "position": "QA Specialist",
@@ -76,8 +81,8 @@ def create_test_users():
                 "username": "prod_manager",
                 "email": "prod.manager@dairy.com",
                 "full_name": "Jennifer Lee",
-                "password": "prod123",
-                "role": UserRole.PRODUCTION_MANAGER,
+                "password": "prod123456",
+                "role_name": "Production Manager",
                 "status": UserStatus.ACTIVE,
                 "department": "Production",
                 "position": "Production Manager",
@@ -91,8 +96,8 @@ def create_test_users():
                 "username": "prod_operator1",
                 "email": "operator1@dairy.com",
                 "full_name": "Mike Chen",
-                "password": "prod123",
-                "role": UserRole.PRODUCTION_OPERATOR,
+                "password": "prod123456",
+                "role_name": "Line Operator",
                 "status": UserStatus.ACTIVE,
                 "department": "Production",
                 "position": "Production Operator",
@@ -106,8 +111,8 @@ def create_test_users():
                 "username": "prod_operator2",
                 "email": "operator2@dairy.com",
                 "full_name": "Lisa Thompson",
-                "password": "prod123",
-                "role": UserRole.PRODUCTION_OPERATOR,
+                "password": "prod123456",
+                "role_name": "Line Operator",
                 "status": UserStatus.ACTIVE,
                 "department": "Production",
                 "position": "Production Operator",
@@ -121,8 +126,8 @@ def create_test_users():
                 "username": "maintenance",
                 "email": "maintenance@dairy.com",
                 "full_name": "David Wilson",
-                "password": "main123",
-                "role": UserRole.MAINTENANCE,
+                "password": "main123456",
+                "role_name": "Maintenance Engineer",
                 "status": UserStatus.ACTIVE,
                 "department": "Maintenance",
                 "position": "Maintenance Technician",
@@ -136,8 +141,8 @@ def create_test_users():
                 "username": "lab_tech",
                 "email": "lab.tech@dairy.com",
                 "full_name": "Emily Davis",
-                "password": "lab123",
-                "role": UserRole.LAB_TECHNICIAN,
+                "password": "lab123456",
+                "role_name": "QA Manager",
                 "status": UserStatus.ACTIVE,
                 "department": "Laboratory",
                 "position": "Lab Technician",
@@ -151,8 +156,8 @@ def create_test_users():
                 "username": "new_user",
                 "email": "new.user@dairy.com",
                 "full_name": "Alex Smith",
-                "password": "new123",
-                "role": UserRole.VIEWER,
+                "password": "new123456",
+                "role_name": "Compliance Officer",
                 "status": UserStatus.PENDING_APPROVAL,
                 "department": "Quality Assurance",
                 "position": "Trainee",
@@ -166,8 +171,8 @@ def create_test_users():
                 "username": "inactive_user",
                 "email": "inactive@dairy.com",
                 "full_name": "Robert Brown",
-                "password": "inactive123",
-                "role": UserRole.PRODUCTION_OPERATOR,
+                "password": "inactive123456",
+                "role_name": "Line Operator",
                 "status": UserStatus.INACTIVE,
                 "department": "Production",
                 "position": "Former Operator",
@@ -183,12 +188,18 @@ def create_test_users():
         for user_data in test_users:
             hashed_password = get_password_hash(user_data["password"])
             
+            # Get role ID from role name
+            role_id = role_mapping.get(user_data["role_name"])
+            if not role_id:
+                print(f"Warning: Role '{user_data['role_name']}' not found. Skipping user {user_data['username']}")
+                continue
+            
             user = User(
                 username=user_data["username"],
                 email=user_data["email"],
                 full_name=user_data["full_name"],
                 hashed_password=hashed_password,
-                role=user_data["role"],
+                role_id=role_id,
                 status=user_data["status"],
                 department=user_data["department"],
                 position=user_data["position"],
@@ -201,7 +212,7 @@ def create_test_users():
             )
             
             db.add(user)
-            print(f"Created user: {user_data['full_name']} ({user_data['username']})")
+            print(f"Created user: {user_data['full_name']} ({user_data['username']}) - Role: {user_data['role_name']}")
         
         db.commit()
         print(f"\nSuccessfully created {len(test_users)} test users!")
@@ -210,7 +221,7 @@ def create_test_users():
         for user_data in test_users:
             print(f"Username: {user_data['username']}")
             print(f"Password: {user_data['password']}")
-            print(f"Role: {user_data['role'].value}")
+            print(f"Role: {user_data['role_name']}")
             print(f"Status: {user_data['status'].value}")
             print("-" * 30)
         

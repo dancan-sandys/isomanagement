@@ -1,6 +1,21 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authAPI } from '../../services/api';
 
+// Helper function to check if token is valid
+const isTokenValid = (token: string): boolean => {
+  if (!token) return false;
+  
+  try {
+    // Decode JWT token to check expiration
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const currentTime = Date.now() / 1000;
+    
+    return payload.exp > currentTime;
+  } catch (error) {
+    return false;
+  }
+};
+
 // Types
 export interface User {
   id: number;
@@ -36,7 +51,7 @@ const initialState: AuthState = {
   user: null,
   token: localStorage.getItem('access_token'),
   refreshToken: localStorage.getItem('refresh_token'),
-  isAuthenticated: !!localStorage.getItem('access_token'),
+  isAuthenticated: !!localStorage.getItem('access_token') && isTokenValid(localStorage.getItem('access_token') || ''),
   isLoading: false,
   error: null,
 };
@@ -108,9 +123,12 @@ export const getCurrentUser = createAsyncThunk(
   'auth/getCurrentUser',
   async (_, { rejectWithValue }) => {
     try {
+      console.log('🔐 getCurrentUser: Calling /auth/me endpoint...');
       const response = await authAPI.me();
+      console.log('🔐 getCurrentUser: Response received:', response);
       return response;
     } catch (error: any) {
+      console.error('🔐 getCurrentUser: Error occurred:', error);
       return rejectWithValue(error.response?.data?.detail || 'Failed to get user data');
     }
   }
@@ -200,6 +218,35 @@ const authSlice = createSlice({
       .addCase(getCurrentUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = typeof action.payload === 'string' ? action.payload : 'Failed to get user data';
+      })
+      
+      // Refresh auth
+      .addCase(refreshAuth.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(refreshAuth.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.token = action.payload.data.access_token;
+        state.refreshToken = action.payload.data.refresh_token;
+        state.error = null;
+        
+        // Store tokens in localStorage
+        localStorage.setItem('access_token', action.payload.data.access_token);
+        localStorage.setItem('refresh_token', action.payload.data.refresh_token);
+      })
+      .addCase(refreshAuth.rejected, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
+        state.refreshToken = null;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Token refresh failed';
+        
+        // Clear tokens from localStorage
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
       });
   },
 });

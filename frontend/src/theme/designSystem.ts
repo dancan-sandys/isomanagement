@@ -294,7 +294,7 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
 };
 
 // Status chip variants
-export const getStatusChipProps = (status: 'compliant' | 'nonConformance' | 'pending' | 'warning' | 'info') => {
+export const getStatusChipProps = (status: 'compliant' | 'nonConformance' | 'pending' | 'warning' | 'info' | 'active' | 'inactive' | 'suspended') => {
   const statusConfig = {
     compliant: {
       color: 'success' as const,
@@ -320,6 +320,21 @@ export const getStatusChipProps = (status: 'compliant' | 'nonConformance' | 'pen
       color: 'info' as const,
       backgroundColor: '#EFF6FF',
       borderColor: '#BFDBFE',
+    },
+    active: {
+      color: 'success' as const,
+      backgroundColor: '#F0FDF4',
+      borderColor: '#BBF7D0',
+    },
+    inactive: {
+      color: 'default' as const,
+      backgroundColor: '#F8FAFC',
+      borderColor: '#E2E8F0',
+    },
+    suspended: {
+      color: 'error' as const,
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
     },
   };
 
