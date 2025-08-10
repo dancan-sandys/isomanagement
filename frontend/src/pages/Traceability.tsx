@@ -45,28 +45,20 @@ import {
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
   Inventory as InventoryIcon,
-  Report as ReportIcon
+  Report as ReportIcon,
+  Assessment as SimulationIcon,
+  Search as SearchIcon2
 } from '@mui/icons-material';
-import { traceabilityAPI } from '../services/api';
+import { traceabilityAPI } from '../services/traceabilityAPI';
+import { Batch } from '../types/traceability';
+import BatchList from '../components/Traceability/BatchList';
+import BatchRegistrationForm from '../components/Traceability/BatchRegistrationForm';
+import BatchDetail from '../components/Traceability/BatchDetail';
+import TraceabilityChain from '../components/Traceability/TraceabilityChain';
+import RecallSimulationForm from '../components/Traceability/RecallSimulationForm';
+import EnhancedSearchForm from '../components/Traceability/EnhancedSearchForm';
 
 // Interfaces
-interface Batch {
-  id: number;
-  batch_number: string;
-  batch_type: string;
-  status: string;
-  product_name: string;
-  quantity: number;
-  unit: string;
-  production_date: string;
-  expiry_date?: string;
-  lot_number?: string;
-  quality_status: string;
-  storage_location?: string;
-  barcode?: string;
-  created_at: string;
-}
-
 interface Recall {
   id: number;
   recall_number: string;
@@ -116,6 +108,13 @@ const Traceability: React.FC = () => {
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [recallDialogOpen, setRecallDialogOpen] = useState(false);
   const [traceDialogOpen, setTraceDialogOpen] = useState(false);
+  const [batchDetailOpen, setBatchDetailOpen] = useState(false);
+  const [traceabilityChainOpen, setTraceabilityChainOpen] = useState(false);
+  const [recallSimulationOpen, setRecallSimulationOpen] = useState(false);
+  const [enhancedSearchOpen, setEnhancedSearchOpen] = useState(false);
+
+  // Selected items
+  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
 
   // Form states
   const [batchForm, setBatchForm] = useState({
@@ -307,6 +306,16 @@ const Traceability: React.FC = () => {
     }
   };
 
+  const handleBatchSelect = (batch: Batch) => {
+    setSelectedBatch(batch);
+    setBatchDetailOpen(true);
+  };
+
+  const handleTraceabilityChain = (batch: Batch) => {
+    setSelectedBatch(batch);
+    setTraceabilityChainOpen(true);
+  };
+
   // Utility functions
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -365,6 +374,8 @@ const Traceability: React.FC = () => {
           <Tab label="Batch Management" icon={<InventoryIcon />} />
           <Tab label="Recall Management" icon={<WarningIcon />} />
           <Tab label="Traceability Reports" icon={<ReportIcon />} />
+          <Tab label="Enhanced Search" icon={<SearchIcon2 />} />
+          <Tab label="Recall Simulation" icon={<SimulationIcon />} />
         </Tabs>
       </Box>
 
@@ -406,90 +417,40 @@ const Traceability: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Recent Reports
+                    </Typography>
+                    <Typography variant="h4" color="primary">
+                      {dashboardData.recent_reports}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Recent Batches
+                    </Typography>
+                    <Typography variant="h4" color="success.main">
+                      {dashboardData.recent_batches}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
             </Grid>
           )}
         </Box>
       )}
 
       {activeTab === 1 && (
-        <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4">
-              Batch Management
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setBatchDialogOpen(true)}
-            >
-              Add New Batch
-            </Button>
-          </Box>
-
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Batch Number</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Product</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Quantity</TableCell>
-                  <TableCell>Production Date</TableCell>
-                  <TableCell>Quality Status</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {batches.map((batch) => (
-                  <TableRow key={batch.id}>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {batch.batch_number}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={batch.batch_type.replace('_', ' ').toUpperCase()} 
-                        color={getBatchTypeColor(batch.batch_type)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{batch.product_name}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={batch.status.replace('_', ' ').toUpperCase()} 
-                        color={getStatusColor(batch.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {batch.quantity} {batch.unit}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(batch.production_date).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={batch.quality_status.toUpperCase()} 
-                        color={batch.quality_status === 'passed' ? 'success' : batch.quality_status === 'failed' ? 'error' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small">
-                        <VisibilityIcon />
-                      </IconButton>
-                      <IconButton size="small">
-                        <EditIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
+        <BatchList 
+          onBatchSelect={handleBatchSelect}
+          showActions={true}
+        />
       )}
 
       {activeTab === 2 && (
@@ -627,81 +588,72 @@ const Traceability: React.FC = () => {
         </Box>
       )}
 
-      {/* Create Batch Dialog */}
-      <Dialog open={batchDialogOpen} onClose={() => setBatchDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Create New Batch</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Batch Type</InputLabel>
-                <Select
-                  value={batchForm.batch_type}
-                  onChange={(e) => setBatchForm({ ...batchForm, batch_type: e.target.value })}
-                >
-                  <MenuItem value="raw_milk">Raw Milk</MenuItem>
-                  <MenuItem value="additive">Additive</MenuItem>
-                  <MenuItem value="culture">Culture</MenuItem>
-                  <MenuItem value="packaging">Packaging</MenuItem>
-                  <MenuItem value="final_product">Final Product</MenuItem>
-                  <MenuItem value="intermediate">Intermediate</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Product Name"
-                value={batchForm.product_name}
-                onChange={(e) => setBatchForm({ ...batchForm, product_name: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Quantity"
-                type="number"
-                value={batchForm.quantity}
-                onChange={(e) => setBatchForm({ ...batchForm, quantity: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Unit"
-                value={batchForm.unit}
-                onChange={(e) => setBatchForm({ ...batchForm, unit: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Production Date"
-                type="date"
-                value={batchForm.production_date}
-                onChange={(e) => setBatchForm({ ...batchForm, production_date: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Expiry Date"
-                type="date"
-                value={batchForm.expiry_date}
-                onChange={(e) => setBatchForm({ ...batchForm, expiry_date: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setBatchDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateBatch} variant="contained" disabled={loading}>
-            {loading ? <CircularProgress size={20} /> : 'Create Batch'}
+      {activeTab === 4 && (
+        <EnhancedSearchForm 
+          onSearchResults={(results) => {
+            console.log('Search results:', results);
+          }}
+        />
+      )}
+
+      {activeTab === 5 && (
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Recall Simulation
+          </Typography>
+          <Typography variant="body1" color="text.secondary" paragraph>
+            Simulate recall scenarios to assess impact and plan response strategies.
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<SimulationIcon />}
+            onClick={() => setRecallSimulationOpen(true)}
+          >
+            Start Recall Simulation
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
+      )}
+
+      {/* Dialogs */}
+      <BatchRegistrationForm
+        open={batchDialogOpen}
+        onClose={() => setBatchDialogOpen(false)}
+        onSuccess={fetchBatches}
+      />
+
+      {selectedBatch && (
+        <>
+          <BatchDetail
+            open={batchDetailOpen}
+            onClose={() => setBatchDetailOpen(false)}
+            batch={selectedBatch}
+          />
+          <Dialog 
+            open={traceabilityChainOpen} 
+            onClose={() => setTraceabilityChainOpen(false)}
+            maxWidth="lg"
+            fullWidth
+          >
+            <DialogTitle>Traceability Chain - {selectedBatch.batch_number}</DialogTitle>
+            <DialogContent>
+              <TraceabilityChain batchId={selectedBatch.id} />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setTraceabilityChainOpen(false)}>
+                Close
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </>
+      )}
+
+      <RecallSimulationForm
+        open={recallSimulationOpen}
+        onClose={() => setRecallSimulationOpen(false)}
+        onSimulationComplete={(simulation) => {
+          console.log('Simulation completed:', simulation);
+        }}
+      />
 
       {/* Create Recall Dialog */}
       <Dialog open={recallDialogOpen} onClose={() => setRecallDialogOpen(false)} maxWidth="md" fullWidth>

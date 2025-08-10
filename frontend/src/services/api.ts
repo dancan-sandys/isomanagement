@@ -273,13 +273,14 @@ export const documentsAPI = {
     return response.data;
   },
 
+  // Approve a specific version of a document
   approveVersion: async (documentId: number, versionId: number, comments?: string) => {
     const formData = new FormData();
     if (comments) {
       formData.append('comments', comments);
     }
     
-    const response: AxiosResponse = await api.post(
+    const response = await api.post(
       `/documents/${documentId}/versions/${versionId}/approve`,
       formData,
       {
@@ -288,18 +289,11 @@ export const documentsAPI = {
         },
       }
     );
-    return response.data;
+    return response;
   },
 
   getChangeLog: async (documentId: number) => {
     const response: AxiosResponse = await api.get(`/documents/${documentId}/change-log`);
-    return response.data;
-  },
-
-  downloadVersion: async (documentId: number, versionId: number) => {
-    const response: AxiosResponse = await api.get(`/documents/${documentId}/versions/${versionId}/download`, {
-      responseType: 'blob',
-    });
     return response.data;
   },
 
@@ -346,7 +340,7 @@ export const documentsAPI = {
     document_type?: string;
     category?: string;
   }) => {
-    const response: AxiosResponse = await api.get('/documents/templates', { params });
+    const response: AxiosResponse = await api.get('/documents/templates/', { params });
     return response.data;
   },
 
@@ -356,7 +350,7 @@ export const documentsAPI = {
   },
 
   createDocumentTemplate: async (templateData: any) => {
-    const response: AxiosResponse = await api.post('/documents/templates', templateData);
+    const response: AxiosResponse = await api.post('/documents/templates/', templateData);
     return response.data;
   },
 
@@ -532,7 +526,7 @@ export const prpAPI = {
 // Dashboard API
 export const dashboardAPI = {
   getDashboard: async () => {
-    const response: AxiosResponse = await api.get('/dashboard');
+    const response: AxiosResponse = await api.get('/dashboard/stats');
     return response.data;
   },
 
@@ -549,8 +543,13 @@ export const dashboardAPI = {
 
 // Notifications API
 export const notificationAPI = {
-  getNotifications: async (params?: { page?: number; size?: number; read?: boolean }) => {
-    const response: AxiosResponse = await api.get('/notifications', { params });
+  getNotifications: async (params?: { page?: number; size?: number; read?: boolean; is_read?: boolean }) => {
+    const mappedParams: any = { ...params };
+    if (mappedParams && typeof mappedParams.read !== 'undefined') {
+      mappedParams.is_read = mappedParams.read;
+      delete mappedParams.read;
+    }
+    const response: AxiosResponse = await api.get('/notifications', { params: mappedParams });
     return response.data;
   },
 
@@ -565,12 +564,12 @@ export const notificationAPI = {
   },
 
   markAsRead: async (notificationId: number) => {
-    const response: AxiosResponse = await api.post(`/notifications/${notificationId}/read`);
+    const response: AxiosResponse = await api.put(`/notifications/${notificationId}/read`);
     return response.data;
   },
 
   markAllAsRead: async () => {
-    const response: AxiosResponse = await api.post('/notifications/read-all');
+    const response: AxiosResponse = await api.put('/notifications/read-all');
     return response.data;
   },
 
@@ -592,7 +591,7 @@ export const settingsAPI = {
     return response.data;
   },
 
-  updateSetting: async (settingId: number, value: any) => {
+  updateSetting: async (settingId: string, value: any) => {
     const response: AxiosResponse = await api.put(`/settings/${settingId}`, { value });
     return response.data;
   },
@@ -607,28 +606,19 @@ export const settingsAPI = {
     return response.data;
   },
 
-  getSystemInfo: async () => {
-    const response: AxiosResponse = await api.get('/settings/system-info');
-    return response.data;
-  },
+  // system-info endpoint not available on backend
 
-  updateSystemSettings: async (settings: any) => {
-    const response: AxiosResponse = await api.put('/settings/system', settings);
-    return response.data;
-  },
+  // system settings endpoint not available on backend
 
-  getBackupStatus: async () => {
-    const response: AxiosResponse = await api.get('/settings/backup-status');
-    return response.data;
-  },
+  // backup-status endpoint not available on backend
 
   getUserPreferences: async () => {
-    const response: AxiosResponse = await api.get('/settings/user-preferences');
+    const response: AxiosResponse = await api.get('/settings/preferences/me');
     return response.data;
   },
 
   bulkUpdateSettings: async (settings: any[]) => {
-    const response: AxiosResponse = await api.put('/settings/bulk-update', { settings });
+    const response: AxiosResponse = await api.post('/settings/bulk-update', { settings });
     return response.data;
   },
 
@@ -638,17 +628,17 @@ export const settingsAPI = {
   },
 
   resetSetting: async (settingKey: string) => {
-    const response: AxiosResponse = await api.post(`/settings/${settingKey}/reset`);
+    const response: AxiosResponse = await api.post(`/settings/reset/${settingKey}`);
     return response.data;
   },
 
   exportSettings: async () => {
-    const response: AxiosResponse = await api.get('/settings/export');
+    const response: AxiosResponse = await api.get('/settings/export/json');
     return response.data;
   },
 
   importSettings: async (settingsData: any) => {
-    const response: AxiosResponse = await api.post('/settings/import', settingsData);
+    const response: AxiosResponse = await api.post('/settings/import/json', settingsData);
     return response.data;
   },
 };
@@ -681,7 +671,7 @@ export const supplierAPI = {
   },
 
   getDashboard: async () => {
-    const response: AxiosResponse = await api.get('/suppliers/dashboard');
+    const response: AxiosResponse = await api.get('/suppliers/dashboard/stats');
     return response.data;
   },
 };
@@ -713,13 +703,10 @@ export const traceabilityAPI = {
     return response.data;
   },
 
-  getTraceabilityChain: async (batchId: number) => {
-    const response: AxiosResponse = await api.get(`/traceability/batches/${batchId}/trace`);
-    return response.data;
-  },
+  // No generic /trace endpoint on backend; use dedicated functions from traceabilityAPI.ts when needed
 
   getDashboard: async () => {
-    const response: AxiosResponse = await api.get('/traceability/dashboard');
+    const response: AxiosResponse = await api.get('/traceability/dashboard/enhanced');
     return response.data;
   },
 

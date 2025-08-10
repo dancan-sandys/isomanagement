@@ -148,7 +148,7 @@ const DocumentVersionHistory: React.FC<DocumentVersionHistoryProps> = ({
         approveComments
       );
       
-      if (response.success) {
+      if (response.data.success) {
         setApproveDialogOpen(false);
         setApproveComments('');
         setSelectedVersion(null);

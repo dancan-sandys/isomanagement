@@ -4,6 +4,8 @@ import notificationReducer from './slices/notificationSlice';
 import rbacReducer from './slices/rbacSlice';
 import documentReducer from './slices/documentSlice';
 import haccpReducer from './slices/haccpSlice';
+import traceabilityReducer from './slices/traceabilitySlice';
+import supplierReducer from './slices/supplierSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +14,8 @@ export const store = configureStore({
     rbac: rbacReducer,
     documents: documentReducer,
     haccp: haccpReducer,
+    traceability: traceabilityReducer,
+    supplier: supplierReducer,
   },
 });
 

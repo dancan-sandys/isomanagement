@@ -8,64 +8,31 @@ import {
   Typography,
   IconButton,
   Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemButton,
-  Divider,
   Avatar,
   Menu,
   MenuItem,
   Badge,
   Tooltip,
-  Collapse,
   Stack,
-  Chip,
+  Fade,
+  Grow,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  Dashboard,
-  Description,
-  Security,
-  Assignment,
-  LocalShipping,
-  Timeline,
-  People,
-  Settings,
-  Person,
-  Notifications,
   AccountCircle,
+  Notifications,
   Logout,
-  ExpandLess,
-  ExpandMore,
   Brightness4,
   Brightness7,
-  Search,
   Task,
+  Settings,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { fetchNotificationSummary } from '../../store/slices/notificationSlice';
-import { hasRole, isSystemAdministrator, canManageUsers } from '../../store/slices/authSlice';
 import NotificationPopup from '../Notifications/NotificationPopup';
-import QuickSearch from '../UI/QuickSearch';
+import NavigationDrawer from './NavigationDrawer';
 import { useTheme } from '../../theme/ThemeProvider';
-import { ISO_NAVIGATION } from '../../theme/designSystem';
-
-interface NavigationItem {
-  readonly text: string;
-  readonly path: string;
-}
-
-interface NavigationSection {
-  readonly title: string;
-  readonly items: readonly NavigationItem[];
-}
-
-interface NavigationStructure {
-  [key: string]: NavigationSection;
-}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -84,7 +51,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
-  const [expandedSections, setExpandedSections] = useState<string[]>(['dashboard']);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    // Add a subtle entrance animation
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -104,14 +79,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleNotificationClose = () => {
     setNotificationAnchorEl(null);
-  };
-
-  const handleSectionToggle = (sectionKey: string) => {
-    setExpandedSections(prev => 
-      prev.includes(sectionKey) 
-        ? prev.filter(key => key !== sectionKey)
-        : [...prev, sectionKey]
-    );
   };
 
   // Load notification summary on component mount
@@ -146,399 +113,353 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return location.pathname.startsWith(path);
   };
 
-  const getSectionIcon = (sectionKey: string) => {
-    switch (sectionKey) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'documents':
-        return <Description />;
-      case 'users':
-        return <People />;
-      case 'haccp':
-        return <Security />;
-      case 'prp':
-        return <Assignment />;
-      case 'suppliers':
-        return <LocalShipping />;
-      case 'traceability':
-        return <Timeline />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
-  // Filter navigation based on user role and permissions
-  const getFilteredNavigation = (): NavigationStructure => {
-    if (!user) return {};
-
-    const filteredNavigation: NavigationStructure = {};
-
-    Object.entries(ISO_NAVIGATION).forEach(([sectionKey, section]) => {
-      // Check if user has access to this section
-      let hasAccess = false;
-
-      switch (sectionKey) {
-        case 'dashboard':
-          hasAccess = true; // All users can access dashboard
-          break;
-        case 'documents':
-          // All authenticated users can access documents
-          hasAccess = true;
-          break;
-        case 'users':
-          // Only System Administrators and QA Managers can access user management
-          hasAccess = canManageUsers(user);
-          break;
-        case 'haccp':
-          // QA roles and production roles can access HACCP
-          hasAccess = hasRole(user, 'QA Manager') || 
-                     hasRole(user, 'QA Specialist') || 
-                     hasRole(user, 'Production Manager') || 
-                     hasRole(user, 'Production Operator') ||
-                     isSystemAdministrator(user);
-          break;
-        case 'prp':
-          // Production roles and maintenance can access PRP
-          hasAccess = hasRole(user, 'Production Manager') || 
-                     hasRole(user, 'Production Operator') || 
-                     hasRole(user, 'Maintenance') ||
-                     isSystemAdministrator(user);
-          break;
-        case 'suppliers':
-          // QA roles and management can access suppliers
-          hasAccess = hasRole(user, 'QA Manager') || 
-                     hasRole(user, 'QA Specialist') || 
-                     hasRole(user, 'Production Manager') ||
-                     isSystemAdministrator(user);
-          break;
-        case 'traceability':
-          // Production roles and QA can access traceability
-          hasAccess = hasRole(user, 'Production Manager') || 
-                     hasRole(user, 'Production Operator') || 
-                     hasRole(user, 'QA Manager') || 
-                     hasRole(user, 'QA Specialist') ||
-                     isSystemAdministrator(user);
-          break;
-        case 'settings':
-          // Only System Administrators can access settings
-          hasAccess = isSystemAdministrator(user);
-          break;
-        default:
-          hasAccess = true;
-      }
-
-      if (hasAccess) {
-        filteredNavigation[sectionKey] = section;
-      }
-    });
-
-    return filteredNavigation;
-  };
-
-  const filteredNavigation = getFilteredNavigation();
-
-  const drawer = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <Security color="primary" sx={{ fontSize: 32 }} />
-          <Box>
-            <Typography variant="h6" fontWeight={700} noWrap>
-              ISO 22000 FSMS
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Food Safety Management System
-            </Typography>
-          </Box>
-        </Box>
-        
-        {/* User Info */}
-        {user && (
-          <Box sx={{ mb: 2, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Avatar sx={{ width: 32, height: 32 }}>
-                {user.profile_picture ? (
-                  <img src={user.profile_picture} alt={user.full_name} />
-                ) : (
-                  <Person fontSize="small" />
-                )}
-              </Avatar>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={600} noWrap>
-                  {user.full_name}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>
-                  {user.role_name || 'Unknown Role'}
-                </Typography>
-              </Box>
-            </Box>
-            <Chip 
-              label={user.department || 'No Department'} 
-              size="small" 
-              color="primary" 
-              variant="outlined"
-            />
-          </Box>
-        )}
-        
-        {/* Quick Search */}
-        <QuickSearch placeholder="Search..." fullWidth />
-      </Box>
-
-      {/* Navigation */}
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
-        <List sx={{ py: 1 }}>
-          {/* ISO Navigation Sections */}
-          {filteredNavigation && Object.entries(filteredNavigation).map(([sectionKey, section]) => {
-            if (!section || !section.items) {
-              return null; // Skip rendering if section or items is undefined
-            }
-            
-            const isExpanded = expandedSections.includes(sectionKey);
-            const hasSelectedItem = section.items.some(item => isSelected(item.path));
-            
-            return (
-              <Box key={sectionKey}>
-                <ListItem disablePadding>
-                  <ListItemButton
-                    onClick={() => handleSectionToggle(sectionKey)}
-                    sx={{
-                      mx: 1,
-                      mb: 0.5,
-                      borderRadius: 2,
-                      backgroundColor: hasSelectedItem ? 'action.selected' : 'transparent',
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      {getSectionIcon(sectionKey)}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={section.title}
-                      primaryTypographyProps={{
-                        fontWeight: hasSelectedItem ? 600 : 400,
-                      }}
-                    />
-                    {isExpanded ? <ExpandLess /> : <ExpandMore />}
-                  </ListItemButton>
-                </ListItem>
-                
-                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                  <List component="div" disablePadding>
-                    {section.items.map((item) => {
-                      const selected = isSelected(item.path);
-                      return (
-                        <ListItem key={item.path} disablePadding>
-                          <ListItemButton
-                            onClick={() => handleNavigation(item.path)}
-                            selected={selected}
-                            sx={{
-                              pl: 4,
-                              mx: 1,
-                              mb: 0.5,
-                              borderRadius: 2,
-                              '&.Mui-selected': {
-                                backgroundColor: 'primary.main',
-                                color: 'primary.contrastText',
-                                '&:hover': {
-                                  backgroundColor: 'primary.dark',
-                                },
-                              },
-                            }}
-                          >
-                            <ListItemText 
-                              primary={item.text}
-                              primaryTypographyProps={{
-                                fontSize: '0.875rem',
-                                fontWeight: selected ? 600 : 400,
-                              }}
-                            />
-                          </ListItemButton>
-                        </ListItem>
-                      );
-                    })}
-                  </List>
-                </Collapse>
-              </Box>
-            );
-          })}
-        </List>
-      </Box>
-    </Box>
-  );
-
   return (
-    <Box sx={{ display: 'flex' }}>
-      {/* App Bar */}
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-          backgroundColor: 'background.paper',
-          color: 'text.primary',
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
-          >
-            <MenuIcon />
-          </IconButton>
-          
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" fontWeight={600} noWrap>
-              ISO 22000 Food Safety Management System
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </Typography>
-          </Box>
-
-          <Stack direction="row" spacing={1} alignItems="center">
-            {/* Theme Toggle */}
-            <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
-              <IconButton color="inherit" onClick={toggleMode}>
-                {mode === 'light' ? <Brightness4 /> : <Brightness7 />}
-              </IconButton>
-            </Tooltip>
-
-            {/* Task Center */}
-            <Tooltip title="Task Center">
-              <IconButton color="inherit">
-                <Badge badgeContent={3} color="error">
-                  <Task />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-
-            {/* Notifications */}
-            <Tooltip title="Notifications">
-              <IconButton 
-                color="inherit"
-                onClick={handleNotificationClick}
-              >
-                <Badge badgeContent={unreadCount} color="error">
-                  <Notifications />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-
-            {/* User Menu */}
-            <Tooltip title="Account">
+    <Fade in={isLoaded} timeout={500}>
+      <Box sx={{ display: 'flex' }}>
+        {/* Enhanced App Bar */}
+        <AppBar
+          position="fixed"
+          sx={{
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            ml: { sm: `${drawerWidth}px` },
+            backgroundColor: 'background.paper',
+            color: 'text.primary',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            backdropFilter: 'blur(10px)',
+            background: (theme) => theme.palette.mode === 'light' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)',
+            zIndex: 1200,
+          }}
+        >
+          <Toolbar>
+            <Grow in={isLoaded} timeout={600}>
               <IconButton
                 color="inherit"
-                onClick={handleProfileMenuOpen}
+                aria-label="open drawer"
+                edge="start"
+                onClick={handleDrawerToggle}
+                sx={{ 
+                  mr: 2, 
+                  display: { sm: 'none' },
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'scale(1.1)',
+                    backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                  },
+                }}
               >
-                {user?.profile_picture ? (
-                  <Avatar src={user.profile_picture} sx={{ width: 32, height: 32 }} />
-                ) : (
-                  <AccountCircle />
-                )}
+                <MenuIcon />
               </IconButton>
-            </Tooltip>
-          </Stack>
+            </Grow>
+            
+            <Grow in={isLoaded} timeout={700}>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography 
+                  variant="h6" 
+                  fontWeight={700} 
+                  noWrap
+                  sx={{
+                    background: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  ISO 22000 Food Safety Management System
+                </Typography>
+                <Typography 
+                  variant="caption" 
+                  color="text.secondary"
+                  sx={{ 
+                    fontWeight: 500,
+                    opacity: 0.8,
+                  }}
+                >
+                  {new Date().toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </Typography>
+              </Box>
+            </Grow>
 
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleProfileMenuClose}
-            onClick={handleProfileMenuClose}
-          >
-            <MenuItem onClick={() => handleNavigation('/profile')}>
-              <ListItemIcon>
-                <AccountCircle fontSize="small" />
-              </ListItemIcon>
-              Profile
-            </MenuItem>
-            {isSystemAdministrator(user) && (
-              <MenuItem onClick={() => handleNavigation('/settings')}>
-                <ListItemIcon>
-                  <Settings fontSize="small" />
-                </ListItemIcon>
-                Settings
+            <Grow in={isLoaded} timeout={800}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                {/* Enhanced Theme Toggle */}
+                <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
+                  <IconButton 
+                    color="inherit" 
+                    onClick={toggleMode}
+                    sx={{
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        transform: 'rotate(180deg)',
+                        backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                      },
+                    }}
+                  >
+                    {mode === 'light' ? <Brightness4 /> : <Brightness7 />}
+                  </IconButton>
+                </Tooltip>
+
+                {/* Enhanced Task Center */}
+                <Tooltip title="Task Center">
+                  <IconButton 
+                    color="inherit"
+                    sx={{
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        transform: 'scale(1.1)',
+                        backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                      },
+                    }}
+                  >
+                    <Badge 
+                      badgeContent={3} 
+                      color="error"
+                      sx={{
+                        '& .MuiBadge-badge': {
+                          animation: 'pulse 2s infinite',
+                          '@keyframes pulse': {
+                            '0%': {
+                              boxShadow: '0 0 0 0 rgba(220, 38, 38, 0.7)',
+                            },
+                            '70%': {
+                              boxShadow: '0 0 0 6px rgba(220, 38, 38, 0)',
+                            },
+                            '100%': {
+                              boxShadow: '0 0 0 0 rgba(220, 38, 38, 0)',
+                            },
+                          },
+                        },
+                      }}
+                    >
+                      <Task />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+
+                {/* Enhanced Notifications */}
+                <Tooltip title="Notifications">
+                  <IconButton 
+                    color="inherit"
+                    onClick={handleNotificationClick}
+                    sx={{
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        transform: 'scale(1.1)',
+                        backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                      },
+                    }}
+                  >
+                    <Badge 
+                      badgeContent={unreadCount} 
+                      color="error"
+                      sx={{
+                        '& .MuiBadge-badge': {
+                          animation: unreadCount > 0 ? 'bounce 1s infinite' : 'none',
+                          '@keyframes bounce': {
+                            '0%, 20%, 53%, 80%, 100%': {
+                              transform: 'translate3d(0,0,0)',
+                            },
+                            '40%, 43%': {
+                              transform: 'translate3d(0, -8px, 0)',
+                            },
+                            '70%': {
+                              transform: 'translate3d(0, -4px, 0)',
+                            },
+                            '90%': {
+                              transform: 'translate3d(0, -2px, 0)',
+                            },
+                          },
+                        },
+                      }}
+                    >
+                      <Notifications />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+
+                {/* Enhanced User Menu */}
+                <Tooltip title="Account">
+                  <IconButton
+                    color="inherit"
+                    onClick={handleProfileMenuOpen}
+                    sx={{
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        transform: 'scale(1.05)',
+                        backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                      },
+                    }}
+                  >
+                    {user?.profile_picture ? (
+                      <Avatar 
+                        src={user.profile_picture} 
+                        sx={{ 
+                          width: 32, 
+                          height: 32,
+                          border: '2px solid',
+                          borderColor: 'primary.main',
+                          boxShadow: '0 2px 8px rgba(30, 64, 175, 0.2)',
+                        }} 
+                      />
+                    ) : (
+                      <AccountCircle />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Grow>
+
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleProfileMenuClose}
+              onClick={handleProfileMenuClose}
+              TransitionComponent={Grow}
+              transitionDuration={200}
+              sx={{
+                '& .MuiPaper-root': {
+                  borderRadius: 12,
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                },
+              }}
+            >
+              <MenuItem 
+                onClick={() => handleNavigation('/profile')}
+                sx={{
+                  borderRadius: 1,
+                  mx: 1,
+                  mb: 0.5,
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                    transform: 'translateX(4px)',
+                  },
+                }}
+              >
+                <AccountCircle fontSize="small" sx={{ mr: 1 }} />
+                Profile
               </MenuItem>
-            )}
-            <Divider />
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <Logout fontSize="small" />
-              </ListItemIcon>
-              Logout
-            </MenuItem>
-          </Menu>
-        </Toolbar>
-      </AppBar>
+              {user?.role_name === 'System Administrator' && (
+                <MenuItem 
+                  onClick={() => handleNavigation('/settings')}
+                  sx={{
+                    borderRadius: 1,
+                    mx: 1,
+                    mb: 0.5,
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(30, 64, 175, 0.08)',
+                      transform: 'translateX(4px)',
+                    },
+                  }}
+                >
+                  <Settings fontSize="small" sx={{ mr: 1 }} />
+                  Settings
+                </MenuItem>
+              )}
+              <MenuItem 
+                onClick={handleLogout}
+                sx={{
+                  borderRadius: 1,
+                  mx: 1,
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                    transform: 'translateX(4px)',
+                  },
+                }}
+              >
+                <Logout fontSize="small" sx={{ mr: 1 }} />
+                Logout
+              </MenuItem>
+            </Menu>
+          </Toolbar>
+        </AppBar>
 
-      {/* Navigation Drawer */}
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
-        {/* Mobile drawer */}
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
-          }}
+        {/* Enhanced Navigation Drawer */}
+        <Box
+          component="nav"
+          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        >
+          {/* Mobile drawer */}
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={handleDrawerToggle}
+            ModalProps={{
+              keepMounted: true, // Better open performance on mobile.
+            }}
+            sx={{
+              display: { xs: 'block', sm: 'none' },
+              '& .MuiDrawer-paper': { 
+                boxSizing: 'border-box', 
+                width: drawerWidth,
+                backdropFilter: 'blur(10px)',
+              },
+            }}
+          >
+            <NavigationDrawer
+              onNavigate={handleNavigation}
+              isSelected={isSelected}
+            />
+          </Drawer>
+          
+          {/* Desktop drawer */}
+          <Drawer
+            variant="permanent"
+            sx={{
+              display: { xs: 'none', sm: 'block' },
+              '& .MuiDrawer-paper': { 
+                boxSizing: 'border-box', 
+                width: drawerWidth,
+                backdropFilter: 'blur(10px)',
+              },
+            }}
+            open
+          >
+            <NavigationDrawer
+              onNavigate={handleNavigation}
+              isSelected={isSelected}
+            />
+          </Drawer>
+        </Box>
+
+        {/* Enhanced Main Content */}
+        <Box
+          component="main"
           sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            flexGrow: 1,
+            p: 3,
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            mt: 8, // Account for AppBar height
+            backgroundColor: 'background.default',
+            minHeight: '100vh',
+            background: (theme) => theme.palette.mode === 'light' 
+              ? 'radial-gradient(1200px 600px at -10% -10%, #FFFFFF 0%, #F8FAFC 40%, #F1F5F9 100%)' 
+              : 'radial-gradient(1200px 600px at -10% -10%, #0B1220 0%, #0F172A 40%, #111827 100%)',
           }}
         >
-          {drawer}
-        </Drawer>
-        
-        {/* Desktop drawer */}
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
+          <Box sx={{ minHeight: '100%' }}>
+            {children}
+          </Box>
+        </Box>
 
-      {/* Main Content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: 8, // Account for AppBar height
-          backgroundColor: 'background.default',
-          minHeight: '100vh',
-        }}
-      >
-        {children}
+        {/* Enhanced Notification Popup */}
+        <NotificationPopup
+          anchorEl={notificationAnchorEl}
+          onClose={handleNotificationClose}
+        />
       </Box>
-
-      {/* Notification Popup */}
-      <NotificationPopup
-        anchorEl={notificationAnchorEl}
-        onClose={handleNotificationClose}
-      />
-    </Box>
+    </Fade>
   );
 };
 

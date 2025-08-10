@@ -2,8 +2,8 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
-# Database
-sqlalchemy==2.0.23
+# Database (updated for Python 3.13 compatibility)
+sqlalchemy==2.0.42
 alembic==1.12.1
 # psycopg2-binary==2.9.9  # Only needed for PostgreSQL in production
 
@@ -12,14 +12,15 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
-# Pydantic for data validation
-pydantic==2.5.0
-pydantic-settings==2.1.0
+# Pydantic for data validation (versions with Python 3.13 wheels)
+pydantic==2.10.4
+pydantic-settings==2.5.2
 
 # File handling and storage
 python-magic==0.4.27
 boto3==1.34.0
-Pillow==10.1.0
+# Bump Pillow for Python 3.13 compatibility
+Pillow==10.4.0
 
 # Email and notifications
 fastapi-mail==1.4.1

@@ -201,6 +201,8 @@ const QuickSearch: React.FC<QuickSearchProps> = ({
             minWidth: fullWidth ? '100%' : 300,
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
+              backgroundColor: 'background.paper',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04) inset',
             },
           }}
         />
@@ -219,6 +221,11 @@ const QuickSearch: React.FC<QuickSearchProps> = ({
               overflow: 'auto',
               border: '1px solid',
               borderColor: 'divider',
+              borderRadius: 2,
+              backdropFilter: 'blur(8px)',
+              background: (theme) => theme.palette.mode === 'light'
+                ? 'rgba(255,255,255,0.9)'
+                : 'rgba(2,6,23,0.9)',
             }}
           >
             {loading ? (

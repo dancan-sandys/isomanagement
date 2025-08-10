@@ -614,9 +614,10 @@ const HACCP: React.FC = () => {
                       {ccp.description}
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                      <StatusChip
-                        status={ccp.status}
-                        getStatusColor={getCCPStatusColor}
+                      <Chip
+                        label={ccp.status}
+                        color={getCCPStatusColor(ccp.status) as any}
+                        size="small"
                       />
                     </Stack>
                     {ccp.critical_limit_min && ccp.critical_limit_max && (

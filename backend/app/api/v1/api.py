@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, documents, haccp, prp, suppliers, traceability, settings, profile, notifications
+from app.api.v1.endpoints import auth, users, documents, haccp, prp, suppliers, traceability, settings, profile, notifications, dashboard
 
 api_router = APIRouter()
 
@@ -15,3 +15,4 @@ api_router.include_router(traceability.router, prefix="/traceability", tags=["tr
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(profile.router, prefix="/profile", tags=["profile"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"]) 
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

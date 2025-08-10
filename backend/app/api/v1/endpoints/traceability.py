@@ -12,6 +12,15 @@ from app.models.traceability import (
     BatchType, BatchStatus, RecallStatus, RecallType
 )
 from app.models.user import User
+from app.schemas.traceability import (
+    BatchCreate, BatchUpdate, RecallCreate, RecallUpdate, TraceabilityLinkCreate,
+    RecallEntryCreate, RecallActionCreate, TraceabilityReportCreate,
+    BatchFilter, RecallFilter, TraceabilityReportRequest,
+    EnhancedBatchSearch, BarcodePrintData, RecallSimulationRequest,
+    RecallSimulationResponse, RecallReportRequest, RecallReportResponse
+)
+from app.services.traceability_service import TraceabilityService
+from app.schemas.common import ResponseModel
 
 router = APIRouter()
 
@@ -73,586 +82,602 @@ async def get_batches(
     }
 
 
+# Enhanced Search Endpoint
+@router.post("/batches/search/enhanced", response_model=dict)
+async def search_batches_enhanced(
+    search_criteria: EnhancedBatchSearch,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enhanced search by batch ID, date, or product"""
+    try:
+        traceability_service = TraceabilityService(db)
+        search_dict = search_criteria.model_dump(exclude_none=True)
+        batches = traceability_service.search_batches_enhanced(search_dict)
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced batch search completed successfully",
+            data={
+                "batches": [
+                    {
+                        "id": batch.id,
+                        "batch_number": batch.batch_number,
+                        "batch_type": batch.batch_type.value,
+                        "status": batch.status.value,
+                        "product_name": batch.product_name,
+                        "quantity": batch.quantity,
+                        "unit": batch.unit,
+                        "production_date": batch.production_date.isoformat(),
+                        "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
+                        "lot_number": batch.lot_number,
+                        "quality_status": batch.quality_status,
+                        "barcode": batch.barcode,
+                        "qr_code_path": batch.qr_code_path,
+                        "created_at": batch.created_at.isoformat()
+                    }
+                    for batch in batches
+                ],
+                "total_found": len(batches)
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Enhanced search failed: {str(e)}"
+        )
+
+
+# Barcode Generation Endpoint
+@router.get("/batches/{batch_id}/barcode/print", response_model=dict)
+async def generate_barcode_print_data(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate barcode print data for a batch"""
+    try:
+        traceability_service = TraceabilityService(db)
+        print_data = traceability_service.generate_barcode_print_data(batch_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Barcode print data generated successfully",
+            data=print_data
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate barcode print data: {str(e)}"
+        )
+
+
+# Recall Simulation Endpoint
+@router.post("/recalls/simulate", response_model=dict)
+async def simulate_recall(
+    simulation_data: RecallSimulationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Simulate a product recall"""
+    try:
+        traceability_service = TraceabilityService(db)
+        simulation_dict = simulation_data.model_dump(exclude_none=True)
+        simulation_result = traceability_service.simulate_recall(simulation_dict)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall simulation completed successfully",
+            data=simulation_result
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Recall simulation failed: {str(e)}"
+        )
+
+
+# Recall Report with Corrective Action Endpoint
+@router.post("/recalls/{recall_id}/report/with-corrective-action", response_model=dict)
+async def generate_recall_report_with_corrective_action(
+    recall_id: int,
+    report_request: RecallReportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate recall report with corrective action form"""
+    try:
+        traceability_service = TraceabilityService(db)
+        report = traceability_service.generate_recall_report_with_corrective_action(recall_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall report with corrective action generated successfully",
+            data=report
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate recall report: {str(e)}"
+        )
+
+
+# Enhanced Trace Backward and Forward Endpoints
+@router.get("/batches/{batch_id}/trace/backward", response_model=dict)
+async def trace_backward_enhanced(
+    batch_id: int,
+    depth: int = Query(5, ge=1, le=10),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enhanced backward trace (ingredients)"""
+    try:
+        traceability_service = TraceabilityService(db)
+        traced_batches = traceability_service._trace_backward(batch_id, depth)
+        
+        # Get batch details for traced batches
+        batches = db.query(Batch).filter(Batch.id.in_(traced_batches)).all()
+        
+        return ResponseModel(
+            success=True,
+            message="Backward trace completed successfully",
+            data={
+                "starting_batch_id": batch_id,
+                "trace_depth": depth,
+                "traced_batches": [
+                    {
+                        "id": batch.id,
+                        "batch_number": batch.batch_number,
+                        "batch_type": batch.batch_type.value,
+                        "product_name": batch.product_name,
+                        "quantity": batch.quantity,
+                        "unit": batch.unit,
+                        "production_date": batch.production_date.isoformat(),
+                        "quality_status": batch.quality_status
+                    }
+                    for batch in batches
+                ],
+                "total_ingredients_found": len(traced_batches)
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Backward trace failed: {str(e)}"
+        )
+
+
+@router.get("/batches/{batch_id}/trace/forward", response_model=dict)
+async def trace_forward_enhanced(
+    batch_id: int,
+    depth: int = Query(5, ge=1, le=10),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enhanced forward trace (distribution)"""
+    try:
+        traceability_service = TraceabilityService(db)
+        traced_batches = traceability_service._trace_forward(batch_id, depth)
+        
+        # Get batch details for traced batches
+        batches = db.query(Batch).filter(Batch.id.in_(traced_batches)).all()
+        
+        return ResponseModel(
+            success=True,
+            message="Forward trace completed successfully",
+            data={
+                "starting_batch_id": batch_id,
+                "trace_depth": depth,
+                "traced_batches": [
+                    {
+                        "id": batch.id,
+                        "batch_number": batch.batch_number,
+                        "batch_type": batch.batch_type.value,
+                        "product_name": batch.product_name,
+                        "quantity": batch.quantity,
+                        "unit": batch.unit,
+                        "production_date": batch.production_date.isoformat(),
+                        "quality_status": batch.quality_status,
+                        "status": batch.status.value
+                    }
+                    for batch in batches
+                ],
+                "total_products_found": len(traced_batches)
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Forward trace failed: {str(e)}"
+        )
+
+
+# Enhanced Batch Management Endpoints
 @router.post("/batches", response_model=dict)
 async def create_batch(
-    batch_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Create a new batch"""
-    try:
-        # Generate unique batch number
-        batch_number = f"BATCH-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-        
-        # Generate barcode
-        barcode = f"BC-{batch_number}"
-        
-        batch = Batch(
-            batch_number=batch_number,
-            batch_type=batch_data.get("batch_type"),
-            status=BatchStatus.IN_PRODUCTION,
-            product_name=batch_data.get("product_name"),
-            quantity=batch_data.get("quantity"),
-            unit=batch_data.get("unit"),
-            production_date=datetime.fromisoformat(batch_data.get("production_date")) if batch_data.get("production_date") else datetime.now(),
-            expiry_date=datetime.fromisoformat(batch_data.get("expiry_date")) if batch_data.get("expiry_date") else None,
-            lot_number=batch_data.get("lot_number"),
-            supplier_id=batch_data.get("supplier_id"),
-            supplier_batch_number=batch_data.get("supplier_batch_number"),
-            coa_number=batch_data.get("coa_number"),
-            storage_location=batch_data.get("storage_location"),
-            storage_conditions=batch_data.get("storage_conditions"),
-            created_by=current_user.id
-        )
-        
-        db.add(batch)
-        db.commit()
-        db.refresh(batch)
-        
-        return {
-            "id": batch.id,
-            "batch_number": batch.batch_number,
-            "barcode": batch.barcode,
-            "message": "Batch created successfully"
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/batches/{batch_id}", response_model=dict)
-async def get_batch(
-    batch_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get detailed information about a specific batch"""
-    batch = db.query(Batch).filter(Batch.id == batch_id).first()
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    
-    # Get traceability links
-    incoming_links = db.query(TraceabilityLink).filter(TraceabilityLink.linked_batch_id == batch_id).all()
-    outgoing_links = db.query(TraceabilityLink).filter(TraceabilityLink.batch_id == batch_id).all()
-    
-    return {
-        "id": batch.id,
-        "batch_number": batch.batch_number,
-        "batch_type": batch.batch_type,
-        "status": batch.status,
-        "product_name": batch.product_name,
-        "quantity": batch.quantity,
-        "unit": batch.unit,
-        "production_date": batch.production_date,
-        "expiry_date": batch.expiry_date,
-        "lot_number": batch.lot_number,
-        "supplier_id": batch.supplier_id,
-        "supplier_batch_number": batch.supplier_batch_number,
-        "coa_number": batch.coa_number,
-        "quality_status": batch.quality_status,
-        "test_results": batch.test_results,
-        "storage_location": batch.storage_location,
-        "storage_conditions": batch.storage_conditions,
-        "barcode": batch.barcode,
-        "incoming_links": [
-            {
-                "id": link.id,
-                "batch_id": link.batch_id,
-                "relationship_type": link.relationship_type,
-                "quantity_used": link.quantity_used,
-                "unit": link.unit,
-                "usage_date": link.usage_date,
-                "process_step": link.process_step
-            }
-            for link in incoming_links
-        ],
-        "outgoing_links": [
-            {
-                "id": link.id,
-                "linked_batch_id": link.linked_batch_id,
-                "relationship_type": link.relationship_type,
-                "quantity_used": link.quantity_used,
-                "unit": link.unit,
-                "usage_date": link.usage_date,
-                "process_step": link.process_step
-            }
-            for link in outgoing_links
-        ],
-        "created_at": batch.created_at
-    }
-
-
-# Dashboard Endpoints
-@router.get("/dashboard", response_model=dict)
-async def get_traceability_dashboard(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get traceability dashboard statistics"""
-    try:
-        # Total batches by type
-        batch_counts = {}
-        for batch_type in BatchType:
-            count = db.query(Batch).filter(Batch.batch_type == batch_type).count()
-            batch_counts[batch_type.value] = count
-        
-        # Total batches by status
-        status_counts = {}
-        for status in BatchStatus:
-            count = db.query(Batch).filter(Batch.status == status).count()
-            status_counts[status.value] = count
-        
-        # Recent batches (last 30 days)
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        recent_batches = db.query(Batch).filter(Batch.created_at >= thirty_days_ago).count()
-        
-        # Active recalls
-        active_recalls = db.query(Recall).filter(
-            Recall.status.in_([RecallStatus.INITIATED, RecallStatus.IN_PROGRESS])
-        ).count()
-        
-        # Recent traceability reports (last 30 days)
-        recent_reports = db.query(TraceabilityReport).filter(
-            TraceabilityReport.created_at >= thirty_days_ago
-        ).count()
-        
-        # Quality status breakdown
-        quality_counts = db.query(Batch.quality_status, db.func.count(Batch.id)).group_by(Batch.quality_status).all()
-        quality_breakdown = {status: count for status, count in quality_counts}
-        
-        return {
-            "batch_counts": batch_counts,
-            "status_counts": status_counts,
-            "recent_batches": recent_batches,
-            "active_recalls": active_recalls,
-            "recent_reports": recent_reports,
-            "quality_breakdown": quality_breakdown
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-# Traceability Link Endpoints
-@router.post("/batches/{batch_id}/links", response_model=dict)
-async def create_traceability_link(
-    batch_id: int,
-    link_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Create a traceability link between batches"""
-    # Verify both batches exist
-    batch = db.query(Batch).filter(Batch.id == batch_id).first()
-    linked_batch = db.query(Batch).filter(Batch.id == link_data.get("linked_batch_id")).first()
-    
-    if not batch or not linked_batch:
-        raise HTTPException(status_code=404, detail="One or both batches not found")
-    
-    try:
-        link = TraceabilityLink(
-            batch_id=batch_id,
-            linked_batch_id=link_data.get("linked_batch_id"),
-            relationship_type=link_data.get("relationship_type"),
-            quantity_used=link_data.get("quantity_used"),
-            unit=link_data.get("unit"),
-            usage_date=datetime.fromisoformat(link_data.get("usage_date")) if link_data.get("usage_date") else datetime.now(),
-            process_step=link_data.get("process_step"),
-            created_by=current_user.id
-        )
-        
-        db.add(link)
-        db.commit()
-        db.refresh(link)
-        
-        return {
-            "id": link.id,
-            "message": "Traceability link created successfully"
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-# Recall Management Endpoints
-@router.get("/recalls", response_model=dict)
-async def get_recalls(
-    db: Session = Depends(get_db),
+    batch_data: BatchCreate,
     current_user: User = Depends(get_current_user),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    status: Optional[RecallStatus] = None,
-    recall_type: Optional[RecallType] = None,
-    search: Optional[str] = None
+    db: Session = Depends(get_db)
 ):
-    """Get recalls with filtering and pagination"""
-    query = db.query(Recall)
-    
-    if status:
-        query = query.filter(Recall.status == status)
-    if recall_type:
-        query = query.filter(Recall.recall_type == recall_type)
-    if search:
-        query = query.filter(
-            (Recall.recall_number.ilike(f"%{search}%")) |
-            (Recall.title.ilike(f"%{search}%"))
-        )
-    
-    total = query.count()
-    recalls = query.offset(skip).limit(limit).all()
-    
-    return {
-        "items": [
-            {
-                "id": recall.id,
-                "recall_number": recall.recall_number,
-                "recall_type": recall.recall_type,
-                "status": recall.status,
-                "title": recall.title,
-                "reason": recall.reason,
-                "issue_discovered_date": recall.issue_discovered_date,
-                "recall_initiated_date": recall.recall_initiated_date,
-                "total_quantity_affected": recall.total_quantity_affected,
-                "quantity_recalled": recall.quantity_recalled,
-                "assigned_to": recall.assigned_to,
-                "created_at": recall.created_at
+    """Create a new batch with validation"""
+    try:
+        traceability_service = TraceabilityService(db)
+        batch = traceability_service.create_batch(batch_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Batch created successfully",
+            data={
+                "id": batch.id,
+                "batch_number": batch.batch_number,
+                "barcode": batch.barcode,
+                "qr_code_path": batch.qr_code_path,
+                "message": "Batch created successfully"
             }
-            for recall in recalls
-        ],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create batch: {str(e)}"
+        )
 
 
+@router.put("/batches/{batch_id}", response_model=dict)
+async def update_batch(
+    batch_id: int,
+    batch_data: BatchUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a batch"""
+    try:
+        traceability_service = TraceabilityService(db)
+        batch = traceability_service.update_batch(batch_id, batch_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Batch updated successfully",
+            data={
+                "id": batch.id,
+                "batch_number": batch.batch_number,
+                "status": batch.status.value,
+                "message": "Batch updated successfully"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update batch: {str(e)}"
+        )
+
+
+@router.delete("/batches/{batch_id}", response_model=dict)
+async def delete_batch(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a batch"""
+    try:
+        batch = db.query(Batch).filter(Batch.id == batch_id).first()
+        if not batch:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Batch not found"
+            )
+        
+        db.delete(batch)
+        db.commit()
+        
+        return ResponseModel(
+            success=True,
+            message="Batch deleted successfully",
+            data={"id": batch_id}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete batch: {str(e)}"
+        )
+
+
+# Enhanced Recall Management Endpoints
 @router.post("/recalls", response_model=dict)
 async def create_recall(
-    recall_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    recall_data: RecallCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Create a new recall"""
+    """Create a new recall with validation"""
     try:
-        # Generate unique recall number
-        recall_number = f"RECALL-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        traceability_service = TraceabilityService(db)
+        recall = traceability_service.create_recall(recall_data, current_user.id)
         
-        recall = Recall(
-            recall_number=recall_number,
-            recall_type=recall_data.get("recall_type"),
-            status=RecallStatus.DRAFT,
-            title=recall_data.get("title"),
-            description=recall_data.get("description"),
-            reason=recall_data.get("reason"),
-            hazard_description=recall_data.get("hazard_description"),
-            affected_products=json.dumps(recall_data.get("affected_products", [])),
-            affected_batches=json.dumps(recall_data.get("affected_batches", [])),
-            date_range_start=datetime.fromisoformat(recall_data.get("date_range_start")) if recall_data.get("date_range_start") else None,
-            date_range_end=datetime.fromisoformat(recall_data.get("date_range_end")) if recall_data.get("date_range_end") else None,
-            total_quantity_affected=recall_data.get("total_quantity_affected"),
-            quantity_in_distribution=recall_data.get("quantity_in_distribution"),
-            issue_discovered_date=datetime.fromisoformat(recall_data.get("issue_discovered_date")) if recall_data.get("issue_discovered_date") else datetime.now(),
-            regulatory_notification_required=recall_data.get("regulatory_notification_required", False),
-            assigned_to=recall_data.get("assigned_to"),
-            created_by=current_user.id
+        return ResponseModel(
+            success=True,
+            message="Recall created successfully",
+            data={
+                "id": recall.id,
+                "recall_number": recall.recall_number,
+                "message": "Recall created successfully"
+            }
         )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create recall: {str(e)}"
+        )
+
+
+@router.put("/recalls/{recall_id}", response_model=dict)
+async def update_recall(
+    recall_id: int,
+    recall_data: RecallUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a recall"""
+    try:
+        recall = db.query(Recall).filter(Recall.id == recall_id).first()
+        if not recall:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Recall not found"
+            )
         
-        db.add(recall)
+        # Update fields
+        if recall_data.status is not None:
+            recall.status = recall_data.status
+        if recall_data.title is not None:
+            recall.title = recall_data.title
+        if recall_data.description is not None:
+            recall.description = recall_data.description
+        if recall_data.reason is not None:
+            recall.reason = recall_data.reason
+        if recall_data.hazard_description is not None:
+            recall.hazard_description = recall_data.hazard_description
+        if recall_data.affected_products is not None:
+            recall.affected_products = json.dumps(recall_data.affected_products)
+        if recall_data.affected_batches is not None:
+            recall.affected_batches = json.dumps(recall_data.affected_batches)
+        if recall_data.date_range_start is not None:
+            recall.date_range_start = recall_data.date_range_start
+        if recall_data.date_range_end is not None:
+            recall.date_range_end = recall_data.date_range_end
+        if recall_data.total_quantity_affected is not None:
+            recall.total_quantity_affected = recall_data.total_quantity_affected
+        if recall_data.quantity_in_distribution is not None:
+            recall.quantity_in_distribution = recall_data.quantity_in_distribution
+        if recall_data.regulatory_notification_required is not None:
+            recall.regulatory_notification_required = recall_data.regulatory_notification_required
+        if recall_data.assigned_to is not None:
+            recall.assigned_to = recall_data.assigned_to
+        
+        recall.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(recall)
         
-        return {
-            "id": recall.id,
-            "recall_number": recall.recall_number,
-            "message": "Recall created successfully"
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/recalls/{recall_id}", response_model=dict)
-async def get_recall(
-    recall_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get detailed information about a specific recall"""
-    recall = db.query(Recall).filter(Recall.id == recall_id).first()
-    if not recall:
-        raise HTTPException(status_code=404, detail="Recall not found")
-    
-    # Get recall entries and actions
-    entries = db.query(RecallEntry).filter(RecallEntry.recall_id == recall_id).all()
-    actions = db.query(RecallAction).filter(RecallAction.recall_id == recall_id).all()
-    
-    return {
-        "id": recall.id,
-        "recall_number": recall.recall_number,
-        "recall_type": recall.recall_type,
-        "status": recall.status,
-        "title": recall.title,
-        "description": recall.description,
-        "reason": recall.reason,
-        "hazard_description": recall.hazard_description,
-        "affected_products": json.loads(recall.affected_products) if recall.affected_products else [],
-        "affected_batches": json.loads(recall.affected_batches) if recall.affected_batches else [],
-        "date_range_start": recall.date_range_start,
-        "date_range_end": recall.date_range_end,
-        "total_quantity_affected": recall.total_quantity_affected,
-        "quantity_in_distribution": recall.quantity_in_distribution,
-        "quantity_recalled": recall.quantity_recalled,
-        "quantity_disposed": recall.quantity_disposed,
-        "issue_discovered_date": recall.issue_discovered_date,
-        "recall_initiated_date": recall.recall_initiated_date,
-        "recall_completed_date": recall.recall_completed_date,
-        "regulatory_notification_required": recall.regulatory_notification_required,
-        "regulatory_notification_date": recall.regulatory_notification_date,
-        "regulatory_reference": recall.regulatory_reference,
-        "assigned_to": recall.assigned_to,
-        "approved_by": recall.approved_by,
-        "approved_at": recall.approved_at,
-        "entries": [
-            {
-                "id": entry.id,
-                "batch_id": entry.batch_id,
-                "quantity_affected": entry.quantity_affected,
-                "quantity_recalled": entry.quantity_recalled,
-                "quantity_disposed": entry.quantity_disposed,
-                "location": entry.location,
-                "customer": entry.customer,
-                "status": entry.status,
-                "completion_date": entry.completion_date
+        return ResponseModel(
+            success=True,
+            message="Recall updated successfully",
+            data={
+                "id": recall.id,
+                "recall_number": recall.recall_number,
+                "status": recall.status.value,
+                "message": "Recall updated successfully"
             }
-            for entry in entries
-        ],
-        "actions": [
-            {
-                "id": action.id,
-                "action_type": action.action_type,
-                "description": action.description,
-                "assigned_to": action.assigned_to,
-                "due_date": action.due_date,
-                "completed_date": action.completed_date,
-                "status": action.status,
-                "results": action.results
-            }
-            for action in actions
-        ],
-        "created_at": recall.created_at
-    }
-
-
-@router.put("/recalls/{recall_id}/status", response_model=dict)
-async def update_recall_status(
-    recall_id: int,
-    status_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update recall status"""
-    recall = db.query(Recall).filter(Recall.id == recall_id).first()
-    if not recall:
-        raise HTTPException(status_code=404, detail="Recall not found")
-    
-    new_status = status_data.get("status")
-    if new_status not in [status.value for status in RecallStatus]:
-        raise HTTPException(status_code=400, detail="Invalid status")
-    
-    recall.status = new_status
-    
-    # Update dates based on status
-    if new_status == RecallStatus.INITIATED:
-        recall.recall_initiated_date = datetime.now()
-    elif new_status == RecallStatus.COMPLETED:
-        recall.recall_completed_date = datetime.now()
-    
-    db.commit()
-    
-    return {
-        "id": recall.id,
-        "status": recall.status,
-        "message": "Recall status updated successfully"
-    }
-
-
-# Traceability Report Endpoints
-@router.post("/trace", response_model=dict)
-async def create_traceability_report(
-    trace_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Create a traceability report (forward/backward trace)"""
-    try:
-        starting_batch_id = trace_data.get("starting_batch_id")
-        report_type = trace_data.get("report_type", "full_trace")
-        trace_depth = trace_data.get("trace_depth", 5)
-        
-        # Verify starting batch exists
-        starting_batch = db.query(Batch).filter(Batch.id == starting_batch_id).first()
-        if not starting_batch:
-            raise HTTPException(status_code=404, detail="Starting batch not found")
-        
-        # Generate report number
-        report_number = f"TRACE-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-        
-        # Perform traceability analysis
-        traced_batches = []
-        trace_path = {}
-        
-        if report_type in ["backward_trace", "full_trace"]:
-            # Trace backward (ingredients)
-            traced_batches.extend(await _trace_backward(db, starting_batch_id, trace_depth))
-        
-        if report_type in ["forward_trace", "full_trace"]:
-            # Trace forward (products)
-            traced_batches.extend(await _trace_forward(db, starting_batch_id, trace_depth))
-        
-        # Remove duplicates
-        traced_batches = list(set(traced_batches))
-        
-        # Create trace path visualization
-        trace_path = await _build_trace_path(db, starting_batch_id, traced_batches)
-        
-        # Generate summary
-        trace_summary = f"Trace report for batch {starting_batch.batch_number}. Found {len(traced_batches)} related batches."
-        
-        report = TraceabilityReport(
-            report_number=report_number,
-            report_type=report_type,
-            starting_batch_id=starting_batch_id,
-            trace_date=datetime.now(),
-            trace_depth=trace_depth,
-            traced_batches=json.dumps(traced_batches),
-            trace_path=json.dumps(trace_path),
-            trace_summary=trace_summary,
-            created_by=current_user.id
         )
-        
-        db.add(report)
-        db.commit()
-        db.refresh(report)
-        
-        return {
-            "id": report.id,
-            "report_number": report.report_number,
-            "traced_batches": traced_batches,
-            "trace_path": trace_path,
-            "trace_summary": trace_summary,
-            "message": "Traceability report created successfully"
-        }
+    except HTTPException:
+        raise
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update recall: {str(e)}"
+        )
 
 
-@router.get("/trace/reports", response_model=dict)
-async def get_traceability_reports(
-    db: Session = Depends(get_db),
+# Enhanced Traceability Report Endpoints
+@router.post("/reports", response_model=dict)
+async def create_traceability_report(
+    report_data: TraceabilityReportCreate,
     current_user: User = Depends(get_current_user),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    db: Session = Depends(get_db)
 ):
-    """Get traceability reports"""
-    query = db.query(TraceabilityReport)
-    total = query.count()
-    reports = query.offset(skip).limit(limit).all()
-    
-    return {
-        "items": [
-            {
+    """Create a traceability report with validation"""
+    try:
+        traceability_service = TraceabilityService(db)
+        report = traceability_service.create_traceability_report(report_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability report created successfully",
+            data={
                 "id": report.id,
                 "report_number": report.report_number,
-                "report_type": report.report_type,
-                "starting_batch_id": report.starting_batch_id,
-                "trace_date": report.trace_date,
-                "trace_depth": report.trace_depth,
+                "traced_batches": json.loads(report.traced_batches) if report.traced_batches else [],
+                "trace_path": json.loads(report.trace_path) if report.trace_path else {},
                 "trace_summary": report.trace_summary,
-                "created_at": report.created_at
+                "message": "Traceability report created successfully"
             }
-            for report in reports
-        ],
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create traceability report: {str(e)}"
+        )
 
 
-# Helper functions for traceability analysis
-async def _trace_backward(db: Session, batch_id: int, depth: int) -> List[int]:
-    """Trace backward to find ingredient batches"""
-    traced = []
-    to_trace = [batch_id]
-    current_depth = 0
-    
-    while to_trace and current_depth < depth:
-        next_level = []
-        for bid in to_trace:
-            links = db.query(TraceabilityLink).filter(TraceabilityLink.linked_batch_id == bid).all()
-            for link in links:
-                if link.batch_id not in traced:
-                    traced.append(link.batch_id)
-                    next_level.append(link.batch_id)
-        to_trace = next_level
-        current_depth += 1
-    
-    return traced
+# Enhanced Dashboard Endpoint
+@router.get("/dashboard/enhanced", response_model=dict)
+async def get_enhanced_traceability_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get enhanced traceability dashboard statistics"""
+    try:
+        traceability_service = TraceabilityService(db)
+        stats = traceability_service.get_dashboard_stats()
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced traceability dashboard data retrieved successfully",
+            data=stats
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve enhanced dashboard data: {str(e)}"
+        )
 
 
-async def _trace_forward(db: Session, batch_id: int, depth: int) -> List[int]:
-    """Trace forward to find product batches"""
-    traced = []
-    to_trace = [batch_id]
-    current_depth = 0
-    
-    while to_trace and current_depth < depth:
-        next_level = []
-        for bid in to_trace:
-            links = db.query(TraceabilityLink).filter(TraceabilityLink.batch_id == bid).all()
-            for link in links:
-                if link.linked_batch_id not in traced:
-                    traced.append(link.linked_batch_id)
-                    next_level.append(link.linked_batch_id)
-        to_trace = next_level
-        current_depth += 1
-    
-    return traced
+# Recall Entry Management
+@router.post("/recalls/{recall_id}/entries", response_model=dict)
+async def create_recall_entry(
+    recall_id: int,
+    entry_data: RecallEntryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a recall entry"""
+    try:
+        traceability_service = TraceabilityService(db)
+        entry = traceability_service.create_recall_entry(recall_id, entry_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall entry created successfully",
+            data={
+                "id": entry.id,
+                "recall_id": entry.recall_id,
+                "batch_id": entry.batch_id,
+                "message": "Recall entry created successfully"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create recall entry: {str(e)}"
+        )
 
 
-async def _build_trace_path(db: Session, starting_batch_id: int, traced_batches: List[int]) -> dict:
-    """Build a visual trace path"""
-    # Get all batches involved
-    all_batch_ids = [starting_batch_id] + traced_batches
-    batches = db.query(Batch).filter(Batch.id.in_(all_batch_ids)).all()
-    
-    # Get all links
-    links = db.query(TraceabilityLink).filter(
-        (TraceabilityLink.batch_id.in_(all_batch_ids)) |
-        (TraceabilityLink.linked_batch_id.in_(all_batch_ids))
-    ).all()
-    
-    # Build path structure
-    path = {
-        "nodes": [
-            {
+# Recall Action Management
+@router.post("/recalls/{recall_id}/actions", response_model=dict)
+async def create_recall_action(
+    recall_id: int,
+    action_data: RecallActionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a recall action"""
+    try:
+        traceability_service = TraceabilityService(db)
+        action = traceability_service.create_recall_action(recall_id, action_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall action created successfully",
+            data={
+                "id": action.id,
+                "recall_id": action.recall_id,
+                "action_type": action.action_type,
+                "message": "Recall action created successfully"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create recall action: {str(e)}"
+        )
+
+
+# Batch Status Update
+@router.put("/batches/{batch_id}/status", response_model=dict)
+async def update_batch_status(
+    batch_id: int,
+    status_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update batch status"""
+    try:
+        batch = db.query(Batch).filter(Batch.id == batch_id).first()
+        if not batch:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Batch not found"
+            )
+        
+        new_status = status_data.get("status")
+        if new_status not in [status.value for status in BatchStatus]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid status"
+            )
+        
+        batch.status = new_status
+        batch.updated_at = datetime.utcnow()
+        db.commit()
+        
+        return ResponseModel(
+            success=True,
+            message="Batch status updated successfully",
+            data={
                 "id": batch.id,
-                "batch_number": batch.batch_number,
-                "type": batch.batch_type,
-                "product_name": batch.product_name,
-                "is_starting": batch.id == starting_batch_id
+                "status": batch.status,
+                "message": "Batch status updated successfully"
             }
-            for batch in batches
-        ],
-        "links": [
-            {
-                "source": link.batch_id,
-                "target": link.linked_batch_id,
-                "relationship_type": link.relationship_type,
-                "quantity_used": link.quantity_used,
-                "unit": link.unit,
-                "process_step": link.process_step
-            }
-            for link in links
-        ]
-    }
-    
-    return path 
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update batch status: {str(e)}"
+        ) 

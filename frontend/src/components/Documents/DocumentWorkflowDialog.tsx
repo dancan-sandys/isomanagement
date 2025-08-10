@@ -36,7 +36,7 @@ import {
   Close,
   CheckCircle,
   Pending,
-  Error,
+  Error as ErrorIcon,
   Person,
   AccessTime,
   Comment,
@@ -50,6 +50,9 @@ import {
   Timeline,
 } from '@mui/icons-material';
 import { documentsAPI } from '../../services/api';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '../../store';
+import { approveVersion } from '../../store/slices/documentSlice';
 
 interface WorkflowStep {
   id: number;
@@ -91,6 +94,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   const [activeStep, setActiveStep] = useState(0);
   const [comments, setComments] = useState('');
   const [action, setAction] = useState<'approve' | 'reject' | 'request_changes'>('approve');
+  const dispatch = useDispatch<AppDispatch>();
 
   const workflowSteps = [
     {
@@ -132,7 +136,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
       const mockWorkflow: DocumentWorkflow = {
         id: 1,
         document_id: document.id,
-        current_step: 1,
+        current_step: 2,
         status: 'under_review',
         steps: [
           {
@@ -181,42 +185,26 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   };
 
   const handleStepAction = async () => {
-    if (!workflow) return;
-    
+    if (!workflow || !document) return;
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Mock API call - in real implementation, this would update the workflow
-      const updatedWorkflow = { ...workflow };
-      const currentStep = updatedWorkflow.steps[activeStep];
+      // Get the current version of the document
+      const versionResponse = await documentsAPI.getVersionHistory(document.id);
+      const currentVersion = versionResponse.data.versions?.find((v: any) => v.is_current);
       
-      if (action === 'approve') {
-        currentStep.status = 'completed';
-        currentStep.completed_at = new Date().toISOString();
-        currentStep.comments = comments;
-        
-        if (activeStep < workflowSteps.length - 1) {
-          updatedWorkflow.current_step = activeStep + 2;
-          updatedWorkflow.steps[activeStep + 1].status = 'in_progress';
-        } else {
-          updatedWorkflow.status = 'approved';
-        }
-      } else if (action === 'reject') {
-        currentStep.status = 'rejected';
-        currentStep.comments = comments;
-        updatedWorkflow.status = 'rejected';
-      } else if (action === 'request_changes') {
-        currentStep.status = 'rejected';
-        currentStep.comments = comments;
-        updatedWorkflow.steps[0].status = 'in_progress';
-        updatedWorkflow.current_step = 1;
+      if (!currentVersion) {
+        const error = new Error('No current version found for this document');
+        throw error;
       }
-      
-      setWorkflow(updatedWorkflow);
-      if (onWorkflowUpdate) {
-        onWorkflowUpdate(updatedWorkflow);
-      }
+
+      // Call the approval API directly
+      await documentsAPI.approveVersion(document.id, currentVersion.id, comments);
+
+      // Reload the workflow to get updated status
+      await loadWorkflow();
       
       setComments('');
     } catch (error: any) {
@@ -233,7 +221,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
       case 'in_progress':
         return <Pending color="warning" />;
       case 'rejected':
-        return <Error color="error" />;
+        return <ErrorIcon color="error" />;
       default:
         return <Timeline color="disabled" />;
     }

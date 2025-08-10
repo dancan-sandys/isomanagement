@@ -30,6 +30,13 @@ class EvaluationStatus(str, enum.Enum):
     OVERDUE = "overdue"
 
 
+class InspectionStatus(str, enum.Enum):
+    PENDING = "pending"
+    PASSED = "passed"
+    FAILED = "failed"
+    QUARANTINED = "quarantined"
+
+
 class Supplier(Base):
     __tablename__ = "suppliers"
 
@@ -148,6 +155,7 @@ class SupplierEvaluation(Base):
     price_score = Column(Float)
     communication_score = Column(Float)
     technical_support_score = Column(Float)
+    hygiene_score = Column(Float)  # Added hygiene score
     overall_score = Column(Float)
     
     # Detailed evaluation
@@ -156,6 +164,7 @@ class SupplierEvaluation(Base):
     price_comments = Column(Text)
     communication_comments = Column(Text)
     technical_support_comments = Column(Text)
+    hygiene_comments = Column(Text)  # Added hygiene comments
     
     # Issues and improvements
     issues_identified = Column(Text)  # JSON array of issues
@@ -222,6 +231,83 @@ class IncomingDelivery(Base):
     
     def __repr__(self):
         return f"<IncomingDelivery(id={self.id}, delivery_number='{self.delivery_number}', supplier_id={self.supplier_id})>"
+
+
+class InspectionChecklist(Base):
+    __tablename__ = "inspection_checklists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("incoming_deliveries.id"), nullable=False)
+    
+    # Checklist details
+    checklist_name = Column(String(200), nullable=False)
+    checklist_type = Column(String(100))  # visual, microbiological, chemical, etc.
+    checklist_version = Column(String(20), default="1.0")
+    
+    # Status
+    is_completed = Column(Boolean, default=False)
+    completed_by = Column(Integer, ForeignKey("users.id"))
+    completed_at = Column(DateTime(timezone=True))
+    
+    # Results
+    overall_result = Column(String(20))  # passed, failed, conditional
+    total_items = Column(Integer, default=0)
+    passed_items = Column(Integer, default=0)
+    failed_items = Column(Integer, default=0)
+    
+    # Notes
+    general_notes = Column(Text)
+    corrective_actions = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Relationships
+    delivery = relationship("IncomingDelivery")
+    checklist_items = relationship("InspectionChecklistItem", back_populates="checklist")
+    
+    def __repr__(self):
+        return f"<InspectionChecklist(id={self.id}, delivery_id={self.delivery_id}, checklist_name='{self.checklist_name}')>"
+
+
+class InspectionChecklistItem(Base):
+    __tablename__ = "inspection_checklist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    checklist_id = Column(Integer, ForeignKey("inspection_checklists.id"), nullable=False)
+    
+    # Item details
+    item_name = Column(String(200), nullable=False)
+    item_description = Column(Text)
+    item_category = Column(String(100))  # visual, measurement, test, etc.
+    
+    # Criteria
+    acceptable_criteria = Column(Text)
+    measurement_unit = Column(String(50))
+    min_value = Column(Float)
+    max_value = Column(Float)
+    
+    # Results
+    is_checked = Column(Boolean, default=False)
+    result = Column(String(20))  # passed, failed, n/a
+    actual_value = Column(Float)
+    actual_text = Column(Text)
+    
+    # Comments
+    comments = Column(Text)
+    corrective_action = Column(Text)
+    
+    # Timestamps
+    checked_at = Column(DateTime(timezone=True))
+    checked_by = Column(Integer, ForeignKey("users.id"))
+    
+    # Relationships
+    checklist = relationship("InspectionChecklist", back_populates="checklist_items")
+    
+    def __repr__(self):
+        return f"<InspectionChecklistItem(id={self.id}, checklist_id={self.checklist_id}, item_name='{self.item_name}')>"
 
 
 class SupplierDocument(Base):

@@ -622,13 +622,13 @@ const Documents: React.FC = () => {
                       </Tooltip>
                     )}
                     <Tooltip title="More Actions">
-                      <IconButton 
-                        size="small"
+                        <IconButton 
+                          size="small" 
                         onClick={(e) => handleMenuOpen(e, document)}
-                      >
+                        >
                         <MoreVert />
-                      </IconButton>
-                    </Tooltip>
+                        </IconButton>
+                      </Tooltip>
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -663,6 +663,18 @@ const Documents: React.FC = () => {
           horizontal: 'right',
         }}
       >
+        {canApproveDocuments && (
+          <MenuItemComponent onClick={() => {
+            setSelectedDocument(selectedDocumentForMenu);
+            setApprovalDialogOpen(true);
+            handleMenuClose();
+          }}>
+            <ListItemIcon>
+              <Approval fontSize="small" />
+            </ListItemIcon>
+            Approve Document
+          </MenuItemComponent>
+        )}
         <MenuItemComponent onClick={() => {
           handleViewVersions(selectedDocumentForMenu);
           handleMenuClose();
@@ -691,6 +703,18 @@ const Documents: React.FC = () => {
           </ListItemIcon>
           View Workflow
         </MenuItemComponent>
+        {canApproveDocuments && selectedDocumentForMenu?.status === 'under_review' && (
+          <MenuItemComponent onClick={() => {
+            setSelectedDocument(selectedDocumentForMenu);
+            setApprovalDialogOpen(true);
+            handleMenuClose();
+          }}>
+            <ListItemIcon>
+              <Approval fontSize="small" />
+            </ListItemIcon>
+            Approve Document
+          </MenuItemComponent>
+        )}
         <MenuItemComponent onClick={() => {
           setSelectedDocument(selectedDocumentForMenu);
           setComparisonDialogOpen(true);

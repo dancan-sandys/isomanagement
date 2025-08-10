@@ -55,6 +55,14 @@ const PageHeader: React.FC<PageHeaderProps> = ({
           startIcon={<Refresh />}
           onClick={onRefresh}
           size="small"
+          sx={{
+            borderColor: 'divider',
+            backgroundColor: 'rgba(30, 64, 175, 0.02)',
+            '&:hover': {
+              borderColor: 'text.disabled',
+              backgroundColor: 'rgba(30, 64, 175, 0.06)'
+            },
+          }}
         >
           Refresh
         </Button>
@@ -65,6 +73,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
           startIcon={<Add />}
           onClick={onAdd}
           size="small"
+          sx={{
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            '&:hover': {
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+            }
+          }}
         >
           Add New
         </Button>
@@ -75,6 +89,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
           startIcon={<Download />}
           onClick={onExport}
           size="small"
+          sx={{
+            borderColor: 'divider',
+            '&:hover': {
+              borderColor: 'text.disabled'
+            }
+          }}
         >
           Export
         </Button>
