@@ -348,25 +348,38 @@ async def get_users_dashboard(
         
         # Get users by role
         users_by_role = {}
-        for role in Role:
-            count = db.query(User).filter(User.role_id == role.id).count()
-            if count > 0:
-                users_by_role[role.value] = count
+        try:
+            roles = db.query(Role).all()
+            for role in roles:
+                count = db.query(User).filter(User.role_id == role.id).count()
+                if count > 0:
+                    users_by_role[role.name] = count
+        except Exception as role_error:
+            print(f"Error getting users by role: {role_error}")
+            users_by_role = {}
         
         # Get users by department
         users_by_department = {}
-        departments = db.query(User.department).distinct().filter(User.department.isnot(None)).all()
-        for dept in departments:
-            if dept[0]:
-                count = db.query(User).filter(User.department == dept[0]).count()
-                users_by_department[dept[0]] = count
+        try:
+            departments = db.query(User.department).distinct().filter(User.department.isnot(None)).all()
+            for dept in departments:
+                if dept[0]:
+                    count = db.query(User).filter(User.department == dept[0]).count()
+                    users_by_department[dept[0]] = count
+        except Exception as dept_error:
+            print(f"Error getting users by department: {dept_error}")
+            users_by_department = {}
         
         # Get recent logins (users who logged in today)
-        from datetime import datetime, timedelta
-        today = datetime.now().date()
-        recent_logins = db.query(User).filter(
-            User.last_login >= today
-        ).count()
+        recent_logins = 0
+        try:
+            from datetime import datetime, timedelta
+            today = datetime.now().date()
+            recent_logins = db.query(User).filter(
+                User.last_login >= today
+            ).count()
+        except Exception as login_error:
+            print(f"Error getting recent logins: {login_error}")
         
         # Mock data for training and competency (these would come from separate tables)
         training_overdue = 3  # Mock value
@@ -391,6 +404,9 @@ async def get_users_dashboard(
         )
         
     except Exception as e:
+        print(f"Dashboard error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve dashboard data: {str(e)}"

@@ -139,6 +139,11 @@ const Users: React.FC = () => {
 
   // Check if user has permission to manage users
   const hasUserManagementPermission = canManageUsers(currentUser);
+  
+  // Debug logging
+  console.log('🔍 Users page - Current user:', currentUser);
+  console.log('🔍 Users page - Has permission:', hasUserManagementPermission);
+  console.log('🔍 Users page - User role:', currentUser?.role_name);
 
   // Helper function to format error messages
   const formatErrorMessage = (error: any): string => {
@@ -172,20 +177,25 @@ const Users: React.FC = () => {
 
   // Load data on component mount
   useEffect(() => {
-    if (hasUserManagementPermission) {
-      fetchDashboardData();
-      fetchUsers();
-    }
-  }, [hasUserManagementPermission]); // eslint-disable-line react-hooks/exhaustive-deps
+    console.log('🔍 Users useEffect: Component mounted');
+    console.log('🔍 Users useEffect: hasUserManagementPermission:', hasUserManagementPermission);
+    console.log('🔍 Users useEffect: Current user:', currentUser);
+    
+    // Always fetch data, but show appropriate UI based on permissions
+    fetchDashboardData();
+    fetchUsers();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // API calls
   const fetchDashboardData = async () => {
     try {
+      console.log('🔍 fetchDashboardData: Starting...');
       setLoading(true);
       const response = await usersAPI.getDashboard();
+      console.log('🔍 fetchDashboardData: Response received:', response);
       setDashboardData(response.data);
     } catch (err: any) {
-      console.error('Failed to load dashboard data:', err);
+      console.error('🔍 fetchDashboardData: Error occurred:', err);
       setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
@@ -414,6 +424,12 @@ const Users: React.FC = () => {
             User Management Dashboard
           </Typography>
           
+          {!hasUserManagementPermission && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              You have limited access to user management. Contact your administrator for full access.
+            </Alert>
+          )}
+          
           {loading && <LinearProgress />}
           
           {error && (
@@ -533,81 +549,89 @@ const Users: React.FC = () => {
 
       {activeTab === 1 && (
         <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4">
-              User Management
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setUserDialogOpen(true)}
-            >
-              Add New User
-            </Button>
-          </Box>
+          {!hasUserManagementPermission ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              You don't have permission to manage users. This section is read-only.
+            </Alert>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h4">
+                User Management
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setUserDialogOpen(true)}
+              >
+                Add New User
+              </Button>
+            </Box>
+          )}
 
           {/* Filters */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md={3}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Role</InputLabel>
-                    <Select
-                      value={userFilters.role}
-                      onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}
+          {hasUserManagementPermission && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Role</InputLabel>
+                      <Select
+                        value={userFilters.role}
+                        onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}
+                      >
+                        <MenuItem value="">All Roles</MenuItem>
+                        <MenuItem value="1">System Administrator</MenuItem>
+                        <MenuItem value="2">QA Manager</MenuItem>
+                        <MenuItem value="3">QA Specialist</MenuItem>
+                        <MenuItem value="4">Production Manager</MenuItem>
+                        <MenuItem value="5">Production Operator</MenuItem>
+                        <MenuItem value="6">Maintenance</MenuItem>
+                        <MenuItem value="7">Lab Technician</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        value={userFilters.status}
+                        onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}
+                      >
+                        <MenuItem value="">All Statuses</MenuItem>
+                        <MenuItem value="ACTIVE">Active</MenuItem>
+                        <MenuItem value="INACTIVE">Inactive</MenuItem>
+                        <MenuItem value="SUSPENDED">Suspended</MenuItem>
+                        <MenuItem value="PENDING_APPROVAL">Pending Approval</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="Search users..."
+                      value={userFilters.search}
+                      onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })}
+                      InputProps={{
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={2}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<FilterIcon />}
+                      onClick={handleFilterApply}
+                      fullWidth
                     >
-                      <MenuItem value="">All Roles</MenuItem>
-                      <MenuItem value="1">System Administrator</MenuItem>
-                      <MenuItem value="2">QA Manager</MenuItem>
-                      <MenuItem value="3">QA Specialist</MenuItem>
-                      <MenuItem value="4">Production Manager</MenuItem>
-                      <MenuItem value="5">Production Operator</MenuItem>
-                      <MenuItem value="6">Maintenance</MenuItem>
-                      <MenuItem value="7">Lab Technician</MenuItem>
-                    </Select>
-                  </FormControl>
+                      Apply Filters
+                    </Button>
+                  </Grid>
                 </Grid>
-                <Grid item xs={12} md={3}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                      value={userFilters.status}
-                      onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}
-                    >
-                      <MenuItem value="">All Statuses</MenuItem>
-                      <MenuItem value="ACTIVE">Active</MenuItem>
-                      <MenuItem value="INACTIVE">Inactive</MenuItem>
-                      <MenuItem value="SUSPENDED">Suspended</MenuItem>
-                      <MenuItem value="PENDING_APPROVAL">Pending Approval</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Search users..."
-                    value={userFilters.search}
-                    onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })}
-                    InputProps={{
-                      startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FilterIcon />}
-                    onClick={handleFilterApply}
-                    fullWidth
-                  >
-                    Apply Filters
-                  </Button>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Users Table */}
           <TableContainer component={Paper}>
@@ -673,36 +697,40 @@ const Users: React.FC = () => {
                       }}>
                         <VisibilityIcon />
                       </IconButton>
-                      <IconButton size="small" onClick={() => {
-                        setSelectedUser(user);
-                        setUserForm({
-                          username: user.username,
-                          email: user.email,
-                          full_name: user.full_name,
-                          password: '',
-                          role_id: user.role_id.toString(),
-                          department: user.department || '',
-                          position: user.position || '',
-                          phone: user.phone || '',
-                          employee_id: user.employee_id || '',
-                          bio: user.bio || ''
-                        });
-                        setUserDialogOpen(true);
-                      }}>
-                        <EditIcon />
-                      </IconButton>
-                      {user.is_active ? (
-                        <IconButton size="small" onClick={() => handleDeactivateUser(user.id)}>
-                          <LockIcon />
-                        </IconButton>
-                      ) : (
-                        <IconButton size="small" onClick={() => handleActivateUser(user.id)}>
-                          <LockOpenIcon />
-                        </IconButton>
+                      {hasUserManagementPermission && (
+                        <>
+                          <IconButton size="small" onClick={() => {
+                            setSelectedUser(user);
+                            setUserForm({
+                              username: user.username,
+                              email: user.email,
+                              full_name: user.full_name,
+                              password: '',
+                              role_id: user.role_id.toString(),
+                              department: user.department || '',
+                              position: user.position || '',
+                              phone: user.phone || '',
+                              employee_id: user.employee_id || '',
+                              bio: user.bio || ''
+                            });
+                            setUserDialogOpen(true);
+                          }}>
+                            <EditIcon />
+                          </IconButton>
+                          {user.is_active ? (
+                            <IconButton size="small" onClick={() => handleDeactivateUser(user.id)}>
+                              <LockIcon />
+                            </IconButton>
+                          ) : (
+                            <IconButton size="small" onClick={() => handleActivateUser(user.id)}>
+                              <LockOpenIcon />
+                            </IconButton>
+                          )}
+                          <IconButton size="small" onClick={() => handleDeleteUser(user.id)}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </>
                       )}
-                      <IconButton size="small" onClick={() => handleDeleteUser(user.id)}>
-                        <DeleteIcon />
-                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -711,7 +739,7 @@ const Users: React.FC = () => {
           </TableContainer>
 
           {/* Pagination */}
-          {pagination.pages > 1 && (
+          {hasUserManagementPermission && pagination.pages > 1 && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
               <Pagination
                 count={pagination.pages}
@@ -729,136 +757,146 @@ const Users: React.FC = () => {
           <Typography variant="h4" gutterBottom>
             Training & Competency Management
           </Typography>
-          <Typography variant="body1" color="textSecondary">
-            This section will include training records, competency matrices, and skill assessments.
-          </Typography>
+          {!hasUserManagementPermission ? (
+            <Alert severity="info">
+              You don't have permission to access training and competency management. Contact your administrator for access.
+            </Alert>
+          ) : (
+            <Typography variant="body1" color="textSecondary">
+              This section will include training records, competency matrices, and skill assessments.
+            </Typography>
+          )}
         </Box>
       )}
 
       {/* Create/Edit User Dialog */}
-      <Dialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedUser ? 'Edit User' : 'Create New User'}
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Username"
-                value={userForm.username}
-                onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                disabled={!!selectedUser}
-              />
+      {hasUserManagementPermission && (
+        <Dialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>
+            {selectedUser ? 'Edit User' : 'Create New User'}
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Username"
+                  value={userForm.username}
+                  onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                  disabled={!!selectedUser}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  type="email"
+                  value={userForm.email}
+                  onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Full Name"
+                  value={userForm.full_name}
+                  onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Password"
+                  type="password"
+                  value={userForm.password}
+                  onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                  disabled={!!selectedUser}
+                  helperText={selectedUser ? 'Leave blank to keep current password' : ''}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    value={userForm.role_id}
+                    onChange={(e) => setUserForm({ ...userForm, role_id: e.target.value })}
+                  >
+                    <MenuItem value="1">System Administrator</MenuItem>
+                    <MenuItem value="2">QA Manager</MenuItem>
+                    <MenuItem value="3">QA Specialist</MenuItem>
+                    <MenuItem value="4">Production Manager</MenuItem>
+                    <MenuItem value="5">Production Operator</MenuItem>
+                    <MenuItem value="6">Maintenance</MenuItem>
+                    <MenuItem value="7">Lab Technician</MenuItem>
+                    <MenuItem value="8">Viewer</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Department"
+                  value={userForm.department}
+                  onChange={(e) => setUserForm({ ...userForm, department: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Position"
+                  value={userForm.position}
+                  onChange={(e) => setUserForm({ ...userForm, position: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Phone"
+                  value={userForm.phone}
+                  onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Employee ID"
+                  value={userForm.employee_id}
+                  onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Bio"
+                  multiline
+                  rows={3}
+                  value={userForm.bio}
+                  onChange={(e) => setUserForm({ ...userForm, bio: e.target.value })}
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Email"
-                type="email"
-                value={userForm.email}
-                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Full Name"
-                value={userForm.full_name}
-                onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Password"
-                type="password"
-                value={userForm.password}
-                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                disabled={!!selectedUser}
-                helperText={selectedUser ? 'Leave blank to keep current password' : ''}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Role</InputLabel>
-                <Select
-                  value={userForm.role_id}
-                  onChange={(e) => setUserForm({ ...userForm, role_id: e.target.value })}
-                >
-                  <MenuItem value="1">System Administrator</MenuItem>
-                  <MenuItem value="2">QA Manager</MenuItem>
-                  <MenuItem value="3">QA Specialist</MenuItem>
-                  <MenuItem value="4">Production Manager</MenuItem>
-                  <MenuItem value="5">Production Operator</MenuItem>
-                  <MenuItem value="6">Maintenance</MenuItem>
-                  <MenuItem value="7">Lab Technician</MenuItem>
-                  <MenuItem value="8">Viewer</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Department"
-                value={userForm.department}
-                onChange={(e) => setUserForm({ ...userForm, department: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Position"
-                value={userForm.position}
-                onChange={(e) => setUserForm({ ...userForm, position: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Phone"
-                value={userForm.phone}
-                onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Employee ID"
-                value={userForm.employee_id}
-                onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Bio"
-                multiline
-                rows={3}
-                value={userForm.bio}
-                onChange={(e) => setUserForm({ ...userForm, bio: e.target.value })}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => {
-            setUserDialogOpen(false);
-            resetUserForm();
-          }}>Cancel</Button>
-          <Button 
-            onClick={() => selectedUser ? handleUpdateUser(selectedUser.id) : handleCreateUser()} 
-            variant="contained" 
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={20} /> : (selectedUser ? 'Update User' : 'Create User')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => {
+              setUserDialogOpen(false);
+              resetUserForm();
+            }}>Cancel</Button>
+            <Button 
+              onClick={() => selectedUser ? handleUpdateUser(selectedUser.id) : handleCreateUser()} 
+              variant="contained" 
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={20} /> : (selectedUser ? 'Update User' : 'Create User')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       {/* View User Dialog */}
       <Dialog open={viewUserDialogOpen} onClose={() => setViewUserDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>User Details</DialogTitle>
+        <DialogTitle>
+          User Details
+        </DialogTitle>
         <DialogContent>
           {selectedUser && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
