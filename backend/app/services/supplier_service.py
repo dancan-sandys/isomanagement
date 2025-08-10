@@ -25,9 +25,12 @@ class SupplierService:
     # Supplier operations
     def create_supplier(self, supplier_data: SupplierCreate, created_by: int) -> Supplier:
         """Create a new supplier"""
+        from datetime import datetime
+        
         supplier = Supplier(
             **supplier_data.dict(),
-            created_by=created_by
+            created_by=created_by,
+            updated_at=datetime.utcnow()  # Set updated_at to current time
         )
         self.db.add(supplier)
         self.db.commit()
@@ -83,6 +86,8 @@ class SupplierService:
 
     def update_supplier(self, supplier_id: int, supplier_data: SupplierUpdate) -> Optional[Supplier]:
         """Update supplier"""
+        from datetime import datetime
+        
         supplier = self.get_supplier(supplier_id)
         if not supplier:
             return None
@@ -90,6 +95,9 @@ class SupplierService:
         update_data = supplier_data.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(supplier, field, value)
+        
+        # Set updated_at to current time
+        supplier.updated_at = datetime.utcnow()
 
         self.db.commit()
         self.db.refresh(supplier)

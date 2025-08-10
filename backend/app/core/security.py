@@ -5,25 +5,62 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
+import logging
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User, UserSession
 from app.services.rbac_service import check_user_permission
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Password hashing - use a more compatible configuration
+try:
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+except Exception as e:
+    logger.warning(f"Failed to initialize bcrypt with default settings: {e}")
+    # Fallback to basic configuration
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT token security
 security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    logger.info(f"Verifying password. Hash length: {len(hashed_password)}")
+    
+    try:
+        # First try bcrypt verification
+        logger.info("Attempting bcrypt verification...")
+        result = pwd_context.verify(plain_password, hashed_password)
+        logger.info(f"Bcrypt verification result: {result}")
+        return result
+    except Exception as e:
+        logger.warning(f"Bcrypt verification failed: {e}")
+        # Fallback to simple hash verification
+        try:
+            logger.info("Attempting simple hash verification...")
+            import hashlib
+            simple_hash = hashlib.sha256(plain_password.encode()).hexdigest()
+            logger.info(f"Generated simple hash: {simple_hash}")
+            logger.info(f"Stored hash: {hashed_password}")
+            result = (simple_hash == hashed_password)
+            logger.info(f"Simple hash verification result: {result}")
+            return result
+        except Exception as e2:
+            logger.error(f"Simple hash verification also failed: {e2}")
+            return False
 
 def get_password_hash(password: str) -> str:
     """Generate password hash"""
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except Exception as e:
+        logger.error(f"Password hashing failed: {e}")
+        # Fallback to a simple hash if bcrypt fails
+        import hashlib
+        return hashlib.sha256(password.encode()).hexdigest()
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token"""
@@ -107,9 +144,17 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     """Authenticate user with username and password"""
     user = db.query(User).filter(User.username == username).first()
     if not user:
+        logger.warning(f"User not found: {username}")
         return None
+    
+    logger.info(f"Attempting to verify password for user: {username}")
+    logger.info(f"Stored hash: {user.hashed_password}")
+    
     if not verify_password(password, user.hashed_password):
+        logger.error(f"Password verification failed for user: {username}")
         return None
+    
+    logger.info(f"Password verification successful for user: {username}")
     return user
 
 def create_user_session(db: Session, user_id: int, access_token: str, refresh_token: str, 

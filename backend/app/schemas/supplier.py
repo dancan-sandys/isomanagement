@@ -97,7 +97,7 @@ class SupplierResponse(SupplierBase):
     next_evaluation_date: Optional[datetime] = None
     materials_count: int = 0
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Made optional
     created_by: int
 
     class Config:
@@ -149,7 +149,7 @@ class MaterialResponse(MaterialBase):
     is_active: bool
     approval_status: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Made optional
     created_by: int
 
     class Config:
@@ -165,6 +165,7 @@ class SupplierEvaluationBase(BaseModel):
     price_score: Optional[float] = Field(None, ge=1, le=5)
     communication_score: Optional[float] = Field(None, ge=1, le=5)
     technical_support_score: Optional[float] = Field(None, ge=1, le=5)
+    hygiene_score: Optional[float] = Field(None, ge=1, le=5)
     quality_comments: Optional[str] = None
     delivery_comments: Optional[str] = None
     price_comments: Optional[str] = None
@@ -190,6 +191,7 @@ class SupplierEvaluationUpdate(BaseModel):
     price_score: Optional[float] = Field(None, ge=1, le=5)
     communication_score: Optional[float] = Field(None, ge=1, le=5)
     technical_support_score: Optional[float] = Field(None, ge=1, le=5)
+    hygiene_score: Optional[float] = Field(None, ge=1, le=5)
     overall_score: Optional[float] = None
     quality_comments: Optional[str] = None
     delivery_comments: Optional[str] = None
@@ -212,7 +214,7 @@ class SupplierEvaluationResponse(SupplierEvaluationBase):
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Made optional
 
     class Config:
         from_attributes = True
@@ -266,7 +268,7 @@ class IncomingDeliveryResponse(IncomingDeliveryBase):
     non_conformances: Optional[List[str]] = None
     corrective_actions: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Made optional
     created_by: int
 
     class Config:
@@ -314,7 +316,7 @@ class SupplierDocumentResponse(SupplierDocumentBase):
     verified_by: Optional[int] = None
     verified_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Made optional
     created_by: int
 
     class Config:
@@ -461,7 +463,7 @@ class InspectionChecklistResponse(InspectionChecklistBase):
     passed_items: int
     failed_items: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Made optional
     created_by: int
 
     class Config:
