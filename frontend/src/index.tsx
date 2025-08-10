@@ -7,6 +7,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 
 import App from './App';
 import { store } from './store';
+import AuthProvider from './components/Auth/AuthProvider';
 import './index.css';
 
 // Create Material-UI theme
@@ -55,7 +56,9 @@ root.render(
       <BrowserRouter>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
     </Provider>

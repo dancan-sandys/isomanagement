@@ -112,7 +112,7 @@ const rbacSlice = createSlice({
       })
       .addCase(fetchRoles.fulfilled, (state, action) => {
         state.loading = false;
-        state.roles = action.payload.items;
+        state.roles = action.payload;
       })
       .addCase(fetchRoles.rejected, (state, action) => {
         state.loading = false;
@@ -142,7 +142,7 @@ const rbacSlice = createSlice({
       })
       .addCase(createRole.fulfilled, (state, action) => {
         state.loading = false;
-        state.roles.push(action.payload.data);
+        state.roles.push(action.payload);
       })
       .addCase(createRole.rejected, (state, action) => {
         state.loading = false;
@@ -212,7 +212,7 @@ const rbacSlice = createSlice({
       })
       .addCase(fetchRoleSummary.fulfilled, (state, action) => {
         state.loading = false;
-        state.roleSummary = action.payload;
+        state.roleSummary = action.payload.data;
       })
       .addCase(fetchRoleSummary.rejected, (state, action) => {
         state.loading = false;
@@ -227,7 +227,7 @@ const rbacSlice = createSlice({
       })
       .addCase(fetchPermissionMatrix.fulfilled, (state, action) => {
         state.loading = false;
-        state.permissionMatrix = action.payload;
+        state.permissionMatrix = action.payload.data;
       })
       .addCase(fetchPermissionMatrix.rejected, (state, action) => {
         state.loading = false;

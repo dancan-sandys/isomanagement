@@ -276,6 +276,9 @@ def create_default_roles():
                     (Module.NOTIFICATIONS, PermissionType.UPDATE),
                     (Module.SETTINGS, PermissionType.VIEW),
                     (Module.SETTINGS, PermissionType.UPDATE),
+                    (Module.USERS, PermissionType.VIEW),
+                    (Module.USERS, PermissionType.CREATE),
+                    (Module.USERS, PermissionType.UPDATE),
                 ]
             },
             {
@@ -453,26 +456,51 @@ def create_default_roles():
         db.close()
 
 def update_existing_users():
-    """Update existing users to have the default System Administrator role"""
+    """Update existing users to have their correct roles based on their usernames"""
     print("Updating existing users...")
     
     db = SessionLocal()
     try:
-        # Get the System Administrator role
-        admin_role = db.query(Role).filter(Role.name == "System Administrator").first()
-        if not admin_role:
-            print("❌ System Administrator role not found")
-            return
+        # Get all roles
+        roles = db.query(Role).all()
+        role_mapping = {role.name: role.id for role in roles}
         
-        # Update existing users to have the admin role
+        # Define user role mappings based on username patterns
+        user_role_mappings = {
+            'admin': 'System Administrator',
+            'qa_manager': 'QA Manager',
+            'qa_specialist': 'QA Manager',
+            'prod_manager': 'Production Manager',
+            'prod_operator1': 'Line Operator',
+            'prod_operator2': 'Line Operator',
+            'maintenance': 'Maintenance Engineer',
+            'lab_tech': 'QA Manager',
+            'new_user': 'Compliance Officer',
+            'inactive_user': 'Line Operator'
+        }
+        
+        # Update existing users to have their correct roles
         users = db.query(User).all()
+        updated_count = 0
+        
         for user in users:
-            if not hasattr(user, 'role_id') or user.role_id is None:
-                user.role_id = admin_role.id
-                print(f"✅ Updated user {user.username} to System Administrator role")
+            if user.username in user_role_mappings:
+                role_name = user_role_mappings[user.username]
+                role_id = role_mapping.get(role_name)
+                
+                if role_id and user.role_id != role_id:
+                    user.role_id = role_id
+                    print(f"✅ Updated user {user.username} to {role_name} role")
+                    updated_count += 1
+                elif role_id:
+                    print(f"ℹ️  User {user.username} already has correct {role_name} role")
+                else:
+                    print(f"⚠️  Role '{role_name}' not found for user {user.username}")
+            else:
+                print(f"⚠️  No role mapping found for user {user.username}")
         
         db.commit()
-        print("✅ All existing users updated successfully")
+        print(f"✅ Updated {updated_count} users with correct roles")
         
     except Exception as e:
         db.rollback()

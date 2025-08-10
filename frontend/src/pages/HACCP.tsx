@@ -31,13 +31,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   CircularProgress,
-  Fab,
   Tabs,
   Tab,
 } from '@mui/material';
@@ -46,20 +40,10 @@ import {
   Security,
   Warning,
   CheckCircle,
-  Schedule,
   Add,
   Edit,
-  Visibility,
-  TrendingUp,
-  TrendingDown,
   Science,
-  Assessment,
-  Timeline,
-  BarChart,
-  Report,
-  Settings,
   Delete,
-  Refresh,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
@@ -106,7 +90,6 @@ function TabPanel(props: TabPanelProps) {
 
 const HACCP: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
   const { 
     products, 
@@ -135,13 +118,10 @@ const HACCP: React.FC = () => {
   const canCreateProducts = hasRole(currentUser, 'QA Manager') || 
                            isSystemAdministrator(currentUser);
 
-  const canApprovePlans = hasRole(currentUser, 'QA Manager') || 
-                         isSystemAdministrator(currentUser);
-
   useEffect(() => {
     loadDashboard();
     loadProducts();
-  }, []);
+  }, [dispatch]);
 
   const loadDashboard = () => {
     dispatch(fetchDashboard());
@@ -159,34 +139,9 @@ const HACCP: React.FC = () => {
     setSelectedTab(newValue);
   };
 
-  const handleAccordionChange = (panel: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
-    setExpanded(isExpanded ? panel : false);
-  };
-
   const handleProductSelect = (product: any) => {
     dispatch(setSelectedProduct(product));
     loadProductDetails(product.id);
-  };
-
-  const handleCreateProduct = async (productData: any) => {
-    try {
-      await dispatch(createProduct(productData)).unwrap();
-      setProductDialogOpen(false);
-      loadProducts();
-    } catch (error) {
-      console.error('Failed to create product:', error);
-    }
-  };
-
-  const handleUpdateProduct = async (productId: number, productData: any) => {
-    try {
-      await dispatch(updateProduct({ productId, productData })).unwrap();
-      setProductDialogOpen(false);
-      setSelectedProductForEdit(null);
-      loadProducts();
-    } catch (error) {
-      console.error('Failed to update product:', error);
-    }
   };
 
   const handleDeleteProduct = async (productId: number) => {
@@ -201,38 +156,7 @@ const HACCP: React.FC = () => {
     }
   };
 
-  const handleCreateProcessFlow = async (flowData: any) => {
-    if (!selectedProduct) return;
-    try {
-      await dispatch(createProcessFlow({ productId: selectedProduct.id, flowData })).unwrap();
-      setProcessFlowDialogOpen(false);
-      loadProductDetails(selectedProduct.id);
-    } catch (error) {
-      console.error('Failed to create process flow:', error);
-    }
-  };
 
-  const handleCreateHazard = async (hazardData: any) => {
-    if (!selectedProduct) return;
-    try {
-      await dispatch(createHazard({ productId: selectedProduct.id, hazardData })).unwrap();
-      setHazardDialogOpen(false);
-      loadProductDetails(selectedProduct.id);
-    } catch (error) {
-      console.error('Failed to create hazard:', error);
-    }
-  };
-
-  const handleCreateCCP = async (ccpData: any) => {
-    if (!selectedProduct) return;
-    try {
-      await dispatch(createCCP({ productId: selectedProduct.id, ccpData })).unwrap();
-      setCcpDialogOpen(false);
-      loadProductDetails(selectedProduct.id);
-    } catch (error) {
-      console.error('Failed to create CCP:', error);
-    }
-  };
 
   const getRiskLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
@@ -244,14 +168,7 @@ const HACCP: React.FC = () => {
     }
   };
 
-  const getCCPStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active': return 'success';
-      case 'inactive': return 'default';
-      case 'suspended': return 'warning';
-      default: return 'default';
-    }
-  };
+
 
   const getHazardTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
@@ -614,11 +531,7 @@ const HACCP: React.FC = () => {
                       {ccp.description}
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                      <Chip
-                        label={ccp.status}
-                        color={getCCPStatusColor(ccp.status) as any}
-                        size="small"
-                      />
+                      <StatusChip status={ccp.status} label={ccp.status} />
                     </Stack>
                     {ccp.critical_limit_min && ccp.critical_limit_max && (
                       <Typography variant="body2" color="textSecondary">

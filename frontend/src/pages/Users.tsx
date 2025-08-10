@@ -52,11 +52,10 @@ import {
   Business as BusinessIcon,
   Work as WorkIcon,
   CalendarToday as CalendarIcon,
-  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { usersAPI } from '../services/api';
 import { RootState } from '../store';
-import { canManageUsers, isSystemAdministrator } from '../store/slices/authSlice';
+import { canManageUsers } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
 
 // Interfaces
@@ -143,31 +142,13 @@ const Users: React.FC = () => {
 
   // Helper function to format error messages
   const formatErrorMessage = (error: any): string => {
-    if (typeof error === 'string') {
-      return error;
-    }
-    
+    if (typeof error === 'string') return error;
     if (error?.response?.data?.detail) {
       const detail = error.response.data.detail;
-      
-      // Handle array of validation errors
-      if (Array.isArray(detail)) {
-        return detail.map((err: any) => 
-          typeof err === 'string' ? err : err.msg || 'Validation error'
-        ).join(', ');
-      }
-      
-      // Handle single validation error object
-      if (typeof detail === 'object' && detail.msg) {
-        return detail.msg;
-      }
-      
-      // Handle string detail
-      if (typeof detail === 'string') {
-        return detail;
-      }
+      if (Array.isArray(detail)) return detail.map((err: any) => (typeof err === 'string' ? err : err.msg || 'Validation error')).join(', ');
+      if (typeof detail === 'object' && detail.msg) return detail.msg;
+      if (typeof detail === 'string') return detail;
     }
-    
     return 'An unexpected error occurred';
   };
 
@@ -186,7 +167,6 @@ const Users: React.FC = () => {
       const response = await usersAPI.getDashboard();
       setDashboardData(response.data);
     } catch (err: any) {
-      console.error('Failed to load dashboard data:', err);
       setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
@@ -196,37 +176,21 @@ const Users: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      // Filter out empty string parameters for enum fields
-      const params: any = {
-        page: pagination.page,
-        size: pagination.size,
-      };
-      
-      if (userFilters.search && userFilters.search.trim() !== '') {
-        params.search = userFilters.search;
-      }
-      if (userFilters.role && userFilters.role.trim() !== '') {
-        params.role_id = parseInt(userFilters.role);
-      }
-      if (userFilters.status && userFilters.status.trim() !== '') {
-        params.status = userFilters.status;
-      }
-      if (userFilters.department && userFilters.department.trim() !== '') {
-        params.department = userFilters.department;
-      }
-      
+      const params: any = { page: pagination.page, size: pagination.size };
+      if (userFilters.search?.trim()) params.search = userFilters.search;
+      if (userFilters.role?.trim()) params.role_id = parseInt(userFilters.role);
+      if (userFilters.status?.trim()) params.status = userFilters.status;
+      if (userFilters.department?.trim()) params.department = userFilters.department;
       const response = await usersAPI.getUsers(params);
-      
       setUsers(response.data.items || []);
       setPagination({
         page: response.data.page || 1,
         size: response.data.size || 10,
         total: response.data.total || 0,
-        pages: response.data.pages || 0
+        pages: response.data.pages || 0,
       });
     } catch (err: any) {
       setError(formatErrorMessage(err));
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -236,16 +200,12 @@ const Users: React.FC = () => {
   const handleCreateUser = async () => {
     try {
       setLoading(true);
-      await usersAPI.createUser({
-        ...userForm,
-        role_id: parseInt(userForm.role_id),
-      });
+      await usersAPI.createUser({ ...userForm, role_id: parseInt(userForm.role_id) });
       setUserDialogOpen(false);
       resetUserForm();
       fetchUsers();
     } catch (err: any) {
       setError(formatErrorMessage(err));
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -255,37 +215,27 @@ const Users: React.FC = () => {
     try {
       setLoading(true);
       const updateData: any = { ...userForm };
-      if (userForm.role_id) {
-        updateData.role_id = parseInt(userForm.role_id);
-      }
-      if (!userForm.password) {
-        delete updateData.password;
-      }
-      
+      if (userForm.role_id) updateData.role_id = parseInt(userForm.role_id);
+      if (!userForm.password) delete updateData.password;
       await usersAPI.updateUser(userId, updateData);
       setUserDialogOpen(false);
       resetUserForm();
       fetchUsers();
     } catch (err: any) {
       setError(formatErrorMessage(err));
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-    
+    if (!window.confirm('Are you sure you want to delete this user?')) return;
     try {
       setLoading(true);
       await usersAPI.deleteUser(userId);
       fetchUsers();
     } catch (err: any) {
       setError(formatErrorMessage(err));
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -298,7 +248,6 @@ const Users: React.FC = () => {
       fetchUsers();
     } catch (err: any) {
       setError(formatErrorMessage(err));
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -311,7 +260,6 @@ const Users: React.FC = () => {
       fetchUsers();
     } catch (err: any) {
       setError(formatErrorMessage(err));
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -328,7 +276,7 @@ const Users: React.FC = () => {
       position: '',
       phone: '',
       employee_id: '',
-      bio: ''
+      bio: '',
     });
     setSelectedUser(null);
   };
@@ -357,22 +305,11 @@ const Users: React.FC = () => {
     }
   };
 
-  const getRoleDisplayName = (role: string) => {
-    return role.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-  };
+  const getRoleDisplayName = (role: string) => role.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  const getStatusDisplayName = (status: string) => status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
 
-  const getStatusDisplayName = (status: string) => {
-    return status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-  };
-
-  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
-    setPagination(prev => ({ ...prev, page }));
-  };
-
-  const handleFilterApply = () => {
-    setPagination(prev => ({ ...prev, page: 1 }));
-    fetchUsers();
-  };
+  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => setPagination(prev => ({ ...prev, page }));
+  const handleFilterApply = () => { setPagination(prev => ({ ...prev, page: 1 })); fetchUsers(); };
 
   // If user doesn't have permission, show access denied
   if (!hasUserManagementPermission) {
@@ -380,9 +317,7 @@ const Users: React.FC = () => {
       <Box sx={{ p: 3 }}>
         <Alert severity="error">
           <Typography variant="h6">Access Denied</Typography>
-          <Typography variant="body2">
-            You don't have permission to access user management. Please contact your system administrator.
-          </Typography>
+          <Typography variant="body2">You don't have permission to access user management. Please contact your system administrator.</Typography>
         </Alert>
       </Box>
     );
@@ -395,137 +330,78 @@ const Users: React.FC = () => {
         subtitle="Manage system users, roles, and permissions"
         breadcrumbs={[
           { label: 'Dashboard', path: '/' },
-          { label: 'Users', path: '/users' }
+          { label: 'Users', path: '/users' },
         ]}
       />
 
-      {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
+        <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)}>
           <Tab label="Dashboard" icon={<AssessmentIcon />} />
           <Tab label="User Management" icon={<GroupIcon />} />
           <Tab label="Training & Competency" icon={<SchoolIcon />} />
         </Tabs>
       </Box>
 
-      {/* Tab Content */}
       {activeTab === 0 && (
         <Box>
-          <Typography variant="h4" gutterBottom>
-            User Management Dashboard
-          </Typography>
-          
+          <Typography variant="h4" gutterBottom>User Management Dashboard</Typography>
           {loading && <LinearProgress />}
-          
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
           {dashboardData && (
             <Grid container spacing={3}>
-              {/* Summary Cards */}
               <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Total Users
-                    </Typography>
-                    <Typography variant="h4">
-                      {dashboardData.total_users}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {dashboardData.active_users} active, {dashboardData.inactive_users} inactive
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <Card><CardContent>
+                  <Typography color="textSecondary" gutterBottom>Total Users</Typography>
+                  <Typography variant="h4">{dashboardData.total_users}</Typography>
+                  <Typography variant="body2" color="textSecondary">{dashboardData.active_users} active, {dashboardData.inactive_users} inactive</Typography>
+                </CardContent></Card>
               </Grid>
-              
               <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Active Users
-                    </Typography>
-                    <Typography variant="h4" color="success.main">
-                      {dashboardData.active_users}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {dashboardData.recent_logins} logged in today
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <Card><CardContent>
+                  <Typography color="textSecondary" gutterBottom>Active Users</Typography>
+                  <Typography variant="h4" color="success.main">{dashboardData.active_users}</Typography>
+                  <Typography variant="body2" color="textSecondary">{dashboardData.recent_logins} logged in today</Typography>
+                </CardContent></Card>
               </Grid>
-              
               <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Pending Approval
-                    </Typography>
-                    <Typography variant="h4" color="warning.main">
-                      {dashboardData.pending_approval}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Awaiting activation
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <Card><CardContent>
+                  <Typography color="textSecondary" gutterBottom>Pending Approval</Typography>
+                  <Typography variant="h4" color="warning.main">{dashboardData.pending_approval}</Typography>
+                  <Typography variant="body2" color="textSecondary">Awaiting activation</Typography>
+                </CardContent></Card>
               </Grid>
-              
               <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Training Alerts
-                    </Typography>
-                    <Typography variant="h4" color="error.main">
-                      {dashboardData.training_overdue}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {dashboardData.competencies_expiring} competencies expiring
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <Card><CardContent>
+                  <Typography color="textSecondary" gutterBottom>Training Alerts</Typography>
+                  <Typography variant="h4" color="error.main">{dashboardData.training_overdue}</Typography>
+                  <Typography variant="body2" color="textSecondary">{dashboardData.competencies_expiring} competencies expiring</Typography>
+                </CardContent></Card>
               </Grid>
-
-              {/* Users by Role */}
               <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Users by Role
-                    </Typography>
-                    <Box>
-                      {Object.entries(dashboardData.users_by_role).map(([role, count]) => (
-                        <Box key={role} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography>{getRoleDisplayName(role)}</Typography>
-                          <Chip label={count} color={getRoleColor(role)} size="small" />
-                        </Box>
-                      ))}
-                    </Box>
-                  </CardContent>
-                </Card>
+                <Card><CardContent>
+                  <Typography variant="h6" gutterBottom>Users by Role</Typography>
+                  <Box>
+                    {Object.entries(dashboardData.users_by_role).map(([role, count]) => (
+                      <Box key={role} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography>{getRoleDisplayName(role)}</Typography>
+                        <Chip label={count} color={getRoleColor(role)} size="small" />
+                      </Box>
+                    ))}
+                  </Box>
+                </CardContent></Card>
               </Grid>
-
-              {/* Users by Department */}
               <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Users by Department
-                    </Typography>
-                    <Box>
-                      {Object.entries(dashboardData.users_by_department).map(([dept, count]) => (
-                        <Box key={dept} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography>{dept}</Typography>
-                          <Chip label={count} color="primary" size="small" />
-                        </Box>
-                      ))}
-                    </Box>
-                  </CardContent>
-                </Card>
+                <Card><CardContent>
+                  <Typography variant="h6" gutterBottom>Users by Department</Typography>
+                  <Box>
+                    {Object.entries(dashboardData.users_by_department).map(([dept, count]) => (
+                      <Box key={dept} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography>{dept}</Typography>
+                        <Chip label={count} color="primary" size="small" />
+                      </Box>
+                    ))}
+                  </Box>
+                </CardContent></Card>
               </Grid>
             </Grid>
           )}
@@ -535,29 +411,17 @@ const Users: React.FC = () => {
       {activeTab === 1 && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4">
-              User Management
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setUserDialogOpen(true)}
-            >
-              Add New User
-            </Button>
+            <Typography variant="h4">User Management</Typography>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setUserDialogOpen(true)}>Add New User</Button>
           </Box>
 
-          {/* Filters */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={3}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Role</InputLabel>
-                    <Select
-                      value={userFilters.role}
-                      onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}
-                    >
+                    <Select value={userFilters.role} onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}>
                       <MenuItem value="">All Roles</MenuItem>
                       <MenuItem value="1">System Administrator</MenuItem>
                       <MenuItem value="2">QA Manager</MenuItem>
@@ -572,10 +436,7 @@ const Users: React.FC = () => {
                 <Grid item xs={12} md={3}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Status</InputLabel>
-                    <Select
-                      value={userFilters.status}
-                      onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}
-                    >
+                    <Select value={userFilters.status} onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}>
                       <MenuItem value="">All Statuses</MenuItem>
                       <MenuItem value="ACTIVE">Active</MenuItem>
                       <MenuItem value="INACTIVE">Inactive</MenuItem>
@@ -585,32 +446,15 @@ const Users: React.FC = () => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Search users..."
-                    value={userFilters.search}
-                    onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })}
-                    InputProps={{
-                      startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                  />
+                  <TextField fullWidth size="small" placeholder="Search users..." value={userFilters.search} onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })} InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} /> }} />
                 </Grid>
                 <Grid item xs={12} md={2}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FilterIcon />}
-                    onClick={handleFilterApply}
-                    fullWidth
-                  >
-                    Apply Filters
-                  </Button>
+                  <Button variant="outlined" startIcon={<FilterIcon />} onClick={handleFilterApply} fullWidth>Apply Filters</Button>
                 </Grid>
               </Grid>
             </CardContent>
           </Card>
 
-          {/* Users Table */}
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -629,81 +473,31 @@ const Users: React.FC = () => {
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Avatar sx={{ mr: 2 }}>
-                          {user.profile_picture ? (
-                            <img src={user.profile_picture} alt={user.full_name} />
-                          ) : (
-                            <PersonIcon />
-                          )}
+                          {user.profile_picture ? <img src={user.profile_picture} alt={user.full_name} /> : <PersonIcon />}
                         </Avatar>
                         <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {user.full_name}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {user.username} • {user.email}
-                          </Typography>
+                          <Typography variant="body2" fontWeight="bold">{user.full_name}</Typography>
+                          <Typography variant="caption" color="textSecondary">{user.username} • {user.email}</Typography>
                         </Box>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getRoleDisplayName(user.role_name || 'Unknown')} 
-                        color={getRoleColor(user.role_name || '')}
-                        size="small"
-                      />
+                      <Chip label={getRoleDisplayName(user.role_name || 'Unknown')} color={getRoleColor(user.role_name || '')} size="small" />
                     </TableCell>
                     <TableCell>{user.department || '-'}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getStatusDisplayName(user.status)} 
-                        color={getStatusColor(user.status)}
-                        size="small"
-                      />
+                      <Chip label={getStatusDisplayName(user.status)} color={getStatusColor(user.status)} size="small" />
                     </TableCell>
+                    <TableCell>{user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</TableCell>
                     <TableCell>
-                      {user.last_login ? (
-                        new Date(user.last_login).toLocaleDateString()
-                      ) : (
-                        'Never'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small" onClick={() => {
-                        setSelectedUser(user);
-                        setViewUserDialogOpen(true);
-                      }}>
-                        <VisibilityIcon />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => {
-                        setSelectedUser(user);
-                        setUserForm({
-                          username: user.username,
-                          email: user.email,
-                          full_name: user.full_name,
-                          password: '',
-                          role_id: user.role_id.toString(),
-                          department: user.department || '',
-                          position: user.position || '',
-                          phone: user.phone || '',
-                          employee_id: user.employee_id || '',
-                          bio: user.bio || ''
-                        });
-                        setUserDialogOpen(true);
-                      }}>
-                        <EditIcon />
-                      </IconButton>
+                      <IconButton size="small" onClick={() => { setSelectedUser(user); setViewUserDialogOpen(true); }}><VisibilityIcon /></IconButton>
+                      <IconButton size="small" onClick={() => { setSelectedUser(user); setUserForm({ username: user.username, email: user.email, full_name: user.full_name, password: '', role_id: user.role_id.toString(), department: user.department || '', position: user.position || '', phone: user.phone || '', employee_id: user.employee_id || '', bio: user.bio || '' }); setUserDialogOpen(true); }}><EditIcon /></IconButton>
                       {user.is_active ? (
-                        <IconButton size="small" onClick={() => handleDeactivateUser(user.id)}>
-                          <LockIcon />
-                        </IconButton>
+                        <IconButton size="small" onClick={() => handleDeactivateUser(user.id)}><LockIcon /></IconButton>
                       ) : (
-                        <IconButton size="small" onClick={() => handleActivateUser(user.id)}>
-                          <LockOpenIcon />
-                        </IconButton>
+                        <IconButton size="small" onClick={() => handleActivateUser(user.id)}><LockOpenIcon /></IconButton>
                       )}
-                      <IconButton size="small" onClick={() => handleDeleteUser(user.id)}>
-                        <DeleteIcon />
-                      </IconButton>
+                      <IconButton size="small" onClick={() => handleDeleteUser(user.id)}><DeleteIcon /></IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -711,15 +505,9 @@ const Users: React.FC = () => {
             </Table>
           </TableContainer>
 
-          {/* Pagination */}
           {pagination.pages > 1 && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-              <Pagination
-                count={pagination.pages}
-                page={pagination.page}
-                onChange={handlePageChange}
-                color="primary"
-              />
+              <Pagination count={pagination.pages} page={pagination.page} onChange={handlePageChange} color="primary" />
             </Box>
           )}
         </Box>
@@ -727,66 +515,24 @@ const Users: React.FC = () => {
 
       {activeTab === 2 && (
         <Box>
-          <Typography variant="h4" gutterBottom>
-            Training & Competency Management
-          </Typography>
-          <Typography variant="body1" color="textSecondary">
-            This section will include training records, competency matrices, and skill assessments.
-          </Typography>
+          <Typography variant="h4" gutterBottom>Training & Competency Management</Typography>
+          <Typography variant="body1" color="textSecondary">This section will include training records, competency matrices, and skill assessments.</Typography>
         </Box>
       )}
 
       {/* Create/Edit User Dialog */}
       <Dialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedUser ? 'Edit User' : 'Create New User'}
-        </DialogTitle>
+        <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Username"
-                value={userForm.username}
-                onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                disabled={!!selectedUser}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Email"
-                type="email"
-                value={userForm.email}
-                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Full Name"
-                value={userForm.full_name}
-                onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Password"
-                type="password"
-                value={userForm.password}
-                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                disabled={!!selectedUser}
-                helperText={selectedUser ? 'Leave blank to keep current password' : ''}
-              />
-            </Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Username" value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!selectedUser} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Email" type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Full Name" value={userForm.full_name} onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} disabled={!!selectedUser} helperText={selectedUser ? 'Leave blank to keep current password' : ''} /></Grid>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Role</InputLabel>
-                <Select
-                  value={userForm.role_id}
-                  onChange={(e) => setUserForm({ ...userForm, role_id: e.target.value })}
-                >
+                <Select value={userForm.role_id} onChange={(e) => setUserForm({ ...userForm, role_id: e.target.value })}>
                   <MenuItem value="1">System Administrator</MenuItem>
                   <MenuItem value="2">QA Manager</MenuItem>
                   <MenuItem value="3">QA Specialist</MenuItem>
@@ -798,60 +544,16 @@ const Users: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Department"
-                value={userForm.department}
-                onChange={(e) => setUserForm({ ...userForm, department: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Position"
-                value={userForm.position}
-                onChange={(e) => setUserForm({ ...userForm, position: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Phone"
-                value={userForm.phone}
-                onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Employee ID"
-                value={userForm.employee_id}
-                onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Bio"
-                multiline
-                rows={3}
-                value={userForm.bio}
-                onChange={(e) => setUserForm({ ...userForm, bio: e.target.value })}
-              />
-            </Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Department" value={userForm.department} onChange={(e) => setUserForm({ ...userForm, department: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Position" value={userForm.position} onChange={(e) => setUserForm({ ...userForm, position: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Phone" value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Employee ID" value={userForm.employee_id} onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })} /></Grid>
+            <Grid item xs={12}><TextField fullWidth label="Bio" multiline rows={3} value={userForm.bio} onChange={(e) => setUserForm({ ...userForm, bio: e.target.value })} /></Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setUserDialogOpen(false);
-            resetUserForm();
-          }}>Cancel</Button>
-          <Button 
-            onClick={() => selectedUser ? handleUpdateUser(selectedUser.id) : handleCreateUser()} 
-            variant="contained" 
-            disabled={loading}
-          >
+          <Button onClick={() => { setUserDialogOpen(false); resetUserForm(); }}>Cancel</Button>
+          <Button onClick={() => (selectedUser ? handleUpdateUser(selectedUser.id) : handleCreateUser())} variant="contained" disabled={loading}>
             {loading ? <CircularProgress size={20} /> : (selectedUser ? 'Update User' : 'Create User')}
           </Button>
         </DialogActions>
@@ -865,82 +567,25 @@ const Users: React.FC = () => {
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12} sx={{ textAlign: 'center', mb: 2 }}>
                 <Avatar sx={{ width: 80, height: 80, mx: 'auto', mb: 2 }}>
-                  {selectedUser.profile_picture ? (
-                    <img src={selectedUser.profile_picture} alt={selectedUser.full_name} />
-                  ) : (
-                    <PersonIcon sx={{ fontSize: 40 }} />
-                  )}
+                  {selectedUser.profile_picture ? <img src={selectedUser.profile_picture} alt={selectedUser.full_name} /> : <PersonIcon sx={{ fontSize: 40 }} />}
                 </Avatar>
                 <Typography variant="h5">{selectedUser.full_name}</Typography>
                 <Typography variant="body2" color="textSecondary">{selectedUser.username}</Typography>
               </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="body2">{selectedUser.email}</Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <PhoneIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="body2">{selectedUser.phone || 'Not provided'}</Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <BusinessIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="body2">{selectedUser.department || 'Not assigned'}</Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <WorkIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="body2">{selectedUser.position || 'Not assigned'}</Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="body2">
-                    Last login: {selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : 'Never'}
-                  </Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="body2">
-                    Created: {new Date(selectedUser.created_at).toLocaleDateString()}
-                  </Typography>
-                </Box>
-              </Grid>
-              
+              <Grid item xs={12} md={6}><Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><EmailIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="body2">{selectedUser.email}</Typography></Box></Grid>
+              <Grid item xs={12} md={6}><Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><PhoneIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="body2">{selectedUser.phone || 'Not provided'}</Typography></Box></Grid>
+              <Grid item xs={12} md={6}><Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><BusinessIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="body2">{selectedUser.department || 'Not assigned'}</Typography></Box></Grid>
+              <Grid item xs={12} md={6}><Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><WorkIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="body2">{selectedUser.position || 'Not assigned'}</Typography></Box></Grid>
+              <Grid item xs={12} md={6}><Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="body2">Last login: {selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : 'Never'}</Typography></Box></Grid>
+              <Grid item xs={12} md={6}><Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="body2">Created: {new Date(selectedUser.created_at).toLocaleDateString()}</Typography></Box></Grid>
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>Account Status</Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Chip 
-                    label={getRoleDisplayName(selectedUser.role_name || 'Unknown')} 
-                    color={getRoleColor(selectedUser.role_name || '')}
-                  />
-                  <Chip 
-                    label={getStatusDisplayName(selectedUser.status)} 
-                    color={getStatusColor(selectedUser.status)}
-                  />
-                  <Chip 
-                    label={selectedUser.is_active ? 'Active' : 'Inactive'} 
-                    color={selectedUser.is_active ? 'success' : 'error'}
-                  />
-                  <Chip 
-                    label={selectedUser.is_verified ? 'Verified' : 'Unverified'} 
-                    color={selectedUser.is_verified ? 'success' : 'warning'}
-                  />
+                  <Chip label={getRoleDisplayName(selectedUser.role_name || 'Unknown')} color={getRoleColor(selectedUser.role_name || '')} />
+                  <Chip label={getStatusDisplayName(selectedUser.status)} color={getStatusColor(selectedUser.status)} />
+                  <Chip label={selectedUser.is_active ? 'Active' : 'Inactive'} color={selectedUser.is_active ? 'success' : 'error'} />
+                  <Chip label={selectedUser.is_verified ? 'Verified' : 'Unverified'} color={selectedUser.is_verified ? 'success' : 'warning'} />
                 </Box>
               </Grid>
             </Grid>

@@ -76,8 +76,8 @@ class Document(Base):
     
     # Relationships
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
-    approvals = relationship("DocumentApproval", back_populates="document")
-    change_logs = relationship("DocumentChangeLog", back_populates="document")
+    approvals = relationship("DocumentApproval", back_populates="document", cascade="all, delete-orphan")
+    change_logs = relationship("DocumentChangeLog", back_populates="document", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Document(id={self.id}, document_number='{self.document_number}', title='{self.title}')>"

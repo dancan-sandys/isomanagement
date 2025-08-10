@@ -34,14 +34,9 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon,
-  QrCode as QrCodeIcon,
-  Timeline as TimelineIcon,
   Warning as WarningIcon,
   Visibility as VisibilityIcon,
   Edit as EditIcon,
-  Print as PrintIcon,
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
   Inventory as InventoryIcon,
@@ -150,13 +145,13 @@ const Traceability: React.FC = () => {
   });
 
   // Filter states
-  const [batchFilters, setBatchFilters] = useState({
+  const [batchFilters] = useState({
     batch_type: '',
     status: '',
     search: ''
   });
 
-  const [recallFilters, setRecallFilters] = useState({
+  const [recallFilters] = useState({
     status: '',
     recall_type: '',
     search: ''
@@ -168,6 +163,7 @@ const Traceability: React.FC = () => {
     fetchBatches();
     fetchRecalls();
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // API calls

@@ -12,7 +12,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
 } from '@mui/material';
 import {
   Dashboard,
@@ -22,14 +21,7 @@ import {
   LocalShipping,
   Description,
   Add,
-  Settings,
   Analytics,
-  Notifications,
-  Timeline,
-  Assessment as AssessmentIcon,
-  LocalShipping as LocalShippingIcon,
-  Inventory as InventoryIcon,
-  Description as DescriptionIcon,
 } from '@mui/icons-material';
 import {
   fetchSupplierDashboard,
@@ -101,7 +93,6 @@ const Suppliers: React.FC = () => {
   const handleSaveSupplier = (supplier: Supplier) => {
     setShowSupplierForm(false);
     setSelectedSupplier(null);
-    // Refresh data
     loadInitialData();
   };
 
@@ -111,17 +102,14 @@ const Suppliers: React.FC = () => {
   };
 
   const handleViewMaterial = (material: Material) => {
-    // Navigate to material detail or open material dialog
     console.log('View material:', material);
   };
 
   const handleEditMaterial = (material: Material) => {
-    // Navigate to material edit or open material dialog
     console.log('Edit material:', material);
   };
 
   const handleCreateMaterial = () => {
-    // Navigate to material creation or open material dialog
     console.log('Create material');
   };
 
@@ -150,33 +138,33 @@ const Suppliers: React.FC = () => {
           <Box p={3}>
             <Typography variant="h6" gutterBottom>
               Evaluations
-                  </Typography>
-                      <Typography variant="body2" color="text.secondary">
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
               Evaluation management component will be implemented here.
-                      </Typography>
-                    </Box>
+            </Typography>
+          </Box>
         );
       case 4:
         return (
           <Box p={3}>
-        <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" gutterBottom>
               Deliveries
-        </Typography>
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               Delivery management component will be implemented here.
-        </Typography>
-      </Box>
+            </Typography>
+          </Box>
         );
       case 5:
         return (
           <Box p={3}>
-        <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" gutterBottom>
               Documents
-        </Typography>
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               Document management component will be implemented here.
-        </Typography>
-      </Box>
+            </Typography>
+          </Box>
         );
       default:
         return null;
@@ -189,7 +177,7 @@ const Suppliers: React.FC = () => {
         <LinearProgress />
         <Typography sx={{ mt: 2 }}>Loading supplier management system...</Typography>
       </Box>
-  );
+    );
   }
 
   return (
@@ -212,13 +200,13 @@ const Suppliers: React.FC = () => {
           >
             Dashboard
           </Button>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
+          <Button
+            variant="contained"
+            startIcon={<Add />}
             onClick={handleCreateSupplier}
-        >
-          New Supplier
-        </Button>
+          >
+            New Supplier
+          </Button>
         </Box>
       </Box>
 
@@ -236,36 +224,12 @@ const Suppliers: React.FC = () => {
           onChange={handleTabChange}
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab 
-            icon={<Dashboard />} 
-            label="Dashboard" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<Business />} 
-            label="Suppliers" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<Inventory />} 
-            label="Materials" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<Assessment />} 
-            label="Evaluations" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<LocalShipping />} 
-            label="Deliveries" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<Description />} 
-            label="Documents" 
-            iconPosition="start"
-          />
+          <Tab icon={<Dashboard />} label="Dashboard" iconPosition="start" />
+          <Tab icon={<Business />} label="Suppliers" iconPosition="start" />
+          <Tab icon={<Inventory />} label="Materials" iconPosition="start" />
+          <Tab icon={<Assessment />} label="Evaluations" iconPosition="start" />
+          <Tab icon={<LocalShipping />} label="Deliveries" iconPosition="start" />
+          <Tab icon={<Description />} label="Documents" iconPosition="start" />
         </Tabs>
       </Paper>
 
@@ -277,7 +241,7 @@ const Suppliers: React.FC = () => {
         open={showSupplierForm} 
         onClose={handleCancelSupplier}
         maxWidth="lg"
-                  fullWidth
+        fullWidth
       >
         <DialogTitle>
           {formMode === 'create' ? 'Create New Supplier' : 
