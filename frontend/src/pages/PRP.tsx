@@ -41,6 +41,8 @@ import {
   FormControlLabel,
   CircularProgress,
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
+import { usersAPI } from '../services/api';
 import {
   Add,
   Visibility,
@@ -83,6 +85,7 @@ import {
   Air,
 } from '@mui/icons-material';
 import { prpAPI } from '../services/api';
+import { useLocation } from 'react-router-dom';
 
 interface PRPProgram {
   id: number;
@@ -115,7 +118,23 @@ interface PRPChecklist {
 }
 
 const PRP: React.FC = () => {
+  const [userSearch, setUserSearch] = useState('');
+  const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  useEffect(() => {
+    let active = true;
+    const t = setTimeout(async () => {
+      try {
+        const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
+        const items = (resp?.data?.items || resp?.items || []) as Array<any>;
+        if (active) setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch {
+        if (active) setUserOptions([]);
+      }
+    }, 300);
+    return () => { active = false; clearTimeout(t); };
+  }, [userSearch]);
   const [activeTab, setActiveTab] = useState(0);
+  const location = useLocation();
   const [programs, setPrograms] = useState<PRPProgram[]>([]);
   const [checklists, setChecklists] = useState<PRPChecklist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,6 +249,23 @@ const PRP: React.FC = () => {
     fetchPrograms();
     fetchDashboard();
   }, []);
+
+  // Read ?category= and ?tab= to prime filters and tab
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const category = params.get('category');
+    const tab = params.get('tab');
+    if (category) {
+      setFilterCategory(category);
+    }
+    if (tab === 'programs') {
+      setActiveTab(1);
+    } else if (tab === 'checklists') {
+      setActiveTab(2);
+    } else if (tab === 'overview') {
+      setActiveTab(0);
+    }
+  }, [location.search]);
 
   // Fetch checklists after programs are loaded
   useEffect(() => {
@@ -1052,11 +1088,14 @@ const PRP: React.FC = () => {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField
-                  label="Responsible Person"
-                  fullWidth
-                  value={programForm.responsible_person}
-                  onChange={(e) => setProgramForm({ ...programForm, responsible_person: e.target.value })}
+                <Autocomplete
+                  options={userOptions}
+                  getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                  value={userOptions.find(o => (o.full_name || o.username) === programForm.responsible_person) || null}
+                  onChange={(_, val) => setProgramForm({ ...programForm, responsible_person: val ? (val.full_name || val.username) : '' })}
+                  onInputChange={(_, val) => setUserSearch(val)}
+                  isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                  renderInput={(params) => <TextField {...params} label="Responsible Person" placeholder="Search user..." fullWidth />}
                 />
               </Grid>
             </Grid>
@@ -1159,12 +1198,14 @@ const PRP: React.FC = () => {
                 />
               </Grid>
             </Grid>
-            <TextField
-              label="Assigned To"
-              fullWidth
-              value={checklistForm.assigned_to}
-              onChange={(e) => setChecklistForm({ ...checklistForm, assigned_to: e.target.value })}
-              helperText="Person responsible for completing this checklist"
+            <Autocomplete
+              options={userOptions}
+              getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+              value={userOptions.find(o => (o.full_name || o.username) === checklistForm.assigned_to) || null}
+              onChange={(_, val) => setChecklistForm({ ...checklistForm, assigned_to: val ? (val.full_name || val.username) : '' })}
+              onInputChange={(_, val) => setUserSearch(val)}
+              isOptionEqualToValue={(opt, val) => opt.id === val.id}
+              renderInput={(params) => <TextField {...params} label="Assigned To" placeholder="Search user..." fullWidth helperText="Person responsible for completing this checklist" />}
             />
           </Box>
         </DialogContent>

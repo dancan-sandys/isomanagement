@@ -22,6 +22,20 @@ class NonConformanceService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def _decode_text_array_fields(obj: RootCauseAnalysis) -> RootCauseAnalysis:
+        """Convert JSON-encoded TEXT array fields back into Python lists for responses."""
+        import json as _json
+        for field_name in ['contributing_factors', 'system_failures', 'recommendations', 'preventive_measures']:
+            value = getattr(obj, field_name, None)
+            if isinstance(value, str):
+                try:
+                    setattr(obj, field_name, _json.loads(value))
+                except Exception:
+                    # leave as string if not valid JSON
+                    pass
+        return obj
+
     def _generate_nc_number(self) -> str:
         """Generate unique NC number"""
         timestamp = datetime.now().strftime("%Y%m%d")
@@ -157,24 +171,47 @@ class NonConformanceService:
     # Root Cause Analysis operations
     def create_root_cause_analysis(self, analysis_data: RootCauseAnalysisCreate, conducted_by: int) -> RootCauseAnalysis:
         """Create a new root cause analysis"""
+        payload = analysis_data.dict()
+
+        # Serialize list-based fields destined for TEXT columns to JSON strings
+        text_array_fields = [
+            'contributing_factors',
+            'system_failures',
+            'recommendations',
+            'preventive_measures',
+        ]
+
+        for field_name in text_array_fields:
+            value = payload.get(field_name)
+            if isinstance(value, (list, dict)):
+                payload[field_name] = json.dumps(value)
+            elif value is None:
+                payload[field_name] = None
+            # if it's already a string, leave as-is
+
         analysis = RootCauseAnalysis(
-            **analysis_data.dict(),
+            **payload,
             conducted_by=conducted_by
         )
         self.db.add(analysis)
         self.db.commit()
         self.db.refresh(analysis)
+        # Do not decode array fields on the managed instance to avoid flushing lists into TEXT columns
         return analysis
 
     def get_root_cause_analyses(self, non_conformance_id: int) -> List[RootCauseAnalysis]:
         """Get root cause analyses for a non-conformance"""
-        return self.db.query(RootCauseAnalysis).filter(
+        analyses = self.db.query(RootCauseAnalysis).filter(
             RootCauseAnalysis.non_conformance_id == non_conformance_id
         ).all()
+        return [self._decode_text_array_fields(a) for a in analyses]
 
     def get_root_cause_analysis(self, analysis_id: int) -> Optional[RootCauseAnalysis]:
         """Get root cause analysis by ID"""
-        return self.db.query(RootCauseAnalysis).filter(RootCauseAnalysis.id == analysis_id).first()
+        analysis = self.db.query(RootCauseAnalysis).filter(RootCauseAnalysis.id == analysis_id).first()
+        if analysis:
+            return self._decode_text_array_fields(analysis)
+        return analysis
 
     def update_root_cause_analysis(self, analysis_id: int, analysis_data: RootCauseAnalysisUpdate) -> Optional[RootCauseAnalysis]:
         """Update root cause analysis"""
@@ -183,12 +220,28 @@ class NonConformanceService:
             return None
 
         update_data = analysis_data.dict(exclude_unset=True)
+
+        # Serialize list-based fields destined for TEXT columns to JSON strings
+        text_array_fields = [
+            'contributing_factors',
+            'system_failures',
+            'recommendations',
+            'preventive_measures',
+        ]
+        for field in text_array_fields:
+            if field in update_data:
+                value = update_data[field]
+                if isinstance(value, (list, dict)):
+                    update_data[field] = json.dumps(value)
+                elif value is None:
+                    update_data[field] = None
+
         for field, value in update_data.items():
             setattr(analysis, field, value)
 
         self.db.commit()
         self.db.refresh(analysis)
-        return analysis
+        return self._decode_text_array_fields(analysis)
 
     def delete_root_cause_analysis(self, analysis_id: int) -> bool:
         """Delete root cause analysis"""
@@ -522,3 +575,15 @@ class NonConformanceService:
             }
             for nc in ncs
         ] 
+
+    def get_recent_nc_for_haccp(self, ccp_id: int, batch_number: Optional[str]) -> Optional[NonConformance]:
+        """Get the most recent HACCP-origin NC for a given CCP and optional batch number"""
+        query = self.db.query(NonConformance).filter(
+            NonConformance.source == NonConformanceSource.HACCP
+        )
+        if batch_number:
+            query = query.filter(NonConformance.batch_reference == batch_number)
+        # process_reference may contain 'CCP:{id}'
+        like_pattern = f"%CCP:{ccp_id}%"
+        query = query.filter(NonConformance.process_reference.ilike(like_pattern))
+        return query.order_by(desc(NonConformance.created_at)).first()

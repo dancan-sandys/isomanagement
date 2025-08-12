@@ -20,6 +20,7 @@ const Login: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { isLoading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
 
   // Debug logging
   console.log('Login component - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
@@ -123,6 +124,17 @@ const Login: React.FC = () => {
         // Ensure error is a string
         const errorMessage = typeof result.error === 'string' ? result.error : 'Login failed';
         console.log('Error message:', errorMessage);
+        // Map backend messages for password policy/lockout/expiry hints
+        const normalized = (errorMessage || '').toLowerCase();
+        if (normalized.includes('locked') || normalized.includes('lockout')) {
+          setErrorHint('Account locked due to multiple failed attempts. Please try again later or contact an administrator.');
+        } else if (normalized.includes('expired')) {
+          setErrorHint('Your password has expired. Please reset your password or contact support.');
+        } else if (normalized.includes('invalid credentials')) {
+          setErrorHint('Invalid username or password. Passwords are case sensitive and must meet the security policy.');
+        } else {
+          setErrorHint(null);
+        }
       }
     } catch (error) {
       // Error is handled by the Redux slice
@@ -158,9 +170,15 @@ const Login: React.FC = () => {
             ISO 22000 FSMS Login
           </Typography>
 
-          {error && (
+          {(error || errorHint) && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
               {typeof error === 'string' ? error : 'An error occurred during login'}
+              {errorHint ? (
+                <>
+                  <br />
+                  <Typography variant="caption" color="inherit">{errorHint}</Typography>
+                </>
+              ) : null}
             </Alert>
           )}
 

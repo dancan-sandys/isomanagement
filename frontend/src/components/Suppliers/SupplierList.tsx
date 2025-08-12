@@ -33,8 +33,7 @@ import {
   DialogActions,
   FormControlLabel,
   Switch,
-  Toolbar,
-  alpha,
+  
 } from '@mui/material';
 import {
   Add,
@@ -42,43 +41,18 @@ import {
   Delete,
   Visibility,
   Business,
-  Warning,
-  CheckCircle,
-  Refresh,
+  
   Search,
   FilterList,
-  Assessment,
-  LocalShipping,
-  Inventory,
-  Description,
-  Person,
-  Email,
-  Phone,
-  Language,
-  LocationOn,
-  Security,
-  TrendingUp,
-  TrendingDown,
   Star,
   StarBorder,
-  Block,
-  Pending,
-  Verified,
-  Error,
-  Info,
-  Download,
-  Upload,
-  MoreVert,
-  Sort,
   ViewList,
   ViewModule,
   Settings,
   Archive,
   RestoreFromTrash,
   Assessment as AssessmentIcon,
-  Schedule,
-  Notifications,
-  Analytics,
+  
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -96,7 +70,7 @@ import { RootState, AppDispatch } from '../../store';
 import { Supplier, SupplierFilters } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
 import { EnhancedStatusChip } from '../UI';
-import { DataTable } from '../UI/DataTable';
+import DataTable from '../UI/DataTable';
 import { NotificationToast } from '../UI';
 
 interface SupplierListProps {
@@ -149,13 +123,13 @@ const SupplierList: React.FC<SupplierListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== filters.search) {
-        dispatch(setSupplierFilters({ search: searchTerm }));
+      if (searchTerm !== (filters.suppliers as any)?.search) {
+        dispatch(setSupplierFilters({ ...filters.suppliers, search: searchTerm } as any));
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch]);
+  }, [searchTerm, dispatch, filters.suppliers]);
 
   const loadSuppliers = () => {
     dispatch(fetchSuppliers({

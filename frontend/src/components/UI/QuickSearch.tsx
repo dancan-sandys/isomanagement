@@ -24,6 +24,7 @@ import {
   Person,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 
 interface SearchResult {
   id: string;
@@ -51,7 +52,6 @@ const QuickSearch: React.FC<QuickSearchProps> = ({
   
   const navigate = useNavigate();
 
-  // Mock search function - replace with actual API call
   const performSearch = async (term: string) => {
     if (!term.trim()) {
       setResults([]);
@@ -59,51 +59,26 @@ const QuickSearch: React.FC<QuickSearchProps> = ({
     }
 
     setLoading(true);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 300));
+    try {
+      // Start with documents search since BE supports it robustly
+      const resp = await api.get('/documents', { params: { search: term, page: 1, size: 5 } });
+      const docs = resp?.data?.data?.items || resp?.data?.items || [];
+      const docResults: SearchResult[] = docs.map((d: any) => ({
+        id: String(d.id),
+        title: d.title || d.document_number,
+        type: 'document',
+        path: `/documents`,
+        description: d.description,
+        status: d.status,
+      }));
 
-    // Mock results - replace with actual search logic
-    const mockResults: SearchResult[] = [
-      {
-        id: '1',
-        title: 'HACCP Plan - Production Line A',
-        type: 'haccp' as const,
-        path: '/haccp/plan/1',
-        description: 'Critical Control Points for Production Line A',
-        status: 'active',
-      },
-      {
-        id: '2',
-        title: 'Non-Conformance Report #2024-001',
-        type: 'nc' as const,
-        path: '/nc/2024-001',
-        description: 'Temperature deviation in cold storage',
-        status: 'open',
-      },
-      {
-        id: '3',
-        title: 'PRP - Cleaning and Sanitation',
-        type: 'prp' as const,
-        path: '/prp/cleaning',
-        description: 'Standard operating procedures for cleaning',
-        status: 'compliant',
-      },
-      {
-        id: '4',
-        title: 'Document Control Procedure',
-        type: 'document' as const,
-        path: '/documents/procedures/control',
-        description: 'Document control and version management',
-        status: 'approved',
-      },
-    ].filter(result => 
-      result.title.toLowerCase().includes(term.toLowerCase()) ||
-      result.description?.toLowerCase().includes(term.toLowerCase())
-    );
-
-    setResults(mockResults);
+      // Future: extend to HACCP/PRP/NC using their list endpoints
+      setResults(docResults);
+    } catch (e) {
+      setResults([]);
+    } finally {
     setLoading(false);
+    }
   };
 
   useEffect(() => {

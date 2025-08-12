@@ -14,6 +14,16 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Password policy & lockout
+    PASSWORD_MIN_LENGTH: int = 8
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_NUMBER: bool = True
+    PASSWORD_REQUIRE_SPECIAL: bool = True
+    PASSWORD_MAX_AGE_DAYS: int = 180
+    ACCOUNT_LOCKOUT_THRESHOLD: int = 5
+    ACCOUNT_LOCKOUT_WINDOW_MINUTES: int = 15
+    ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
     
     # Application Configuration
     APP_NAME: str = "ISO 22000 FSMS"

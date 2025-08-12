@@ -4,13 +4,70 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user, require_permission, get_password_hash
+from app.core.security import get_current_active_user, require_permission, get_password_hash, validate_password_policy
 from app.models.user import User, UserStatus
 from app.models.rbac import Role
 from app.schemas.auth import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.schemas.common import ResponseModel, PaginationParams, PaginatedResponse
 
 router = APIRouter()
+
+
+@router.get("/dashboard", response_model=ResponseModel)
+async def get_users_dashboard(
+    current_user: User = Depends(require_permission("users:read")),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user management dashboard data
+    """
+    try:
+        # Get total users count
+        total_users = db.query(User).count()
+        active_users = db.query(User).filter(User.is_active == True).count()
+        inactive_users = db.query(User).filter(User.is_active == False).count()
+        pending_approval = db.query(User).filter(User.status == UserStatus.PENDING_APPROVAL).count()
+
+        # Users by role
+        users_by_role = {}
+        roles = db.query(Role).all()
+        for role in roles:
+            count = db.query(User).filter(User.role_id == role.id).count()
+            if count > 0:
+                users_by_role[role.name] = count
+
+        # Users by department
+        users_by_department = {}
+        departments = db.query(User.department).distinct().filter(User.department.isnot(None)).all()
+        for dept in departments:
+            if dept[0]:
+                count = db.query(User).filter(User.department == dept[0]).count()
+                users_by_department[dept[0]] = count
+
+        # Recent logins (today)
+        from datetime import datetime
+        today = datetime.now().date()
+        recent_logins = db.query(User).filter(User.last_login >= today).count()
+
+        # Placeholder training metrics
+        training_overdue = 3
+        competencies_expiring = 5
+
+        dashboard_data = {
+            "total_users": total_users,
+            "active_users": active_users,
+            "inactive_users": inactive_users,
+            "pending_approval": pending_approval,
+            "users_by_role": users_by_role,
+            "users_by_department": users_by_department,
+            "recent_logins": recent_logins,
+            "training_overdue": training_overdue,
+            "competencies_expiring": competencies_expiring,
+        }
+
+        return ResponseModel(success=True, message="Dashboard data retrieved successfully", data=dashboard_data)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve dashboard data: {str(e)}")
 
 
 @router.get("/", response_model=PaginatedResponse[UserResponse])
@@ -324,6 +381,31 @@ async def deactivate_user(
         message="User deactivated successfully"
     )
 
+
+@router.post("/{user_id}/reset-password", response_model=ResponseModel)
+async def admin_reset_password(
+    user_id: int,
+    payload: dict,
+    current_user: User = Depends(require_permission("users:write")),
+    db: Session = Depends(get_db)
+):
+    """Reset a user's password (admin only)."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot reset your own password via admin endpoint")
+
+    new_password = payload.get("new_password")
+    if not new_password or not validate_password_policy(new_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="new_password does not meet security requirements")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.hashed_password = get_password_hash(new_password)
+    user.updated_by = current_user.id
+    db.commit()
+
+    return ResponseModel(success=True, message="Password reset successfully")
 
 @router.get("/dashboard", response_model=ResponseModel)
 async def get_users_dashboard(

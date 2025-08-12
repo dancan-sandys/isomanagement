@@ -61,6 +61,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Clear invalid tokens
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
+          // Do not block app; allow rendering to proceed so routing can redirect to /login
         }
       } else {
         console.log('🔐 AuthProvider: No valid tokens, clearing any invalid ones...');

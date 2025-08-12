@@ -136,7 +136,12 @@ class RootCauseAnalysis(Base):
     non_conformance = relationship("NonConformance", back_populates="root_cause_analyses")
     
     def __repr__(self):
-        return f"<RootCauseAnalysis(id={self.id}, non_conformance_id={self.non_conformance_id}, method='{self.method}')>"
+        # Avoid accessing potentially expired attributes (detached instances)
+        try:
+            rid = object.__getattribute__(self, 'id')
+        except Exception:
+            rid = None
+        return f"<RootCauseAnalysis(id={rid})>"
 
 
 class CAPAAction(Base):

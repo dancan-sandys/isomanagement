@@ -18,6 +18,7 @@ from app.schemas.prp import (
     ReminderCreate, ScheduleCreate, PRPReportRequest
 )
 from app.services.prp_service import PRPService
+from app.utils.audit import audit_event
 
 router = APIRouter()
 
@@ -181,11 +182,16 @@ async def create_prp_program(
         db.commit()
         db.refresh(program)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="PRP program created successfully",
             data={"id": program.id}
         )
+        try:
+            audit_event(db, current_user.id, "prp_program_created", "prp", str(program.id))
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -326,11 +332,16 @@ async def create_checklist(
         db.commit()
         db.refresh(checklist)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Checklist created successfully",
             data={"id": checklist.id}
         )
+        try:
+            audit_event(db, current_user.id, "prp_checklist_created", "prp", str(checklist.id), {"program_id": program_id})
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -440,11 +451,19 @@ async def complete_checklist(
         if non_conformance_created:
             response_data["alert_message"] = "Non-conformance has been created due to failed items"
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Checklist completed successfully",
             data=response_data
         )
+        try:
+            audit_event(db, current_user.id, "prp_checklist_completed", "prp", str(checklist.id), {
+                "non_conformance_created": non_conformance_created,
+                "compliance_percentage": checklist.compliance_percentage,
+            })
+        except Exception:
+            pass
+        return resp
         
     except ValueError as e:
         raise HTTPException(
@@ -476,11 +495,19 @@ async def upload_evidence_file(
             checklist_id, file_data, file.filename, current_user.id
         )
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Evidence file uploaded successfully",
             data=upload_result
         )
+        try:
+            audit_event(db, current_user.id, "prp_evidence_uploaded", "prp", str(checklist_id), {
+                "filename": file.filename,
+                "size": upload_result.get("file_size")
+            })
+        except Exception:
+            pass
+        return resp
         
     except ValueError as e:
         raise HTTPException(

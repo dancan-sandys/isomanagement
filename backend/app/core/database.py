@@ -41,4 +41,21 @@ def get_db():
 
 def init_db():
     """Initialize database with all tables"""
-    Base.metadata.create_all(bind=engine) 
+    Base.metadata.create_all(bind=engine)
+    # Lightweight dev migration helpers (SQLite only) to avoid missing-column errors
+    try:
+        if settings.DATABASE_TYPE == "sqlite":
+            with engine.connect() as conn:
+                # Ensure hygiene_score column exists on supplier_evaluations
+                res = conn.execute("PRAGMA table_info('supplier_evaluations')").fetchall()
+                existing_cols = {row[1] for row in res}  # row[1] is column name
+                if 'hygiene_score' not in existing_cols:
+                    conn.execute("ALTER TABLE supplier_evaluations ADD COLUMN hygiene_score FLOAT")
+                if 'hygiene_comments' not in existing_cols:
+                    conn.execute("ALTER TABLE supplier_evaluations ADD COLUMN hygiene_comments TEXT")
+                # Ensure non_conformance tables exist (if metadata create_all missed due to import order)
+                tables = {row[1] for row in conn.execute("PRAGMA table_list").fetchall()} if hasattr(conn, 'exec_driver_sql') else set()
+                conn.commit()
+    except Exception:
+        # Never break app startup for best-effort dev migrations
+        pass

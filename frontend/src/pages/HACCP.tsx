@@ -34,6 +34,9 @@ import {
   CircularProgress,
   Tabs,
   Tab,
+  TextField,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -45,7 +48,7 @@ import {
   Science,
   Delete,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
 import {
   fetchProducts,
@@ -54,8 +57,14 @@ import {
   updateProduct,
   deleteProduct,
   createProcessFlow,
+  updateProcessFlow,
+  deleteProcessFlow,
   createHazard,
+  updateHazard,
+  deleteHazard,
   createCCP,
+  updateCCP,
+  deleteCCP,
   fetchDashboard,
   setSelectedProduct,
   setSelectedCCP,
@@ -63,6 +72,8 @@ import {
   clearError,
 } from '../store/slices/haccpSlice';
 import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
+import { Autocomplete } from '@mui/material';
+import { usersAPI } from '../services/api';
 import PageHeader from '../components/UI/PageHeader';
 import StatusChip from '../components/UI/StatusChip';
 
@@ -103,12 +114,96 @@ const HACCP: React.FC = () => {
   } = useSelector((state: RootState) => state.haccp);
   
   const [selectedTab, setSelectedTab] = useState(0);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [expanded, setExpanded] = useState<string | false>('panel1');
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [processFlowDialogOpen, setProcessFlowDialogOpen] = useState(false);
   const [hazardDialogOpen, setHazardDialogOpen] = useState(false);
   const [ccpDialogOpen, setCcpDialogOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<any>(null);
+  const [selectedFlow, setSelectedFlow] = useState<any>(null);
+  const [selectedHazardItem, setSelectedHazardItem] = useState<any>(null);
+  const [selectedCcpItem, setSelectedCcpItem] = useState<any>(null);
+  const [flowForm, setFlowForm] = useState({
+    step_number: '',
+    step_name: '',
+    description: '',
+    equipment: '',
+    temperature: '',
+    time_minutes: '',
+    ph: '',
+    aw: '',
+  });
+  const [hazardForm, setHazardForm] = useState({
+    process_step_id: '',
+    hazard_type: 'biological',
+    hazard_name: '',
+    description: '',
+    likelihood: '1',
+    severity: '1',
+    control_measures: '',
+    is_controlled: false as boolean,
+    control_effectiveness: '',
+    is_ccp: false as boolean,
+    ccp_justification: '',
+  });
+  const [ccpForm, setCcpForm] = useState({
+    hazard_id: '',
+    ccp_number: '',
+    ccp_name: '',
+    description: '',
+    critical_limit_min: '',
+    critical_limit_max: '',
+    critical_limit_unit: '',
+    monitoring_frequency: '',
+    monitoring_method: '',
+    monitoring_responsible: '',
+    monitoring_equipment: '',
+    corrective_actions: '',
+    verification_frequency: '',
+    verification_method: '',
+    verification_responsible: '',
+  });
+  const [userSearch, setUserSearch] = useState('');
+  const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  useEffect(() => {
+    let active = true;
+    const t = setTimeout(async () => {
+      try {
+        const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
+        const items = (resp?.data?.items || resp?.items || []) as Array<any>;
+        if (active) setUserOptions(items.map((u) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch {
+        if (active) setUserOptions([]);
+      }
+    }, 300);
+    return () => { active = false; clearTimeout(t); };
+  }, [userSearch]);
+  const [productForm, setProductForm] = useState({
+    product_code: '',
+    name: '',
+    description: '',
+    category: '',
+    formulation: '',
+    allergens: '',
+    shelf_life_days: '',
+    storage_conditions: '',
+    packaging_type: '',
+    haccp_plan_approved: false as boolean,
+    haccp_plan_version: '',
+  });
+
+  const handleInputChange = (key: keyof typeof productForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProductForm(prev => ({ ...prev, [key]: e.target.value }));
+  };
+
+  const handleBooleanChange = (key: keyof typeof productForm) => (
+    _e: React.ChangeEvent<HTMLInputElement>,
+    checked: boolean,
+  ) => {
+    setProductForm(prev => ({ ...prev, [key]: checked }));
+  };
 
   // Role-based permissions
   const canManageHACCP = hasRole(currentUser, 'QA Manager') || 
@@ -122,6 +217,19 @@ const HACCP: React.FC = () => {
     loadDashboard();
     loadProducts();
   }, [dispatch]);
+
+  // Read ?tab= from URL to jump to details
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'details') {
+      setSelectedTab(2);
+    } else if (tabParam === 'products') {
+      setSelectedTab(1);
+    } else if (tabParam === 'dashboard') {
+      setSelectedTab(0);
+    }
+  }, [location.search]);
 
   const loadDashboard = () => {
     dispatch(fetchDashboard());
@@ -153,6 +261,226 @@ const HACCP: React.FC = () => {
       loadProducts();
     } catch (error) {
       console.error('Failed to delete product:', error);
+    }
+  };
+
+  const handleDeleteFlow = async (flowId: number) => {
+    if (!window.confirm('Delete this process step?')) return;
+    try {
+      await dispatch(deleteProcessFlow(flowId)).unwrap();
+      if (selectedProduct) loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  const handleDeleteHazard = async (hazardId: number) => {
+    if (!window.confirm('Delete this hazard?')) return;
+    try {
+      await dispatch(deleteHazard(hazardId)).unwrap();
+      if (selectedProduct) loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  const handleDeleteCCP = async (ccpId: number) => {
+    if (!window.confirm('Delete this CCP?')) return;
+    try {
+      await dispatch(deleteCCP(ccpId)).unwrap();
+      if (selectedProduct) loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  // Populate flow/hazard/ccp forms on selection
+  useEffect(() => {
+    if (selectedFlow) {
+      setFlowForm({
+        step_number: String(selectedFlow.step_number ?? ''),
+        step_name: selectedFlow.step_name || '',
+        description: selectedFlow.description || '',
+        equipment: selectedFlow.equipment || '',
+        temperature: String(selectedFlow.temperature ?? ''),
+        time_minutes: String(selectedFlow.time_minutes ?? ''),
+        ph: String(selectedFlow.ph ?? ''),
+        aw: String(selectedFlow.aw ?? ''),
+      });
+    } else {
+      setFlowForm({ step_number: '', step_name: '', description: '', equipment: '', temperature: '', time_minutes: '', ph: '', aw: '' });
+    }
+  }, [selectedFlow]);
+
+  useEffect(() => {
+    if (selectedHazardItem) {
+      setHazardForm({
+        process_step_id: String(selectedHazardItem.process_step_id ?? ''),
+        hazard_type: selectedHazardItem.hazard_type || 'biological',
+        hazard_name: selectedHazardItem.hazard_name || '',
+        description: selectedHazardItem.description || '',
+        likelihood: String(selectedHazardItem.likelihood ?? '1'),
+        severity: String(selectedHazardItem.severity ?? '1'),
+        control_measures: selectedHazardItem.control_measures || '',
+        is_controlled: !!selectedHazardItem.is_controlled,
+        control_effectiveness: String(selectedHazardItem.control_effectiveness ?? ''),
+        is_ccp: !!selectedHazardItem.is_ccp,
+        ccp_justification: selectedHazardItem.ccp_justification || '',
+      });
+    } else {
+      setHazardForm({ process_step_id: '', hazard_type: 'biological', hazard_name: '', description: '', likelihood: '1', severity: '1', control_measures: '', is_controlled: false, control_effectiveness: '', is_ccp: false, ccp_justification: '' });
+    }
+  }, [selectedHazardItem]);
+
+  useEffect(() => {
+    if (selectedCcpItem) {
+      setCcpForm({
+        hazard_id: String(selectedCcpItem.hazard_id ?? ''),
+        ccp_number: selectedCcpItem.ccp_number || '',
+        ccp_name: selectedCcpItem.ccp_name || '',
+        description: selectedCcpItem.description || '',
+        critical_limit_min: String(selectedCcpItem.critical_limit_min ?? ''),
+        critical_limit_max: String(selectedCcpItem.critical_limit_max ?? ''),
+        critical_limit_unit: selectedCcpItem.critical_limit_unit || '',
+        monitoring_frequency: selectedCcpItem.monitoring_frequency || '',
+        monitoring_method: selectedCcpItem.monitoring_method || '',
+        monitoring_responsible: String(selectedCcpItem.monitoring_responsible ?? ''),
+        monitoring_equipment: selectedCcpItem.monitoring_equipment || '',
+        corrective_actions: selectedCcpItem.corrective_actions || '',
+        verification_frequency: selectedCcpItem.verification_frequency || '',
+        verification_method: selectedCcpItem.verification_method || '',
+        verification_responsible: String(selectedCcpItem.verification_responsible ?? ''),
+      });
+    } else {
+      setCcpForm({ hazard_id: '', ccp_number: '', ccp_name: '', description: '', critical_limit_min: '', critical_limit_max: '', critical_limit_unit: '', monitoring_frequency: '', monitoring_method: '', monitoring_responsible: '', monitoring_equipment: '', corrective_actions: '', verification_frequency: '', verification_method: '', verification_responsible: '' });
+    }
+  }, [selectedCcpItem]);
+
+  const handleSaveFlow = async () => {
+    if (!selectedProduct) return;
+    const payload: any = {
+      step_number: flowForm.step_number === '' ? null : Number(flowForm.step_number),
+      step_name: flowForm.step_name,
+      description: flowForm.description,
+      equipment: flowForm.equipment,
+      temperature: flowForm.temperature === '' ? null : Number(flowForm.temperature),
+      time_minutes: flowForm.time_minutes === '' ? null : Number(flowForm.time_minutes),
+      ph: flowForm.ph === '' ? null : Number(flowForm.ph),
+      aw: flowForm.aw === '' ? null : Number(flowForm.aw),
+    };
+    try {
+      if (selectedFlow) {
+        await dispatch(updateProcessFlow({ flowId: selectedFlow.id, flowData: payload })).unwrap();
+      } else {
+        await dispatch(createProcessFlow({ productId: selectedProduct.id, flowData: payload })).unwrap();
+      }
+      setProcessFlowDialogOpen(false);
+      setSelectedFlow(null);
+      loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  const handleSaveHazard = async () => {
+    if (!selectedProduct) return;
+    const payload: any = {
+      process_step_id: hazardForm.process_step_id === '' ? null : Number(hazardForm.process_step_id),
+      hazard_type: hazardForm.hazard_type,
+      hazard_name: hazardForm.hazard_name,
+      description: hazardForm.description,
+      likelihood: Number(hazardForm.likelihood),
+      severity: Number(hazardForm.severity),
+      control_measures: hazardForm.control_measures,
+      is_controlled: hazardForm.is_controlled,
+      control_effectiveness: hazardForm.control_effectiveness === '' ? null : Number(hazardForm.control_effectiveness),
+      is_ccp: hazardForm.is_ccp,
+      ccp_justification: hazardForm.ccp_justification,
+    };
+    try {
+      if (selectedHazardItem) {
+        await dispatch(updateHazard({ hazardId: selectedHazardItem.id, hazardData: payload })).unwrap();
+      } else {
+        await dispatch(createHazard({ productId: selectedProduct.id, hazardData: payload })).unwrap();
+      }
+      setHazardDialogOpen(false);
+      setSelectedHazardItem(null);
+      loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  const handleSaveCCP = async () => {
+    if (!selectedProduct) return;
+    const payload: any = {
+      hazard_id: ccpForm.hazard_id === '' ? null : Number(ccpForm.hazard_id),
+      ccp_number: ccpForm.ccp_number,
+      ccp_name: ccpForm.ccp_name,
+      description: ccpForm.description,
+      critical_limit_min: ccpForm.critical_limit_min === '' ? null : Number(ccpForm.critical_limit_min),
+      critical_limit_max: ccpForm.critical_limit_max === '' ? null : Number(ccpForm.critical_limit_max),
+      critical_limit_unit: ccpForm.critical_limit_unit,
+      monitoring_frequency: ccpForm.monitoring_frequency,
+      monitoring_method: ccpForm.monitoring_method,
+      monitoring_responsible: ccpForm.monitoring_responsible === '' ? null : Number(ccpForm.monitoring_responsible),
+      monitoring_equipment: ccpForm.monitoring_equipment,
+      corrective_actions: ccpForm.corrective_actions,
+      verification_frequency: ccpForm.verification_frequency,
+      verification_method: ccpForm.verification_method,
+      verification_responsible: ccpForm.verification_responsible === '' ? null : Number(ccpForm.verification_responsible),
+    };
+    try {
+      if (selectedCcpItem) {
+        await dispatch(updateCCP({ ccpId: selectedCcpItem.id, ccpData: payload })).unwrap();
+      } else {
+        await dispatch(createCCP({ productId: selectedProduct.id, ccpData: payload })).unwrap();
+      }
+      setCcpDialogOpen(false);
+      setSelectedCcpItem(null);
+      loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  // Populate form when editing
+  useEffect(() => {
+    if (selectedProductForEdit) {
+      setProductForm({
+        product_code: selectedProductForEdit.product_code || '',
+        name: selectedProductForEdit.name || '',
+        description: selectedProductForEdit.description || '',
+        category: selectedProductForEdit.category || '',
+        formulation: selectedProductForEdit.formulation || '',
+        allergens: selectedProductForEdit.allergens || '',
+        shelf_life_days: String(selectedProductForEdit.shelf_life_days ?? ''),
+        storage_conditions: selectedProductForEdit.storage_conditions || '',
+        packaging_type: selectedProductForEdit.packaging_type || '',
+        haccp_plan_approved: !!selectedProductForEdit.haccp_plan_approved,
+        haccp_plan_version: selectedProductForEdit.haccp_plan_version || '',
+      });
+    } else {
+      setProductForm({
+        product_code: '',
+        name: '',
+        description: '',
+        category: '',
+        formulation: '',
+        allergens: '',
+        shelf_life_days: '',
+        storage_conditions: '',
+        packaging_type: '',
+        haccp_plan_approved: false,
+        haccp_plan_version: '',
+      });
+    }
+  }, [selectedProductForEdit]);
+
+  const handleSaveProduct = async () => {
+    const payload: any = {
+      ...productForm,
+      shelf_life_days: productForm.shelf_life_days === '' ? null : Number(productForm.shelf_life_days),
+    };
+    try {
+      if (selectedProductForEdit) {
+        await dispatch(updateProduct({ productId: selectedProductForEdit.id, productData: payload })).unwrap();
+      } else {
+        await dispatch(createProduct(payload)).unwrap();
+      }
+      setProductDialogOpen(false);
+      setSelectedProductForEdit(null);
+      loadProducts();
+    } catch (e) {
+      console.error('Failed to save product', e);
     }
   };
 
@@ -293,7 +621,7 @@ const HACCP: React.FC = () => {
                 cursor: 'pointer',
                 '&:hover': { boxShadow: 3 }
               }}
-              onClick={() => handleProductSelect(product)}
+              onClick={() => navigate(`/haccp/products/${product.id}`)}
             >
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -400,7 +728,7 @@ const HACCP: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => setProcessFlowDialogOpen(true)}
+                onClick={() => { setSelectedFlow(null); setProcessFlowDialogOpen(true); }}
               >
                 Add Step
               </Button>
@@ -428,9 +756,14 @@ const HACCP: React.FC = () => {
                     <TableCell>{flow.time_minutes} min</TableCell>
                     <TableCell>
                       {canManageHACCP && (
-                        <IconButton size="small">
+                        <Stack direction="row" spacing={1}>
+                          <IconButton size="small" onClick={() => { setSelectedFlow(flow); setProcessFlowDialogOpen(true); }}>
                           <Edit />
                         </IconButton>
+                          <IconButton size="small" onClick={() => handleDeleteFlow(flow.id)}>
+                            <Delete />
+                          </IconButton>
+                        </Stack>
                       )}
                     </TableCell>
                   </TableRow>
@@ -447,7 +780,7 @@ const HACCP: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => setHazardDialogOpen(true)}
+                onClick={() => { setSelectedHazardItem(null); setHazardDialogOpen(true); }}
               >
                 Add Hazard
               </Button>
@@ -491,8 +824,11 @@ const HACCP: React.FC = () => {
                     </Stack>
                     {canManageHACCP && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <IconButton size="small">
+                        <IconButton size="small" onClick={() => { setSelectedHazardItem(hazard); setHazardDialogOpen(true); }}>
                           <Edit />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => handleDeleteHazard(hazard.id)}>
+                          <Delete />
                         </IconButton>
                       </Box>
                     )}
@@ -510,7 +846,7 @@ const HACCP: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => setCcpDialogOpen(true)}
+                onClick={() => { setSelectedCcpItem(null); setCcpDialogOpen(true); }}
               >
                 Add CCP
               </Button>
@@ -540,8 +876,11 @@ const HACCP: React.FC = () => {
                     )}
                     {canManageHACCP && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                        <IconButton size="small">
+                        <IconButton size="small" onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }}>
                           <Edit />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => handleDeleteCCP(ccp.id)}>
+                          <Delete />
                         </IconButton>
                       </Box>
                     )}
@@ -553,12 +892,49 @@ const HACCP: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={selectedTab} index={3}>
-          <Typography variant="h6" gutterBottom>
-            Monitoring & Verification
-          </Typography>
-          <Typography color="textSecondary">
-            Monitoring and verification logs will be displayed here.
-          </Typography>
+          <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
+          <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
+            <Autocomplete
+              options={ccps}
+              getOptionLabel={(ccp: any) => `${ccp.ccp_number} - ${ccp.ccp_name}`}
+              value={ccps.find((c: any) => String(c.id) === (ccpForm as any).monitor_ccp_id) || null}
+              onChange={(_, val: any) => setCcpForm({ ...(ccpForm as any), monitor_ccp_id: val ? String(val.id) : '' })}
+              isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id}
+              renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP for monitoring" />}
+            />
+            <TextField label="Batch Number" value={(ccpForm as any).monitor_batch || ''} onChange={e => setCcpForm({ ...(ccpForm as any), monitor_batch: e.target.value })} />
+            <TextField type="number" label="Measured Value" value={(ccpForm as any).monitor_value || ''} onChange={e => setCcpForm({ ...(ccpForm as any), monitor_value: e.target.value })} />
+            <TextField label="Unit" value={(ccpForm as any).monitor_unit || ''} onChange={e => setCcpForm({ ...(ccpForm as any), monitor_unit: e.target.value })} />
+            <Stack direction="row" spacing={2}>
+              <Button variant="contained" disabled={!selectedProduct || !(ccpForm as any).monitor_ccp_id} onClick={async () => {
+                const ccpId = Number((ccpForm as any).monitor_ccp_id);
+                if (!ccpId) return;
+                try {
+                  await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+                    body: JSON.stringify({
+                      batch_number: (ccpForm as any).monitor_batch,
+                      measured_value: Number((ccpForm as any).monitor_value),
+                      unit: (ccpForm as any).monitor_unit,
+                    })
+                  });
+                  const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent((ccpForm as any).monitor_batch || '')}`, {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+                  });
+                  const data = await res.json();
+                  if (data?.found) {
+                    window.open(`/nonconformance/${data.id}`, '_blank');
+                  } else {
+                    alert('Monitoring saved. No NC auto-created for this reading.');
+                  }
+                } catch (e) {
+                  alert('Failed to create monitoring log');
+                }
+              }}>Record Monitoring Log</Button>
+            </Stack>
+            <Typography variant="body2" color="text.secondary">After saving, if out-of-spec, a Non-Conformance will be auto-created and opened.</Typography>
+          </Stack>
         </TabPanel>
       </Box>
     );
@@ -597,7 +973,6 @@ const HACCP: React.FC = () => {
       <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Dashboard" />
         <Tab label="Products" />
-        <Tab label="Product Details" />
       </Tabs>
 
       <TabPanel value={selectedTab} index={0}>
@@ -608,11 +983,274 @@ const HACCP: React.FC = () => {
         {renderProducts()}
       </TabPanel>
 
-      <TabPanel value={selectedTab} index={2}>
-        {renderProductDetails()}
-      </TabPanel>
+      {/* Product Details moved to /haccp/products/:id */}
 
-      {/* Dialogs will be added here for creating/editing products, process flows, hazards, and CCPs */}
+      {/* Dialogs for creating/editing products, process flows, hazards, and CCPs */}
+      <Dialog open={productDialogOpen} onClose={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedProductForEdit ? 'Edit Product' : 'Add Product'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Product Code"
+                value={productForm.product_code}
+                onChange={handleInputChange('product_code')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Name"
+                value={productForm.name}
+                onChange={handleInputChange('name')}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Description"
+                value={productForm.description}
+                onChange={handleInputChange('description')}
+                multiline
+                rows={3}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Category"
+                value={productForm.category}
+                onChange={handleInputChange('category')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Formulation"
+                value={productForm.formulation}
+                onChange={handleInputChange('formulation')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Allergens"
+                value={productForm.allergens}
+                onChange={handleInputChange('allergens')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Shelf Life (days)"
+                value={productForm.shelf_life_days}
+                onChange={handleInputChange('shelf_life_days')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Storage Conditions"
+                value={productForm.storage_conditions}
+                onChange={handleInputChange('storage_conditions')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Packaging Type"
+                value={productForm.packaging_type}
+                onChange={handleInputChange('packaging_type')}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={productForm.haccp_plan_approved}
+                    onChange={handleBooleanChange('haccp_plan_approved')}
+                  />
+                }
+                label="HACCP Plan Approved"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="HACCP Plan Version"
+                value={productForm.haccp_plan_version}
+                onChange={handleInputChange('haccp_plan_version')}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveProduct}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Process Flow Dialog */}
+      <Dialog open={processFlowDialogOpen} onClose={() => { setProcessFlowDialogOpen(false); setSelectedFlow(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedFlow ? 'Edit Process Step' : 'Add Process Step'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="Step #" value={flowForm.step_number} onChange={(e) => setFlowForm({ ...flowForm, step_number: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={9}>
+              <TextField fullWidth label="Step Name" value={flowForm.step_name} onChange={(e) => setFlowForm({ ...flowForm, step_name: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth multiline rows={3} label="Description" value={flowForm.description} onChange={(e) => setFlowForm({ ...flowForm, description: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Equipment" value={flowForm.equipment} onChange={(e) => setFlowForm({ ...flowForm, equipment: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="Temp (°C)" value={flowForm.temperature} onChange={(e) => setFlowForm({ ...flowForm, temperature: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="Time (min)" value={flowForm.time_minutes} onChange={(e) => setFlowForm({ ...flowForm, time_minutes: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="pH" value={flowForm.ph} onChange={(e) => setFlowForm({ ...flowForm, ph: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="aW" value={flowForm.aw} onChange={(e) => setFlowForm({ ...flowForm, aw: e.target.value })} />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setProcessFlowDialogOpen(false); setSelectedFlow(null); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveFlow}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Hazard Dialog */}
+      <Dialog open={hazardDialogOpen} onClose={() => { setHazardDialogOpen(false); setSelectedHazardItem(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedHazardItem ? 'Edit Hazard' : 'Add Hazard'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth type="number" label="Process Step ID" value={hazardForm.process_step_id} onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Hazard Type (biological/chemical/physical/allergen)" value={hazardForm.hazard_type} onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="Likelihood" value={hazardForm.likelihood} onChange={(e) => setHazardForm({ ...hazardForm, likelihood: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="Severity" value={hazardForm.severity} onChange={(e) => setHazardForm({ ...hazardForm, severity: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth label="Control Measures" value={hazardForm.control_measures} onChange={(e) => setHazardForm({ ...hazardForm, control_measures: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <FormControlLabel control={<Switch checked={hazardForm.is_controlled} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_controlled: c })} />} label="Is Controlled" />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField fullWidth type="number" label="Control Effectiveness" value={hazardForm.control_effectiveness} onChange={(e) => setHazardForm({ ...hazardForm, control_effectiveness: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <FormControlLabel control={<Switch checked={hazardForm.is_ccp} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_ccp: c })} />} label="Is CCP" />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth label="CCP Justification" value={hazardForm.ccp_justification} onChange={(e) => setHazardForm({ ...hazardForm, ccp_justification: e.target.value })} />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setHazardDialogOpen(false); setSelectedHazardItem(null); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveHazard}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* CCP Dialog */}
+      <Dialog open={ccpDialogOpen} onClose={() => { setCcpDialogOpen(false); setSelectedCcpItem(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedCcpItem ? 'Edit CCP' : 'Add CCP'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Hazard ID" value={ccpForm.hazard_id} onChange={(e) => setCcpForm({ ...ccpForm, hazard_id: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="CCP Number" value={ccpForm.ccp_number} onChange={(e) => setCcpForm({ ...ccpForm, ccp_number: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="CCP Name" value={ccpForm.ccp_name} onChange={(e) => setCcpForm({ ...ccpForm, ccp_name: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth multiline rows={3} label="Description" value={ccpForm.description} onChange={(e) => setCcpForm({ ...ccpForm, description: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Critical Min" value={ccpForm.critical_limit_min} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_min: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Critical Max" value={ccpForm.critical_limit_max} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_max: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="Unit" value={ccpForm.critical_limit_unit} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_unit: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Monitoring Frequency" value={ccpForm.monitoring_frequency} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_frequency: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Monitoring Method" value={ccpForm.monitoring_method} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_method: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                options={userOptions}
+                getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                value={userOptions.find(o => String(o.id) === ccpForm.monitoring_responsible) || null}
+                onChange={(_, val) => setCcpForm({ ...ccpForm, monitoring_responsible: val ? String(val.id) : '' })}
+                onInputChange={(_, val) => setUserSearch(val)}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => <TextField {...params} label="Monitoring Responsible" placeholder="Search user..." fullWidth />}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Monitoring Equipment" value={ccpForm.monitoring_equipment} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_equipment: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth label="Corrective Actions" value={ccpForm.corrective_actions} onChange={(e) => setCcpForm({ ...ccpForm, corrective_actions: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Verification Frequency" value={ccpForm.verification_frequency} onChange={(e) => setCcpForm({ ...ccpForm, verification_frequency: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Verification Method" value={ccpForm.verification_method} onChange={(e) => setCcpForm({ ...ccpForm, verification_method: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <Autocomplete
+                options={userOptions}
+                getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                value={userOptions.find(o => String(o.id) === ccpForm.verification_responsible) || null}
+                onChange={(_, val) => setCcpForm({ ...ccpForm, verification_responsible: val ? String(val.id) : '' })}
+                onInputChange={(_, val) => setUserSearch(val)}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => <TextField {...params} label="Verification Responsible" placeholder="Search user..." fullWidth />}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setCcpDialogOpen(false); setSelectedCcpItem(null); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveCCP}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Simple edit dialogs could be implemented similarly for process flows, hazards, and CCPs.
+          Deferring full forms to Phase 2; current UI supports delete and open edit dialog shells. */}
     </Box>
   );
 };

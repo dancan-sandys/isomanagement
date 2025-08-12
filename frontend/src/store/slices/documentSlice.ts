@@ -70,6 +70,7 @@ export interface DocumentState {
   documentVersions: DocumentVersion[];
   changeLog: DocumentChangeLog[];
   stats: DocumentStats | null;
+  pendingApprovals: any[];
   loading: boolean;
   error: string | null;
   pagination: {
@@ -100,6 +101,7 @@ const initialState: DocumentState = {
   documentVersions: [],
   changeLog: [],
   stats: null,
+  pendingApprovals: [],
   loading: false,
   error: null,
   pagination: {
@@ -274,6 +276,49 @@ export const fetchDocumentStats = createAsyncThunk(
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to fetch document stats');
+    }
+  }
+);
+
+// Approvals (multi-step)
+export const fetchPendingApprovals = createAsyncThunk(
+  'documents/fetchPendingApprovals',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await documentsAPI.getPendingApprovals();
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch pending approvals');
+    }
+  }
+);
+
+export const approveApprovalStep = createAsyncThunk(
+  'documents/approveApprovalStep',
+  async (
+    { documentId, approvalId, password, comments }: { documentId: number; approvalId: number; password?: string; comments?: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await documentsAPI.approveApprovalStep(documentId, approvalId, { password, comments });
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to approve');
+    }
+  }
+);
+
+export const rejectApprovalStep = createAsyncThunk(
+  'documents/rejectApprovalStep',
+  async (
+    { documentId, approvalId, comments }: { documentId: number; approvalId: number; comments?: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await documentsAPI.rejectApprovalStep(documentId, approvalId, { comments });
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to reject');
     }
   }
 );
@@ -508,6 +553,44 @@ const documentSlice = createSlice({
       .addCase(fetchDocumentStats.rejected, (state, action) => {
         state.loading = false;
         state.error = typeof action.payload === 'string' ? action.payload : 'Failed to fetch document stats';
+      })
+
+      // Pending approvals
+      .addCase(fetchPendingApprovals.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchPendingApprovals.fulfilled, (state, action) => {
+        state.loading = false;
+        state.pendingApprovals = action.payload.data?.items || action.payload.data || [];
+      })
+      .addCase(fetchPendingApprovals.rejected, (state, action) => {
+        state.loading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Failed to fetch pending approvals';
+      })
+
+      .addCase(approveApprovalStep.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(approveApprovalStep.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(approveApprovalStep.rejected, (state, action) => {
+        state.loading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Failed to approve';
+      })
+
+      .addCase(rejectApprovalStep.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(rejectApprovalStep.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(rejectApprovalStep.rejected, (state, action) => {
+        state.loading = false;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Failed to reject';
       })
 
       // Bulk Update Status

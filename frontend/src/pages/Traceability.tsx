@@ -30,7 +30,8 @@ import {
   LinearProgress,
   CircularProgress,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Autocomplete
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,13 +46,17 @@ import {
   Search as SearchIcon2
 } from '@mui/icons-material';
 import { traceabilityAPI } from '../services/traceabilityAPI';
+import { usersAPI } from '../services/api';
 import { Batch } from '../types/traceability';
 import BatchList from '../components/Traceability/BatchList';
 import BatchRegistrationForm from '../components/Traceability/BatchRegistrationForm';
 import BatchDetail from '../components/Traceability/BatchDetail';
+import RecallDetail from '../components/Traceability/RecallDetail';
 import TraceabilityChain from '../components/Traceability/TraceabilityChain';
 import RecallSimulationForm from '../components/Traceability/RecallSimulationForm';
 import EnhancedSearchForm from '../components/Traceability/EnhancedSearchForm';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 // Interfaces
 interface Recall {
@@ -90,6 +95,7 @@ interface DashboardData {
 }
 
 const Traceability: React.FC = () => {
+  const { user: currentUser } = useSelector((state: RootState) => state.auth);
   // State management
   const [activeTab, setActiveTab] = useState(0);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -105,6 +111,8 @@ const Traceability: React.FC = () => {
   const [traceDialogOpen, setTraceDialogOpen] = useState(false);
   const [batchDetailOpen, setBatchDetailOpen] = useState(false);
   const [traceabilityChainOpen, setTraceabilityChainOpen] = useState(false);
+  const [recallDetailOpen, setRecallDetailOpen] = useState(false);
+  const [selectedRecall, setSelectedRecall] = useState<Recall | null>(null);
   const [recallSimulationOpen, setRecallSimulationOpen] = useState(false);
   const [enhancedSearchOpen, setEnhancedSearchOpen] = useState(false);
 
@@ -137,6 +145,24 @@ const Traceability: React.FC = () => {
     issue_discovered_date: '',
     regulatory_notification_required: false
   });
+
+  // Assigned-to user search state
+  const [assigneeInput, setAssigneeInput] = useState('');
+  const [assigneeOptions, setAssigneeOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  const [selectedAssignee, setSelectedAssignee] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const t = setTimeout(async () => {
+      try {
+        const resp = await usersAPI.getUsers({ page: 1, size: 10, search: assigneeInput });
+        const items = (resp?.items || []) as Array<any>;
+        if (active) setAssigneeOptions(items.map((u) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch {
+        if (active) setAssigneeOptions([]);
+      }
+    }, 300);
+    return () => { active = false; clearTimeout(t); };
+  }, [assigneeInput]);
 
   const [traceForm, setTraceForm] = useState({
     starting_batch_id: '',
@@ -259,7 +285,34 @@ const Traceability: React.FC = () => {
   const handleCreateRecall = async () => {
     try {
       setLoading(true);
-      await traceabilityAPI.createRecall(recallForm);
+      // Clean payload to match backend schema
+      const payload: any = {
+        recall_type: recallForm.recall_type,
+        title: recallForm.title,
+        description: recallForm.description,
+        reason: recallForm.reason,
+        issue_discovered_date: recallForm.issue_discovered_date,
+        total_quantity_affected: recallForm.total_quantity_affected === '' ? undefined : parseFloat(recallForm.total_quantity_affected as any),
+        quantity_in_distribution: recallForm.quantity_in_distribution === '' ? undefined : parseFloat(recallForm.quantity_in_distribution as any),
+        regulatory_notification_required: recallForm.regulatory_notification_required,
+        assigned_to: selectedAssignee?.id,
+      };
+      // Omit optional string lists if empty
+      if (recallForm.hazard_description && recallForm.hazard_description.trim() !== '') {
+        payload.hazard_description = recallForm.hazard_description;
+      }
+      if (recallForm.affected_products && recallForm.affected_products.trim() !== '') {
+        try { payload.affected_products = JSON.parse(recallForm.affected_products); } catch { /* ignore */ }
+      }
+      if (recallForm.affected_batches && recallForm.affected_batches.trim() !== '') {
+        try { payload.affected_batches = JSON.parse(recallForm.affected_batches); } catch { /* ignore */ }
+      }
+
+      if (!payload.assigned_to) {
+        throw new Error('Please select an assignee for this recall');
+      }
+
+      await traceabilityAPI.createRecall(payload);
       setRecallDialogOpen(false);
       setRecallForm({
         recall_type: '',
@@ -274,6 +327,8 @@ const Traceability: React.FC = () => {
         issue_discovered_date: '',
         regulatory_notification_required: false
       });
+      setSelectedAssignee(null);
+      setAssigneeInput('');
       fetchRecalls();
     } catch (err) {
       setError('Failed to create recall');
@@ -506,11 +561,8 @@ const Traceability: React.FC = () => {
                     </TableCell>
                     <TableCell>{recall.total_quantity_affected}</TableCell>
                     <TableCell>
-                      <IconButton size="small">
+                      <IconButton size="small" onClick={() => { setSelectedRecall(recall); setRecallDetailOpen(true); }}>
                         <VisibilityIcon />
-                      </IconButton>
-                      <IconButton size="small">
-                        <EditIcon />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -651,6 +703,15 @@ const Traceability: React.FC = () => {
         }}
       />
 
+      {selectedRecall && (
+        <RecallDetail
+          open={recallDetailOpen}
+          onClose={() => { setRecallDetailOpen(false); fetchRecalls(); }}
+          recallId={selectedRecall.id}
+          recallTitle={selectedRecall.title}
+        />
+      )}
+
       {/* Create Recall Dialog */}
       <Dialog open={recallDialogOpen} onClose={() => setRecallDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Create New Recall</DialogTitle>
@@ -668,6 +729,19 @@ const Traceability: React.FC = () => {
                   <MenuItem value="class_iii">Class III - No health effects</MenuItem>
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                options={assigneeOptions}
+                getOptionLabel={(option) => option.full_name ? `${option.full_name} (${option.username})` : option.username}
+                value={selectedAssignee}
+                onChange={(_, val) => setSelectedAssignee(val)}
+                onInputChange={(_, val) => setAssigneeInput(val)}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Assign To User" placeholder="Type to search users..." />
+                )}
+              />
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField

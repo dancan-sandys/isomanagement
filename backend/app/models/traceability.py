@@ -262,3 +262,54 @@ class TraceabilityReport(Base):
     
     def __repr__(self):
         return f"<TraceabilityReport(id={self.id}, report_number='{self.report_number}', type='{self.report_type}')>" 
+
+
+# Corrective Action Suite Models
+class RootCauseAnalysisRecord(Base):
+    __tablename__ = "recall_root_cause_analysis"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    immediate_cause = Column(Text, nullable=False)
+    underlying_cause = Column(Text, nullable=False)
+    systemic_cause = Column(Text, nullable=False)
+    analysis_date = Column(DateTime(timezone=True), nullable=False)
+    analyzed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PreventiveMeasureRecord(Base):
+    __tablename__ = "recall_preventive_measures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    measure_type = Column(String(50), nullable=False)
+    description = Column(Text, nullable=False)
+    implementation_date = Column(DateTime(timezone=True))
+    responsible_person = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class VerificationPlanRecord(Base):
+    __tablename__ = "recall_verification_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    verification_methods = Column(JSON, nullable=False)
+    verification_schedule = Column(Text, nullable=False)
+    responsible_person = Column(Integer, ForeignKey("users.id"), nullable=False)
+    success_criteria = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class EffectivenessReviewRecord(Base):
+    __tablename__ = "recall_effectiveness_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    review_date = Column(DateTime(timezone=True), nullable=False)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    effectiveness_score = Column(Integer, nullable=False)
+    additional_actions_required = Column(Boolean, default=False)
+    review_notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

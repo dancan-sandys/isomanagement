@@ -279,17 +279,35 @@ class PRPService:
             else:
                 severity = "low"
             
-            # Create non-conformance record
-            non_conformance = {
-                "checklist_id": checklist.id,
-                "severity": severity,
-                "description": f"Checklist '{checklist.name}' failed with {checklist.failed_items} failed items out of {checklist.total_items} total items",
-                "root_cause": "Checklist compliance failure",
-                "corrective_action": completion_data.corrective_actions or "Review and address failed checklist items",
-                "assigned_to": checklist.assigned_to,
-                "due_date": datetime.utcnow() + timedelta(days=7),
-                "evidence_files": completion_data.evidence_files
-            }
+            # Persist a Non-Conformance via NonConformanceService
+            try:
+                from app.schemas.nonconformance import NonConformanceCreate as NCCreate, NonConformanceSource
+                from app.services.nonconformance_service import NonConformanceService
+            except Exception:
+                NonConformanceService = None  # type: ignore
+            if NonConformanceService:
+                nc_title = f"PRP Checklist Failure: {checklist.name}"
+                nc_description = (
+                    f"Checklist '{checklist.name}' failed with {checklist.failed_items} of {checklist.total_items} items. "
+                    f"Compliance: {checklist.compliance_percentage:.1f}%"
+                )
+                nc_data = NCCreate(
+                    title=nc_title,
+                    description=nc_description,
+                    source=NonConformanceSource.PRP,
+                    batch_reference=None,
+                    product_reference=None,
+                    process_reference=f"PRPProgram:{checklist.program_id}/Checklist:{checklist.id}",
+                    location=None,
+                    severity=severity,
+                    impact_area="quality",
+                    category="PRP_Checklist",
+                    target_resolution_date=datetime.utcnow() + timedelta(days=7),
+                )
+                nc_service = NonConformanceService(self.db)
+                # Use checklist.creator as reporter if available; fallback to assigned_to
+                reported_by = checklist.created_by or (checklist.assigned_to or 1)
+                _nc = nc_service.create_non_conformance(nc_data, reported_by)
             
             # Create notification for non-conformance
             notification = Notification(

@@ -14,8 +14,27 @@ export const traceabilityAPI = {
     date_to?: string;
     product_name?: string;
   }) => {
-    const response = await api.get('/traceability/batches', { params });
-    return response.data;
+    // Clean params: map page/size -> skip/limit and drop empty strings for enums
+    const cleaned: any = {};
+    if (params) {
+      const { page, size, batch_type, status, search, ...rest } = params;
+      if (size) cleaned.limit = size;
+      if (page) cleaned.skip = (page - 1) * (size || 10);
+      if (batch_type) cleaned.batch_type = batch_type; // omit if empty
+      if (status) cleaned.status = status; // omit if empty
+      if (search && search.trim() !== '') cleaned.search = search;
+      Object.entries(rest).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') cleaned[k] = v;
+      });
+    }
+    const response = await api.get('/traceability/batches', { params: cleaned });
+    // Support both ResponseModel and raw data
+    const payload = response.data?.data || response.data;
+    // If server used skip/limit, adapt to page/size for UI
+    if (payload && typeof payload.total !== 'undefined' && typeof payload.items !== 'undefined') {
+      return payload;
+    }
+    return { items: payload?.items || [], total: payload?.total || 0 };
   },
 
   getBatch: async (batchId: number) => {
@@ -40,13 +59,34 @@ export const traceabilityAPI = {
 
   // Barcode and QR Code System
   // Use backend print data endpoint
-  printBarcode: async (batchId: number) => {
-    const response = await api.get(`/traceability/batches/${batchId}/barcode/print`);
+  generateBarcode: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/barcode`);
+    return response.data;
+  },
+
+  generateQRCode: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/qrcode`);
+    return response.data;
+  },
+
+  printBarcode: async (batchId: number, format: string = 'pdf') => {
+    const response = await api.get(`/traceability/batches/${batchId}/barcode/print`, {
+      params: { format },
+    });
     return response.data;
   },
 
   // Traceability Chain
   // No generic /trace endpoint on backend; prefer backward/forward
+  getTraceabilityChain: async (batchId: number) => {
+      const response = await api.get(`/traceability/batches/${batchId}/trace/chain`);
+    return response.data?.data || response.data;
+  },
+
+  getFullTrace: async (batchId: number, depth: number = 5) => {
+    const response = await api.get(`/traceability/batches/${batchId}/trace/full`, { params: { depth } });
+    return response.data?.data || response.data;
+  },
 
   createTraceabilityLink: async (linkData: {
     source_batch_id: number;
@@ -55,11 +95,12 @@ export const traceabilityAPI = {
     quantity_used: number;
     process_step: string;
   }) => {
-    const response = await api.post('/traceability/links', linkData);
-    return response.data;
+    // Not available in backend yet; defer to Phase 3
+    throw new Error('Traceability links creation endpoint is not implemented on the backend');
   },
 
   deleteTraceabilityLink: async (linkId: number) => {
+    // Not available in backend yet; defer to Phase 3
     const response = await api.delete(`/traceability/links/${linkId}`);
     return response.data;
   },
@@ -79,12 +120,7 @@ export const traceabilityAPI = {
     return response.data;
   },
 
-  getFullTrace: async (batchId: number, depth: number = 5) => {
-    const response = await api.get(`/traceability/batches/${batchId}/full-trace`, {
-      params: { depth }
-    });
-    return response.data;
-  },
+  // Kept for compatibility if backend full-trace is unavailable; backend now exposes /trace/full
 
   // Recall Management
   getRecalls: async (params?: {
@@ -96,8 +132,14 @@ export const traceabilityAPI = {
     date_from?: string;
     date_to?: string;
   }) => {
-    const response = await api.get('/traceability/recalls', { params });
-    return response.data;
+    const cleaned: any = {};
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') cleaned[k] = v;
+      });
+    }
+    const response = await api.get('/traceability/recalls', { params: cleaned });
+    return response.data?.data || response.data;
   },
 
   getRecall: async (recallId: number) => {
@@ -174,8 +216,14 @@ export const traceabilityAPI = {
     date_from?: string;
     date_to?: string;
   }) => {
-    const response = await api.get('/traceability/reports', { params });
-    return response.data;
+    const cleaned: any = {};
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') cleaned[k] = v;
+      });
+    }
+    const response = await api.get('/traceability/reports', { params: cleaned });
+    return response.data?.data || response.data;
   },
 
   getTraceabilityReport: async (reportId: number) => {
@@ -214,6 +262,11 @@ export const traceabilityAPI = {
     return response.data;
   },
 
+  deleteCorrectiveAction: async (recallId: number, actionId: number) => {
+    const response = await api.delete(`/traceability/recalls/${recallId}/corrective-actions/${actionId}`);
+    return response.data;
+  },
+
   // Root Cause Analysis
   getRootCauseAnalysis: async (recallId: number) => {
     const response = await api.get(`/traceability/recalls/${recallId}/root-cause-analysis`);
@@ -225,6 +278,8 @@ export const traceabilityAPI = {
     return response.data;
   },
 
+  // Optional updates/deletes can be added later if backend supports
+
   // Preventive Measures
   getPreventiveMeasures: async (recallId: number) => {
     const response = await api.get(`/traceability/recalls/${recallId}/preventive-measures`);
@@ -233,6 +288,11 @@ export const traceabilityAPI = {
 
   createPreventiveMeasure: async (recallId: number, measureData: any) => {
     const response = await api.post(`/traceability/recalls/${recallId}/preventive-measures`, measureData);
+    return response.data;
+  },
+
+  deletePreventiveMeasure: async (recallId: number, measureId: number) => {
+    const response = await api.delete(`/traceability/recalls/${recallId}/preventive-measures/${measureId}`);
     return response.data;
   },
 
@@ -247,6 +307,11 @@ export const traceabilityAPI = {
     return response.data;
   },
 
+  deleteVerificationPlan: async (recallId: number, planId: number) => {
+    const response = await api.delete(`/traceability/recalls/${recallId}/verification-plans/${planId}`);
+    return response.data;
+  },
+
   // Effectiveness Reviews
   getEffectivenessReviews: async (recallId: number) => {
     const response = await api.get(`/traceability/recalls/${recallId}/effectiveness-reviews`);
@@ -258,36 +323,42 @@ export const traceabilityAPI = {
     return response.data;
   },
 
+  deleteEffectivenessReview: async (recallId: number, reviewId: number) => {
+    const response = await api.delete(`/traceability/recalls/${recallId}/effectiveness-reviews/${reviewId}`);
+    return response.data;
+  },
+
   // Dashboard
   getDashboard: async () => {
     const response = await api.get('/traceability/dashboard/enhanced');
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   // Export functionality
   exportBatches: async (format: string = 'csv', filters?: any) => {
-    const response = await api.post('/traceability/export/batches', { format, filters });
-    return response.data;
+    // Not supported by backend
+    throw new Error('Export batches endpoint is not available on the backend');
   },
 
   exportRecalls: async (format: string = 'csv', filters?: any) => {
-    const response = await api.post('/traceability/export/recalls', { format, filters });
-    return response.data;
+    // Not supported by backend
+    throw new Error('Export recalls endpoint is not available on the backend');
   },
 
   exportTraceabilityReport: async (reportId: number, format: string = 'pdf') => {
-    const response = await api.post(`/traceability/reports/${reportId}/export`, { format });
-    return response.data;
+    // Not supported by backend
+    throw new Error('Export traceability report endpoint is not available on the backend');
   },
 
   // Bulk operations
   bulkUpdateBatches: async (batchIds: number[], updateData: any) => {
-    const response = await api.put('/traceability/batches/bulk', { batch_ids: batchIds, ...updateData });
-    return response.data;
+    // Not available on backend; defer to Phase 3
+    throw new Error('Bulk update for batches is not implemented on the backend');
   },
 
   bulkDeleteBatches: async (batchIds: number[]) => {
-    const response = await api.delete('/traceability/batches/bulk', { data: { batch_ids: batchIds } });
-    return response.data;
+    // Fallback: delete individually until bulk endpoint exists
+    await Promise.all(batchIds.map((id) => api.delete(`/traceability/batches/${id}`)));
+    return { success: true, deleted: batchIds.length } as any;
   },
 }; 

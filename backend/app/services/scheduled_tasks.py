@@ -7,8 +7,10 @@ from sqlalchemy import and_
 
 from app.core.database import get_db
 from app.models.document import Document, DocumentStatus, DocumentChangeLog
+from app.models.settings import ApplicationSetting
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
+from app.models.equipment import MaintenancePlan, CalibrationPlan
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +177,77 @@ class ScheduledTasksService:
             logger.error(f"Error marking documents as obsolete: {str(e)}")
             self.db.rollback()
             return 0
+
+    def enforce_document_retention_policy(self) -> dict:
+        """
+        Auto-obsolete/archive documents by category based on configured retention days.
+        Policy keys: retention.<category>.days where category in {haccp, prp, record}
+        """
+        try:
+            # Load retention settings
+            settings_map = {s.key: s.value for s in self.db.query(ApplicationSetting).filter(ApplicationSetting.key.like('retention.%')).all()}
+            now = datetime.utcnow()
+
+            def days_for(key: str, default: int) -> int:
+                try:
+                    return int(settings_map.get(key, default))
+                except Exception:
+                    return default
+
+            cat_days = {
+                'haccp': days_for('retention.haccp.days', 1825),
+                'prp': days_for('retention.prp.days', 1095),
+                'record': days_for('retention.record.days', 3650),
+            }
+
+            updated = 0
+            # Find candidates by category and created_at age
+            candidates = self.db.query(Document).all()
+            for doc in candidates:
+                try:
+                    created = doc.created_at or now
+                    age_days = (now - created).days
+                    category = (doc.category.value if doc.category else '').lower()
+                    keep_days = cat_days.get(category)
+                    if not keep_days:
+                        continue
+                    # Only apply to approved/under_review docs; draft may be excluded
+                    if doc.status not in [DocumentStatus.APPROVED, DocumentStatus.UNDER_REVIEW]:
+                        continue
+                    if age_days >= keep_days:
+                        old_status = doc.status
+                        # First mark obsolete if not already
+                        if doc.status != DocumentStatus.OBSOLETE:
+                            doc.status = DocumentStatus.OBSOLETE
+                            updated += 1
+                            change_log = DocumentChangeLog(
+                                document_id=doc.id,
+                                change_type="status_changed",
+                                change_description=f"Auto-retention: {old_status.value} -> obsolete",
+                            )
+                            self.db.add(change_log)
+                        else:
+                            # If already obsolete for > 90 days, archive
+                            if doc.updated_at and (now - doc.updated_at).days >= 90:
+                                doc.status = DocumentStatus.ARCHIVED
+                                updated += 1
+                                change_log = DocumentChangeLog(
+                                    document_id=doc.id,
+                                    change_type="status_changed",
+                                    change_description="Auto-retention: obsolete -> archived",
+                                )
+                                self.db.add(change_log)
+                except Exception as inner_e:
+                    logger.error(f"Retention enforcement error for doc {doc.id}: {inner_e}")
+                    continue
+
+            self.db.commit()
+            logger.info(f"Retention policy enforcement updated {updated} documents")
+            return {"updated": updated}
+        except Exception as e:
+            logger.error(f"Error enforcing retention policy: {str(e)}")
+            self.db.rollback()
+            return {"updated": 0, "error": str(e)}
     
     def cleanup_old_notifications(self, days_old: int = 90) -> int:
         """
@@ -209,6 +282,9 @@ class ScheduledTasksService:
             "review_notifications_created": 0,
             "obsolete_documents_marked": 0,
             "notifications_cleaned": 0,
+            "retention_enforced": 0,
+            "due_maintenance_alerts": 0,
+            "due_calibration_alerts": 0,
             "errors": []
         }
         
@@ -225,6 +301,41 @@ class ScheduledTasksService:
             
             # Clean up old notifications
             results["notifications_cleaned"] = self.cleanup_old_notifications()
+
+            # Enforce retention policy
+            retention_result = self.enforce_document_retention_policy()
+            results["retention_enforced"] = retention_result.get("updated", 0)
+
+            # Alerts for equipment due dates within 7 days
+            try:
+                now = datetime.utcnow()
+                in_seven = now + timedelta(days=7)
+                due_m = self.db.query(MaintenancePlan).filter(MaintenancePlan.next_due_at != None, MaintenancePlan.next_due_at <= in_seven).all()
+                for plan in due_m:
+                    self.db.add(Notification(
+                        user_id=1,
+                        title="Maintenance Due Soon",
+                        message=f"Equipment ID {plan.equipment_id} maintenance is due by {plan.next_due_at}",
+                        notification_type=NotificationType.WARNING,
+                        priority=NotificationPriority.MEDIUM,
+                        category=NotificationCategory.MAINTENANCE
+                    ))
+                results["due_maintenance_alerts"] = len(due_m)
+                due_c = self.db.query(CalibrationPlan).filter(CalibrationPlan.next_due_at != None, CalibrationPlan.next_due_at <= in_seven).all()
+                for plan in due_c:
+                    self.db.add(Notification(
+                        user_id=1,
+                        title="Calibration Due Soon",
+                        message=f"Equipment ID {plan.equipment_id} calibration is due by {plan.next_due_at}",
+                        notification_type=NotificationType.WARNING,
+                        priority=NotificationPriority.MEDIUM,
+                        category=NotificationCategory.MAINTENANCE
+                    ))
+                results["due_calibration_alerts"] = len(due_c)
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                results["errors"].append(f"equipment alerts: {e}")
             
         except Exception as e:
             error_msg = f"Error in maintenance tasks: {str(e)}"

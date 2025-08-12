@@ -43,12 +43,12 @@ import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
 import { RootState } from '../store';
 import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
+import { dashboardAPI } from '../services/api';
 
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
 
-  // Mock data - in real implementation, this would come from API calls
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
@@ -59,82 +59,51 @@ const Dashboard: React.FC = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // In real implementation, make API calls based on user role
-      // For now, using mock data
-      const mockData = getMockDashboardData();
-      setDashboardData(mockData);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const [statsResp, activityResp] = await Promise.all([
+        dashboardAPI.getStats(),
+        dashboardAPI.getRecentActivity(),
+      ]);
 
-  const getMockDashboardData = () => {
-    if (isSystemAdministrator(user)) {
-      return {
-        totalUsers: 25,
-        activeUsers: 20,
-        pendingApprovals: 3,
-        systemAlerts: 2,
-        recentActivities: [
-          { id: 1, action: 'New user registered', time: '2 hours ago', type: 'info' },
-          { id: 2, action: 'System backup completed', time: '4 hours ago', type: 'success' },
-          { id: 3, action: 'Security audit scheduled', time: '1 day ago', type: 'warning' },
-        ],
+      const stats = statsResp?.data || statsResp; // some services wrap data
+      const activitiesWrapper = activityResp?.data || activityResp;
+      const activities = activitiesWrapper?.activities || activitiesWrapper?.data?.activities || [];
+
+      // Map backend stats to UI-friendly structure
+      const mapped = {
+        totalUsers: stats?.totalUsers ?? 0,
+        activeUsers: stats?.activeUsers ?? 0,
+        pendingApprovals: stats?.pendingApprovals ?? 0,
+        systemAlerts: stats?.openIssues ?? 0,
         systemHealth: {
-          database: 'healthy',
-          storage: '85%',
-          performance: 'excellent',
-          security: 'up-to-date'
-        }
+          database: 'healthy', // use dashboard/system-status later if needed
+          storage: 'n/a',
+          performance: 'ok',
+          security: 'ok',
+        },
+        recentActivities: activities.map((a: any, idx: number) => ({
+          id: a.id ?? idx,
+          action: a.title ? `${a.action}: ${a.title}` : a.action,
+          time: a.timestamp ?? '',
+          type: 'info',
+        })),
       };
-    } else if (hasRole(user, 'QA Manager')) {
-      return {
-        openNCs: 12,
-        capaCompletion: 87,
-        documentUpdates: 5,
-        auditSchedule: 2,
-        ncTrends: [
-          { id: 1, title: 'Temperature Deviation', status: 'open', priority: 'high', assignedTo: 'John Doe', dueDate: '2024-01-15' },
-          { id: 2, title: 'Document Version Mismatch', status: 'pending', priority: 'medium', assignedTo: 'Jane Smith', dueDate: '2024-01-20' },
-          { id: 3, title: 'Training Overdue', status: 'closed', priority: 'low', assignedTo: 'Mike Johnson', dueDate: '2024-01-10' },
-        ],
-        capaDeadlines: [
-          { id: 1, title: 'Implement New Monitoring System', dueDate: '2024-01-25', status: 'in_progress' },
-          { id: 2, title: 'Update HACCP Documentation', dueDate: '2024-02-01', status: 'pending' },
-        ],
-      };
-    } else if (hasRole(user, 'Production Operator')) {
-      return {
-        todayTasks: [
-          { id: 1, title: 'Temperature Monitoring - Line A', completed: false, time: '09:00' },
-          { id: 2, title: 'Cleaning Checklist - Zone 3', completed: true, time: '10:30' },
-          { id: 3, title: 'Quality Check - Batch #2024-001', completed: false, time: '14:00' },
-        ],
-        recentActivities: [
-          { id: 1, action: 'Completed temperature check', time: '2 hours ago', status: 'success' },
-          { id: 2, action: 'Reported minor deviation', time: '4 hours ago', status: 'warning' },
-        ],
-      };
-    } else if (hasRole(user, 'Auditor')) {
-      return {
-        complianceScore: 94,
-        auditFindings: [
-          { id: 1, finding: 'Document control procedures need updating', severity: 'medium', status: 'open' },
-          { id: 2, finding: 'Training records incomplete', severity: 'high', status: 'in_progress' },
-        ],
-      };
-    } else {
-      // Default dashboard for other roles
-      return {
-        welcomeMessage: `Welcome, ${user?.full_name}!`,
-        quickActions: [
+
+      // Default welcome block for non-admins
+      if (!isSystemAdministrator(user)) {
+        (mapped as any).welcomeMessage = `Welcome, ${user?.full_name || user?.username || 'User'}!`;
+        (mapped as any).quickActions = [
           { title: 'View Documents', path: '/documents', icon: Description },
           { title: 'Check Notifications', path: '/notifications', icon: Notifications },
           { title: 'Update Profile', path: '/profile', icon: Person },
-        ],
-      };
+        ];
+      }
+
+      setDashboardData(mapped);
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+      setDashboardData(null);
+    } finally {
+      setLoading(false);
     }
   };
 

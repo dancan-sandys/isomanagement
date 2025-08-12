@@ -41,6 +41,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
+  Password as PasswordIcon,
   Person as PersonIcon,
   Group as GroupIcon,
   School as SchoolIcon,
@@ -105,6 +106,9 @@ const Users: React.FC = () => {
   // Dialog states
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [viewUserDialogOpen, setViewUserDialogOpen] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // Form states
@@ -120,6 +124,14 @@ const Users: React.FC = () => {
     employee_id: '',
     bio: ''
   });
+  const [createConfirmPassword, setCreateConfirmPassword] = useState('');
+  const [formErrors, setFormErrors] = useState<{
+    username?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+    role_id?: string;
+  }>({});
 
   // Filter states
   const [userFilters, setUserFilters] = useState({
@@ -165,7 +177,7 @@ const Users: React.FC = () => {
     try {
       setLoading(true);
       const response = await usersAPI.getDashboard();
-      setDashboardData(response.data);
+      setDashboardData(response);
     } catch (err: any) {
       setError(formatErrorMessage(err));
     } finally {
@@ -182,12 +194,13 @@ const Users: React.FC = () => {
       if (userFilters.status?.trim()) params.status = userFilters.status;
       if (userFilters.department?.trim()) params.department = userFilters.department;
       const response = await usersAPI.getUsers(params);
-      setUsers(response.data.items || []);
+      // Backend returns PaginatedResponse directly (no data wrapper)
+      setUsers(response.items || []);
       setPagination({
-        page: response.data.page || 1,
-        size: response.data.size || 10,
-        total: response.data.total || 0,
-        pages: response.data.pages || 0,
+        page: response.page || 1,
+        size: response.size || 10,
+        total: response.total || 0,
+        pages: response.pages || 0,
       });
     } catch (err: any) {
       setError(formatErrorMessage(err));
@@ -198,6 +211,7 @@ const Users: React.FC = () => {
 
   // Form handlers
   const handleCreateUser = async () => {
+    if (!validateUserForm(false)) return;
     try {
       setLoading(true);
       await usersAPI.createUser({ ...userForm, role_id: parseInt(userForm.role_id) });
@@ -212,6 +226,7 @@ const Users: React.FC = () => {
   };
 
   const handleUpdateUser = async (userId: number) => {
+    if (!validateUserForm(true)) return;
     try {
       setLoading(true);
       const updateData: any = { ...userForm };
@@ -279,6 +294,8 @@ const Users: React.FC = () => {
       bio: '',
     });
     setSelectedUser(null);
+    setCreateConfirmPassword('');
+    setFormErrors({});
   };
 
   // Utility functions
@@ -307,6 +324,38 @@ const Users: React.FC = () => {
 
   const getRoleDisplayName = (role: string) => role.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   const getStatusDisplayName = (status: string) => status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  const evaluatePasswordStrength = (password: string): { score: number; label: 'Very Weak'|'Weak'|'Medium'|'Strong'|'Very Strong' } => {
+    let score = 0;
+    if (!password) return { score: 0, label: 'Very Weak' };
+    const lengthOK = password.length >= 8;
+    const hasLower = /[a-z]/.test(password);
+    const hasUpper = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    const checksPassed = [lengthOK, hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+    score = Math.min(100, Math.round((checksPassed / 5) * 100));
+    const label = score >= 80 ? 'Very Strong' : score >= 60 ? 'Strong' : score >= 40 ? 'Medium' : score >= 20 ? 'Weak' : 'Very Weak';
+    return { score, label };
+  };
+  const passwordMeetsPolicy = (password: string): boolean => {
+    return password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password);
+  };
+
+  const isEmailValid = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const validateUserForm = (isEdit: boolean): boolean => {
+    const errors: typeof formErrors = {};
+    if (!userForm.username.trim()) errors.username = 'Username is required';
+    if (!userForm.email.trim()) errors.email = 'Email is required';
+    else if (!isEmailValid(userForm.email.trim())) errors.email = 'Invalid email';
+    if (!userForm.role_id) errors.role_id = 'Role is required';
+    if (!isEdit) {
+      if (!passwordMeetsPolicy(userForm.password)) errors.password = 'Password must meet policy';
+      if (userForm.password !== createConfirmPassword) errors.confirmPassword = 'Passwords do not match';
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => setPagination(prev => ({ ...prev, page }));
   const handleFilterApply = () => { setPagination(prev => ({ ...prev, page: 1 })); fetchUsers(); };
@@ -492,6 +541,7 @@ const Users: React.FC = () => {
                     <TableCell>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setViewUserDialogOpen(true); }}><VisibilityIcon /></IconButton>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setUserForm({ username: user.username, email: user.email, full_name: user.full_name, password: '', role_id: user.role_id.toString(), department: user.department || '', position: user.position || '', phone: user.phone || '', employee_id: user.employee_id || '', bio: user.bio || '' }); setUserDialogOpen(true); }}><EditIcon /></IconButton>
+                      <IconButton size="small" onClick={() => { setSelectedUser(user); setResetPassword(''); setResetDialogOpen(true); }} title="Reset Password"><PasswordIcon /></IconButton>
                       {user.is_active ? (
                         <IconButton size="small" onClick={() => handleDeactivateUser(user.id)}><LockIcon /></IconButton>
                       ) : (
@@ -525,14 +575,25 @@ const Users: React.FC = () => {
         <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Username" value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!selectedUser} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Email" type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Username" value={userForm.username} onChange={(e) => { setUserForm({ ...userForm, username: e.target.value }); setFormErrors({ ...formErrors, username: undefined }); }} disabled={!!selectedUser} error={!!formErrors.username} helperText={formErrors.username} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Email" type="email" value={userForm.email} onChange={(e) => { setUserForm({ ...userForm, email: e.target.value }); setFormErrors({ ...formErrors, email: undefined }); }} error={!!formErrors.email} helperText={formErrors.email} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Full Name" value={userForm.full_name} onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} disabled={!!selectedUser} helperText={selectedUser ? 'Leave blank to keep current password' : ''} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Password" type="password" value={userForm.password} onChange={(e) => { setUserForm({ ...userForm, password: e.target.value }); setFormErrors({ ...formErrors, password: undefined }); }} disabled={!!selectedUser} helperText={selectedUser ? 'Leave blank to keep current password' : (formErrors.password || '')} error={!!formErrors.password} /></Grid>
+            {!selectedUser && (
+              <Grid item xs={12} md={6}><TextField fullWidth label="Confirm Password" type="password" value={createConfirmPassword} onChange={(e) => { setCreateConfirmPassword(e.target.value); setFormErrors({ ...formErrors, confirmPassword: undefined }); }} error={!!formErrors.confirmPassword} helperText={formErrors.confirmPassword} /></Grid>
+            )}
+            {!selectedUser && (
+              <Grid item xs={12} md={6}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Strength: {evaluatePasswordStrength(userForm.password).label}</Typography>
+                  <LinearProgress variant="determinate" value={evaluatePasswordStrength(userForm.password).score} sx={{ mt: 0.5 }} />
+                </Box>
+              </Grid>
+            )}
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Role</InputLabel>
-                <Select value={userForm.role_id} onChange={(e) => setUserForm({ ...userForm, role_id: e.target.value })}>
+                <Select value={userForm.role_id} onChange={(e) => { setUserForm({ ...userForm, role_id: e.target.value }); setFormErrors({ ...formErrors, role_id: undefined }); }} error={!!formErrors.role_id}>
                   <MenuItem value="1">System Administrator</MenuItem>
                   <MenuItem value="2">QA Manager</MenuItem>
                   <MenuItem value="3">QA Specialist</MenuItem>
@@ -542,6 +603,7 @@ const Users: React.FC = () => {
                   <MenuItem value="7">Lab Technician</MenuItem>
                   <MenuItem value="8">Viewer</MenuItem>
                 </Select>
+                {formErrors.role_id && <Typography variant="caption" color="error">{formErrors.role_id}</Typography>}
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Department" value={userForm.department} onChange={(e) => setUserForm({ ...userForm, department: e.target.value })} /></Grid>
@@ -593,6 +655,66 @@ const Users: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setViewUserDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Admin Reset Password Dialog */}
+      <Dialog open={resetDialogOpen} onClose={() => setResetDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Admin Reset Password {selectedUser ? `— ${selectedUser.username}` : ''}</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This will immediately set a new password for the user. The user should change it after first login.
+          </Alert>
+          <TextField
+            fullWidth
+            type="password"
+            label="New Password"
+            value={resetPassword}
+            onChange={(e) => setResetPassword(e.target.value)}
+            helperText="Must be at least 8 characters and include upper, lower, number, and special character"
+          />
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">Strength: {evaluatePasswordStrength(resetPassword).label}</Typography>
+            <LinearProgress variant="determinate" value={evaluatePasswordStrength(resetPassword).score} sx={{ mt: 0.5 }} />
+          </Box>
+          <TextField
+            fullWidth
+            sx={{ mt: 2 }}
+            type="password"
+            label="Confirm New Password"
+            value={resetPasswordConfirm}
+            onChange={(e) => setResetPasswordConfirm(e.target.value)}
+            error={!!resetPassword && resetPasswordConfirm.length > 0 && resetPassword !== resetPasswordConfirm}
+            helperText={resetPasswordConfirm && resetPassword !== resetPasswordConfirm ? 'Passwords do not match' : ' '}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={
+              loading ||
+              !selectedUser ||
+              !passwordMeetsPolicy(resetPassword) ||
+              resetPassword !== resetPasswordConfirm
+            }
+            onClick={async () => {
+              if (!selectedUser) return;
+              try {
+                setLoading(true);
+                await usersAPI.resetPassword(selectedUser.id, resetPassword);
+                setResetDialogOpen(false);
+                setResetPassword('');
+                setResetPasswordConfirm('');
+              } catch (err: any) {
+                setError(formatErrorMessage(err));
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            Reset Password
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

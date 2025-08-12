@@ -31,24 +31,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  FormControlLabel,
-  Switch,
-  Toolbar,
-  alpha,
-  Badge,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
+  
 } from '@mui/material';
 import {
   Add,
   Edit,
   Delete,
   Visibility,
-  Refresh,
+  
   Search,
   FilterList,
   ViewList,
@@ -57,6 +47,11 @@ import {
   Inventory2,
   Cancel,
   Coronavirus as Allergen,
+  Inventory,
+  Science,
+  Build,
+  Support,
+  CheckCircle,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -77,7 +72,7 @@ import { RootState, AppDispatch } from '../../store';
 import { Material, MaterialFilters } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
 import { EnhancedStatusChip } from '../UI';
-import { DataTable } from '../UI/DataTable';
+ 
 import { NotificationToast } from '../UI';
 
 interface MaterialListProps {
@@ -133,13 +128,13 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== filters.search) {
-        dispatch(setMaterialFilters({ search: searchTerm }));
+      if (searchTerm !== (filters.materials as any).search) {
+        dispatch(setMaterialFilters({ ...(filters.materials || {}), search: searchTerm } as any));
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch]);
+  }, [searchTerm, dispatch, filters.materials]);
 
   const loadMaterials = () => {
     dispatch(fetchMaterials({
@@ -163,7 +158,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
   };
 
   const handleFilterChange = () => {
-    const newFilters: MaterialFilters = {};
+    const newFilters: MaterialFilters & { date_from?: string; date_to?: string } = {};
     
     if (filterCategory) newFilters.category = filterCategory;
     if (filterSupplier) newFilters.supplier_id = parseInt(filterSupplier);
@@ -172,7 +167,8 @@ const MaterialList: React.FC<MaterialListProps> = ({
     if (filterDateFrom) newFilters.date_from = format(filterDateFrom, 'yyyy-MM-dd');
     if (filterDateTo) newFilters.date_to = format(filterDateTo, 'yyyy-MM-dd');
 
-    dispatch(setMaterialFilters(newFilters));
+    // Cast to any because store typing for MaterialFilters currently omits date range
+    dispatch(setMaterialFilters(newFilters as any));
     setPage(0);
   };
 

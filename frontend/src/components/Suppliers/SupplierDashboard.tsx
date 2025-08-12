@@ -33,7 +33,24 @@ import {
   MenuItem,
   TextField,
 } from '@mui/material';
-import { Business, CheckCircle, Warning, LocalShipping, Refresh, Add } from '@mui/icons-material';
+import {
+  Business,
+  CheckCircle,
+  Warning,
+  LocalShipping,
+  Refresh,
+  Add,
+  Inventory,
+  Science,
+  Build,
+  Support,
+  Assessment,
+  Notifications,
+  Schedule,
+  Error,
+  Info,
+  Analytics,
+} from '@mui/icons-material';
 import {
   LineChart,
   Line,
@@ -94,9 +111,14 @@ const SupplierDashboard: React.FC = () => {
     severity: 'success' | 'error' | 'info' | 'warning';
   }>({ open: false, message: '', severity: 'info' });
 
+  // Load once on mount only; no polling, no re-fetch on state changes
+  const loadedOnceRef = React.useRef(false);
   useEffect(() => {
+    if (loadedOnceRef.current) return;
+    loadedOnceRef.current = true;
     loadDashboardData();
-  }, [timeRange, selectedCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadDashboardData = async () => {
     try {

@@ -8,12 +8,15 @@ from app.core.database import get_db
 from app.core.security import (
     authenticate_user, create_access_token, create_refresh_token,
     create_user_session, invalidate_user_session, get_current_user,
-    get_password_hash, verify_token, verify_password
+    get_password_hash, verify_token, verify_password, validate_password_policy
 )
 from app.models.user import User, UserSession
 from app.models.rbac import Role
 from app.schemas.auth import Token, TokenData, UserLogin, UserCreate, UserResponse, UserSignup
 from app.schemas.common import ResponseModel
+from app.services import log_audit_event
+from app.core.config import settings
+from datetime import timedelta as _timedelta
 
 router = APIRouter()
 
@@ -27,9 +30,20 @@ async def login(
     """
     Authenticate user and return access token
     """
-    # Authenticate user
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+    # Authenticate user (with lockout tracking)
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        # Increment failed attempts and lock if threshold exceeded
+        if user:
+            now = datetime.utcnow()
+            if user.locked_until and user.locked_until > now:
+                # Already locked
+                pass
+            else:
+                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+                if user.failed_login_attempts >= settings.ACCOUNT_LOCKOUT_THRESHOLD:
+                    user.locked_until = now + _timedelta(minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES)
+                db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -61,10 +75,16 @@ async def login(
     ip_address = request.client.host if request and request.client else None
     user_agent = request.headers.get("user-agent") if request else None
     create_user_session(db, user.id, access_token, refresh_token, ip_address, user_agent)
+    # Audit: successful login
+    try:
+        log_audit_event(db, user.id, action="login_success", resource_type="auth", details={"username": user.username}, ip_address=ip_address, user_agent=user_agent)
+    except Exception:
+        pass
     
-    # Update last login
+    # Update last login & reset failure window
     user.last_login = datetime.utcnow()
     user.failed_login_attempts = 0
+    user.locked_until = None
     db.commit()
     
     # Get role name for response
@@ -91,7 +111,7 @@ async def login(
         updated_at=user.updated_at
     )
     
-    return ResponseModel(
+    response = ResponseModel(
         success=True,
         message="Login successful",
         data={
@@ -102,6 +122,7 @@ async def login(
             "user": user_response
         }
     )
+    return response
 
 
 @router.post("/signup", response_model=ResponseModel[UserResponse])
@@ -145,6 +166,9 @@ async def signup(
             detail="System Administrator role not found"
         )
     
+    # Enforce password policy
+    if not validate_password_policy(user_data.password):
+        raise HTTPException(status_code=400, detail="Password does not meet security requirements")
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
@@ -208,6 +232,13 @@ async def logout(
         token = auth_header.split(" ")[1]
         invalidate_user_session(db, token)
     
+    # Audit logout
+    try:
+        ip_address = request.client.host if request and request.client else None
+        user_agent = request.headers.get("user-agent") if request else None
+        log_audit_event(db, current_user.id, action="logout", resource_type="auth", details=None, ip_address=ip_address, user_agent=user_agent)
+    except Exception:
+        pass
     return ResponseModel(
         success=True,
         message="Successfully logged out"
@@ -294,6 +325,11 @@ async def refresh_token(
         updated_at=user.updated_at
     )
     
+    # Audit token refresh
+    try:
+        log_audit_event(db, user.id, action="token_refresh", resource_type="auth", details=None)
+    except Exception:
+        pass
     return ResponseModel(
         success=True,
         message="Token refreshed successfully",
@@ -339,6 +375,9 @@ async def register(
             detail="Invalid role ID"
         )
     
+    # Enforce password policy
+    if not validate_password_policy(user_data.password):
+        raise HTTPException(status_code=400, detail="Password does not meet security requirements")
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
@@ -377,6 +416,11 @@ async def register(
         updated_at=db_user.updated_at
     )
     
+    # Audit user registration
+    try:
+        log_audit_event(db, db_user.id, action="user_registered", resource_type="user", resource_id=str(db_user.id), details={"username": db_user.username})
+    except Exception:
+        pass
     return ResponseModel(
         success=True,
         message="User registered successfully",
@@ -440,10 +484,18 @@ async def change_password(
             detail="Incorrect current password"
         )
     
+    # Enforce password policy
+    if not validate_password_policy(new_password):
+        raise HTTPException(status_code=400, detail="Password does not meet security requirements")
     # Update password
     current_user.hashed_password = get_password_hash(new_password)
     db.commit()
     
+    # Audit password change
+    try:
+        log_audit_event(db, current_user.id, action="password_changed", resource_type="user", resource_id=str(current_user.id))
+    except Exception:
+        pass
     return ResponseModel(
         success=True,
         message="Password changed successfully"

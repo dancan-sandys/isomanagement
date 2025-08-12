@@ -280,11 +280,65 @@ class HACCPService:
         self.db.commit()
         self.db.refresh(monitoring_log)
         
-        # Create alert if out of spec
+        # Create alert if out of spec and auto-create Non-Conformance
         alert_created = False
         if not is_within_limits:
             alert_created = self._create_out_of_spec_alert(ccp, monitoring_log)
-        
+
+            # Attempt to create a Non-Conformance when out-of-spec
+            try:
+                from app.schemas.nonconformance import (
+                    NonConformanceCreate as NCCreate,
+                    NonConformanceSource,
+                )
+                from app.services.nonconformance_service import NonConformanceService
+
+                # Determine severity heuristically
+                severity = "high"
+                try:
+                    if ccp.critical_limit_max is not None and monitoring_log.measured_value is not None:
+                        # If exceeds by >10% of max range, mark critical
+                        range_span = (
+                            (ccp.critical_limit_max - (ccp.critical_limit_min or 0))
+                            if ccp.critical_limit_min is not None
+                            else ccp.critical_limit_max or 1
+                        )
+                        if range_span:
+                            delta = abs(monitoring_log.measured_value - (ccp.critical_limit_max or 0))
+                            if delta > 0.1 * abs(range_span):
+                                severity = "critical"
+                except Exception:
+                    pass
+
+                nc_title = f"CCP Out-of-Spec: {ccp.ccp_name}"
+                nc_description = (
+                    f"Batch {monitoring_log.batch_number}: {monitoring_log.measured_value}"
+                    f"{(' ' + (monitoring_log.unit or '')) if monitoring_log.unit else ''} outside limits"
+                    f" ({ccp.critical_limit_min or 'N/A'} - {ccp.critical_limit_max or 'N/A'})."
+                )
+                process_ref = f"Product:{ccp.product_id}/CCP:{ccp.id}"
+
+                nc_data = NCCreate(
+                    title=nc_title,
+                    description=nc_description,
+                    source=NonConformanceSource.HACCP,
+                    batch_reference=monitoring_log.batch_number,
+                    product_reference=str(ccp.product_id),
+                    process_reference=process_ref,
+                    location=None,
+                    severity=severity,
+                    impact_area="food_safety",
+                    category="CCP_Out_of_Spec",
+                    target_resolution_date=datetime.utcnow() + timedelta(days=7),
+                )
+
+                nc_service = NonConformanceService(self.db)
+                reporter = created_by
+                nc_service.create_non_conformance(nc_data, reporter)
+            except Exception as _:
+                # Do not break monitoring log creation if NC creation fails
+                pass
+
         return monitoring_log, alert_created
     
     def _create_out_of_spec_alert(self, ccp: CCP, monitoring_log: CCPMonitoringLog) -> bool:

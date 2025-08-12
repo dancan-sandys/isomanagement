@@ -214,7 +214,11 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     onSubmit: async (values) => {
       try {
         if (mode === 'create') {
-          const response = await dispatch(createSupplier(values)).unwrap();
+          const payload = {
+            ...values,
+            year_established: values.year_established ? Number(values.year_established) : undefined,
+          } as any;
+          const response = await dispatch(createSupplier(payload)).unwrap();
           setNotification({
             open: true,
             message: 'Supplier created successfully',
@@ -224,7 +228,10 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
         } else if (mode === 'edit' && supplierId) {
           const response = await dispatch(updateSupplier({
             supplierId,
-            supplierData: values,
+            supplierData: {
+              ...values,
+              year_established: values.year_established ? Number(values.year_established) : undefined,
+            } as any,
           })).unwrap();
           setNotification({
             open: true,

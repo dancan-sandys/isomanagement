@@ -36,6 +36,7 @@ import SupplierList from '../components/Suppliers/SupplierList';
 import MaterialList from '../components/Materials/MaterialList';
 import SupplierForm from '../components/Suppliers/SupplierForm';
 import { Supplier, Material } from '../types/supplier';
+import { useLocation } from 'react-router-dom';
 
 const Suppliers: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -46,16 +47,33 @@ const Suppliers: React.FC = () => {
   } = useSelector((state: RootState) => state.supplier);
 
   const [activeTab, setActiveTab] = useState(0);
+  const location = useLocation();
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
 
+  const initRef = React.useRef(false);
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     loadInitialData();
   }, []);
 
+  // Support redirects like /suppliers?tab=1
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam) {
+      const idx = parseInt(tabParam, 10);
+      if (!Number.isNaN(idx)) {
+        setActiveTab(idx);
+      }
+    }
+  }, [location.search]);
+
   const loadInitialData = async () => {
     try {
+      // Load only endpoints backed by the backend to avoid 404s
       await Promise.all([
         dispatch(fetchSupplierDashboard()),
         dispatch(fetchSuppliers()),
@@ -171,14 +189,7 @@ const Suppliers: React.FC = () => {
     }
   };
 
-  if (dashboardLoading) {
-    return (
-      <Box>
-        <LinearProgress />
-        <Typography sx={{ mt: 2 }}>Loading supplier management system...</Typography>
-      </Box>
-    );
-  }
+  // Do not block the entire page on dashboard load; show a thin loader instead
 
   return (
     <Box>

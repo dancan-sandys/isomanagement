@@ -45,8 +45,8 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 1,
     items: [
       { text: 'Overview', path: '/dashboard' },
-      { text: 'Analytics', path: '/dashboard/analytics', comingSoon: true },
-      { text: 'Reports', path: '/dashboard/reports', comingSoon: true },
+      { text: 'Analytics', path: '/dashboard/analytics' },
+      { text: 'Reports', path: '/dashboard/reports' },
     ],
   },
   
@@ -66,11 +66,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'Production Operator', 'System Administrator'],
     items: [
       { text: 'HACCP Plans', path: '/haccp' },
-      { text: 'CCP Management', path: '/haccp/ccp', comingSoon: true },
-      { text: 'Hazard Analysis', path: '/haccp/hazards', comingSoon: true },
-      { text: 'Critical Limits', path: '/haccp/limits', comingSoon: true },
-      { text: 'Monitoring', path: '/haccp/monitoring', comingSoon: true },
-      { text: 'Corrective Actions', path: '/haccp/corrective', comingSoon: true },
     ],
   },
   
@@ -81,11 +76,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['Production Manager', 'Production Operator', 'Maintenance Manager', 'Maintenance Technician', 'System Administrator'],
     items: [
       { text: 'PRP Overview', path: '/prp' },
-      { text: 'Cleaning & Sanitation', path: '/prp/cleaning', comingSoon: true },
-      { text: 'Maintenance', path: '/prp/maintenance', comingSoon: true },
-      { text: 'Pest Control', path: '/prp/pest-control', comingSoon: true },
-      { text: 'Personal Hygiene', path: '/prp/hygiene', comingSoon: true },
-      { text: 'Infrastructure', path: '/prp/infrastructure', comingSoon: true },
     ],
   },
   
@@ -96,10 +86,9 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
       { text: 'Suppliers', path: '/suppliers' },
-      { text: 'Supplier Evaluation', path: '/suppliers/evaluation', comingSoon: true },
-      { text: 'Approved Suppliers', path: '/suppliers/approved', comingSoon: true },
-      { text: 'Supplier Audits', path: '/suppliers/audits', comingSoon: true },
-      { text: 'Performance Metrics', path: '/suppliers/metrics', comingSoon: true },
+      // Evaluation and Approved remain accessible via redirects but hidden from the menu
+      // Supplier Audits hidden until implemented
+      { text: 'Performance Metrics', path: '/suppliers/metrics' },
     ],
   },
   
@@ -110,21 +99,31 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['Production Manager', 'Production Operator', 'QA Manager', 'QA Specialist', 'System Administrator'],
     items: [
       { text: 'Batch Tracking', path: '/traceability' },
-      { text: 'Traceability Chain', path: '/traceability/chain', comingSoon: true },
-      { text: 'Product Recall', path: '/traceability/recall', comingSoon: true },
-      { text: 'Lot Tracking', path: '/traceability/lots', comingSoon: true },
-      { text: 'Traceability Reports', path: '/traceability/reports', comingSoon: true },
+      { text: 'Traceability Chain', path: '/traceability/chain' },
+      { text: 'Product Recall', path: '/traceability/recall' },
+      { text: 'Traceability Reports', path: '/traceability/reports' },
+    ],
+  },
+  
+  nonconformance: {
+    title: 'Non-Conformance & CAPA',
+    icon: Receipt,
+    order: 7,
+    requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
+    items: [
+      { text: 'Non-Conformances', path: '/nonconformance' },
+      { text: 'CAPA Actions', path: '/nonconformance/capas' },
     ],
   },
   
   audits: {
     title: 'Audit Management',
     icon: Assessment,
-    order: 7,
+    order: 8,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Auditor', 'System Administrator'],
     items: [
-      { text: 'Internal Audits', path: '/audits/internal', comingSoon: true },
-      { text: 'External Audits', path: '/audits/external', comingSoon: true },
+      { text: 'Internal Audits', path: '/audits/internal' },
+      { text: 'External Audits', path: '/audits/external' },
       { text: 'Audit Schedule', path: '/audits/schedule', comingSoon: true },
       { text: 'Findings & NCs', path: '/audits/findings', comingSoon: true },
       { text: 'Audit Reports', path: '/audits/reports', comingSoon: true },
@@ -137,7 +136,8 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 8,
     requiredRoles: ['QA Manager', 'HR Manager', 'System Administrator'],
     items: [
-      { text: 'Training Programs', path: '/training/programs', comingSoon: true },
+      { text: 'Training Programs', path: '/training' },
+      { text: 'My Training Matrix', path: '/training/matrix' },
       { text: 'Competence Assessment', path: '/training/assessment', comingSoon: true },
       { text: 'Training Records', path: '/training/records', comingSoon: true },
       { text: 'Certification Tracking', path: '/training/certification', comingSoon: true },
@@ -179,6 +179,9 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 11,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Compliance Officer', 'System Administrator'],
     items: [
+      { text: 'Risks', path: '/compliance/risks' },
+      { text: 'Opportunities', path: '/compliance/opportunities' },
+      { text: 'Risk & Opportunity Register', path: '/compliance/risk' },
       { text: 'Regulatory Requirements', path: '/compliance/regulatory', comingSoon: true },
       { text: 'Compliance Monitoring', path: '/compliance/monitoring', comingSoon: true },
       { text: 'Compliance Reports', path: '/compliance/reports', comingSoon: true },
@@ -194,8 +197,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     items: [
       { text: 'Users', path: '/users' },
       { text: 'Roles & Permissions', path: '/rbac' },
-      { text: 'User Groups', path: '/users/groups', comingSoon: true },
-      { text: 'Access Logs', path: '/users/logs', comingSoon: true },
     ],
   },
   
@@ -206,9 +207,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['System Administrator'],
     items: [
       { text: 'Settings', path: '/settings' },
-      { text: 'System Configuration', path: '/settings/config', comingSoon: true },
-      { text: 'Backup & Restore', path: '/settings/backup', comingSoon: true },
-      { text: 'System Logs', path: '/settings/logs', comingSoon: true },
+      // Submenus removed until implemented
     ],
   },
 };

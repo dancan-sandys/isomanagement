@@ -16,8 +16,9 @@ from app.schemas.nonconformance import (
     CAPAVerificationCreate, CAPAVerificationUpdate, CAPAVerificationResponse, VerificationListResponse,
     NonConformanceAttachmentCreate, NonConformanceAttachmentResponse, AttachmentListResponse,
     NonConformanceFilter, CAPAFilter, BulkNonConformanceAction, BulkCAPAAction,
-    NonConformanceDashboardStats, FiveWhysAnalysis, IshikawaAnalysis, RootCauseAnalysisRequest
+    NonConformanceDashboardStats, FiveWhysAnalysis, IshikawaAnalysis, RootCauseAnalysisRequest, RootCauseMethod
 )
+from app.utils.audit import audit_event
 
 router = APIRouter()
 
@@ -94,6 +95,10 @@ async def create_non_conformance(
     """Create a new non-conformance"""
     service = NonConformanceService(db)
     non_conformance = service.create_non_conformance(nc_data, current_user.id)
+    try:
+        audit_event(db, current_user.id, "nc_created", "nc_capa", str(non_conformance.id), {"source": nc_data.source})
+    except Exception:
+        pass
     return non_conformance
 
 
@@ -114,6 +119,10 @@ async def update_non_conformance(
             detail="Non-conformance not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "nc_updated", "nc_capa", str(non_conformance.id))
+    except Exception:
+        pass
     return non_conformance
 
 
@@ -133,6 +142,10 @@ async def delete_non_conformance(
             detail="Non-conformance not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "nc_deleted", "nc_capa", str(nc_id))
+    except Exception:
+        pass
     return {"message": "Non-conformance deleted successfully"}
 
 
@@ -205,6 +218,10 @@ async def create_root_cause_analysis(
     
     analysis_data.non_conformance_id = nc_id
     analysis = service.create_root_cause_analysis(analysis_data, current_user.id)
+    try:
+        audit_event(db, current_user.id, "rca_created", "nc_capa", str(analysis.id), {"nc_id": nc_id})
+    except Exception:
+        pass
     return analysis
 
 
@@ -225,6 +242,10 @@ async def update_root_cause_analysis(
             detail="Root cause analysis not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "rca_updated", "nc_capa", str(analysis.id))
+    except Exception:
+        pass
     return analysis
 
 
@@ -244,7 +265,35 @@ async def delete_root_cause_analysis(
             detail="Root cause analysis not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "rca_deleted", "nc_capa", str(analysis_id))
+    except Exception:
+        pass
     return {"message": "Root cause analysis deleted successfully"}
+
+
+# HACCP helpers
+@router.get("/haccp/recent-nc")
+async def get_recent_haccp_nc(
+    ccp_id: int = Query(..., description="CCP id"),
+    batch_number: Optional[str] = Query(None, description="Optional batch number"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get the most recent HACCP-origin NC for a given CCP and optional batch number."""
+    service = NonConformanceService(db)
+    nc = service.get_recent_nc_for_haccp(ccp_id=ccp_id, batch_number=batch_number)
+    if not nc:
+        return {"found": False}
+    return {
+        "found": True,
+        "id": nc.id,
+        "nc_number": nc.nc_number,
+        "title": nc.title,
+        "status": nc.status,
+        "severity": nc.severity,
+        "reported_date": nc.reported_date,
+    }
 
 
 # CAPA Action endpoints
@@ -324,6 +373,10 @@ async def create_capa_action(
     
     capa_data.non_conformance_id = nc_id
     capa_action = service.create_capa_action(capa_data, current_user.id)
+    try:
+        audit_event(db, current_user.id, "capa_created", "nc_capa", str(capa_action.id), {"nc_id": nc_id})
+    except Exception:
+        pass
     return capa_action
 
 
@@ -344,6 +397,10 @@ async def update_capa_action(
             detail="CAPA action not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "capa_updated", "nc_capa", str(capa_action.id))
+    except Exception:
+        pass
     return capa_action
 
 
@@ -363,6 +420,10 @@ async def delete_capa_action(
             detail="CAPA action not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "capa_deleted", "nc_capa", str(capa_id))
+    except Exception:
+        pass
     return {"message": "CAPA action deleted successfully"}
 
 
@@ -444,6 +505,10 @@ async def create_capa_verification(
     verification_data.non_conformance_id = nc_id
     verification_data.capa_action_id = capa_id
     verification = service.create_capa_verification(verification_data, current_user.id)
+    try:
+        audit_event(db, current_user.id, "capa_verification_created", "nc_capa", str(verification.id), {"nc_id": nc_id, "capa_id": capa_id})
+    except Exception:
+        pass
     return verification
 
 
@@ -464,6 +529,10 @@ async def update_capa_verification(
             detail="CAPA verification not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "capa_verification_updated", "nc_capa", str(verification.id))
+    except Exception:
+        pass
     return verification
 
 
@@ -483,6 +552,10 @@ async def delete_capa_verification(
             detail="CAPA verification not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "capa_verification_deleted", "nc_capa", str(verification_id))
+    except Exception:
+        pass
     return {"message": "CAPA verification deleted successfully"}
 
 
@@ -540,6 +613,10 @@ async def create_attachment(
     )
     
     attachment = service.create_attachment(attachment_data, current_user.id)
+    try:
+        audit_event(db, current_user.id, "nc_attachment_uploaded", "nc_capa", str(attachment.id), {"nc_id": nc_id})
+    except Exception:
+        pass
     return attachment
 
 
@@ -559,6 +636,10 @@ async def delete_attachment(
             detail="Attachment not found"
         )
     
+    try:
+        audit_event(db, current_user.id, "nc_attachment_deleted", "nc_capa", str(attachment_id))
+    except Exception:
+        pass
     return {"message": "Attachment deleted successfully"}
 
 
@@ -598,37 +679,74 @@ async def get_non_conformances_by_source(
 
 
 # Root cause analysis tools
-@router.post("/tools/five-whys")
-async def analyze_five_whys(
+@router.post("/{nc_id}/tools/five-whys", response_model=RootCauseAnalysisResponse)
+async def persist_five_whys(
+    nc_id: int,
     analysis: FiveWhysAnalysis,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Perform 5 Whys analysis"""
-    # This would implement the 5 Whys logic
-    return {
-        "problem": analysis.problem,
-        "why_1": analysis.why_1,
-        "why_2": analysis.why_2,
-        "why_3": analysis.why_3,
-        "why_4": analysis.why_4,
-        "why_5": analysis.why_5,
-        "root_cause": analysis.root_cause,
-        "analysis_date": datetime.now()
-    }
+    """Persist a 5 Whys analysis as RootCauseAnalysis for an NC"""
+    service = NonConformanceService(db)
+    non_conformance = service.get_non_conformance(nc_id)
+    if not non_conformance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Non-conformance not found")
+
+    rca = service.create_root_cause_analysis(
+        RootCauseAnalysisCreate(
+            non_conformance_id=nc_id,
+            method=RootCauseMethod.FIVE_WHYS,
+            analysis_date=datetime.utcnow(),
+            immediate_cause=analysis.why_1,
+            underlying_cause=analysis.why_2,
+            root_cause=analysis.root_cause,
+            why_1=analysis.why_1,
+            why_2=analysis.why_2,
+            why_3=analysis.why_3,
+            why_4=analysis.why_4,
+            why_5=analysis.why_5,
+            contributing_factors=[],
+            system_failures=[],
+            recommendations=[],
+            preventive_measures=[],
+        ),
+        conducted_by=current_user.id,
+    )
+    try:
+        audit_event(db, current_user.id, "rca_5whys_created", "nc_capa", str(rca.id), {"nc_id": nc_id})
+    except Exception:
+        pass
+    # Refresh to ensure fully bound instance for response serialization
+    return service.get_root_cause_analysis(rca.id)
 
 
-@router.post("/tools/ishikawa")
-async def analyze_ishikawa(
+@router.post("/{nc_id}/tools/ishikawa", response_model=RootCauseAnalysisResponse)
+async def persist_ishikawa(
+    nc_id: int,
     analysis: IshikawaAnalysis,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Perform Ishikawa/Fishbone analysis"""
-    # This would implement the Ishikawa diagram logic
-    return {
-        "problem": analysis.problem,
-        "categories": analysis.categories,
-        "diagram_data": analysis.diagram_data,
-        "analysis_date": datetime.now()
-    } 
+    """Persist an Ishikawa/Fishbone analysis as RootCauseAnalysis for an NC"""
+    service = NonConformanceService(db)
+    non_conformance = service.get_non_conformance(nc_id)
+    if not non_conformance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Non-conformance not found")
+
+    rca = service.create_root_cause_analysis(
+        RootCauseAnalysisCreate(
+            non_conformance_id=nc_id,
+            method=RootCauseMethod.ISHIKAWA,
+            analysis_date=datetime.utcnow(),
+            fishbone_categories=analysis.categories,
+            fishbone_diagram_data=analysis.diagram_data,
+            recommendations=[],
+            preventive_measures=[],
+        ),
+        conducted_by=current_user.id,
+    )
+    try:
+        audit_event(db, current_user.id, "rca_ishikawa_created", "nc_capa", str(rca.id), {"nc_id": nc_id})
+    except Exception:
+        pass
+    return service.get_root_cause_analysis(rca.id)

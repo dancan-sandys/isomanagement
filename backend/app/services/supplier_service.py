@@ -344,6 +344,15 @@ class SupplierService:
         self.db.refresh(evaluation)
         return evaluation
 
+    def delete_evaluation(self, evaluation_id: int) -> bool:
+        """Delete evaluation"""
+        evaluation = self.db.query(SupplierEvaluation).filter(SupplierEvaluation.id == evaluation_id).first()
+        if not evaluation:
+            return False
+        self.db.delete(evaluation)
+        self.db.commit()
+        return True
+
     # Inspection Checklist operations
     def create_inspection_checklist(self, checklist_data: InspectionChecklistCreate, created_by: int) -> InspectionChecklist:
         """Create a new inspection checklist"""
@@ -654,9 +663,13 @@ class SupplierService:
         ).group_by(Supplier.risk_level).all()
 
         # Recent evaluations (last 30 days)
-        recent_evaluations = self.db.query(SupplierEvaluation).filter(
-            SupplierEvaluation.evaluation_date >= datetime.now() - timedelta(days=30)
-        ).order_by(desc(SupplierEvaluation.evaluation_date)).limit(5).all()
+        recent_evaluations = (
+            self.db.query(SupplierEvaluation)
+            .filter(SupplierEvaluation.evaluation_date >= datetime.now() - timedelta(days=30))
+            .order_by(SupplierEvaluation.evaluation_date.desc())
+            .limit(5)
+            .all()
+        )
 
         # Recent deliveries (last 30 days)
         recent_deliveries = self.db.query(IncomingDelivery).filter(

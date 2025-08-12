@@ -26,11 +26,24 @@ import {
   QualityAlert,
 } from '../types/supplier';
 
+// Remove empty strings, null, and undefined from params
+const cleanParams = (obj?: Record<string, any>) => {
+  if (!obj) return undefined;
+  const out: Record<string, any> = {};
+  Object.entries(obj).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    if (typeof v === 'string' && v.trim() === '') return;
+    if (Array.isArray(v) && v.length === 0) return;
+    out[k] = v;
+  });
+  return out;
+};
+
 // Enhanced Supplier API
 export const supplierAPI = {
   // Supplier Management
   getSuppliers: async (params?: SupplierFilters & { page?: number; size?: number }) => {
-    const response = await api.get('/suppliers', { params });
+    const response = await api.get('/suppliers', { params: cleanParams(params) });
     return response.data as ApiResponse<PaginatedResponse<Supplier>>;
   },
 
@@ -70,7 +83,7 @@ export const supplierAPI = {
 
   // Material Management
   getMaterials: async (params?: MaterialFilters & { page?: number; size?: number }) => {
-    const response = await api.get('/suppliers/materials', { params });
+    const response = await api.get('/suppliers/materials', { params: cleanParams(params) });
     return response.data as ApiResponse<PaginatedResponse<Material>>;
   },
 
@@ -127,7 +140,7 @@ export const supplierAPI = {
 
   // Evaluation System
   getEvaluations: async (params?: EvaluationFilters & { page?: number; size?: number }) => {
-    const response = await api.get('/suppliers/evaluations', { params });
+    const response = await api.get('/suppliers/evaluations', { params: cleanParams(params) });
     return response.data as ApiResponse<PaginatedResponse<Evaluation>>;
   },
 
@@ -159,7 +172,7 @@ export const supplierAPI = {
 
   // Delivery Management
   getDeliveries: async (params?: DeliveryFilters & { page?: number; size?: number }) => {
-    const response = await api.get('/suppliers/deliveries', { params });
+    const response = await api.get('/suppliers/deliveries', { params: cleanParams(params) });
     return response.data as ApiResponse<PaginatedResponse<Delivery>>;
   },
 
@@ -227,6 +240,18 @@ export const supplierAPI = {
       responseType: 'blob',
     });
     return response.data;
+  },
+
+  // Delivery → Batch linkage
+  createBatchFromDelivery: async (
+    deliveryId: number,
+    options?: { link_to_batch_id?: number; link_relationship_type?: 'ingredient' | 'parent' | 'child' | 'packaging' }
+  ) => {
+    const params: any = {};
+    if (options?.link_to_batch_id) params.link_to_batch_id = options.link_to_batch_id;
+    if (options?.link_relationship_type) params.link_relationship_type = options.link_relationship_type;
+    const response = await api.post(`/suppliers/deliveries/${deliveryId}/create-batch`, null, { params });
+    return response.data as ApiResponse<{ batch_id: number; link_id?: number | null }>;
   },
 
   // Document Management
@@ -299,7 +324,7 @@ export const supplierAPI = {
     date_to?: string;
     supplier_id?: number;
   }) => {
-    const response = await api.get('/suppliers/analytics/performance', { params });
+    const response = await api.get('/suppliers/analytics/performance', { params: cleanParams(params) });
     return response.data as ApiResponse<{
       trends: Array<{ date: string; average_score: number }>;
       category_performance: Array<{ category: string; average_score: number }>;
@@ -324,7 +349,7 @@ export const supplierAPI = {
     page?: number;
     size?: number;
   }) => {
-    const response = await api.get('/suppliers/alerts', { params });
+    const response = await api.get('/suppliers/alerts', { params: cleanParams(params) });
     return response.data as ApiResponse<PaginatedResponse<{
       id: number;
       type: string;
@@ -354,7 +379,7 @@ export const supplierAPI = {
 
   exportSuppliers: async (params?: SupplierFilters) => {
     const response = await api.get('/suppliers/export', { 
-      params,
+      params: cleanParams(params),
       responseType: 'blob',
     });
     return response.data;
@@ -362,7 +387,7 @@ export const supplierAPI = {
 
   exportMaterials: async (params?: MaterialFilters) => {
     const response = await api.get('/suppliers/materials/export', { 
-      params,
+      params: cleanParams(params),
       responseType: 'blob',
     });
     return response.data;
@@ -370,7 +395,7 @@ export const supplierAPI = {
 
   exportEvaluations: async (params?: EvaluationFilters) => {
     const response = await api.get('/suppliers/evaluations/export', { 
-      params,
+      params: cleanParams(params),
       responseType: 'blob',
     });
     return response.data;
@@ -384,7 +409,7 @@ export const supplierAPI = {
     limit?: number;
   }) => {
     const response = await api.get('/suppliers/search', { 
-      params: { query, ...params }
+      params: cleanParams({ query, ...params })
     });
     return response.data as ApiResponse<Supplier[]>;
   },
@@ -396,7 +421,7 @@ export const supplierAPI = {
     limit?: number;
   }) => {
     const response = await api.get('/suppliers/materials/search', { 
-      params: { query, ...params }
+      params: cleanParams({ query, ...params })
     });
     return response.data as ApiResponse<Material[]>;
   },
