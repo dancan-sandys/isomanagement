@@ -144,8 +144,8 @@ class RiskItemResponse(BaseModel):
     category: RiskCategory
     classification: Optional[RiskClassification] = None
     status: RiskStatus
-    severity: RiskSeverity
-    likelihood: RiskLikelihood
+    severity: Optional[RiskSeverity] = None
+    likelihood: Optional[RiskLikelihood] = None
     detectability: Optional[RiskDetectability] = None
     impact_score: Optional[int] = None
     risk_score: int

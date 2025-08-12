@@ -47,6 +47,8 @@ async def list_risk_items(
     status_f: Optional[str] = Query(None, alias="status"),
     severity: Optional[str] = None,
     likelihood: Optional[str] = None,
+    classification: Optional[str] = None,
+    detectability: Optional[str] = None,
     assigned_to: Optional[int] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
@@ -54,14 +56,18 @@ async def list_risk_items(
     db: Session = Depends(get_db),
 ):
     try:
+        def nz(v: Optional[str]) -> Optional[str]:
+            return None if v in ("", None) else v
         # Build filter model (enum values are validated inside schema)
         filters = RiskFilter(
-            search=search,
-            item_type=item_type,  # pydantic will coerce
-            category=category,
-            status=status_f,
-            severity=severity,
-            likelihood=likelihood,
+            search=nz(search),
+            item_type=nz(item_type),  # pydantic will coerce
+            category=nz(category),
+            status=nz(status_f),
+            severity=nz(severity),
+            likelihood=nz(likelihood),
+            classification=nz(classification),
+            detectability=nz(detectability),
             assigned_to=assigned_to,
             date_from=date_from,
             date_to=date_to,
@@ -152,6 +158,22 @@ async def get_risk_stats(
         return ResponseModel(success=True, message="Risk stats retrieved", data=stats)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve risk stats: {str(e)}")
+
+
+@router.get("/{item_id}/progress", response_model=ResponseModel)
+async def get_risk_progress(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        service = RiskService(db)
+        data = service.get_progress(item_id)
+        return ResponseModel(success=True, message="Risk progress retrieved", data=data)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve progress: {str(e)}")
 
 
 @router.post("/{item_id}/actions", response_model=ResponseModel)

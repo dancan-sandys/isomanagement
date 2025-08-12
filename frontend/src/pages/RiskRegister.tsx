@@ -12,7 +12,7 @@ const RiskRegister: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { items, stats, loading, error, filters } = useSelector((s: RootState) => s.risk);
   const [search, setSearch] = useState(filters.search || '');
-  const [type, setType] = useState<'risk' | 'opportunity' | ''>(filters.item_type ?? '');
+  const [type, setType] = useState<'risk' | 'opportunity' | ''>(filters.item_type ?? 'risk');
   const [category, setCategory] = useState(filters.category || '');
   const [classification, setClassification] = useState<
     'food_safety' | 'business' | 'customer' | ''
@@ -25,7 +25,8 @@ const RiskRegister: React.FC = () => {
   >(filters.detectability || '');
 
   useEffect(() => {
-    dispatch(fetchRiskItems({ ...filters }));
+    dispatch(setFilters({ item_type: 'risk' }));
+    dispatch(fetchRiskItems({ ...filters, item_type: 'risk' }));
     dispatch(fetchRiskStats());
   }, []);
 
@@ -194,7 +195,7 @@ const RiskRegister: React.FC = () => {
       <Card>
         <CardContent>
           <Grid container spacing={2}>
-            {items.map((it) => (
+            {items.filter(it => it.item_type === 'risk').map((it) => (
               <Grid item xs={12} md={6} key={it.id}>
                 <Card variant="outlined">
                   <CardContent>

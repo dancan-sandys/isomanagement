@@ -34,6 +34,10 @@ export const riskAPI = {
     const response: AxiosResponse = await api.put(`/risk/${id}`, payload);
     return response.data;
   },
+  progress: async (id: number) => {
+    const response: AxiosResponse = await api.get(`/risk/${id}/progress`);
+    return response.data;
+  },
   remove: async (id: number) => {
     const response: AxiosResponse = await api.delete(`/risk/${id}`);
     return response.data;

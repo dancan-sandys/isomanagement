@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Box, Button, Card, CardContent, Chip, Grid, LinearProgress, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import { Add } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../store';
 import { clearError, fetchRiskItems, fetchRiskStats, setFilters } from '../store/slices/riskSlice';
-import riskAPI from '../services/riskAPI';
+import riskAPI, { RiskListParams } from '../services/riskAPI';
+import OpportunityCreateDialog from '../components/Risk/OpportunityCreateDialog';
 import { Link as RouterLink } from 'react-router-dom';
 
 const OpportunitiesRegister: React.FC = () => {
@@ -12,7 +14,7 @@ const OpportunitiesRegister: React.FC = () => {
   const { items, loading, error, filters } = useSelector((s: RootState) => s.risk);
   const [search, setSearch] = useState(filters.search || '');
   const [category, setCategory] = useState(filters.category || '');
-  const [classification, setClassification] = useState(filters.classification || '');
+  const [classification, setClassification] = useState<RiskListParams['classification'] | ''>(filters.classification || '');
 
   useEffect(() => {
     dispatch(setFilters({ item_type: 'opportunity' }));
@@ -24,9 +26,9 @@ const OpportunitiesRegister: React.FC = () => {
     dispatch(fetchRiskItems({ ...filters, search, item_type: 'opportunity', category: category || undefined, classification: classification || undefined }));
   };
 
-  const onCreate = async () => {
-    const payload = { item_type: 'opportunity', title: 'New Opportunity', category: 'process' };
-    await riskAPI.create(payload as any);
+  const [open, setOpen] = useState(false);
+  const onCreate = async () => setOpen(true);
+  const onCreated = () => {
     dispatch(fetchRiskItems({ ...filters, item_type: 'opportunity' }));
   };
 
@@ -45,7 +47,7 @@ const OpportunitiesRegister: React.FC = () => {
             <MenuItem value="customer">Customer</MenuItem>
             <MenuItem value="other">Other</MenuItem>
           </Select>
-          <Select size="small" displayEmpty value={classification} onChange={(e) => setClassification(e.target.value as string)}>
+          <Select size="small" displayEmpty value={classification} onChange={(e: SelectChangeEvent) => setClassification(e.target.value as RiskListParams['classification'] | '')}>
             <MenuItem value="">All Classifications</MenuItem>
             <MenuItem value="food_safety">Food Safety</MenuItem>
             <MenuItem value="business">Business</MenuItem>
@@ -57,6 +59,7 @@ const OpportunitiesRegister: React.FC = () => {
       </Stack>
       {loading && <LinearProgress />}
       {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+      <OpportunityCreateDialog open={open} onClose={() => setOpen(false)} onCreated={onCreated} />
       <Grid container spacing={2}>
         {items.filter(i => i.item_type === 'opportunity').map((it) => (
           <Grid item xs={12} md={6} lg={4} key={it.id}>

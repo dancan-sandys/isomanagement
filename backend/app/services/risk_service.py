@@ -205,4 +205,19 @@ class RiskService:
         self.db.commit()
         return True
 
+    def get_progress(self, item_id: int) -> Dict[str, int]:
+        """Return total, completed, and overdue action counts for a risk item."""
+        item = self.db.query(RiskRegisterItem).filter(RiskRegisterItem.id == item_id).first()
+        if not item:
+            raise ValueError("Risk item not found")
+        total = self.db.query(func.count(RiskAction.id)).filter(RiskAction.item_id == item_id).scalar() or 0
+        completed = self.db.query(func.count(RiskAction.id)).filter(RiskAction.item_id == item_id, RiskAction.completed.is_(True)).scalar() or 0
+        overdue = self.db.query(func.count(RiskAction.id)).filter(
+            RiskAction.item_id == item_id,
+            RiskAction.completed.is_(False),
+            RiskAction.due_date.isnot(None),
+            RiskAction.due_date < datetime.utcnow()
+        ).scalar() or 0
+        return {"total": total, "completed": completed, "overdue": overdue}
+
 

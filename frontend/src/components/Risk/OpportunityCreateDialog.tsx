@@ -9,8 +9,8 @@ const OpportunityCreateDialog: React.FC<Props> = ({ open, onClose, onCreated }) 
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('process');
   const [classification, setClassification] = useState('business');
-  const [benefit, setBenefit] = useState<number | ''>('');
   const [feasibility, setFeasibility] = useState<number | ''>('');
+  const [score, setScore] = useState<number | ''>('');
 
   const submit = async () => {
     if (!title) return;
@@ -20,8 +20,8 @@ const OpportunityCreateDialog: React.FC<Props> = ({ open, onClose, onCreated }) 
       description,
       category,
       classification,
-      opportunity_benefit: typeof benefit === 'number' ? benefit : undefined,
       opportunity_feasibility: typeof feasibility === 'number' ? feasibility : undefined,
+      opportunity_score: typeof score === 'number' ? score : undefined,
     };
     await riskAPI.create(payload);
     onCreated();
@@ -57,10 +57,10 @@ const OpportunityCreateDialog: React.FC<Props> = ({ open, onClose, onCreated }) 
             </Select>
           </Grid>
           <Grid item xs={12} md={6}>
-            <TextField label="Benefit (1-5)" type="number" fullWidth value={benefit} onChange={(e) => setBenefit(Number(e.target.value))} />
+            <TextField label="Feasibility (1-5)" type="number" fullWidth value={feasibility} onChange={(e) => setFeasibility(Number(e.target.value))} />
           </Grid>
           <Grid item xs={12} md={6}>
-            <TextField label="Feasibility (1-5)" type="number" fullWidth value={feasibility} onChange={(e) => setFeasibility(Number(e.target.value))} />
+            <TextField label="Score" type="number" fullWidth value={score} onChange={(e) => setScore(Number(e.target.value))} />
           </Grid>
         </Grid>
       </DialogContent>

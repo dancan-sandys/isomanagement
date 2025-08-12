@@ -27,6 +27,8 @@ import Settings from './pages/Settings';
 import RBAC from './pages/RBAC';
 import ComingSoon from './components/UI/ComingSoon';
 import EquipmentPage from './pages/Equipment';
+import ComplaintsPage from './pages/Complaints';
+import ComplaintDetail from './pages/ComplaintDetail';
 import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import DashboardAnalytics from './pages/DashboardAnalytics';
@@ -34,7 +36,10 @@ import DashboardReports from './pages/DashboardReports';
 import RiskRegister from './pages/RiskRegister';
 import OpportunitiesRegister from './pages/OpportunitiesRegister';
 import OpportunityDetail from './pages/OpportunityDetail';
+import ManagementReviews from './pages/ManagementReviews';
+import ManagementReviewDetail from './pages/ManagementReviewDetail';
 import RiskDetail from './pages/RiskDetail';
+import AllergenLabel from './pages/AllergenLabel';
 
 function App() {
   return (
@@ -219,11 +224,18 @@ function App() {
                         />
                       } />
                       
+                      {/* Complaints */}
+                      <Route path="/complaints" element={<ComplaintsPage />} />
+                      <Route path="/complaints/:id" element={<ComplaintDetail />} />
+
                       {/* Compliance - QA and Compliance roles */}
                       <Route path="/compliance/risks" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskRegister} />} />
                       <Route path="/compliance/opportunities" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={OpportunitiesRegister} />} />
                       <Route path="/compliance/opportunity/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={OpportunityDetail} />} />
+                      <Route path="/management-reviews" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviews} />} />
+                      <Route path="/management-reviews/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewDetail} />} />
                       <Route path="/compliance/risk/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskDetail} />} />
+                      <Route path="/compliance/allergen-label" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={AllergenLabel} />} />
                       <Route path="/compliance/regulatory" element={
                         <ComingSoon 
                           title="Regulatory Requirements"

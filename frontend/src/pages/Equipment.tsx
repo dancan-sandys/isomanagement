@@ -11,6 +11,11 @@ const EquipmentPage: React.FC = () => {
   const [woOpen, setWoOpen] = useState(false);
   const [woForm, setWoForm] = useState({ equipment_id: 0, plan_id: '', title: '', description: '' });
   const [workOrders, setWorkOrders] = useState<any[]>([]);
+  // Calibration
+  const [calOpen, setCalOpen] = useState(false);
+  const [calForm, setCalForm] = useState({ equipment_id: 0, schedule_date: '', notes: '' });
+  const [calUploadOpen, setCalUploadOpen] = useState(false);
+  const [calUploadForm, setCalUploadForm] = useState<{ plan_id: number; file: File | null }>({ plan_id: 0, file: null });
 
   const load = async () => {
     const data = await equipmentAPI.list();
@@ -27,6 +32,8 @@ const EquipmentPage: React.FC = () => {
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" onClick={() => setPlanOpen(true)}>New Maintenance Plan</Button>
           <Button variant="outlined" onClick={() => setWoOpen(true)}>New Work Order</Button>
+          <Button variant="outlined" onClick={() => setCalOpen(true)}>New Calibration Plan</Button>
+          <Button variant="outlined" onClick={() => setCalUploadOpen(true)}>Upload Calibration Certificate</Button>
           <Button variant="contained" onClick={() => setOpen(true)}>New Equipment</Button>
         </Stack>
       </Stack>
@@ -103,6 +110,54 @@ const EquipmentPage: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={async () => { await equipmentAPI.create({ ...form, serial_number: form.serial_number || undefined, location: form.location || undefined, notes: form.notes || undefined }); setOpen(false); setForm({ name: '', equipment_type: '', serial_number: '', location: '', notes: '' }); load(); }}>Create</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Calibration plan dialog */}
+      <Dialog open={calOpen} onClose={() => setCalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>New Calibration Plan</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField type="number" label="Equipment ID" value={calForm.equipment_id} onChange={e => setCalForm({ ...calForm, equipment_id: Number(e.target.value || 0) })} />
+            <TextField type="date" label="Schedule Date" InputLabelProps={{ shrink: true }} value={calForm.schedule_date} onChange={e => setCalForm({ ...calForm, schedule_date: e.target.value })} />
+            <TextField label="Notes" multiline rows={3} value={calForm.notes} onChange={e => setCalForm({ ...calForm, notes: e.target.value })} />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCalOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            const isoDate = calForm.schedule_date ? new Date(calForm.schedule_date).toISOString() : new Date().toISOString();
+            await equipmentAPI.createCalibrationPlan(calForm.equipment_id, { schedule_date: isoDate, notes: calForm.notes || undefined });
+            setCalOpen(false);
+            setCalForm({ equipment_id: 0, schedule_date: '', notes: '' });
+          }}>Create</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Calibration certificate upload dialog */}
+      <Dialog open={calUploadOpen} onClose={() => setCalUploadOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Upload Calibration Certificate</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField type="number" label="Calibration Plan ID" value={calUploadForm.plan_id} onChange={e => setCalUploadForm({ ...calUploadForm, plan_id: Number(e.target.value || 0) })} />
+            <Button component="label" variant="outlined">
+              {calUploadForm.file ? 'Change File' : 'Choose File'}
+              <input hidden type="file" onChange={(e) => {
+                const f = e.target.files && e.target.files[0];
+                setCalUploadForm({ ...calUploadForm, file: f || null });
+              }} />
+            </Button>
+            {calUploadForm.file && <Typography variant="body2">{calUploadForm.file.name}</Typography>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCalUploadOpen(false)}>Cancel</Button>
+          <Button variant="contained" disabled={!calUploadForm.plan_id || !calUploadForm.file} onClick={async () => {
+            if (!calUploadForm.file) return;
+            await equipmentAPI.uploadCalibrationCertificate(calUploadForm.plan_id, calUploadForm.file);
+            setCalUploadOpen(false);
+            setCalUploadForm({ plan_id: 0, file: null });
+          }}>Upload</Button>
         </DialogActions>
       </Dialog>
 

@@ -17,6 +17,16 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  LinearProgress,
+  Divider,
+  Skeleton,
+  Badge,
+  Tooltip,
+  IconButton,
+  Avatar,
+  Fade,
+  Grow,
+  Slide,
 } from '@mui/material';
 import {
   Warning,
@@ -37,10 +47,27 @@ import {
   LocalShipping,
   Settings,
   Dashboard as DashboardIcon,
+  PlayArrow,
+  MoreVert,
+  Star,
+  Bookmark,
+  Speed,
+  Analytics,
+  Task,
+  CheckBox,
+  RadioButtonUnchecked,
+  Flag,
+  AccessTime,
+  CalendarToday,
+  Insights,
+  AutoAwesome,
+  Lightbulb,
 } from '@mui/icons-material';
 import PageHeader from '../components/UI/PageHeader';
 import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
+import SmartDashboard from '../components/Dashboard/SmartDashboard';
+import SmartOnboarding from '../components/Onboarding/SmartOnboarding';
 import { RootState } from '../store';
 import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
 import { dashboardAPI } from '../services/api';
@@ -48,12 +75,23 @@ import { dashboardAPI } from '../services/api';
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isFirstTime, setIsFirstTime] = useState(false);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
     // Load dashboard data based on user role
     loadDashboardData();
+  }, [user]);
+
+  // Check if this is user's first time (must be before any early returns)
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding && user) {
+      setIsFirstTime(true);
+      setShowOnboarding(true);
+    }
   }, [user]);
 
   const loadDashboardData = async () => {
@@ -603,17 +641,45 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('hasSeenOnboarding', 'true');
+    setShowOnboarding(false);
+    setIsFirstTime(false);
+  };
+
   return (
     <Box>
-      <PageHeader
-        title={getDashboardTitle()}
-        subtitle={getDashboardSubtitle()}
-        breadcrumbs={[
-          { label: 'Dashboard', path: '/' }
-        ]}
+      {/* Smart Onboarding */}
+      <SmartOnboarding
+        open={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onComplete={handleOnboardingComplete}
+        isFirstTime={isFirstTime}
       />
 
-      {renderDashboard()}
+      {/* Modern Smart Dashboard */}
+      <SmartDashboard />
+
+      {/* Optional: Legacy Dashboard Toggle for comparison */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ position: 'fixed', top: 100, right: 20, zIndex: 1000 }}>
+          <Tooltip title="Show onboarding again">
+            <IconButton
+              onClick={() => setShowOnboarding(true)}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': { bgcolor: 'primary.dark' },
+                boxShadow: 3,
+              }}
+            >
+              <AutoAwesome />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
     </Box>
   );
 };

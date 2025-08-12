@@ -1,4 +1,5 @@
 # Import all models for Alembic to detect them
+from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
 from .haccp import Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog
@@ -9,6 +10,7 @@ from .training import TrainingProgram, TrainingSession, TrainingAttendance
 from .settings import ApplicationSetting, UserPreference
 from .risk import RiskRegisterItem, RiskAction
 from .notification import Notification, NotificationType, NotificationCategory, NotificationPriority
+from .management_review import ManagementReview, ReviewAgendaItem, ReviewAction, ManagementReviewStatus
 from .audit_mgmt import (
     Audit, AuditType, AuditStatus,
     AuditChecklistTemplate, AuditChecklistItem, ChecklistResponse,
@@ -18,7 +20,7 @@ from .audit_mgmt import (
 
 __all__ = [
     # User models
-    "User", "UserSession", "PasswordReset",
+    "Role", "Permission", "UserPermission", "User", "UserSession", "PasswordReset",
     
     # Document models
     "Document", "DocumentVersion", "DocumentApproval", "DocumentChangeLog", "DocumentTemplate",
@@ -43,6 +45,8 @@ __all__ = [
     "RiskRegisterItem", "RiskAction",
     # Notification models
     "Notification", "NotificationType", "NotificationCategory", "NotificationPriority",
+    # Management Reviews
+    "ManagementReview", "ReviewAgendaItem", "ReviewAction", "ManagementReviewStatus",
     # Audit management
     "Audit", "AuditType", "AuditStatus",
     "AuditChecklistTemplate", "AuditChecklistItem", "ChecklistResponse",

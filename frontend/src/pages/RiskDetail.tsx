@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Card, CardContent, Chip, Divider, Grid, Stack, Typography } from '@mui/material';
+import { Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, Stack, Typography } from '@mui/material';
 import riskAPI from '../services/riskAPI';
 import RiskActionList from '../components/Risk/RiskActionList';
 
@@ -9,6 +9,7 @@ const RiskDetail: React.FC = () => {
   const [risk, setRisk] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ total: number; completed: number; overdue: number } | null>(null);
 
   const load = async () => {
     if (!id) return;
@@ -17,6 +18,8 @@ const RiskDetail: React.FC = () => {
       const resp = await riskAPI.get(Number(id));
       const data = resp.data || resp;
       setRisk(data);
+      const p = await riskAPI.progress(Number(id));
+      setProgress(p.data || p);
     } catch (e: any) {
       setError(e?.message || 'Failed to load risk');
     } finally {
@@ -69,6 +72,18 @@ const RiskDetail: React.FC = () => {
           </Card>
         </Grid>
         <Grid item xs={12} md={5}>
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Implementation Status</Typography>
+              {progress ? (
+                <Stack spacing={1}>
+                  <Typography>Actions: {progress.completed}/{progress.total}</Typography>
+                  <Typography color={progress.overdue > 0 ? 'error' : undefined}>Overdue: {progress.overdue}</Typography>
+                  <LinearProgress variant="determinate" value={progress.total ? (progress.completed / progress.total) * 100 : 0} />
+                </Stack>
+              ) : <Typography variant="body2">No actions</Typography>}
+            </CardContent>
+          </Card>
           <RiskActionList itemId={Number(id)} />
         </Grid>
       </Grid>

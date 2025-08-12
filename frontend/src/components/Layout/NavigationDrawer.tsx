@@ -20,7 +20,7 @@ import {
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { getNavigationForUser, NavigationSection, NAVIGATION_CONFIG } from '../../theme/navigationConfig';
-import QuickSearch from '../UI/QuickSearch';
+import EnhancedQuickSearch from '../UI/EnhancedQuickSearch';
 
 interface NavigationDrawerProps {
   onNavigate: (path: string) => void;
@@ -73,8 +73,8 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
           </Box>
         </Box>
         
-        {/* Quick Search */}
-        <QuickSearch placeholder="Search…" fullWidth />
+        {/* Enhanced Quick Search */}
+        <EnhancedQuickSearch placeholder="Search…" fullWidth />
       </Box>
 
       {/* User Info */}

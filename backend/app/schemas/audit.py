@@ -58,7 +58,6 @@ class ChecklistTemplateResponse(ChecklistTemplateBase):
 
 
 class ChecklistItemBase(BaseModel):
-  audit_id: int
   template_id: Optional[int] = None
   clause_ref: Optional[str] = None
   question: Optional[str] = None
@@ -79,6 +78,7 @@ class ChecklistItemUpdate(ChecklistItemBase):
 
 
 class ChecklistItemResponse(ChecklistItemBase):
+  audit_id: int
   id: int
   evidence_file_path: Optional[str] = None
   created_at: datetime
@@ -124,7 +124,6 @@ class AuditAttachmentResponse(BaseModel):
 
 
 class FindingBase(BaseModel):
-  audit_id: int
   clause_ref: Optional[str] = None
   description: str
   severity: str = Field(pattern="^(minor|major|critical)$")
@@ -144,6 +143,7 @@ class FindingUpdate(FindingBase):
 
 
 class FindingResponse(FindingBase):
+  audit_id: int
   id: int
   created_at: datetime
 

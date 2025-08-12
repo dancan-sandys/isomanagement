@@ -5,6 +5,7 @@ from typing import Optional, List
 from datetime import datetime
 import os
 import shutil
+import csv
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -21,7 +22,7 @@ from app.schemas.audit import (
     ChecklistItemCreate, ChecklistItemUpdate, ChecklistItemResponse,
     FindingCreate, FindingUpdate, FindingResponse,
     AuditItemAttachmentResponse, AuditFindingAttachmentResponse,
-    AuditStatsResponse, AuditeeResponse,
+    AuditAttachmentResponse, AuditStatsResponse, AuditeeResponse,
 )
 from app.utils.audit import audit_event
 from app.schemas.nonconformance import NonConformanceCreate, NonConformanceResponse
@@ -146,8 +147,102 @@ async def create_template(payload: ChecklistTemplateCreate, db: Session = Depend
 
 
 @router.get("/templates", response_model=List[ChecklistTemplateResponse])
-async def list_templates(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(AuditChecklistTemplate).filter(AuditChecklistTemplate.is_active == True).order_by(AuditChecklistTemplate.created_at.desc()).all()
+async def list_templates(
+    include_inactive: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditChecklistTemplate)
+    if not include_inactive:
+        q = q.filter(AuditChecklistTemplate.is_active == True)
+    return q.order_by(AuditChecklistTemplate.created_at.desc()).all()
+
+
+@router.post("/templates/{template_id}/activate", response_model=ChecklistTemplateResponse)
+async def activate_template(template_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    t = db.query(AuditChecklistTemplate).get(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Template not found")
+    t.is_active = True
+    db.commit()
+    db.refresh(t)
+    try:
+        audit_event(db, current_user.id, "audit_template_activated", "audits", str(template_id))
+    except Exception:
+        pass
+    return t
+
+
+@router.post("/templates/{template_id}/deactivate", response_model=ChecklistTemplateResponse)
+async def deactivate_template(template_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    t = db.query(AuditChecklistTemplate).get(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Template not found")
+    t.is_active = False
+    db.commit()
+    db.refresh(t)
+    try:
+        audit_event(db, current_user.id, "audit_template_deactivated", "audits", str(template_id))
+    except Exception:
+        pass
+    return t
+
+
+@router.post("/templates/import", response_model=dict)
+async def import_templates_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Expect CSV headers: name, clause_ref, question, requirement, category, is_active(optional)
+    content = (await file.read()).decode("utf-8-sig", errors="ignore")
+    reader = csv.DictReader(content.splitlines())
+    created = 0
+    updated = 0
+    skipped = 0
+    for row in reader:
+        name = (row.get("name") or "").strip()
+        question = (row.get("question") or "").strip()
+        if not name or not question:
+            skipped += 1
+            continue
+        clause_ref = (row.get("clause_ref") or "").strip() or None
+        requirement = (row.get("requirement") or "").strip() or None
+        category = (row.get("category") or "").strip() or None
+        is_active_val = (row.get("is_active") or "").strip().lower()
+        is_active = True if is_active_val in {"", "1", "true", "yes", "y"} else False
+
+        # Upsert by (name, clause_ref, question)
+        existing = (
+            db.query(AuditChecklistTemplate)
+            .filter(AuditChecklistTemplate.name == name)
+            .filter(AuditChecklistTemplate.clause_ref == clause_ref)
+            .filter(AuditChecklistTemplate.question == question)
+            .first()
+        )
+        if existing:
+            existing.requirement = requirement
+            existing.category = category
+            existing.is_active = is_active
+            updated += 1
+        else:
+            t = AuditChecklistTemplate(
+                name=name,
+                clause_ref=clause_ref,
+                question=question,
+                requirement=requirement,
+                category=category,
+                is_active=is_active,
+                created_by=current_user.id,
+            )
+            db.add(t)
+            created += 1
+    db.commit()
+    try:
+        audit_event(db, current_user.id, "audit_templates_imported", "audits", "templates", {"created": created, "updated": updated, "skipped": skipped})
+    except Exception:
+        pass
+    return {"created": created, "updated": updated, "skipped": skipped}
 
 
 # Checklist items
@@ -240,6 +335,18 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
 
 
 # Attachments
+@router.get("/{audit_id}/attachments", response_model=List[AuditAttachmentResponse])
+async def list_attachments(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    audit = db.query(AuditModel).get(audit_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
+    return (
+        db.query(AuditAttachment)
+        .filter(AuditAttachment.audit_id == audit_id)
+        .order_by(AuditAttachment.uploaded_at.desc())
+        .all()
+    )
+
 @router.post("/{audit_id}/attachments", response_model=dict)
 async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
@@ -264,6 +371,24 @@ async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Ses
     except Exception:
         pass
     return {"file_path": file_path}
+
+
+@router.get("/attachments/{attachment_id}/download")
+async def download_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    att = db.query(AuditAttachment).get(attachment_id)
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return FileResponse(att.file_path, filename=att.filename)
+
+
+@router.delete("/attachments/{attachment_id}")
+async def delete_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    att = db.query(AuditAttachment).get(attachment_id)
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    db.delete(att)
+    db.commit()
+    return {"message": "Attachment deleted"}
 
 
 # Upload attachment for a checklist item
