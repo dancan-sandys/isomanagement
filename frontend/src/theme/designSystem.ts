@@ -464,7 +464,7 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
 
 // Status chip variants
 export const getStatusChipProps = (
-  status: 'compliant' | 'nonConformance' | 'pending' | 'warning' | 'info' | 'active' | 'inactive' | 'suspended'
+  status: 'compliant' | 'nonConformance' | 'pending' | 'warning' | 'info' | 'active' | 'inactive' | 'suspended' | 'pending_approval' | 'blacklisted' | 'passed' | 'failed' | 'under_review'
 ) => {
   const statusConfig = {
     compliant: {
@@ -506,16 +506,57 @@ export const getStatusChipProps = (
       color: 'success' as const,
       backgroundColor: '#F0FDF4',
       borderColor: '#BBF7D0',
+      textColor: '#166534',
+      iconColor: '#059669',
     },
     inactive: {
       color: 'default' as const,
       backgroundColor: '#F8FAFC',
       borderColor: '#E2E8F0',
+      textColor: '#334155',
+      iconColor: '#64748B',
     },
     suspended: {
       color: 'error' as const,
       backgroundColor: '#FEF2F2',
       borderColor: '#FECACA',
+      textColor: '#991B1B',
+      iconColor: '#DC2626',
+    },
+    pending_approval: {
+      color: 'info' as const,
+      backgroundColor: '#EFF6FF',
+      borderColor: '#BFDBFE',
+      textColor: '#1E40AF',
+      iconColor: '#2563EB',
+    },
+    blacklisted: {
+      color: 'error' as const,
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
+      textColor: '#991B1B',
+      iconColor: '#DC2626',
+    },
+    passed: {
+      color: 'success' as const,
+      backgroundColor: '#F0FDF4',
+      borderColor: '#BBF7D0',
+      textColor: '#166534',
+      iconColor: '#059669',
+    },
+    failed: {
+      color: 'error' as const,
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
+      textColor: '#991B1B',
+      iconColor: '#DC2626',
+    },
+    under_review: {
+      color: 'info' as const,
+      backgroundColor: '#EFF6FF',
+      borderColor: '#BFDBFE',
+      textColor: '#1E40AF',
+      iconColor: '#2563EB',
     },
   };
 

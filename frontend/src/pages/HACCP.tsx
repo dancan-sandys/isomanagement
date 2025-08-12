@@ -65,6 +65,7 @@ import {
 import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
 import StatusChip from '../components/UI/StatusChip';
+import ProductDialog from '../components/HACCP/ProductDialog';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -612,7 +613,12 @@ const HACCP: React.FC = () => {
         {renderProductDetails()}
       </TabPanel>
 
-      {/* Dialogs will be added here for creating/editing products, process flows, hazards, and CCPs */}
+      {/* Dialogs */}
+      <ProductDialog
+        open={productDialogOpen}
+        onClose={() => setProductDialogOpen(false)}
+        product={selectedProductForEdit}
+      />
     </Box>
   );
 };

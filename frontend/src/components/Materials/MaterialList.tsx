@@ -56,6 +56,7 @@ import {
   AddCircle,
   Inventory2,
   Cancel,
+  CheckCircle,
   Coronavirus as Allergen,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -77,7 +78,7 @@ import { RootState, AppDispatch } from '../../store';
 import { Material, MaterialFilters } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
 import { EnhancedStatusChip } from '../UI';
-import { DataTable } from '../UI/DataTable';
+import DataTable from '../UI/DataTable';
 import { NotificationToast } from '../UI';
 
 interface MaterialListProps {
@@ -133,13 +134,13 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== filters.search) {
+      if (searchTerm !== (filters.materials?.search || '')) {
         dispatch(setMaterialFilters({ search: searchTerm }));
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch]);
+  }, [searchTerm, dispatch, filters.materials]);
 
   const loadMaterials = () => {
     dispatch(fetchMaterials({
@@ -163,14 +164,14 @@ const MaterialList: React.FC<MaterialListProps> = ({
   };
 
   const handleFilterChange = () => {
-    const newFilters: MaterialFilters = {};
+    const newFilters: MaterialFilters = {} as MaterialFilters;
     
     if (filterCategory) newFilters.category = filterCategory;
     if (filterSupplier) newFilters.supplier_id = parseInt(filterSupplier);
     if (filterApprovalStatus) newFilters.approval_status = filterApprovalStatus;
     if (filterAllergens.length > 0) newFilters.allergens = filterAllergens;
-    if (filterDateFrom) newFilters.date_from = format(filterDateFrom, 'yyyy-MM-dd');
-    if (filterDateTo) newFilters.date_to = format(filterDateTo, 'yyyy-MM-dd');
+    if (filterDateFrom) (newFilters as any).date_from = format(filterDateFrom, 'yyyy-MM-dd');
+    if (filterDateTo) (newFilters as any).date_to = format(filterDateTo, 'yyyy-MM-dd');
 
     dispatch(setMaterialFilters(newFilters));
     setPage(0);
@@ -336,14 +337,14 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'raw_milk': return <Inventory />;
+      case 'raw_milk': return <Inventory2 />;
       case 'additives': return <AddCircle />;
-      case 'cultures': return <Science />;
+      case 'cultures': return <Allergen />;
       case 'packaging': return <Inventory2 />;
-      case 'equipment': return <Build />;
-      case 'chemicals': return <Science />;
-      case 'services': return <Support />;
-      default: return <Inventory />;
+      case 'equipment': return <Inventory2 />;
+      case 'chemicals': return <Allergen />;
+      case 'services': return <Inventory2 />;
+      default: return <Inventory2 />;
     }
   };
 
@@ -427,7 +428,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
                 </TableCell>
                 <TableCell>
                   <EnhancedStatusChip
-                    status={material.approval_status}
+                    status={material.approval_status as any}
                     label={getApprovalStatusDisplayName(material.approval_status)}
                   />
                 </TableCell>
@@ -594,7 +595,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
                     {material.supplier_name}
                   </Typography>
                   <EnhancedStatusChip
-                    status={material.approval_status}
+                    status={material.approval_status as any}
                     label={getApprovalStatusDisplayName(material.approval_status)}
                   />
                 </Box>

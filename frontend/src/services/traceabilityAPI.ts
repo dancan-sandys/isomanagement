@@ -39,7 +39,16 @@ export const traceabilityAPI = {
   },
 
   // Barcode and QR Code System
-  // Use backend print data endpoint
+  // Generate barcode and QR code data
+  generateBarcode: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/barcode`);
+    return response.data;
+  },
+  generateQRCode: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/qrcode`);
+    return response.data;
+  },
+  // Print label (server returns printable content or URL)
   printBarcode: async (batchId: number) => {
     const response = await api.get(`/traceability/batches/${batchId}/barcode/print`);
     return response.data;
@@ -64,6 +73,12 @@ export const traceabilityAPI = {
     return response.data;
   },
 
+  // Traceability Chain & Enhanced Trace Analysis
+  getTraceabilityChain: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/traceability-chain`);
+    return response.data;
+  },
+  
   // Enhanced Trace Analysis
   getBackwardTrace: async (batchId: number, depth: number = 5) => {
     const response = await api.get(`/traceability/batches/${batchId}/trace/backward`, {

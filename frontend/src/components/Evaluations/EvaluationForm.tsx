@@ -97,10 +97,14 @@ const validationSchema = Yup.object({
   technical_support_score: Yup.number().min(0).max(10).required('Technical support score is required'),
   hygiene_score: Yup.number().min(0).max(10).required('Hygiene score is required'),
   follow_up_required: Yup.boolean(),
-  follow_up_date: Yup.string().when('follow_up_required', {
-    is: true,
-    then: Yup.string().required('Follow-up date is required when follow-up is required'),
-  }),
+  follow_up_date: Yup.string()
+    .nullable()
+    .when('follow_up_required', {
+      is: true,
+      then: (schema: Yup.StringSchema<string | null | undefined>) =>
+        schema.required('Follow-up date is required when follow-up is required'),
+      otherwise: (schema: Yup.StringSchema<string | null | undefined>) => schema.notRequired(),
+    }),
 });
 
 const hygieneAuditAreas = [
@@ -168,7 +172,34 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({
     'Review & Save',
   ];
 
-  const formik = useFormik({
+  type EvaluationFormValues = {
+    supplier_id: number;
+    evaluation_period: string;
+    evaluation_date: string;
+    quality_score: number;
+    delivery_score: number;
+    price_score: number;
+    communication_score: number;
+    technical_support_score: number;
+    hygiene_score: number;
+    quality_comments: string;
+    delivery_comments: string;
+    price_comments: string;
+    communication_comments: string;
+    technical_support_comments: string;
+    hygiene_comments: string;
+    issues_identified: string;
+    improvement_actions: string;
+    follow_up_required: boolean;
+    follow_up_date: string;
+    compliance_score: number;
+    risk_assessment_score: number;
+    corrective_actions: string[];
+    verification_required: boolean;
+    verification_date: string;
+  };
+
+  const formik = useFormik<EvaluationFormValues>({
     initialValues: {
       supplier_id: supplierId || 0,
       evaluation_period: '',
@@ -861,7 +892,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({
       case 3:
         return renderScoreAssessment('Price Assessment', 'price_score', 'price_comments', <AttachMoneyIcon color="primary" />);
       case 4:
-        return renderScoreAssessment('Communication Assessment', 'communication_score', 'communication_comments', <PhoneIcon2 color="primary" />);
+        return renderScoreAssessment('Communication Assessment', 'communication_score', 'communication_comments', <PhoneIcon color="primary" />);
       case 5:
         return renderScoreAssessment('Technical Support Assessment', 'technical_support_score', 'technical_support_comments', <BuildIcon color="primary" />);
       case 6:

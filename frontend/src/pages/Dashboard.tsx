@@ -43,12 +43,14 @@ import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
 import { RootState } from '../store';
 import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
+import { dashboardAPI } from '../services/api';
 
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - in real implementation, this would come from API calls
+  // Real data from API
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
@@ -58,13 +60,17 @@ const Dashboard: React.FC = () => {
 
   const loadDashboardData = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // In real implementation, make API calls based on user role
-      // For now, using mock data
+      // Use real API call
+      const response = await dashboardAPI.getDashboard();
+      setDashboardData(response.data);
+    } catch (error: any) {
+      console.error('Failed to load dashboard data:', error);
+      setError(error.response?.data?.detail || 'Failed to load dashboard data');
+      // Fallback to mock data if API fails
       const mockData = getMockDashboardData();
       setDashboardData(mockData);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
     }
@@ -73,21 +79,21 @@ const Dashboard: React.FC = () => {
   const getMockDashboardData = () => {
     if (isSystemAdministrator(user)) {
       return {
+        totalDocuments: 25,
+        totalHaccpPlans: 5,
+        totalPrpPrograms: 8,
+        totalSuppliers: 12,
+        pendingApprovals: 3,
+        complianceScore: 98,
+        openIssues: 2,
         totalUsers: 25,
         activeUsers: 20,
-        pendingApprovals: 3,
-        systemAlerts: 2,
-        recentActivities: [
-          { id: 1, action: 'New user registered', time: '2 hours ago', type: 'info' },
-          { id: 2, action: 'System backup completed', time: '4 hours ago', type: 'success' },
-          { id: 3, action: 'Security audit scheduled', time: '1 day ago', type: 'warning' },
-        ],
-        systemHealth: {
-          database: 'healthy',
-          storage: '85%',
-          performance: 'excellent',
-          security: 'up-to-date'
-        }
+        systemStatus: 'online',
+        nextAuditDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        recentDocuments: [
+          { id: 1, title: 'Quality Manual v2.1', category: 'manual', created_at: new Date().toISOString(), status: 'active' },
+          { id: 2, title: 'HACCP Plan - Milk Processing', category: 'haccp', created_at: new Date().toISOString(), status: 'active' },
+        ]
       };
     } else if (hasRole(user, 'QA Manager')) {
       return {
@@ -98,42 +104,22 @@ const Dashboard: React.FC = () => {
         ncTrends: [
           { id: 1, title: 'Temperature Deviation', status: 'open', priority: 'high', assignedTo: 'John Doe', dueDate: '2024-01-15' },
           { id: 2, title: 'Document Version Mismatch', status: 'pending', priority: 'medium', assignedTo: 'Jane Smith', dueDate: '2024-01-20' },
-          { id: 3, title: 'Training Overdue', status: 'closed', priority: 'low', assignedTo: 'Mike Johnson', dueDate: '2024-01-10' },
         ],
         capaDeadlines: [
-          { id: 1, title: 'Implement New Monitoring System', dueDate: '2024-01-25', status: 'in_progress' },
-          { id: 2, title: 'Update HACCP Documentation', dueDate: '2024-02-01', status: 'pending' },
-        ],
-      };
-    } else if (hasRole(user, 'Production Operator')) {
-      return {
-        todayTasks: [
-          { id: 1, title: 'Temperature Monitoring - Line A', completed: false, time: '09:00' },
-          { id: 2, title: 'Cleaning Checklist - Zone 3', completed: true, time: '10:30' },
-          { id: 3, title: 'Quality Check - Batch #2024-001', completed: false, time: '14:00' },
-        ],
-        recentActivities: [
-          { id: 1, action: 'Completed temperature check', time: '2 hours ago', status: 'success' },
-          { id: 2, action: 'Reported minor deviation', time: '4 hours ago', status: 'warning' },
-        ],
-      };
-    } else if (hasRole(user, 'Auditor')) {
-      return {
-        complianceScore: 94,
-        auditFindings: [
-          { id: 1, finding: 'Document control procedures need updating', severity: 'medium', status: 'open' },
-          { id: 2, finding: 'Training records incomplete', severity: 'high', status: 'in_progress' },
-        ],
+          { id: 1, title: 'Equipment Calibration', dueDate: '2024-01-18', status: 'in_progress' },
+          { id: 2, title: 'Staff Training Update', dueDate: '2024-01-25', status: 'pending' },
+        ]
       };
     } else {
-      // Default dashboard for other roles
       return {
-        welcomeMessage: `Welcome, ${user?.full_name}!`,
-        quickActions: [
-          { title: 'View Documents', path: '/documents', icon: Description },
-          { title: 'Check Notifications', path: '/notifications', icon: Notifications },
-          { title: 'Update Profile', path: '/profile', icon: Person },
-        ],
+        dailyTasks: 8,
+        completedTasks: 6,
+        pendingReviews: 2,
+        upcomingDeadlines: 3,
+        recentActivities: [
+          { id: 1, action: 'Completed daily checklist', time: '2 hours ago', type: 'success' },
+          { id: 2, title: 'Updated process log', time: '4 hours ago', type: 'info' },
+        ]
       };
     }
   };
@@ -643,6 +629,12 @@ const Dashboard: React.FC = () => {
           { label: 'Dashboard', path: '/' }
         ]}
       />
+
+      {error && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {error} - Showing fallback data
+        </Alert>
+      )}
 
       {renderDashboard()}
     </Box>

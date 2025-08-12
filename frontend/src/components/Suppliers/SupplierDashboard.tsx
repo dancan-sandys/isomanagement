@@ -33,7 +33,24 @@ import {
   MenuItem,
   TextField,
 } from '@mui/material';
-import { Business, CheckCircle, Warning, LocalShipping, Refresh, Add } from '@mui/icons-material';
+import {
+  Business,
+  CheckCircle,
+  Warning,
+  LocalShipping,
+  Refresh,
+  Add,
+  Schedule,
+  Error as ErrorIcon,
+  Inventory,
+  Info,
+  Assessment,
+  Analytics,
+  Science,
+  Build,
+  Support,
+  Notifications,
+} from '@mui/icons-material';
 import {
   LineChart,
   Line,
@@ -387,10 +404,10 @@ const SupplierDashboard: React.FC = () => {
                       primary={delivery.supplier_name}
                       secondary={`${delivery.material_name} | ${format(parseISO(delivery.delivery_date), 'MMM dd, yyyy')}`}
                     />
-                    <EnhancedStatusChip
-                      status={delivery.inspection_status}
-                      label={delivery.inspection_status.replace('_', ' ')}
-                    />
+                      <EnhancedStatusChip
+                        status={delivery.inspection_status as any}
+                        label={delivery.inspection_status.replace('_', ' ')}
+                      />
                   </ListItem>
                   {index < 4 && <Divider />}
                 </React.Fragment>
@@ -470,7 +487,7 @@ const SupplierDashboard: React.FC = () => {
     switch (type) {
       case 'expired_certificate': return <Warning />;
       case 'overdue_evaluation': return <Schedule />;
-      case 'quality_alert': return <Error />;
+      case 'quality_alert': return <ErrorIcon />;
       case 'expired_material': return <Inventory />;
       default: return <Info />;
     }

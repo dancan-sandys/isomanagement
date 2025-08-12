@@ -99,6 +99,7 @@ class SupplierResponse(SupplierBase):
     created_at: datetime
     updated_at: Optional[datetime] = None  # Made optional
     created_by: int
+    created_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True

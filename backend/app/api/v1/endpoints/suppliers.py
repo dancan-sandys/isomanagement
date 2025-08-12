@@ -189,67 +189,7 @@ async def get_supplier_stats(
         data=stats_data
     )
 
-@router.get("/materials/stats", response_model=ResponseModel[dict])
-async def get_material_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get material statistics"""
-    service = SupplierService(db)
-    
-    # Mock material stats for now
-    material_stats = {
-        "total_materials": 15,
-        "approved_materials": 12,
-        "pending_materials": 2,
-        "rejected_materials": 1,
-        "materials_by_category": [
-            {"category": "raw_milk", "count": 8},
-            {"category": "additives", "count": 4},
-            {"category": "packaging", "count": 3}
-        ],
-        "materials_by_supplier": [
-            {"supplier_name": "Dairy Farm A", "count": 5},
-            {"supplier_name": "Packaging Co", "count": 3},
-            {"supplier_name": "Additives Inc", "count": 2}
-        ]
-    }
-    
-    return ResponseModel(
-        success=True,
-        message="Material statistics retrieved successfully",
-        data=material_stats
-    )
 
-@router.get("/evaluations/stats", response_model=ResponseModel[dict])
-async def get_evaluation_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get evaluation statistics"""
-    service = SupplierService(db)
-    
-    # Mock evaluation stats for now
-    evaluation_stats = {
-        "total_evaluations": 25,
-        "completed_evaluations": 20,
-        "in_progress_evaluations": 3,
-        "scheduled_evaluations": 2,
-        "overdue_evaluations": 1,
-        "average_score": 4.2,
-        "evaluations_by_month": [
-            {"month": "2024-01", "count": 8, "average_score": 4.3},
-            {"month": "2024-02", "count": 6, "average_score": 4.1},
-            {"month": "2024-03", "count": 7, "average_score": 4.4},
-            {"month": "2024-04", "count": 4, "average_score": 4.0}
-        ]
-    }
-    
-    return ResponseModel(
-        success=True,
-        message="Evaluation statistics retrieved successfully",
-        data=evaluation_stats
-    )
 
 # Dashboard endpoints (must come before path parameter endpoints)
 @router.get("/dashboard/stats", response_model=ResponseModel[SupplierDashboardStats])
@@ -308,29 +248,6 @@ async def get_suppliers(
     )
 
 
-@router.get("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
-async def get_supplier(
-    supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get supplier by ID"""
-    service = SupplierService(db)
-    supplier = service.get_supplier(supplier_id)
-    
-    if not supplier:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Supplier not found"
-        )
-    
-    return ResponseModel(
-        success=True,
-        message="Supplier retrieved successfully",
-        data=supplier
-    )
-
-
 @router.post("/", response_model=ResponseModel[SupplierResponse])
 async def create_supplier(
     supplier_data: SupplierCreate,
@@ -360,71 +277,7 @@ async def create_supplier(
     )
 
 
-@router.put("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
-async def update_supplier(
-    supplier_id: int,
-    supplier_data: SupplierUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update supplier"""
-    service = SupplierService(db)
-    supplier = service.update_supplier(supplier_id, supplier_data)
-    
-    if not supplier:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Supplier not found"
-        )
-    
-    return ResponseModel(
-        success=True,
-        message="Supplier updated successfully",
-        data=supplier
-    )
-
-
-@router.delete("/{supplier_id}", response_model=ResponseModel[dict])
-async def delete_supplier(
-    supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Delete supplier"""
-    service = SupplierService(db)
-    success = service.delete_supplier(supplier_id)
-    
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Supplier not found"
-        )
-    
-    return ResponseModel(
-        success=True,
-        message="Supplier deleted successfully",
-        data={"message": "Supplier deleted successfully"}
-    )
-
-
-@router.post("/bulk/action", response_model=ResponseModel[dict])
-async def bulk_update_suppliers(
-    action_data: BulkSupplierAction,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Bulk update suppliers"""
-    service = SupplierService(db)
-    result = service.bulk_update_suppliers(action_data)
-    
-    return ResponseModel(
-        success=True,
-        message=f"Bulk action completed successfully",
-        data=result
-    )
-
-
-# Material endpoints
+# Material endpoints (must come before /{supplier_id} route)
 @router.get("/materials/", response_model=ResponseModel[MaterialListResponse])
 async def get_materials(
     search: Optional[str] = Query(None, description="Search by name or code"),
@@ -487,34 +340,35 @@ async def get_material(
     )
 
 
-@router.post("/materials/", response_model=ResponseModel[MaterialResponse])
-async def create_material(
-    material_data: MaterialCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Create a new material"""
-    service = SupplierService(db)
-    
-    # Check if material code already exists for this supplier
-    existing_material = service.db.query(service.db.query(Material).filter(
-        Material.material_code == material_data.material_code,
-        Material.supplier_id == material_data.supplier_id
-    ).exists()).scalar()
-    
-    if existing_material:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Material code already exists for this supplier"
-        )
-    
-    material = service.create_material(material_data, current_user.id)
-    
-    return ResponseModel(
-        success=True,
-        message="Material created successfully",
-        data=material
-    )
+# Temporarily commented out to test route conflicts
+# @router.post("/materials/", response_model=ResponseModel[MaterialResponse])
+# async def create_material(
+#     material_data: MaterialCreate,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     """Create a new material"""
+#     service = SupplierService(db)
+#     
+#     # Check if material code already exists for this supplier
+#     existing_material = service.db.query(service.db.query(Material).filter(
+#         Material.material_code == material_data.material_code,
+#         Material.supplier_id == material_data.supplier_id
+#     ).exists()).scalar()
+#     
+#     if existing_material:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Material code already exists for this supplier"
+#         )
+#     
+#     material = service.create_material(material_data, current_user.id)
+#     
+#     return ResponseModel(
+#         success=True,
+#         message="Material created successfully",
+#         data=material
+#     )
 
 
 @router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
@@ -564,30 +418,14 @@ async def delete_material(
     )
 
 
-@router.post("/materials/bulk/action", response_model=ResponseModel[dict])
-async def bulk_update_materials(
-    action_data: BulkMaterialAction,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Bulk update materials"""
-    service = SupplierService(db)
-    result = service.bulk_update_materials(action_data)
-    
-    return ResponseModel(
-        success=True,
-        message=f"Bulk material action completed successfully",
-        data=result
-    )
-
-
-# Evaluation endpoints
+# Evaluation endpoints (must come before /{supplier_id} route)
 @router.get("/evaluations/", response_model=ResponseModel[EvaluationListResponse])
 async def get_evaluations(
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    evaluation_period: Optional[str] = Query(None, description="Filter by evaluation period"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    date_from: Optional[datetime] = Query(None, description="Filter from date"),
-    date_to: Optional[datetime] = Query(None, description="Filter to date"),
+    date_from: Optional[str] = Query(None, description="Filter by start date"),
+    date_to: Optional[str] = Query(None, description="Filter by end date"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     db: Session = Depends(get_db),
@@ -596,6 +434,7 @@ async def get_evaluations(
     """Get evaluations with filtering and pagination"""
     filter_params = EvaluationFilter(
         supplier_id=supplier_id,
+        evaluation_period=evaluation_period,
         status=status,
         date_from=date_from,
         date_to=date_to,
@@ -708,14 +547,14 @@ async def delete_evaluation(
     )
 
 
-# Delivery endpoints
+# Delivery endpoints (must come before /{supplier_id} route)
 @router.get("/deliveries/", response_model=DeliveryListResponse)
 async def get_deliveries(
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    delivery_date_from: Optional[str] = Query(None, description="Filter by delivery date from"),
+    delivery_date_to: Optional[str] = Query(None, description="Filter by delivery date to"),
+    status: Optional[str] = Query(None, description="Filter by status"),
     material_id: Optional[int] = Query(None, description="Filter by material"),
-    inspection_status: Optional[str] = Query(None, description="Filter by inspection status"),
-    date_from: Optional[datetime] = Query(None, description="Filter from date"),
-    date_to: Optional[datetime] = Query(None, description="Filter to date"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     db: Session = Depends(get_db),
@@ -724,10 +563,10 @@ async def get_deliveries(
     """Get deliveries with filtering and pagination"""
     filter_params = DeliveryFilter(
         supplier_id=supplier_id,
+        delivery_date_from=delivery_date_from,
+        delivery_date_to=delivery_date_to,
+        status=status,
         material_id=material_id,
-        inspection_status=inspection_status,
-        date_from=date_from,
-        date_to=date_to,
         page=page,
         size=size
     )
@@ -735,13 +574,15 @@ async def get_deliveries(
     service = SupplierService(db)
     result = service.get_deliveries(filter_params)
     
-    return DeliveryListResponse(
+    response_data = DeliveryListResponse(
         items=result["items"],
         total=result["total"],
         page=result["page"],
         size=result["size"],
         pages=result["pages"]
     )
+    
+    return response_data
 
 
 @router.get("/deliveries/{delivery_id}", response_model=IncomingDeliveryResponse)
@@ -769,9 +610,10 @@ async def create_delivery(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new incoming delivery"""
+    """Create a new delivery"""
     service = SupplierService(db)
     delivery = service.create_delivery(delivery_data, current_user.id)
+    
     return delivery
 
 
@@ -795,7 +637,7 @@ async def update_delivery(
     return delivery
 
 
-@router.delete("/deliveries/{delivery_id}")
+@router.delete("/deliveries/{delivery_id}", response_model=ResponseModel[dict])
 async def delete_delivery(
     delivery_id: int,
     db: Session = Depends(get_db),
@@ -811,7 +653,117 @@ async def delete_delivery(
             detail="Delivery not found"
         )
     
-    return {"message": "Delivery deleted successfully"}
+    return ResponseModel(
+        success=True,
+        message="Delivery deleted successfully",
+        data={"message": "Delivery deleted successfully"}
+    )
+
+
+# Now the generic supplier routes
+# Temporarily commented out to test route conflicts
+# @router.get("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
+# async def get_supplier(
+#     supplier_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     """Get supplier by ID"""
+#     service = SupplierService(db)
+#     supplier = service.get_supplier(supplier_id)
+#     
+#     if not supplier:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="Supplier not found"
+#         )
+#     
+#     return ResponseModel(
+#         success=True,
+#         message="Supplier retrieved successfully",
+#         data=supplier
+#     )
+
+
+@router.put("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
+async def update_supplier(
+    supplier_id: int,
+    supplier_data: SupplierUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update supplier"""
+    service = SupplierService(db)
+    supplier = service.update_supplier(supplier_id, supplier_data)
+    
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Supplier updated successfully",
+        data=supplier
+    )
+
+
+@router.delete("/{supplier_id}", response_model=ResponseModel[dict])
+async def delete_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete supplier"""
+    service = SupplierService(db)
+    success = service.delete_supplier(supplier_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Supplier deleted successfully",
+        data={"message": "Supplier deleted successfully"}
+    )
+
+
+@router.post("/bulk/action", response_model=ResponseModel[dict])
+async def bulk_update_suppliers(
+    action_data: BulkSupplierAction,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk update suppliers"""
+    service = SupplierService(db)
+    result = service.bulk_update_suppliers(action_data)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk action completed successfully",
+        data=result
+    )
+
+
+@router.post("/materials/bulk/action", response_model=ResponseModel[dict])
+async def bulk_update_materials(
+    action_data: BulkMaterialAction,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk update materials"""
+    service = SupplierService(db)
+    result = service.bulk_update_materials(action_data)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk material action completed successfully",
+        data=result
+    )
 
 
 # Document endpoints

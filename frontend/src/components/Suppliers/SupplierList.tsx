@@ -96,7 +96,7 @@ import { RootState, AppDispatch } from '../../store';
 import { Supplier, SupplierFilters } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
 import { EnhancedStatusChip } from '../UI';
-import { DataTable } from '../UI/DataTable';
+import DataTable from '../UI/DataTable';
 import { NotificationToast } from '../UI';
 
 interface SupplierListProps {
@@ -149,13 +149,13 @@ const SupplierList: React.FC<SupplierListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== filters.search) {
+      if (searchTerm !== (filters.suppliers?.search || '')) {
         dispatch(setSupplierFilters({ search: searchTerm }));
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch]);
+  }, [searchTerm, dispatch, filters.suppliers]);
 
   const loadSuppliers = () => {
     dispatch(fetchSuppliers({

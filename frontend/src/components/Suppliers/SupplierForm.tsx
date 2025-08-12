@@ -150,6 +150,12 @@ const validationSchema = Yup.object({
     .max(50, 'Company type must not exceed 50 characters')
     .optional(),
   year_established: Yup.number()
+    .transform((value, originalValue) => {
+      if (originalValue === '' || originalValue === null || typeof originalValue === 'undefined') {
+        return undefined as any;
+      }
+      return Number(originalValue);
+    })
     .min(1800, 'Year established must be after 1800')
     .max(new Date().getFullYear(), 'Year established cannot be in the future')
     .optional(),
@@ -214,7 +220,13 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     onSubmit: async (values) => {
       try {
         if (mode === 'create') {
-          const response = await dispatch(createSupplier(values)).unwrap();
+          const payload = {
+            ...values,
+            year_established: values.year_established === ''
+              ? undefined
+              : Number(values.year_established),
+          } as any;
+          const response = await dispatch(createSupplier(payload)).unwrap();
           setNotification({
             open: true,
             message: 'Supplier created successfully',
@@ -222,9 +234,15 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
           });
           onSave?.(response);
         } else if (mode === 'edit' && supplierId) {
+          const payload = {
+            ...values,
+            year_established: values.year_established === ''
+              ? undefined
+              : Number(values.year_established),
+          } as any;
           const response = await dispatch(updateSupplier({
             supplierId,
-            supplierData: values,
+            supplierData: payload,
           })).unwrap();
           setNotification({
             open: true,
