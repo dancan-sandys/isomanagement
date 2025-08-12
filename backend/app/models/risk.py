@@ -83,11 +83,16 @@ class RiskRegisterItem(Base):
     classification = Column(Enum(RiskClassification), nullable=True)
     status = Column(Enum(RiskStatus), nullable=False, default=RiskStatus.OPEN)
 
-    severity = Column(Enum(RiskSeverity), nullable=False, default=RiskSeverity.LOW)
-    likelihood = Column(Enum(RiskLikelihood), nullable=False, default=RiskLikelihood.UNLIKELY)
+    severity = Column(Enum(RiskSeverity), nullable=True)
+    likelihood = Column(Enum(RiskLikelihood), nullable=True)
     detectability = Column(Enum(RiskDetectability), nullable=True)
     impact_score = Column(Integer, nullable=True)  # optional numeric 1-5
-    risk_score = Column(Integer, nullable=False, default=1)  # computed S*L*(D)
+    risk_score = Column(Integer, nullable=False, default=1)  # for risks: S*L*(D); for opportunities: mirrors opportunity_score
+
+    # Opportunity-specific evaluation (ISO allows org-defined criteria; we use Benefit x Feasibility)
+    opportunity_benefit = Column(Integer, nullable=True)       # 1-5
+    opportunity_feasibility = Column(Integer, nullable=True)   # 1-5
+    opportunity_score = Column(Integer, nullable=True)         # benefit * feasibility
 
     mitigation_plan = Column(Text, nullable=True)
     residual_risk = Column(String(100), nullable=True)

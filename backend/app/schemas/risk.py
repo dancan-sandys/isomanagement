@@ -95,11 +95,16 @@ class RiskItemCreate(BaseModel):
     description: Optional[str] = None
     category: RiskCategory = RiskCategory.OTHER
     classification: Optional[RiskClassification] = None
-    severity: RiskSeverity = RiskSeverity.LOW
-    likelihood: RiskLikelihood = RiskLikelihood.UNLIKELY
+    # Risk-only fields
+    severity: Optional[RiskSeverity] = RiskSeverity.LOW
+    likelihood: Optional[RiskLikelihood] = RiskLikelihood.UNLIKELY
     detectability: Optional[RiskDetectability] = None
     impact_score: Optional[int] = Field(None, ge=1, le=5)
     risk_score: Optional[int] = Field(None, ge=1, le=125)
+    # Opportunity-only fields
+    opportunity_benefit: Optional[int] = Field(None, ge=1, le=5)
+    opportunity_feasibility: Optional[int] = Field(None, ge=1, le=5)
+    opportunity_score: Optional[int] = Field(None, ge=1, le=25)
     mitigation_plan: Optional[str] = None
     residual_risk: Optional[str] = None
     assigned_to: Optional[int] = None
@@ -119,6 +124,9 @@ class RiskItemUpdate(BaseModel):
     detectability: Optional[RiskDetectability] = None
     impact_score: Optional[int] = Field(None, ge=1, le=5)
     risk_score: Optional[int] = Field(None, ge=1, le=125)
+    opportunity_benefit: Optional[int] = Field(None, ge=1, le=5)
+    opportunity_feasibility: Optional[int] = Field(None, ge=1, le=5)
+    opportunity_score: Optional[int] = Field(None, ge=1, le=25)
     mitigation_plan: Optional[str] = None
     residual_risk: Optional[str] = None
     assigned_to: Optional[int] = None
@@ -141,6 +149,9 @@ class RiskItemResponse(BaseModel):
     detectability: Optional[RiskDetectability] = None
     impact_score: Optional[int] = None
     risk_score: int
+    opportunity_benefit: Optional[int] = None
+    opportunity_feasibility: Optional[int] = None
+    opportunity_score: Optional[int] = None
     mitigation_plan: Optional[str] = None
     residual_risk: Optional[str] = None
     assigned_to: Optional[int] = None

@@ -9,10 +9,16 @@ export interface RiskItem {
   description?: string;
   category: string;
   status: string;
-  severity: string;
-  likelihood: string;
+  classification?: string;
+  severity?: string;
+  likelihood?: string;
+  detectability?: string;
   impact_score?: number;
   risk_score: number;
+  // Opportunity-specific
+  opportunity_benefit?: number;
+  opportunity_feasibility?: number;
+  opportunity_score?: number;
   mitigation_plan?: string;
   residual_risk?: string;
   assigned_to?: number;

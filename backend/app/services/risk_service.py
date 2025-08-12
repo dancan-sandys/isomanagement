@@ -19,31 +19,23 @@ class RiskService:
         return f"RISK-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
 
     def create_item(self, payload: RiskItemCreate, created_by: int) -> RiskRegisterItem:
-        risk_score = payload.risk_score
-        if risk_score is None:
-            # S * L * D (detectability optional; default 1 when not provided)
-            sev_map = {
-                RiskSeverity.LOW: 1,
-                RiskSeverity.MEDIUM: 2,
-                RiskSeverity.HIGH: 3,
-                RiskSeverity.CRITICAL: 4,
-            }
-            lik_map = {
-                RiskLikelihood.RARE: 1,
-                RiskLikelihood.UNLIKELY: 2,
-                RiskLikelihood.POSSIBLE: 3,
-                RiskLikelihood.LIKELY: 4,
-                RiskLikelihood.ALMOST_CERTAIN: 5,
-            }
-            det_map = {
-                None: 1,
-                RiskDetectability.EASILY_DETECTABLE: 1,
-                RiskDetectability.MODERATELY_DETECTABLE: 2,
-                RiskDetectability.DIFFICULT: 3,
-                RiskDetectability.VERY_DIFFICULT: 4,
-                RiskDetectability.ALMOST_UNDETECTABLE: 5,
-            }
-            risk_score = sev_map[payload.severity] * lik_map[payload.likelihood] * det_map[payload.detectability]
+        # Compute score based on item type
+        if payload.item_type == RiskItemType.OPPORTUNITY:
+            benefit = payload.opportunity_benefit or 1
+            feasibility = payload.opportunity_feasibility or 1
+            opportunity_score = payload.opportunity_score or (benefit * feasibility)
+            risk_score = opportunity_score
+        else:
+            risk_score = payload.risk_score
+            if risk_score is None:
+                # S * L * D (detectability optional; default 1 when not provided)
+                sev_map = {RiskSeverity.LOW: 1, RiskSeverity.MEDIUM: 2, RiskSeverity.HIGH: 3, RiskSeverity.CRITICAL: 4}
+                lik_map = {RiskLikelihood.RARE: 1, RiskLikelihood.UNLIKELY: 2, RiskLikelihood.POSSIBLE: 3, RiskLikelihood.LIKELY: 4, RiskLikelihood.ALMOST_CERTAIN: 5}
+                det_map = {None: 1, RiskDetectability.EASILY_DETECTABLE: 1, RiskDetectability.MODERATELY_DETECTABLE: 2, RiskDetectability.DIFFICULT: 3, RiskDetectability.VERY_DIFFICULT: 4, RiskDetectability.ALMOST_UNDETECTABLE: 5}
+                sev = sev_map.get(payload.severity or RiskSeverity.LOW, 1)
+                lik = lik_map.get(payload.likelihood or RiskLikelihood.UNLIKELY, 1)
+                det = det_map.get(payload.detectability, 1)
+                risk_score = sev * lik * det
 
         item = RiskRegisterItem(
             item_type=payload.item_type,
@@ -55,9 +47,12 @@ class RiskService:
             status=RiskStatus.OPEN,
             severity=payload.severity,
             likelihood=payload.likelihood,
-                detectability=payload.detectability,
+            detectability=payload.detectability,
             impact_score=payload.impact_score,
             risk_score=risk_score,
+            opportunity_benefit=(payload.opportunity_benefit if payload.item_type == RiskItemType.OPPORTUNITY else None),
+            opportunity_feasibility=(payload.opportunity_feasibility if payload.item_type == RiskItemType.OPPORTUNITY else None),
+            opportunity_score=(opportunity_score if payload.item_type == RiskItemType.OPPORTUNITY else None),
             mitigation_plan=payload.mitigation_plan,
             residual_risk=payload.residual_risk,
             assigned_to=payload.assigned_to,
@@ -77,15 +72,25 @@ class RiskService:
             raise ValueError("Risk item not found")
 
         data = payload.model_dump(exclude_unset=True)
-        # If severity/likelihood change but risk_score not provided, recompute
-        severity = data.get("severity", item.severity)
-        likelihood = data.get("likelihood", item.likelihood)
-        detectability = data.get("detectability", item.detectability)
-        if ("severity" in data or "likelihood" in data or "detectability" in data) and "risk_score" not in data:
-            sev_map = {RiskSeverity.LOW: 1, RiskSeverity.MEDIUM: 2, RiskSeverity.HIGH: 3, RiskSeverity.CRITICAL: 4}
-            lik_map = {RiskLikelihood.RARE: 1, RiskLikelihood.UNLIKELY: 2, RiskLikelihood.POSSIBLE: 3, RiskLikelihood.LIKELY: 4, RiskLikelihood.ALMOST_CERTAIN: 5}
-            det_map = {None: 1, RiskDetectability.EASILY_DETECTABLE: 1, RiskDetectability.MODERATELY_DETECTABLE: 2, RiskDetectability.DIFFICULT: 3, RiskDetectability.VERY_DIFFICULT: 4, RiskDetectability.ALMOST_UNDETECTABLE: 5}
-            data["risk_score"] = sev_map[severity] * lik_map[likelihood] * det_map[detectability]
+        # Recompute appropriate score if relevant fields changed
+        if item.item_type == RiskItemType.OPPORTUNITY:
+            if any(k in data for k in ["opportunity_benefit", "opportunity_feasibility", "opportunity_score"]):
+                benefit = data.get("opportunity_benefit", item.opportunity_benefit or 1)
+                feasibility = data.get("opportunity_feasibility", item.opportunity_feasibility or 1)
+                score = data.get("opportunity_score", benefit * feasibility)
+                data["opportunity_benefit"] = benefit
+                data["opportunity_feasibility"] = feasibility
+                data["opportunity_score"] = score
+                data["risk_score"] = score
+        else:
+            severity = data.get("severity", item.severity)
+            likelihood = data.get("likelihood", item.likelihood)
+            detectability = data.get("detectability", item.detectability)
+            if ("severity" in data or "likelihood" in data or "detectability" in data) and "risk_score" not in data:
+                sev_map = {RiskSeverity.LOW: 1, RiskSeverity.MEDIUM: 2, RiskSeverity.HIGH: 3, RiskSeverity.CRITICAL: 4}
+                lik_map = {RiskLikelihood.RARE: 1, RiskLikelihood.UNLIKELY: 2, RiskLikelihood.POSSIBLE: 3, RiskLikelihood.LIKELY: 4, RiskLikelihood.ALMOST_CERTAIN: 5}
+                det_map = {None: 1, RiskDetectability.EASILY_DETECTABLE: 1, RiskDetectability.MODERATELY_DETECTABLE: 2, RiskDetectability.DIFFICULT: 3, RiskDetectability.VERY_DIFFICULT: 4, RiskDetectability.ALMOST_UNDETECTABLE: 5}
+                data["risk_score"] = sev_map[severity] * lik_map[likelihood] * det_map[detectability]
 
         for k, v in data.items():
             setattr(item, k, v)

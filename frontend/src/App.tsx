@@ -32,6 +32,8 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import DashboardAnalytics from './pages/DashboardAnalytics';
 import DashboardReports from './pages/DashboardReports';
 import RiskRegister from './pages/RiskRegister';
+import OpportunitiesRegister from './pages/OpportunitiesRegister';
+import OpportunityDetail from './pages/OpportunityDetail';
 import RiskDetail from './pages/RiskDetail';
 
 function App() {
@@ -219,7 +221,8 @@ function App() {
                       
                       {/* Compliance - QA and Compliance roles */}
                       <Route path="/compliance/risks" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskRegister} />} />
-                      <Route path="/compliance/opportunities" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskRegister} />} />
+                      <Route path="/compliance/opportunities" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={OpportunitiesRegister} />} />
+                      <Route path="/compliance/opportunity/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={OpportunityDetail} />} />
                       <Route path="/compliance/risk/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskDetail} />} />
                       <Route path="/compliance/regulatory" element={
                         <ComingSoon 
