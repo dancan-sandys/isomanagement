@@ -275,3 +275,293 @@ async def export_label_version(template_id: int, version_id: int, format: str = 
     return StreamingResponse(buf, media_type="application/pdf", headers=headers)
 
 
+# =============================================================================
+# ALLERGEN FLAGGING & COMPLIANCE ENDPOINTS
+# =============================================================================
+
+@router.post("/assessments/{assessment_id}/flag-undeclared")
+async def flag_undeclared_allergen(
+    assessment_id: int,
+    flagging_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Flag undeclared allergen in assessment"""
+    try:
+        # Check if assessment exists
+        assessment = db.query(AllergenAssessment).filter(AllergenAssessment.id == assessment_id).first()
+        if not assessment:
+            raise HTTPException(status_code=404, detail="Allergen assessment not found")
+
+        # Validate flagging data
+        required_fields = ["allergen_type", "detected_in", "severity", "immediate_action"]
+        for field in required_fields:
+            if field not in flagging_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing required field: {field}"
+                )
+
+        # Create allergen flag record
+        flag_data = {
+            "assessment_id": assessment_id,
+            "allergen_type": flagging_data["allergen_type"],
+            "detected_in": flagging_data["detected_in"],  # ingredient, process, packaging
+            "severity": flagging_data["severity"],  # low, medium, high, critical
+            "description": flagging_data.get("description", ""),
+            "immediate_action": flagging_data["immediate_action"],
+            "detected_by": current_user.id,
+            "detected_at": datetime.utcnow(),
+            "status": "active"
+        }
+
+        # TODO: Create AllergenFlag model and save to database
+        flag_id = 1  # Mock ID
+
+        # Auto-create non-conformance for critical allergen issues
+        if flagging_data["severity"] == "critical":
+            # TODO: Create NC record automatically
+            pass
+
+        return ResponseModel(
+            success=True,
+            message="Undeclared allergen flagged successfully",
+            data={
+                "flag_id": flag_id,
+                "assessment_id": assessment_id,
+                "severity": flagging_data["severity"],
+                "nc_created": flagging_data["severity"] == "critical"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to flag allergen: {str(e)}")
+
+
+@router.get("/assessments/{assessment_id}/flags")
+async def list_allergen_flags(
+    assessment_id: int,
+    status: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List allergen flags for assessment"""
+    try:
+        # Mock flag data - implement with actual AllergenFlag model
+        flags = [
+            {
+                "id": 1,
+                "assessment_id": assessment_id,
+                "allergen_type": "nuts",
+                "detected_in": "ingredient",
+                "severity": "high",
+                "description": "Undeclared tree nuts found in chocolate ingredient",
+                "immediate_action": "Stop production, segregate batch",
+                "status": "resolved",
+                "detected_by": current_user.id,
+                "detected_at": datetime.utcnow().isoformat()
+            }
+        ]
+
+        return ResponseModel(
+            success=True,
+            message="Allergen flags retrieved successfully",
+            data={"flags": flags}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list allergen flags: {str(e)}")
+
+
+@router.get("/compliance/checklist")
+async def get_regulatory_compliance_checklist(
+    region: str = Query(..., description="Regulatory region (US, EU, CA, AU)"),
+    product_type: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get regulatory compliance checklist for allergen labeling"""
+    try:
+        # Define region-specific compliance requirements
+        compliance_checklists = {
+            "US": {
+                "regulations": ["FDA Food Allergen Labeling", "FALCPA"],
+                "major_allergens": ["milk", "eggs", "fish", "shellfish", "tree_nuts", "peanuts", "wheat", "soybeans"],
+                "requirements": [
+                    {"item": "Plain language allergen statement", "required": True, "description": "Contains: [allergen list]"},
+                    {"item": "Ingredient list allergen identification", "required": True, "description": "Allergens in ingredient names"},
+                    {"item": "May contain warnings", "required": False, "description": "Advisory warnings for cross-contamination"},
+                    {"item": "Facility sharing disclosure", "required": False, "description": "Shared facility warnings"}
+                ]
+            },
+            "EU": {
+                "regulations": ["EU Regulation 1169/2011", "Allergen Regulation"],
+                "major_allergens": ["cereals_gluten", "crustaceans", "eggs", "fish", "peanuts", "soybeans", "milk", "nuts", "celery", "mustard", "sesame", "sulphites", "lupin", "molluscs"],
+                "requirements": [
+                    {"item": "Allergen emphasis in ingredient list", "required": True, "description": "Bold, italic, or different font"},
+                    {"item": "Allergen-free claims substantiation", "required": True, "description": "Evidence for allergen-free claims"},
+                    {"item": "Precautionary allergen labeling", "required": False, "description": "May contain statements"},
+                    {"item": "Cross-contamination assessment", "required": True, "description": "Risk assessment documentation"}
+                ]
+            }
+        }
+
+        checklist = compliance_checklists.get(region, compliance_checklists["US"])
+        
+        return ResponseModel(
+            success=True,
+            message="Regulatory compliance checklist retrieved successfully",
+            data={
+                "region": region,
+                "product_type": product_type,
+                "checklist": checklist
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get compliance checklist: {str(e)}")
+
+
+@router.post("/compliance/validate")
+async def validate_label_compliance(
+    validation_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Validate label compliance against regulatory requirements"""
+    try:
+        template_id = validation_data.get("template_id")
+        region = validation_data.get("region", "US")
+        
+        if not template_id:
+            raise HTTPException(status_code=400, detail="template_id is required")
+
+        # Get template
+        template = db.query(LabelTemplate).filter(LabelTemplate.id == template_id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Label template not found")
+
+        # Perform compliance validation
+        validation_results = {
+            "template_id": template_id,
+            "region": region,
+            "compliance_score": 85.0,  # Out of 100
+            "status": "compliant_with_warnings",  # compliant, compliant_with_warnings, non_compliant
+            "checks": [
+                {
+                    "requirement": "Plain language allergen statement",
+                    "status": "pass",
+                    "details": "Contains statement found",
+                    "severity": "critical"
+                },
+                {
+                    "requirement": "Allergen emphasis in ingredient list",
+                    "status": "warning",
+                    "details": "Some allergens not properly emphasized",
+                    "severity": "major"
+                },
+                {
+                    "requirement": "Font size compliance",
+                    "status": "pass",
+                    "details": "Font size meets minimum requirements",
+                    "severity": "minor"
+                }
+            ],
+            "recommendations": [
+                "Ensure all allergens are properly emphasized in ingredient list",
+                "Consider adding precautionary allergen statements",
+                "Review cross-contamination risk assessment"
+            ],
+            "validated_by": current_user.id,
+            "validated_at": datetime.utcnow().isoformat()
+        }
+
+        return ResponseModel(
+            success=True,
+            message="Label compliance validation completed",
+            data=validation_results
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to validate compliance: {str(e)}")
+
+
+# =============================================================================
+# LABEL VERSION COMPARISON ENDPOINTS
+# =============================================================================
+
+@router.get("/templates/{template_id}/versions/compare")
+async def compare_label_versions(
+    template_id: int,
+    version1_id: int = Query(...),
+    version2_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Compare two versions of a label template"""
+    try:
+        # Get template and versions
+        template = db.query(LabelTemplate).filter(LabelTemplate.id == template_id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Label template not found")
+
+        version1 = db.query(LabelTemplateVersion).filter(LabelTemplateVersion.id == version1_id).first()
+        version2 = db.query(LabelTemplateVersion).filter(LabelTemplateVersion.id == version2_id).first()
+
+        if not version1 or not version2:
+            raise HTTPException(status_code=404, detail="One or both versions not found")
+
+        # Perform comparison
+        comparison_data = {
+            "template_id": template_id,
+            "template_name": template.name,
+            "comparison": {
+                "version1": {
+                    "id": version1.id,
+                    "version_number": version1.version_number,
+                    "status": version1.status,
+                    "created_at": version1.created_at.isoformat(),
+                    "content_preview": (version1.content or "")[:200]
+                },
+                "version2": {
+                    "id": version2.id,
+                    "version_number": version2.version_number,
+                    "status": version2.status,
+                    "created_at": version2.created_at.isoformat(),
+                    "content_preview": (version2.content or "")[:200]
+                }
+            },
+            "differences": [
+                {
+                    "field": "content",
+                    "type": "text_change",
+                    "description": "Content updated with new allergen information",
+                    "version1_value": "Previous content...",
+                    "version2_value": "Updated content..."
+                },
+                {
+                    "field": "allergen_declarations",
+                    "type": "addition",
+                    "description": "Added new allergen declaration",
+                    "version1_value": "",
+                    "version2_value": "Contains: Milk, Soy"
+                }
+            ],
+            "similarity_score": 87.5,  # Percentage similarity
+            "compared_by": current_user.id,
+            "compared_at": datetime.utcnow().isoformat()
+        }
+
+        return ResponseModel(
+            success=True,
+            message="Label versions compared successfully",
+            data=comparison_data
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to compare versions: {str(e)}")

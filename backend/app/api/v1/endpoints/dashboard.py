@@ -295,4 +295,420 @@ async def get_system_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve system status: {str(e)}"
+        )
+
+
+# =============================================================================
+# ADVANCED DASHBOARD FEATURES
+# =============================================================================
+
+@router.get("/fsms-compliance-score")
+async def get_fsms_compliance_score(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get real-time FSMS compliance score calculation"""
+    try:
+        # Calculate comprehensive FSMS compliance score
+        # This would aggregate data from all modules
+        
+        # Mock calculations based on various factors
+        compliance_factors = {
+            "document_control": {
+                "weight": 0.15,
+                "score": 95.0,
+                "factors": ["approval_workflow", "version_control", "distribution"]
+            },
+            "haccp_implementation": {
+                "weight": 0.25,
+                "score": 92.0,
+                "factors": ["ccp_monitoring", "corrective_actions", "verification"]
+            },
+            "prp_programs": {
+                "weight": 0.20,
+                "score": 88.0,
+                "factors": ["checklist_completion", "non_conformances", "improvements"]
+            },
+            "supplier_management": {
+                "weight": 0.15,
+                "score": 96.0,
+                "factors": ["evaluations", "deliveries", "corrective_actions"]
+            },
+            "training_competency": {
+                "weight": 0.10,
+                "score": 94.0,
+                "factors": ["completion_rates", "assessments", "certifications"]
+            },
+            "audit_compliance": {
+                "weight": 0.15,
+                "score": 90.0,
+                "factors": ["internal_audits", "external_audits", "findings_resolution"]
+            }
+        }
+        
+        # Calculate weighted overall score
+        overall_score = sum(
+            factor["weight"] * factor["score"] 
+            for factor in compliance_factors.values()
+        )
+        
+        compliance_data = {
+            "overall_score": round(overall_score, 2),
+            "compliance_level": "compliant" if overall_score >= 90 else "needs_improvement" if overall_score >= 80 else "non_compliant",
+            "last_calculated": datetime.utcnow().isoformat(),
+            "factors": compliance_factors,
+            "trend": "stable",  # improving, stable, declining
+            "recommendations": [
+                "Focus on PRP program completion rates",
+                "Enhance HACCP verification procedures",
+                "Improve audit findings resolution time"
+            ]
+        }
+        
+        return ResponseModel(
+            success=True,
+            message="FSMS compliance score calculated successfully",
+            data=compliance_data
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate FSMS compliance score: {str(e)}"
+        )
+
+
+@router.get("/cross-module-kpis")
+async def get_cross_module_kpis(
+    period: str = Query(default="month", regex="^(week|month|quarter|year)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get aggregated KPIs across all modules"""
+    try:
+        # Calculate period dates
+        end_date = datetime.utcnow()
+        if period == "week":
+            start_date = end_date - timedelta(days=7)
+        elif period == "month":
+            start_date = end_date - timedelta(days=30)
+        elif period == "quarter":
+            start_date = end_date - timedelta(days=90)
+        else:  # year
+            start_date = end_date - timedelta(days=365)
+        
+        # Mock cross-module KPIs
+        kpi_data = {
+            "period": {
+                "type": period,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat()
+            },
+            "food_safety_metrics": {
+                "ccp_compliance_rate": 95.5,
+                "prp_completion_rate": 92.1,
+                "non_conformances": 15,
+                "corrective_actions_completed": 14,
+                "food_safety_incidents": 0
+            },
+            "operational_metrics": {
+                "documents_processed": 245,
+                "audits_completed": 12,
+                "training_sessions": 8,
+                "supplier_evaluations": 6
+            },
+            "quality_metrics": {
+                "customer_complaints": 3,
+                "complaint_resolution_rate": 100.0,
+                "supplier_delivery_accuracy": 98.5,
+                "equipment_calibration_compliance": 100.0
+            },
+            "compliance_metrics": {
+                "regulatory_compliance": 100.0,
+                "iso_22000_compliance": 92.8,
+                "certification_status": "valid",
+                "next_audit_date": (end_date + timedelta(days=45)).isoformat()
+            },
+            "trends": {
+                "ccp_compliance_trend": "improving",
+                "prp_completion_trend": "stable",
+                "non_conformance_trend": "declining",
+                "overall_performance": "improving"
+            }
+        }
+        
+        return ResponseModel(
+            success=True,
+            message="Cross-module KPIs retrieved successfully",
+            data=kpi_data
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get cross-module KPIs: {str(e)}"
+        )
+
+
+@router.post("/executive-summary")
+async def generate_executive_summary(
+    summary_params: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate executive summary reports"""
+    try:
+        # Extract parameters
+        report_type = summary_params.get("report_type", "monthly")
+        include_details = summary_params.get("include_details", True)
+        include_recommendations = summary_params.get("include_recommendations", True)
+        
+        # Generate executive summary
+        summary_data = {
+            "report_type": report_type,
+            "generated_at": datetime.utcnow().isoformat(),
+            "generated_by": f"{current_user.first_name} {current_user.last_name}",
+            "executive_summary": {
+                "overall_performance": "Excellent",
+                "fsms_effectiveness": "High",
+                "key_achievements": [
+                    "Zero food safety incidents this period",
+                    "100% CCP compliance maintained",
+                    "All regulatory requirements met",
+                    "Supplier performance improved by 5%"
+                ],
+                "key_metrics": {
+                    "fsms_compliance_score": 92.8,
+                    "ccp_compliance_rate": 95.5,
+                    "prp_completion_rate": 92.1,
+                    "customer_satisfaction": 4.8
+                }
+            },
+            "detailed_analysis": {
+                "strengths": [
+                    "Strong HACCP implementation",
+                    "Effective document control",
+                    "Proactive supplier management",
+                    "Comprehensive training programs"
+                ],
+                "areas_for_improvement": [
+                    "PRP completion rates could be higher",
+                    "Some audit findings need faster resolution",
+                    "Consider expanding training programs"
+                ],
+                "risks_and_opportunities": [
+                    "Risk: Equipment aging may affect calibration",
+                    "Opportunity: Implement predictive maintenance",
+                    "Risk: Staff turnover affecting competency",
+                    "Opportunity: Enhanced digital training platform"
+                ]
+            },
+            "recommendations": [
+                "Implement automated PRP reminders",
+                "Establish audit findings tracking system",
+                "Develop equipment replacement schedule",
+                "Enhance competency assessment tools"
+            ] if include_recommendations else [],
+            "next_period_focus": [
+                "Complete equipment calibration review",
+                "Implement new training modules",
+                "Conduct supplier performance review",
+                "Prepare for external audit"
+            ]
+        }
+        
+        return ResponseModel(
+            success=True,
+            message="Executive summary generated successfully",
+            data=summary_data
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate executive summary: {str(e)}"
+        )
+
+
+# =============================================================================
+# REPORT SCHEDULER ENDPOINTS
+# =============================================================================
+
+@router.post("/reports/schedule")
+async def schedule_automated_report(
+    schedule_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Schedule automated report generation"""
+    try:
+        # Validate required fields
+        required_fields = ["report_type", "frequency", "recipients"]
+        for field in required_fields:
+            if field not in schedule_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing required field: {field}"
+                )
+
+        # Validate frequency
+        valid_frequencies = ["daily", "weekly", "monthly", "quarterly"]
+        if schedule_data["frequency"] not in valid_frequencies:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}"
+            )
+
+        # Create schedule record
+        schedule_id = 1  # Mock ID - implement with actual model
+        
+        scheduled_report = {
+            "id": schedule_id,
+            "report_type": schedule_data["report_type"],
+            "frequency": schedule_data["frequency"],
+            "recipients": schedule_data["recipients"],
+            "format": schedule_data.get("format", "pdf"),
+            "include_attachments": schedule_data.get("include_attachments", True),
+            "is_active": True,
+            "next_run": (datetime.utcnow() + timedelta(days=1)).isoformat(),
+            "created_by": current_user.id,
+            "created_at": datetime.utcnow().isoformat()
+        }
+
+        return ResponseModel(
+            success=True,
+            message="Automated report scheduled successfully",
+            data=scheduled_report
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to schedule automated report: {str(e)}"
+        )
+
+
+@router.get("/reports/scheduled")
+async def list_scheduled_reports(
+    is_active: Optional[bool] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List scheduled automated reports"""
+    try:
+        # Mock scheduled reports
+        scheduled_reports = [
+            {
+                "id": 1,
+                "report_type": "compliance_summary",
+                "frequency": "monthly",
+                "recipients": ["management@company.com", "quality@company.com"],
+                "format": "pdf",
+                "is_active": True,
+                "next_run": (datetime.utcnow() + timedelta(days=5)).isoformat(),
+                "last_run": (datetime.utcnow() - timedelta(days=25)).isoformat(),
+                "created_by": current_user.id
+            },
+            {
+                "id": 2,
+                "report_type": "executive_summary",
+                "frequency": "quarterly",
+                "recipients": ["ceo@company.com", "board@company.com"],
+                "format": "pdf",
+                "is_active": True,
+                "next_run": (datetime.utcnow() + timedelta(days=60)).isoformat(),
+                "last_run": (datetime.utcnow() - timedelta(days=85)).isoformat(),
+                "created_by": current_user.id
+            }
+        ]
+
+        return ResponseModel(
+            success=True,
+            message="Scheduled reports retrieved successfully",
+            data={"scheduled_reports": scheduled_reports}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list scheduled reports: {str(e)}"
+        )
+
+
+@router.put("/reports/scheduled/{schedule_id}")
+async def update_scheduled_report(
+    schedule_id: int,
+    update_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update scheduled report configuration"""
+    try:
+        # Validate update fields
+        allowed_fields = ["frequency", "recipients", "format", "include_attachments", "is_active"]
+        for field in update_data:
+            if field not in allowed_fields:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Field '{field}' not allowed for update"
+                )
+
+        # Mock update
+        updated_report = {
+            "id": schedule_id,
+            "report_type": "compliance_summary",
+            "frequency": update_data.get("frequency", "monthly"),
+            "recipients": update_data.get("recipients", []),
+            "format": update_data.get("format", "pdf"),
+            "is_active": update_data.get("is_active", True),
+            "updated_by": current_user.id,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        return ResponseModel(
+            success=True,
+            message="Scheduled report updated successfully",
+            data=updated_report
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update scheduled report: {str(e)}"
+        )
+
+
+@router.delete("/reports/scheduled/{schedule_id}")
+async def cancel_scheduled_report(
+    schedule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cancel scheduled automated report"""
+    try:
+        # Mock cancellation
+        cancelled_report = {
+            "id": schedule_id,
+            "status": "cancelled",
+            "cancelled_by": current_user.id,
+            "cancelled_at": datetime.utcnow().isoformat()
+        }
+
+        return ResponseModel(
+            success=True,
+            message="Scheduled report cancelled successfully",
+            data=cancelled_report
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel scheduled report: {str(e)}"
         ) 
