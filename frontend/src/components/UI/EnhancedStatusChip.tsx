@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Chip, ChipProps, Box, Tooltip } from '@mui/material';
+import { Chip, ChipProps, Tooltip } from '@mui/material';
 import { getStatusChipProps } from '../../theme/designSystem';
 
 export type StatusType =
@@ -8,6 +8,7 @@ export type StatusType =
   | 'pending'
   | 'warning'
   | 'info'
+<<<<<<< HEAD
   | 'active'
   | 'inactive'
   | 'suspended'
@@ -16,6 +17,18 @@ export type StatusType =
   | 'passed'
   | 'failed'
   | 'under_review';
+=======
+  | 'approved'
+  | 'rejected'
+  | 'under_review'
+  | 'active'
+  | 'inactive'
+  | 'suspended'
+  | 'passed'
+  | 'failed'
+  | 'pending_approval'
+  | 'blacklisted';
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 
 interface EnhancedStatusChipProps extends Omit<ChipProps, 'color'> {
   status: StatusType;

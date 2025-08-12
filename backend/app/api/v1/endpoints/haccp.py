@@ -1,8 +1,8 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
-from datetime import datetime
+from sqlalchemy import desc, func, and_
+from datetime import datetime, timedelta
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -17,6 +17,7 @@ from app.schemas.haccp import (
     MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, HACCPReportRequest
 )
 from app.services.haccp_service import HACCPService
+from app.utils.audit import audit_event
 
 router = APIRouter()
 
@@ -219,11 +220,15 @@ async def create_product(
         db.commit()
         db.refresh(product)
         
+<<<<<<< HEAD
         # Get creator name
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
         
         return ResponseModel(
+=======
+        resp = ResponseModel(
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
             success=True,
             message="Product created successfully",
             data={
@@ -244,6 +249,11 @@ async def create_product(
                 "updated_at": product.updated_at.isoformat() if product.updated_at else None,
             }
         )
+        try:
+            audit_event(db, current_user.id, "haccp_product_created", "haccp", str(product.id))
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -257,6 +267,7 @@ async def create_product(
 @router.put("/products/{product_id}")
 async def update_product(
     product_id: int,
+<<<<<<< HEAD
     product_data: ProductUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -299,6 +310,43 @@ async def update_product(
         creator_name = creator.full_name if creator else "Unknown"
         
         return ResponseModel(
+=======
+    product_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a product"""
+    try:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+        # Update allowed fields
+        for field in [
+            "product_code",
+            "name",
+            "description",
+            "category",
+            "formulation",
+            "allergens",
+            "shelf_life_days",
+            "storage_conditions",
+            "packaging_type",
+            "haccp_plan_approved",
+            "haccp_plan_version",
+        ]:
+            if field in product_data:
+                setattr(product, field, product_data[field])
+
+        db.commit()
+        db.refresh(product)
+
+        # Get role/creator name
+        creator = db.query(User).filter(User.id == product.created_by).first()
+        creator_name = creator.full_name if creator else "Unknown"
+
+        resp = ResponseModel(
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
             success=True,
             message="Product updated successfully",
             data={
@@ -307,6 +355,7 @@ async def update_product(
                 "name": product.name,
                 "description": product.description,
                 "category": product.category,
+<<<<<<< HEAD
                 "formulation": product.formulation,
                 "allergens": product.allergens,
                 "shelf_life_days": product.shelf_life_days,
@@ -327,6 +376,23 @@ async def update_product(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update product: {str(e)}"
         )
+=======
+                "haccp_plan_approved": product.haccp_plan_approved,
+                "haccp_plan_version": product.haccp_plan_version,
+                "created_by": creator_name,
+                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+            },
+        )
+        try:
+            audit_event(db, current_user.id, "haccp_product_updated", "haccp", str(product.id))
+        except Exception:
+            pass
+        return resp
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update product: {str(e)}")
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 
 
 @router.delete("/products/{product_id}")
@@ -337,6 +403,7 @@ async def delete_product(
 ):
     """Delete a product"""
     try:
+<<<<<<< HEAD
         # Check if product exists
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
@@ -368,6 +435,24 @@ async def delete_product(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete product: {str(e)}"
         )
+=======
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+        db.delete(product)
+        db.commit()
+
+        try:
+            audit_event(db, current_user.id, "haccp_product_deleted", "haccp", str(product_id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="Product deleted successfully", data={"id": product_id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete product: {str(e)}")
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 
 
 # Process Flow Management
@@ -406,11 +491,16 @@ async def create_process_flow(
         db.commit()
         db.refresh(process_flow)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Process flow created successfully",
             data={"id": process_flow.id}
         )
+        try:
+            audit_event(db, current_user.id, "haccp_flow_created", "haccp", str(process_flow.id), {"product_id": product_id})
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -419,6 +509,71 @@ async def create_process_flow(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create process flow: {str(e)}"
         )
+
+
+@router.put("/process-flows/{flow_id}")
+async def update_process_flow(
+    flow_id: int,
+    flow_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a process flow step"""
+    try:
+        flow = db.query(ProcessFlow).filter(ProcessFlow.id == flow_id).first()
+        if not flow:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Process flow not found")
+
+        for field in [
+            "step_number",
+            "step_name",
+            "description",
+            "equipment",
+            "temperature",
+            "time_minutes",
+            "ph",
+            "aw",
+            "parameters",
+        ]:
+            if field in flow_data:
+                setattr(flow, field, flow_data[field])
+
+        db.commit()
+        db.refresh(flow)
+
+        try:
+            audit_event(db, current_user.id, "haccp_flow_updated", "haccp", str(flow.id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="Process flow updated successfully", data={"id": flow.id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update process flow: {str(e)}")
+
+
+@router.delete("/process-flows/{flow_id}")
+async def delete_process_flow(
+    flow_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a process flow step"""
+    try:
+        flow = db.query(ProcessFlow).filter(ProcessFlow.id == flow_id).first()
+        if not flow:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Process flow not found")
+        db.delete(flow)
+        db.commit()
+        try:
+            audit_event(db, current_user.id, "haccp_flow_deleted", "haccp", str(flow_id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="Process flow deleted successfully", data={"id": flow_id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete process flow: {str(e)}")
 
 
 # Hazard Management
@@ -476,11 +631,16 @@ async def create_hazard(
         db.commit()
         db.refresh(hazard)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Hazard created successfully",
             data={"id": hazard.id}
         )
+        try:
+            audit_event(db, current_user.id, "haccp_hazard_created", "haccp", str(hazard.id), {"product_id": product_id})
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -489,6 +649,92 @@ async def create_hazard(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create hazard: {str(e)}"
         )
+
+
+@router.put("/hazards/{hazard_id}")
+async def update_hazard(
+    hazard_id: int,
+    hazard_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a hazard"""
+    try:
+        hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hazard not found")
+
+        # Recalculate risk if likelihood or severity provided
+        if "likelihood" in hazard_data or "severity" in hazard_data:
+            likelihood = hazard_data.get("likelihood", hazard.likelihood)
+            severity = hazard_data.get("severity", hazard.severity)
+            risk_score = likelihood * severity
+            if risk_score <= 4:
+                risk_level = RiskLevel.LOW
+            elif risk_score <= 8:
+                risk_level = RiskLevel.MEDIUM
+            elif risk_score <= 15:
+                risk_level = RiskLevel.HIGH
+            else:
+                risk_level = RiskLevel.CRITICAL
+            hazard.likelihood = likelihood
+            hazard.severity = severity
+            hazard.risk_score = risk_score
+            hazard.risk_level = risk_level
+
+        for field in [
+            "process_step_id",
+            "hazard_type",
+            "hazard_name",
+            "description",
+            "control_measures",
+            "is_controlled",
+            "control_effectiveness",
+            "is_ccp",
+            "ccp_justification",
+        ]:
+            if field in hazard_data:
+                # cast enums where needed
+                if field == "hazard_type":
+                    setattr(hazard, field, HazardType(hazard_data[field]))
+                else:
+                    setattr(hazard, field, hazard_data[field])
+
+        db.commit()
+        db.refresh(hazard)
+        try:
+            audit_event(db, current_user.id, "haccp_hazard_updated", "haccp", str(hazard.id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="Hazard updated successfully", data={"id": hazard.id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update hazard: {str(e)}")
+
+
+@router.delete("/hazards/{hazard_id}")
+async def delete_hazard(
+    hazard_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a hazard"""
+    try:
+        hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hazard not found")
+        db.delete(hazard)
+        db.commit()
+        try:
+            audit_event(db, current_user.id, "haccp_hazard_deleted", "haccp", str(hazard_id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="Hazard deleted successfully", data={"id": hazard_id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete hazard: {str(e)}")
 
 
 # CCP Management
@@ -537,11 +783,16 @@ async def create_ccp(
         db.commit()
         db.refresh(ccp)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="CCP created successfully",
             data={"id": ccp.id}
         )
+        try:
+            audit_event(db, current_user.id, "haccp_ccp_created", "haccp", str(ccp.id), {"product_id": product_id})
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -552,6 +803,81 @@ async def create_ccp(
         )
 
 
+@router.put("/ccps/{ccp_id}")
+async def update_ccp(
+    ccp_id: int,
+    ccp_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a CCP"""
+    try:
+        ccp = db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CCP not found")
+
+        for field in [
+            "hazard_id",
+            "ccp_number",
+            "ccp_name",
+            "description",
+            "status",
+            "critical_limit_min",
+            "critical_limit_max",
+            "critical_limit_unit",
+            "critical_limit_description",
+            "monitoring_frequency",
+            "monitoring_method",
+            "monitoring_responsible",
+            "monitoring_equipment",
+            "corrective_actions",
+            "verification_frequency",
+            "verification_method",
+            "verification_responsible",
+            "monitoring_records",
+            "verification_records",
+        ]:
+            if field in ccp_data:
+                if field == "status":
+                    setattr(ccp, field, CCPStatus(ccp_data[field]))
+                else:
+                    setattr(ccp, field, ccp_data[field])
+
+        db.commit()
+        db.refresh(ccp)
+        try:
+            audit_event(db, current_user.id, "haccp_ccp_updated", "haccp", str(ccp.id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="CCP updated successfully", data={"id": ccp.id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update CCP: {str(e)}")
+
+
+@router.delete("/ccps/{ccp_id}")
+async def delete_ccp(
+    ccp_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a CCP"""
+    try:
+        ccp = db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CCP not found")
+        db.delete(ccp)
+        db.commit()
+        try:
+            audit_event(db, current_user.id, "haccp_ccp_deleted", "haccp", str(ccp_id))
+        except Exception:
+            pass
+        return ResponseModel(success=True, message="CCP deleted successfully", data={"id": ccp_id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete CCP: {str(e)}")
 # CCP Monitoring Logs
 @router.post("/ccps/{ccp_id}/monitoring-logs")
 async def create_monitoring_log(
@@ -599,11 +925,19 @@ async def create_monitoring_log(
         db.commit()
         db.refresh(monitoring_log)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Monitoring log created successfully",
             data={"id": monitoring_log.id, "is_within_limits": is_within_limits}
         )
+        try:
+            audit_event(db, current_user.id, "haccp_monitoring_log_created", "haccp", str(monitoring_log.id), {
+                "ccp_id": ccp_id,
+                "is_within_limits": is_within_limits
+            })
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -707,11 +1041,18 @@ async def create_verification_log(
         db.commit()
         db.refresh(verification_log)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Verification log created successfully",
             data={"id": verification_log.id}
         )
+        try:
+            audit_event(db, current_user.id, "haccp_verification_log_created", "haccp", str(verification_log.id), {
+                "ccp_id": ccp_id
+            })
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise

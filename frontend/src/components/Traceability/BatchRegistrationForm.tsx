@@ -125,8 +125,12 @@ const BatchRegistrationForm: React.FC<BatchRegistrationFormProps> = ({
       };
 
       if (isEdit && initialData) {
-        // Handle edit case
-        await traceabilityAPI.updateBatch(0, submitData); // TODO: Add batch ID
+        // Handle edit case; require an id in initialData
+        const id = (initialData as any).id;
+        if (!id) {
+          throw new Error('Missing batch id for update');
+        }
+        await traceabilityAPI.updateBatch(id as number, submitData);
       } else {
         await traceabilityAPI.createBatch(submitData);
       }

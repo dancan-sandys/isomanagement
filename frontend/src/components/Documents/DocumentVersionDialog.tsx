@@ -113,6 +113,7 @@ const DocumentVersionDialog: React.FC<DocumentVersionDialogProps> = ({
   const [showCreateVersion, setShowCreateVersion] = useState(false);
   const [viewingVersion, setViewingVersion] = useState<DocumentVersion | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<false | 'pdf' | 'xlsx'>(false);
 
   useEffect(() => {
     if (open && document) {
@@ -198,6 +199,19 @@ const DocumentVersionDialog: React.FC<DocumentVersionDialogProps> = ({
     link.click();
     globalThis.document.body.removeChild(link);
     setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleExportVersions = async (format: 'pdf' | 'xlsx') => {
+    if (!document) return;
+    try {
+      setExporting(format);
+      const blob = await documentsAPI.exportVersions(document.id, format);
+      downloadFile(blob, `version_history_${document.document_number || document.id}.${format}`);
+    } catch (e) {
+      console.error('Export failed', e);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleDownload = async (version: DocumentVersion) => {
@@ -542,6 +556,12 @@ const DocumentVersionDialog: React.FC<DocumentVersionDialogProps> = ({
       <DialogActions sx={{ p: 3 }}>
         <Button onClick={onClose}>
           Close
+        </Button>
+        <Button onClick={() => handleExportVersions('pdf')} disabled={!!exporting}>
+          Export Versions PDF
+        </Button>
+        <Button onClick={() => handleExportVersions('xlsx')} disabled={!!exporting}>
+          Export Versions XLSX
         </Button>
         {!showCreateVersion && (
           <Button

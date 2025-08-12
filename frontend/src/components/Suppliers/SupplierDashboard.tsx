@@ -40,6 +40,7 @@ import {
   LocalShipping,
   Refresh,
   Add,
+<<<<<<< HEAD
   Schedule,
   Error as ErrorIcon,
   Inventory,
@@ -50,6 +51,18 @@ import {
   Build,
   Support,
   Notifications,
+=======
+  Inventory,
+  Science,
+  Build,
+  Support,
+  Assessment,
+  Notifications,
+  Schedule,
+  Error,
+  Info,
+  Analytics,
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -111,9 +124,14 @@ const SupplierDashboard: React.FC = () => {
     severity: 'success' | 'error' | 'info' | 'warning';
   }>({ open: false, message: '', severity: 'info' });
 
+  // Load once on mount only; no polling, no re-fetch on state changes
+  const loadedOnceRef = React.useRef(false);
   useEffect(() => {
+    if (loadedOnceRef.current) return;
+    loadedOnceRef.current = true;
     loadDashboardData();
-  }, [timeRange, selectedCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadDashboardData = async () => {
     try {

@@ -464,7 +464,26 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
 
 // Status chip variants
 export const getStatusChipProps = (
+<<<<<<< HEAD
   status: 'compliant' | 'nonConformance' | 'pending' | 'warning' | 'info' | 'active' | 'inactive' | 'suspended' | 'pending_approval' | 'blacklisted' | 'passed' | 'failed' | 'under_review'
+=======
+  status:
+    | 'compliant'
+    | 'nonConformance'
+    | 'pending'
+    | 'warning'
+    | 'info'
+    | 'active'
+    | 'inactive'
+    | 'suspended'
+    | 'approved'
+    | 'rejected'
+    | 'under_review'
+    | 'passed'
+    | 'failed'
+    | 'pending_approval'
+    | 'blacklisted'
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 ) => {
   const statusConfig = {
     compliant: {
@@ -502,6 +521,27 @@ export const getStatusChipProps = (
       textColor: '#1E40AF',
       iconColor: '#2563EB',
     },
+    approved: {
+      color: 'success' as const,
+      backgroundColor: '#F0FDF4',
+      borderColor: '#BBF7D0',
+      textColor: '#166534',
+      iconColor: '#059669',
+    },
+    rejected: {
+      color: 'error' as const,
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
+      textColor: '#991B1B',
+      iconColor: '#DC2626',
+    },
+    under_review: {
+      color: 'info' as const,
+      backgroundColor: '#EFF6FF',
+      borderColor: '#BFDBFE',
+      textColor: '#1E40AF',
+      iconColor: '#2563EB',
+    },
     active: {
       color: 'success' as const,
       backgroundColor: '#F0FDF4',
@@ -513,8 +553,13 @@ export const getStatusChipProps = (
       color: 'default' as const,
       backgroundColor: '#F8FAFC',
       borderColor: '#E2E8F0',
+<<<<<<< HEAD
       textColor: '#334155',
       iconColor: '#64748B',
+=======
+      textColor: '#1F2937',
+      iconColor: '#6B7280',
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     },
     suspended: {
       color: 'error' as const,
@@ -523,6 +568,7 @@ export const getStatusChipProps = (
       textColor: '#991B1B',
       iconColor: '#DC2626',
     },
+<<<<<<< HEAD
     pending_approval: {
       color: 'info' as const,
       backgroundColor: '#EFF6FF',
@@ -537,6 +583,8 @@ export const getStatusChipProps = (
       textColor: '#991B1B',
       iconColor: '#DC2626',
     },
+=======
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     passed: {
       color: 'success' as const,
       backgroundColor: '#F0FDF4',
@@ -551,12 +599,26 @@ export const getStatusChipProps = (
       textColor: '#991B1B',
       iconColor: '#DC2626',
     },
+<<<<<<< HEAD
     under_review: {
+=======
+    pending_approval: {
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
       color: 'info' as const,
       backgroundColor: '#EFF6FF',
       borderColor: '#BFDBFE',
       textColor: '#1E40AF',
       iconColor: '#2563EB',
+<<<<<<< HEAD
+=======
+    },
+    blacklisted: {
+      color: 'error' as const,
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
+      textColor: '#991B1B',
+      iconColor: '#DC2626',
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     },
   };
 

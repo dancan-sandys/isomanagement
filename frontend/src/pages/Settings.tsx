@@ -97,6 +97,8 @@ const Settings: React.FC = () => {
   const [settings, setSettings] = useState<SettingsCategory[]>([]);
   const [userPreferences, setUserPreferences] = useState<UserPreference[]>([]);
   const [loading, setLoading] = useState(false);
+  const [systemInfo, setSystemInfo] = useState<any | null>(null);
+  const [backupStatus, setBackupStatus] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -113,6 +115,8 @@ const Settings: React.FC = () => {
   useEffect(() => {
     fetchSettings();
     fetchUserPreferences();
+    fetchSystemInfo();
+    fetchBackupStatus();
   }, []);
 
   // API calls
@@ -249,6 +253,24 @@ const Settings: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSystemInfo = async () => {
+    try {
+      const data = await settingsAPI.getSystemInfo();
+      setSystemInfo(data);
+    } catch (err) {
+      console.error('Failed to load system info:', err);
+    }
+  };
+
+  const fetchBackupStatus = async () => {
+    try {
+      const data = await settingsAPI.getBackupStatus();
+      setBackupStatus(data);
+    } catch (err) {
+      console.error('Failed to load backup status:', err);
     }
   };
 
@@ -500,28 +522,28 @@ const Settings: React.FC = () => {
               </Typography>
               <List dense>
                 <ListItem>
-                  <ListItemText 
-                    primary="Application Name" 
-                    secondary="ISO 22000 FSMS" 
-                  />
+                    <ListItemText 
+                     primary="Application Name" 
+                     secondary={systemInfo?.app?.name || 'ISO 22000 FSMS'} 
+                   />
                 </ListItem>
                 <ListItem>
-                  <ListItemText 
-                    primary="Version" 
-                    secondary="1.0.0" 
-                  />
+                    <ListItemText 
+                     primary="Version" 
+                     secondary={systemInfo?.app?.version || '1.0.0'} 
+                   />
                 </ListItem>
                 <ListItem>
-                  <ListItemText 
-                    primary="Environment" 
-                    secondary="Development" 
-                  />
+                    <ListItemText 
+                     primary="Environment" 
+                     secondary={systemInfo?.app?.environment || 'Development'} 
+                   />
                 </ListItem>
                 <ListItem>
-                  <ListItemText 
-                    primary="Database" 
-                    secondary="SQLite" 
-                  />
+                    <ListItemText 
+                     primary="Database" 
+                     secondary={systemInfo?.database?.dialect ? String(systemInfo.database.dialect).toUpperCase() : 'SQLite'} 
+                   />
                 </ListItem>
               </List>
             </CardContent>
@@ -536,9 +558,9 @@ const Settings: React.FC = () => {
               </Typography>
               <List dense>
                 <ListItem>
-                  <ListItemText 
-                    primary="Backend Status" 
-                    secondary={
+                    <ListItemText 
+                     primary="Backend Status" 
+                     secondary={
                       <Chip 
                         icon={<CheckCircleIcon />} 
                         label="Online" 
@@ -549,13 +571,13 @@ const Settings: React.FC = () => {
                   />
                 </ListItem>
                 <ListItem>
-                  <ListItemText 
-                    primary="Database Status" 
-                    secondary={
+                    <ListItemText 
+                     primary="Database Status" 
+                     secondary={
                       <Chip 
                         icon={<CheckCircleIcon />} 
-                        label="Connected" 
-                        color="success" 
+                        label={systemInfo?.database?.dialect ? 'Connected' : 'Unknown'} 
+                        color={systemInfo?.database?.dialect ? 'success' : 'default'} 
                         size="small" 
                       />
                     } 
@@ -568,10 +590,10 @@ const Settings: React.FC = () => {
                   />
                 </ListItem>
                 <ListItem>
-                  <ListItemText 
-                    primary="Last Backup" 
-                    secondary="Never" 
-                  />
+                    <ListItemText 
+                     primary="Last Backup" 
+                     secondary={backupStatus?.last_backup || 'Never'} 
+                   />
                 </ListItem>
               </List>
             </CardContent>

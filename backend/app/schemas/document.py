@@ -184,6 +184,31 @@ class DocumentTemplateResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DocumentTemplateVersionCreate(BaseModel):
+    change_description: str
+    template_content: Optional[str] = None
+
+
+class DocumentTemplateVersionResponse(BaseModel):
+    id: int
+    template_id: int
+    version_number: str
+    template_content: Optional[str] = None
+    change_description: Optional[str] = None
+    created_by: int
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentTemplateApprovalCreate(BaseModel):
+    approver_id: int
+    approval_order: int
+    comments: Optional[str] = None
+
+
 class BulkDocumentAction(BaseModel):
     document_ids: List[int] = Field(..., min_items=1)
     action: str = Field(..., pattern="^(archive|obsolete|activate|delete|export)$")

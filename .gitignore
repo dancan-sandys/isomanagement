@@ -161,3 +161,6 @@ tmp/
 # Application specific
 iso22000_fsms.db
 *.db-journal
+
+# Ignore local dev DB
+backend/iso22000_fsms.db

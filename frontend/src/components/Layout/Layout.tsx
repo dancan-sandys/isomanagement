@@ -32,6 +32,7 @@ import { logout } from '../../store/slices/authSlice';
 import { fetchNotificationSummary } from '../../store/slices/notificationSlice';
 import NotificationPopup from '../Notifications/NotificationPopup';
 import NavigationDrawer from './NavigationDrawer';
+import AccessibilityPanel from '../Accessibility/AccessibilityPanel';
 import { useTheme } from '../../theme/ThemeProvider';
 
 interface LayoutProps {
@@ -116,6 +117,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <Fade in={isLoaded} timeout={500}>
       <Box sx={{ display: 'flex' }}>
+        {/* Skip Navigation Links for Screen Readers */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
+        <a href="#navigation" className="skip-link">
+          Skip to navigation
+        </a>
         {/* Enhanced App Bar */}
         <AppBar
           position="fixed"
@@ -388,6 +396,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Enhanced Navigation Drawer */}
         <Box
           component="nav"
+          id="navigation"
           sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
         >
           {/* Mobile drawer */}
@@ -436,6 +445,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Enhanced Main Content */}
         <Box
           component="main"
+          id="main-content"
+          tabIndex={-1}
           sx={{
             flexGrow: 1,
             p: 3,
@@ -458,6 +469,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           anchorEl={notificationAnchorEl}
           onClose={handleNotificationClose}
         />
+
+        {/* Accessibility Panel */}
+        <AccessibilityPanel />
       </Box>
     </Fade>
   );

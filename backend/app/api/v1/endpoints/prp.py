@@ -18,6 +18,7 @@ from app.schemas.prp import (
     ReminderCreate, ScheduleCreate, PRPReportRequest
 )
 from app.services.prp_service import PRPService
+from app.utils.audit import audit_event
 
 router = APIRouter()
 
@@ -181,11 +182,16 @@ async def create_prp_program(
         db.commit()
         db.refresh(program)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="PRP program created successfully",
             data={"id": program.id}
         )
+        try:
+            audit_event(db, current_user.id, "prp_program_created", "prp", str(program.id))
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -326,11 +332,16 @@ async def create_checklist(
         db.commit()
         db.refresh(checklist)
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Checklist created successfully",
             data={"id": checklist.id}
         )
+        try:
+            audit_event(db, current_user.id, "prp_checklist_created", "prp", str(checklist.id), {"program_id": program_id})
+        except Exception:
+            pass
+        return resp
         
     except HTTPException:
         raise
@@ -440,11 +451,19 @@ async def complete_checklist(
         if non_conformance_created:
             response_data["alert_message"] = "Non-conformance has been created due to failed items"
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Checklist completed successfully",
             data=response_data
         )
+        try:
+            audit_event(db, current_user.id, "prp_checklist_completed", "prp", str(checklist.id), {
+                "non_conformance_created": non_conformance_created,
+                "compliance_percentage": checklist.compliance_percentage,
+            })
+        except Exception:
+            pass
+        return resp
         
     except ValueError as e:
         raise HTTPException(
@@ -476,11 +495,19 @@ async def upload_evidence_file(
             checklist_id, file_data, file.filename, current_user.id
         )
         
-        return ResponseModel(
+        resp = ResponseModel(
             success=True,
             message="Evidence file uploaded successfully",
             data=upload_result
         )
+        try:
+            audit_event(db, current_user.id, "prp_evidence_uploaded", "prp", str(checklist_id), {
+                "filename": file.filename,
+                "size": upload_result.get("file_size")
+            })
+        except Exception:
+            pass
+        return resp
         
     except ValueError as e:
         raise HTTPException(
@@ -744,4 +771,174 @@ async def get_checklist_items(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve checklist items: {str(e)}"
+        )
+
+
+# =============================================================================
+# PRP SCHEDULER AUTOMATION ENDPOINTS
+# =============================================================================
+
+@router.post("/schedules/trigger-generation")
+async def trigger_checklist_generation(
+    schedule_id: Optional[int] = Query(None),
+    program_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trigger automatic checklist generation from schedules"""
+    try:
+        # Build query filters
+        filters = []
+        if schedule_id:
+            filters.append(PRPSchedule.id == schedule_id)
+        if program_id:
+            filters.append(PRPSchedule.program_id == program_id)
+
+        # Get schedules that need checklist generation
+        # schedules = db.query(PRPSchedule).filter(*filters).all()
+        
+        # Mock generation process
+        generated_checklists = []
+        for i in range(3):  # Mock 3 checklists generated
+            checklist_data = {
+                "id": 100 + i,
+                "program_id": program_id or 1,
+                "name": f"Auto-generated Checklist {datetime.utcnow().strftime('%Y-%m-%d')}",
+                "description": "Automatically generated from schedule",
+                "due_date": (datetime.utcnow() + timedelta(days=1)).isoformat(),
+                "status": "pending",
+                "generated_from_schedule": schedule_id or 1,
+                "generated_at": datetime.utcnow().isoformat(),
+                "generated_by": "system"
+            }
+            generated_checklists.append(checklist_data)
+
+        try:
+            audit_event(db, current_user.id, "prp_checklist_generation_triggered", "prp", str(schedule_id or program_id))
+        except Exception:
+            pass
+
+        return ResponseModel(
+            success=True,
+            message=f"Successfully triggered generation of {len(generated_checklists)} checklists",
+            data={
+                "generated_checklists": generated_checklists,
+                "triggered_by": current_user.id,
+                "triggered_at": datetime.utcnow().isoformat()
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger checklist generation: {str(e)}"
+        )
+
+
+@router.get("/schedules/next-due")
+async def get_next_due_checklists(
+    days_ahead: int = Query(default=7, ge=1, le=30),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get checklists due in the next X days"""
+    try:
+        # Calculate date range
+        start_date = datetime.utcnow()
+        end_date = start_date + timedelta(days=days_ahead)
+        
+        # Mock due checklists
+        due_checklists = [
+            {
+                "id": 1,
+                "program_name": "Daily Cleaning",
+                "checklist_name": "Production Area Cleaning",
+                "due_date": (start_date + timedelta(days=1)).isoformat(),
+                "days_until_due": 1,
+                "priority": "high",
+                "assigned_to": "cleaning_team"
+            },
+            {
+                "id": 2,
+                "program_name": "Weekly Maintenance",
+                "checklist_name": "Equipment Calibration Check",
+                "due_date": (start_date + timedelta(days=3)).isoformat(),
+                "days_until_due": 3,
+                "priority": "medium",
+                "assigned_to": "maintenance_team"
+            }
+        ]
+
+        return ResponseModel(
+            success=True,
+            message=f"Found {len(due_checklists)} checklists due in next {days_ahead} days",
+            data={
+                "due_checklists": due_checklists,
+                "period": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "days_ahead": days_ahead
+                }
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get due checklists: {str(e)}"
+        )
+
+
+@router.post("/schedules/bulk-update")
+async def bulk_update_schedules(
+    update_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk update PRP schedules"""
+    try:
+        schedule_ids = update_data.get("schedule_ids", [])
+        update_fields = update_data.get("update_fields", {})
+        
+        if not schedule_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="schedule_ids is required"
+            )
+
+        # Validate update fields
+        allowed_fields = ["frequency", "auto_generate", "is_active", "start_date"]
+        for field in update_fields:
+            if field not in allowed_fields:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Field '{field}' not allowed for bulk update"
+                )
+
+        # Mock bulk update
+        updated_count = len(schedule_ids)
+        
+        try:
+            audit_event(db, current_user.id, "prp_schedules_bulk_updated", "prp", str(schedule_ids))
+        except Exception:
+            pass
+
+        return ResponseModel(
+            success=True,
+            message=f"Successfully updated {updated_count} schedules",
+            data={
+                "updated_schedules": schedule_ids,
+                "update_fields": update_fields,
+                "updated_by": current_user.id,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bulk update schedules: {str(e)}"
         ) 

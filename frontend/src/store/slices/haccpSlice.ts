@@ -220,6 +220,30 @@ export const createProcessFlow = createAsyncThunk(
   }
 );
 
+export const updateProcessFlow = createAsyncThunk(
+  'haccp/updateProcessFlow',
+  async ({ flowId, flowData }: { flowId: number; flowData: any }, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.updateProcessFlow(flowId, flowData);
+      return { id: flowId, response };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update process flow');
+    }
+  }
+);
+
+export const deleteProcessFlow = createAsyncThunk(
+  'haccp/deleteProcessFlow',
+  async (flowId: number, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.deleteProcessFlow(flowId);
+      return { id: flowId, response };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to delete process flow');
+    }
+  }
+);
+
 export const createHazard = createAsyncThunk(
   'haccp/createHazard',
   async ({ productId, hazardData }: { productId: number; hazardData: any }, { rejectWithValue }) => {
@@ -232,6 +256,30 @@ export const createHazard = createAsyncThunk(
   }
 );
 
+export const updateHazard = createAsyncThunk(
+  'haccp/updateHazard',
+  async ({ hazardId, hazardData }: { hazardId: number; hazardData: any }, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.updateHazard(hazardId, hazardData);
+      return { id: hazardId, response };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update hazard');
+    }
+  }
+);
+
+export const deleteHazard = createAsyncThunk(
+  'haccp/deleteHazard',
+  async (hazardId: number, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.deleteHazard(hazardId);
+      return { id: hazardId, response };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to delete hazard');
+    }
+  }
+);
+
 export const createCCP = createAsyncThunk(
   'haccp/createCCP',
   async ({ productId, ccpData }: { productId: number; ccpData: any }, { rejectWithValue }) => {
@@ -240,6 +288,30 @@ export const createCCP = createAsyncThunk(
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to create CCP');
+    }
+  }
+);
+
+export const updateCCP = createAsyncThunk(
+  'haccp/updateCCP',
+  async ({ ccpId, ccpData }: { ccpId: number; ccpData: any }, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.updateCCP(ccpId, ccpData);
+      return { id: ccpId, response };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update CCP');
+    }
+  }
+);
+
+export const deleteCCP = createAsyncThunk(
+  'haccp/deleteCCP',
+  async (ccpId: number, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.deleteCCP(ccpId);
+      return { id: ccpId, response };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to delete CCP');
     }
   }
 );
@@ -428,6 +500,38 @@ const haccpSlice = createSlice({
         state.error = action.payload as string;
       });
 
+    // updateProcessFlow
+    builder
+      .addCase(updateProcessFlow.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProcessFlow.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(updateProcessFlow.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // deleteProcessFlow
+    builder
+      .addCase(deleteProcessFlow.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteProcessFlow.fulfilled, (state, action) => {
+        state.loading = false;
+        const id = action.payload.id;
+        state.processFlows = state.processFlows.filter(f => f.id !== id);
+        state.error = null;
+      })
+      .addCase(deleteProcessFlow.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
     // createHazard
     builder
       .addCase(createHazard.pending, (state) => {
@@ -444,6 +548,38 @@ const haccpSlice = createSlice({
         state.error = action.payload as string;
       });
 
+    // updateHazard
+    builder
+      .addCase(updateHazard.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateHazard.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(updateHazard.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // deleteHazard
+    builder
+      .addCase(deleteHazard.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteHazard.fulfilled, (state, action) => {
+        state.loading = false;
+        const id = action.payload.id;
+        state.hazards = state.hazards.filter(h => h.id !== id);
+        state.error = null;
+      })
+      .addCase(deleteHazard.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
     // createCCP
     builder
       .addCase(createCCP.pending, (state) => {
@@ -456,6 +592,38 @@ const haccpSlice = createSlice({
         state.error = null;
       })
       .addCase(createCCP.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // updateCCP
+    builder
+      .addCase(updateCCP.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateCCP.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(updateCCP.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // deleteCCP
+    builder
+      .addCase(deleteCCP.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteCCP.fulfilled, (state, action) => {
+        state.loading = false;
+        const id = action.payload.id;
+        state.ccps = state.ccps.filter(c => c.id !== id);
+        state.error = null;
+      })
+      .addCase(deleteCCP.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });

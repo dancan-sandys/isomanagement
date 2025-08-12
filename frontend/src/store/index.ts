@@ -6,6 +6,9 @@ import documentReducer from './slices/documentSlice';
 import haccpReducer from './slices/haccpSlice';
 import traceabilityReducer from './slices/traceabilitySlice';
 import supplierReducer from './slices/supplierSlice';
+import ncReducer from './slices/ncSlice';
+import trainingReducer from './slices/trainingSlice';
+import riskReducer from './slices/riskSlice';
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +19,9 @@ export const store = configureStore({
     haccp: haccpReducer,
     traceability: traceabilityReducer,
     supplier: supplierReducer,
+    nc: ncReducer,
+  training: trainingReducer,
+  risk: riskReducer,
   },
 });
 

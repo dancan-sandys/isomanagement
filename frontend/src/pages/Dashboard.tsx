@@ -17,6 +17,16 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  LinearProgress,
+  Divider,
+  Skeleton,
+  Badge,
+  Tooltip,
+  IconButton,
+  Avatar,
+  Fade,
+  Grow,
+  Slide,
 } from '@mui/material';
 import {
   Warning,
@@ -37,10 +47,27 @@ import {
   LocalShipping,
   Settings,
   Dashboard as DashboardIcon,
+  PlayArrow,
+  MoreVert,
+  Star,
+  Bookmark,
+  Speed,
+  Analytics,
+  Task,
+  CheckBox,
+  RadioButtonUnchecked,
+  Flag,
+  AccessTime,
+  CalendarToday,
+  Insights,
+  AutoAwesome,
+  Lightbulb,
 } from '@mui/icons-material';
 import PageHeader from '../components/UI/PageHeader';
 import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
+import SmartDashboard from '../components/Dashboard/SmartDashboard';
+import SmartOnboarding from '../components/Onboarding/SmartOnboarding';
 import { RootState } from '../store';
 import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
 import { dashboardAPI } from '../services/api';
@@ -48,9 +75,15 @@ import { dashboardAPI } from '../services/api';
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
+<<<<<<< HEAD
   const [error, setError] = useState<string | null>(null);
 
   // Real data from API
+=======
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isFirstTime, setIsFirstTime] = useState(false);
+
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
@@ -58,10 +91,20 @@ const Dashboard: React.FC = () => {
     loadDashboardData();
   }, [user]);
 
+  // Check if this is user's first time (must be before any early returns)
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding && user) {
+      setIsFirstTime(true);
+      setShowOnboarding(true);
+    }
+  }, [user]);
+
   const loadDashboardData = async () => {
     setLoading(true);
     setError(null);
     try {
+<<<<<<< HEAD
       // Use real API call
       const response = await dashboardAPI.getDashboard();
       setDashboardData(response.data);
@@ -121,6 +164,53 @@ const Dashboard: React.FC = () => {
           { id: 2, title: 'Updated process log', time: '4 hours ago', type: 'info' },
         ]
       };
+=======
+      const [statsResp, activityResp] = await Promise.all([
+        dashboardAPI.getStats(),
+        dashboardAPI.getRecentActivity(),
+      ]);
+
+      const stats = statsResp?.data || statsResp; // some services wrap data
+      const activitiesWrapper = activityResp?.data || activityResp;
+      const activities = activitiesWrapper?.activities || activitiesWrapper?.data?.activities || [];
+
+      // Map backend stats to UI-friendly structure
+      const mapped = {
+        totalUsers: stats?.totalUsers ?? 0,
+        activeUsers: stats?.activeUsers ?? 0,
+        pendingApprovals: stats?.pendingApprovals ?? 0,
+        systemAlerts: stats?.openIssues ?? 0,
+        systemHealth: {
+          database: 'healthy', // use dashboard/system-status later if needed
+          storage: 'n/a',
+          performance: 'ok',
+          security: 'ok',
+        },
+        recentActivities: activities.map((a: any, idx: number) => ({
+          id: a.id ?? idx,
+          action: a.title ? `${a.action}: ${a.title}` : a.action,
+          time: a.timestamp ?? '',
+          type: 'info',
+        })),
+      };
+
+      // Default welcome block for non-admins
+      if (!isSystemAdministrator(user)) {
+        (mapped as any).welcomeMessage = `Welcome, ${user?.full_name || user?.username || 'User'}!`;
+        (mapped as any).quickActions = [
+          { title: 'View Documents', path: '/documents', icon: Description },
+          { title: 'Check Notifications', path: '/notifications', icon: Notifications },
+          { title: 'Update Profile', path: '/profile', icon: Person },
+        ];
+      }
+
+      setDashboardData(mapped);
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+      setDashboardData(null);
+    } finally {
+      setLoading(false);
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     }
   };
 
@@ -620,16 +710,25 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('hasSeenOnboarding', 'true');
+    setShowOnboarding(false);
+    setIsFirstTime(false);
+  };
+
   return (
     <Box>
-      <PageHeader
-        title={getDashboardTitle()}
-        subtitle={getDashboardSubtitle()}
-        breadcrumbs={[
-          { label: 'Dashboard', path: '/' }
-        ]}
+      {/* Smart Onboarding */}
+      <SmartOnboarding
+        open={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onComplete={handleOnboardingComplete}
+        isFirstTime={isFirstTime}
       />
 
+<<<<<<< HEAD
       {error && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           {error} - Showing fallback data
@@ -637,6 +736,29 @@ const Dashboard: React.FC = () => {
       )}
 
       {renderDashboard()}
+=======
+      {/* Modern Smart Dashboard */}
+      <SmartDashboard />
+
+      {/* Optional: Legacy Dashboard Toggle for comparison */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ position: 'fixed', top: 100, right: 20, zIndex: 1000 }}>
+          <Tooltip title="Show onboarding again">
+            <IconButton
+              onClick={() => setShowOnboarding(true)}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': { bgcolor: 'primary.dark' },
+                boxShadow: 3,
+              }}
+            >
+              <AutoAwesome />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     </Box>
   );
 };

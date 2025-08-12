@@ -11,7 +11,7 @@ import {
   Box,
   Card,
   CardContent,
-  Divider,
+  
   IconButton,
   Alert,
   CircularProgress,
@@ -27,12 +27,7 @@ import {
 } from '@mui/material';
 import {
   Close as CloseIcon,
-  QrCode as QrCodeIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon,
-  Timeline as TimelineIcon,
-  Edit as EditIcon,
-  Refresh as RefreshIcon
+  Print as PrintIcon
 } from '@mui/icons-material';
 import { Batch, BarcodeData, QRCodeData } from '../../types/traceability';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
@@ -349,12 +344,13 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
-          <Typography variant="h6" gutterBottom>
-            Traceability Chain
-          </Typography>
-          <Typography color="text.secondary">
-            Traceability chain visualization will be implemented here.
-          </Typography>
+              <Typography variant="h6" gutterBottom>
+                Traceability Chain
+              </Typography>
+              {/* Placeholder: could render a simple JSON or small list for now */}
+              <Typography color="text.secondary">
+                View full trace via the Traceability Chain dialog from the main page.
+              </Typography>
         </TabPanel>
 
         <TabPanel value={activeTab} index={2}>
@@ -400,23 +396,11 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
         </Button>
         <Button
           variant="outlined"
-          startIcon={<TimelineIcon />}
-        >
-          View Trace Chain
-        </Button>
-        <Button
-          variant="outlined"
           startIcon={<PrintIcon />}
           onClick={handlePrintLabel}
           disabled={loading}
         >
           Print Label
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<EditIcon />}
-        >
-          Edit Batch
         </Button>
       </DialogActions>
     </Dialog>

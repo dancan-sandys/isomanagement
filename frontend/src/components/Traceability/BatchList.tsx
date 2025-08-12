@@ -25,7 +25,6 @@ import {
   CircularProgress,
   Tooltip,
   Checkbox,
-  Toolbar,
   alpha
 } from '@mui/material';
 import {

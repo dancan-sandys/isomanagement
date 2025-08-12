@@ -37,6 +37,10 @@ import {
   TableRow,
   Menu,
   MenuItem as MenuItemComponent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Description,
@@ -74,6 +78,9 @@ import {
   setPagination,
   downloadDocument,
   downloadVersion,
+  fetchPendingApprovals,
+  approveApprovalStep,
+  rejectApprovalStep,
 } from '../store/slices/documentSlice';
 import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
@@ -89,6 +96,7 @@ import DocumentAnalyticsDialog from '../components/Documents/DocumentAnalyticsDi
 import DocumentComparisonDialog from '../components/Documents/DocumentComparisonDialog';
 import DocumentEditDialog from '../components/Documents/DocumentEditDialog';
 import { downloadFile } from '../utils/downloadUtils';
+import { documentsAPI } from '../services/api';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -115,7 +123,7 @@ function TabPanel(props: TabPanelProps) {
 const Documents: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
-  const { documents, stats, loading, error, pagination, filters } = useSelector((state: RootState) => state.documents);
+  const { documents, stats, loading, error, pagination, filters, pendingApprovals } = useSelector((state: RootState) => state.documents);
   
   const [selectedTab, setSelectedTab] = useState(0);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -133,6 +141,10 @@ const Documents: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedDocumentForMenu, setSelectedDocumentForMenu] = useState<any>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [reasonDialog, setReasonDialog] = useState<{ open: boolean; action: 'obsolete'|'archive'|'activate'|null; doc: any | null; reason: string }>({ open: false, action: null, doc: null, reason: '' });
+  const [distributeDialog, setDistributeDialog] = useState<{ open: boolean; doc: any | null }>( { open: false, doc: null } );
+  const [distributionUsers, setDistributionUsers] = useState<any[]>([]);
+  const [selectedDistributionUserIds, setSelectedDistributionUserIds] = useState<number[]>([]);
 
   // Role-based permissions
   const canCreateDocuments = hasRole(currentUser, 'QA Manager') || 
@@ -154,6 +166,7 @@ const Documents: React.FC = () => {
   useEffect(() => {
     loadDocuments();
     loadStats();
+    dispatch(fetchPendingApprovals());
   }, [pagination.page, filters]);
 
   const loadDocuments = () => {
@@ -241,6 +254,15 @@ const Documents: React.FC = () => {
   const handleMenuClose = () => {
     setAnchorEl(null);
     setSelectedDocumentForMenu(null);
+  };
+
+  const handleExport = async (format: 'pdf' | 'xlsx') => {
+    try {
+      const blob = await documentsAPI.exportDocuments(format, { ...filters, page: undefined, size: undefined });
+      downloadFile(blob, `documents_export.${format}`);
+    } catch (e) {
+      console.error('Export failed', e);
+    }
   };
 
   const handleBulkAction = async (action: string) => {
@@ -704,85 +726,115 @@ const Documents: React.FC = () => {
             Delete Document
           </MenuItemComponent>
         )}
+        {/* Status transitions */}
+        <MenuItemComponent onClick={() => { setReasonDialog({ open: true, action: 'obsolete', doc: selectedDocumentForMenu, reason: '' }); handleMenuClose(); }}>
+          <ListItemIcon>
+            <Archive fontSize="small" />
+          </ListItemIcon>
+          Mark Obsolete
+        </MenuItemComponent>
+        <MenuItemComponent onClick={() => { setReasonDialog({ open: true, action: 'archive', doc: selectedDocumentForMenu, reason: '' }); handleMenuClose(); }}>
+          <ListItemIcon>
+            <Archive fontSize="small" />
+          </ListItemIcon>
+          Archive
+        </MenuItemComponent>
+        <MenuItemComponent onClick={() => { setReasonDialog({ open: true, action: 'activate', doc: selectedDocumentForMenu, reason: '' }); handleMenuClose(); }}>
+          <ListItemIcon>
+            <Approval fontSize="small" />
+          </ListItemIcon>
+          Activate
+        </MenuItemComponent>
+
+        {/* Controlled distribution */}
+        <MenuItemComponent onClick={async () => {
+          try {
+            // Lazy load users for selection
+            const resp: any = await (await import('../services/api')).usersAPI.getUsers({ size: 100 });
+            setDistributionUsers(resp.data?.items || resp.items || []);
+          } catch (e) {
+            console.error('Failed to load users', e);
+          }
+          setSelectedDistributionUserIds([]);
+          setDistributeDialog({ open: true, doc: selectedDocumentForMenu });
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <Approval fontSize="small" />
+          </ListItemIcon>
+          Distribute
+        </MenuItemComponent>
       </Menu>
     </Box>
   );
 
   const renderPendingApprovals = () => {
-    const pendingDocs = documents.filter(doc => doc.status === 'under_review');
-    
     return (
       <Grid container spacing={3}>
-        {pendingDocs.map((doc) => (
-          <Grid item xs={12} md={6} key={doc.id}>
+        {pendingApprovals.map((item: any) => (
+          <Grid item xs={12} md={6} key={`${item.document_id}-${item.id || item.approval_id}`}>
             <Card>
               <CardHeader
                 title={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {getDocumentTypeIcon(doc.document_type)}
+                    <Description color="warning" />
                     <Typography variant="h6" fontWeight={600}>
-                      {doc.title}
+                      {item.document_title || item.title || `Document #${item.document_id}`}
                     </Typography>
                   </Box>
                 }
-                subheader={`${doc.document_number} • v${doc.version} • ${doc.department || 'No Department'}`}
-                action={
-                  <StatusChip
-                    status="pending"
-                    label="Under Review"
-                  />
-                }
+                subheader={`${item.document_number || ''} ${item.version ? `• v${item.version}` : ''}`}
+                action={<StatusChip status="pending" label="Your Approval Required" />}
               />
               <CardContent>
                 <Stack spacing={2}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Created by: {doc.created_by}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Last Modified: {doc.updated_at ? new Date(doc.updated_at).toLocaleDateString() : 
-                                     new Date(doc.created_at).toLocaleDateString()}
-                    </Typography>
+                    {item.created_by && (
+                      <Typography variant="body2" color="text.secondary">Created by: {item.created_by}</Typography>
+                    )}
+                    {item.created_at && (
+                      <Typography variant="body2" color="text.secondary">Requested: {new Date(item.created_at).toLocaleDateString()}</Typography>
+                    )}
                   </Box>
                   <Stack direction="row" spacing={1}>
-                    {canApproveDocuments && (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<Approval />}
-                        onClick={() => {
-                          setSelectedDocument(doc);
-                          setApprovalDialogOpen(true);
-                        }}
-                      >
-                        Approve
-                      </Button>
-                    )}
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<Approval />}
+                      onClick={async () => {
+                        try {
+                          await dispatch(approveApprovalStep({ documentId: item.document_id, approvalId: item.id || item.approval_id })).unwrap();
+                          dispatch(fetchPendingApprovals());
+                          loadDocuments();
+                        } catch (e) {
+                          console.error('Approval failed', e);
+                        }
+                      }}
+                    >
+                      Approve
+                    </Button>
                     <Button
                       variant="outlined"
                       size="small"
-                      startIcon={<Visibility />}
-                      onClick={() => handleDocumentSelect(doc)}
+                      onClick={async () => {
+                        try {
+                          await dispatch(rejectApprovalStep({ documentId: item.document_id, approvalId: item.id || item.approval_id })).unwrap();
+                          dispatch(fetchPendingApprovals());
+                          loadDocuments();
+                        } catch (e) {
+                          console.error('Rejection failed', e);
+                        }
+                      }}
                     >
-                      View
+                      Reject
                     </Button>
-                    {canManageDocuments && (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<Edit />}
-                        onClick={() => handleDocumentEdit(doc)}
-                      >
-                        Edit
-                      </Button>
-                    )}
                   </Stack>
                 </Stack>
               </CardContent>
             </Card>
           </Grid>
         ))}
-        {pendingDocs.length === 0 && (
+        {pendingApprovals.length === 0 && (
           <Grid item xs={12}>
             <Card>
               <CardContent sx={{ textAlign: 'center', py: 4 }}>
@@ -791,7 +843,7 @@ const Documents: React.FC = () => {
                   No Pending Approvals
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  All documents are either approved or in draft status.
+                  You have no approval tasks at the moment.
                 </Typography>
               </CardContent>
             </Card>
@@ -883,7 +935,7 @@ const Documents: React.FC = () => {
         showAdd={canCreateDocuments}
         showExport
         onAdd={() => setUploadDialogOpen(true)}
-        onExport={() => console.log('Export documents')}
+        onExport={() => handleExport('pdf')}
       />
 
       {/* Document Statistics */}
@@ -1144,6 +1196,66 @@ const Documents: React.FC = () => {
           loadDocuments();
         }}
       />
+
+      {/* Reason Dialog for status transitions */}
+      <Dialog open={reasonDialog.open} onClose={() => setReasonDialog({ open: false, action: null, doc: null, reason: '' })} maxWidth="sm" fullWidth>
+        <DialogTitle>{reasonDialog.action === 'obsolete' ? 'Mark as Obsolete' : reasonDialog.action === 'archive' ? 'Archive Document' : 'Activate Document'}</DialogTitle>
+        <DialogContent>
+          <TextField fullWidth label="Reason (optional unless obsolete/archive)" value={reasonDialog.reason}
+            onChange={(e) => setReasonDialog(prev => ({ ...prev, reason: e.target.value }))}
+            multiline rows={3} sx={{ mt: 1 }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReasonDialog({ open: false, action: null, doc: null, reason: '' })}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            if (!reasonDialog.doc || !reasonDialog.action) return;
+            try {
+              if (reasonDialog.action === 'obsolete') {
+                await (await import('../services/api')).documentsAPI.markObsolete(reasonDialog.doc.id, reasonDialog.reason || '');
+              } else if (reasonDialog.action === 'archive') {
+                await (await import('../services/api')).documentsAPI.archiveDocument(reasonDialog.doc.id, reasonDialog.reason || '');
+              } else if (reasonDialog.action === 'activate') {
+                await (await import('../services/api')).documentsAPI.activateDocument(reasonDialog.doc.id, reasonDialog.reason || '');
+              }
+              setReasonDialog({ open: false, action: null, doc: null, reason: '' });
+              loadDocuments();
+              loadStats();
+            } catch (e) { console.error('Status change failed', e); }
+          }}>Confirm</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Distribution Dialog */}
+      <Dialog open={distributeDialog.open} onClose={() => setDistributeDialog({ open: false, doc: null })} maxWidth="sm" fullWidth>
+        <DialogTitle>Distribute Document</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>Select recipients</Typography>
+          <Box sx={{ maxHeight: 300, overflowY: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1 }}>
+            {distributionUsers.map((u: any) => (
+              <Box key={u.id} sx={{ display: 'flex', alignItems: 'center' }}>
+                <Checkbox
+                  checked={selectedDistributionUserIds.includes(u.id)}
+                  onChange={(e) => {
+                    setSelectedDistributionUserIds(prev => e.target.checked ? [...prev, u.id] : prev.filter(id => id !== u.id));
+                  }}
+                />
+                <Typography variant="body2">{u.full_name || u.username} ({u.email})</Typography>
+              </Box>
+            ))}
+            {distributionUsers.length === 0 && <Typography variant="body2" color="text.secondary">No users found.</Typography>}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDistributeDialog({ open: false, doc: null })}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            if (!distributeDialog.doc) return;
+            try {
+              await (await import('../services/api')).documentsAPI.distributeDocument(distributeDialog.doc.id, { user_ids: selectedDistributionUserIds });
+              setDistributeDialog({ open: false, doc: null });
+            } catch (e) { console.error('Distribute failed', e); }
+          }} disabled={selectedDistributionUserIds.length === 0}>Send</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

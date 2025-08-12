@@ -95,7 +95,7 @@ class NonConformanceResponse(NonConformanceBase):
     evidence_files: Optional[List[str]] = None
     attachments: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -149,7 +149,7 @@ class RootCauseAnalysisResponse(RootCauseAnalysisBase):
     non_conformance_id: int
     conducted_by: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -171,7 +171,7 @@ class CAPAActionBase(BaseModel):
 
 
 class CAPAActionCreate(CAPAActionBase):
-    non_conformance_id: int
+    non_conformance_id: Optional[int] = None
 
 
 class CAPAActionUpdate(BaseModel):
@@ -206,7 +206,7 @@ class CAPAActionResponse(CAPAActionBase):
     effectiveness_measured: bool
     effectiveness_score: Optional[float] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
     created_by: int
 
     class Config:
@@ -228,8 +228,8 @@ class CAPAVerificationBase(BaseModel):
 
 
 class CAPAVerificationCreate(CAPAVerificationBase):
-    non_conformance_id: int
-    capa_action_id: int
+    non_conformance_id: Optional[int] = None
+    capa_action_id: Optional[int] = None
 
 
 class CAPAVerificationUpdate(BaseModel):
@@ -251,7 +251,7 @@ class CAPAVerificationResponse(CAPAVerificationBase):
     capa_action_id: int
     verified_by: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

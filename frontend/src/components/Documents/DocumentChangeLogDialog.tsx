@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { AppDispatch } from '../../store';
 import { fetchChangeLog } from '../../store/slices/documentSlice';
+import { documentsAPI } from '../../services/api';
 
 interface DocumentChangeLogDialogProps {
   open: boolean;
@@ -49,6 +50,7 @@ const DocumentChangeLogDialog: React.FC<DocumentChangeLogDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [changeLog, setChangeLog] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<false | 'pdf' | 'xlsx'>(false);
 
   useEffect(() => {
     if (open && document) {
@@ -114,6 +116,30 @@ const DocumentChangeLogDialog: React.FC<DocumentChangeLogDialogProps> = ({
     setChangeLog([]);
     setError(null);
     onClose();
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleExport = async (format: 'pdf' | 'xlsx') => {
+    if (!document) return;
+    try {
+      setExporting(format);
+      const blob = await documentsAPI.exportChangeLog(document.id, format);
+      downloadBlob(blob, `change_log_${document.document_number || document.id}.${format}`);
+    } catch (e) {
+      console.error('Export failed', e);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -206,6 +232,12 @@ const DocumentChangeLogDialog: React.FC<DocumentChangeLogDialogProps> = ({
       </DialogContent>
 
       <DialogActions sx={{ p: 3 }}>
+        <Button onClick={() => handleExport('pdf')} disabled={!!exporting}>
+          Export PDF
+        </Button>
+        <Button onClick={() => handleExport('xlsx')} disabled={!!exporting}>
+          Export XLSX
+        </Button>
         <Button onClick={handleClose}>
           Close
         </Button>

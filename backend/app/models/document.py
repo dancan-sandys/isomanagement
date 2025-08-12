@@ -177,3 +177,43 @@ class DocumentTemplate(Base):
     
     def __repr__(self):
         return f"<DocumentTemplate(id={self.id}, name='{self.name}', type='{self.document_type}')>" 
+
+
+class DocumentTemplateVersion(Base):
+    __tablename__ = "document_template_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("document_templates.id"), nullable=False)
+    version_number = Column(String(20), nullable=False)
+    template_file_path = Column(String(500))
+    template_content = Column(Text)
+    change_description = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_by = Column(Integer, ForeignKey("users.id"))
+    approved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentTemplateApproval(Base):
+    __tablename__ = "document_template_approvals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("document_templates.id"), nullable=False)
+    approver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approval_order = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # pending, approved, rejected
+    comments = Column(Text)
+    approved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentDistribution(Base):
+    __tablename__ = "document_distributions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    copy_number = Column(String(50))
+    notes = Column(Text)
+    distributed_at = Column(DateTime(timezone=True), server_default=func.now())
+    acknowledged_at = Column(DateTime(timezone=True))

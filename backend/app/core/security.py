@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User, UserSession
 from app.services.rbac_service import check_user_permission
+import re
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -61,6 +62,20 @@ def get_password_hash(password: str) -> str:
         # Fallback to a simple hash if bcrypt fails
         import hashlib
         return hashlib.sha256(password.encode()).hexdigest()
+
+def validate_password_policy(password: str) -> bool:
+    """Validate password against policy from settings."""
+    if len(password) < settings.PASSWORD_MIN_LENGTH:
+        return False
+    if settings.PASSWORD_REQUIRE_UPPERCASE and not re.search(r"[A-Z]", password):
+        return False
+    if settings.PASSWORD_REQUIRE_LOWERCASE and not re.search(r"[a-z]", password):
+        return False
+    if settings.PASSWORD_REQUIRE_NUMBER and not re.search(r"\d", password):
+        return False
+    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(r"[^A-Za-z0-9]", password):
+        return False
+    return True
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token"""

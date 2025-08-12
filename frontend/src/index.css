@@ -36,3 +36,6 @@ code {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Import accessibility enhancements */
+@import './styles/accessibility.css';

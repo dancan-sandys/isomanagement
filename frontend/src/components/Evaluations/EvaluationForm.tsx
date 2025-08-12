@@ -97,6 +97,7 @@ const validationSchema = Yup.object({
   technical_support_score: Yup.number().min(0).max(10).required('Technical support score is required'),
   hygiene_score: Yup.number().min(0).max(10).required('Hygiene score is required'),
   follow_up_required: Yup.boolean(),
+<<<<<<< HEAD
   follow_up_date: Yup.string()
     .nullable()
     .when('follow_up_required', {
@@ -105,6 +106,11 @@ const validationSchema = Yup.object({
         schema.required('Follow-up date is required when follow-up is required'),
       otherwise: (schema: Yup.StringSchema<string | null | undefined>) => schema.notRequired(),
     }),
+=======
+  follow_up_date: Yup.string().when(['follow_up_required'], ([followUpRequired], schema: Yup.StringSchema) =>
+    followUpRequired ? schema.required('Follow-up date is required when follow-up is required') : schema
+  ),
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 });
 
 const hygieneAuditAreas = [
@@ -222,7 +228,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({
       follow_up_date: '',
       compliance_score: 0,
       risk_assessment_score: 0,
-      corrective_actions: [],
+      corrective_actions: [] as string[],
       verification_required: false,
       verification_date: '',
     },
@@ -297,7 +303,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({
         follow_up_date: selectedEvaluation.follow_up_date || '',
         compliance_score: selectedEvaluation.compliance_score || 0,
         risk_assessment_score: selectedEvaluation.risk_assessment_score || 0,
-        corrective_actions: selectedEvaluation.corrective_actions || [],
+        corrective_actions: (selectedEvaluation.corrective_actions as string[] | undefined) || ([] as string[]),
         verification_required: selectedEvaluation.verification_required || false,
         verification_date: selectedEvaluation.verification_date || '',
       });

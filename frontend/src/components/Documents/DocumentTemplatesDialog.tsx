@@ -22,6 +22,7 @@ import {
   Select,
   MenuItem,
   Grid,
+  Autocomplete,
 } from '@mui/material';
 import {
   Close,
@@ -34,8 +35,11 @@ import {
   Label,
   Person,
   AccessTime,
+  History,
+  Approval,
 } from '@mui/icons-material';
-import { documentsAPI } from '../../services/api';
+import { documentsAPI, usersAPI } from '../../services/api';
+import { List as MUIList, ListItem as MUIListItem } from '@mui/material';
 
 interface DocumentTemplate {
   id: number;
@@ -65,6 +69,11 @@ const DocumentTemplatesDialog: React.FC<DocumentTemplatesDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showVersions, setShowVersions] = useState<{ open: boolean; template: DocumentTemplate | null; versions: any[]; loading: boolean }>({ open: false, template: null, versions: [], loading: false });
+  const [showApprovals, setShowApprovals] = useState<{ open: boolean; template: DocumentTemplate | null; steps: Array<{ approver_id: number; approval_order: number }> }>({ open: false, template: null, steps: [{ approver_id: 0, approval_order: 1 }] });
+  const [userSearch, setUserSearch] = useState('');
+  const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -156,6 +165,61 @@ const DocumentTemplatesDialog: React.FC<DocumentTemplatesDialogProps> = ({
       setError(error.message || 'Failed to delete template');
     }
   };
+
+  const handleViewTemplateVersions = async (template: DocumentTemplate) => {
+    setShowVersions({ open: true, template, versions: [], loading: true });
+    try {
+      const resp = await documentsAPI.getTemplateVersions(template.id);
+      setShowVersions(prev => ({ ...prev, versions: resp.data?.versions || resp.versions || [], loading: false }));
+    } catch (e) {
+      setShowVersions(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleCreateTemplateVersion = async (template: DocumentTemplate) => {
+    const change_description = window.prompt('Enter change description') || '';
+    if (!change_description) return;
+    const change_reason = window.prompt('Enter change reason') || '';
+    try {
+      await documentsAPI.createTemplateVersion(template.id, { change_description, change_reason });
+      handleViewTemplateVersions(template);
+    } catch (e) {
+      console.error('Create template version failed', e);
+    }
+  };
+
+  const handleOpenTemplateApproval = (template: DocumentTemplate) => {
+    setShowApprovals({ open: true, template, steps: [{ approver_id: 0, approval_order: 1 }] });
+  };
+
+  const handleSubmitTemplateApproval = async () => {
+    if (!showApprovals.template) return;
+    const steps = showApprovals.steps.filter(s => s.approver_id);
+    if (steps.length === 0) return;
+    try {
+      await documentsAPI.submitTemplateApprovalFlow(showApprovals.template.id, steps);
+      setShowApprovals({ open: false, template: null, steps: [{ approver_id: 0, approval_order: 1 }] });
+    } catch (e) {
+      console.error('Submit template approval failed', e);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    const t = setTimeout(async () => {
+      try {
+        setLoadingUsers(true);
+        const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
+        const items = resp?.data?.items || resp?.items || [];
+        if (active) setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch (e) {
+        if (active) setUserOptions([]);
+      } finally {
+        if (active) setLoadingUsers(false);
+      }
+    }, 300);
+    return () => { active = false; clearTimeout(t); };
+  }, [userSearch]);
 
   const handleTemplateSelect = (template: DocumentTemplate) => {
     if (onTemplateSelect) {
@@ -361,6 +425,21 @@ const DocumentTemplatesDialog: React.FC<DocumentTemplatesDialogProps> = ({
                       <FileCopy />
                     </IconButton>
                   </Tooltip>
+                  <Tooltip title="Versions">
+                    <IconButton size="small" onClick={() => handleViewTemplateVersions(template)}>
+                      <History />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="New Template Version">
+                    <IconButton size="small" onClick={() => handleCreateTemplateVersion(template)}>
+                      <Add />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Submit for Approval">
+                    <IconButton size="small" onClick={() => handleOpenTemplateApproval(template)}>
+                      <Approval />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Delete Template">
                     <IconButton
                       size="small"
@@ -402,6 +481,68 @@ const DocumentTemplatesDialog: React.FC<DocumentTemplatesDialogProps> = ({
           </Button>
         )}
       </DialogActions>
+
+      {/* Template Versions Modal (inline simple view) */}
+      <Dialog open={showVersions.open} onClose={() => setShowVersions({ open: false, template: null, versions: [], loading: false })} maxWidth="sm" fullWidth>
+        <DialogTitle>Template Versions - {showVersions.template?.name}</DialogTitle>
+        <DialogContent>
+          {showVersions.loading && <LinearProgress sx={{ mb: 2 }} />}
+          {!showVersions.loading && showVersions.versions.length === 0 && (
+            <Alert severity="info">No versions found for this template.</Alert>
+          )}
+          <List>
+            {showVersions.versions.map((v: any) => (
+              <ListItem key={v.id} divider>
+                <ListItemText
+                  primary={`v${v.version_number} ${v.approved_by ? '(Approved)' : ''}`}
+                  secondary={<>
+                    <Typography variant="caption">{v.change_description}</Typography><br/>
+                    <Typography variant="caption">{v.created_at && new Date(v.created_at).toLocaleString()}</Typography>
+                  </>}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowVersions({ open: false, template: null, versions: [], loading: false })}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Template Approval Steps Modal */}
+      <Dialog open={showApprovals.open} onClose={() => setShowApprovals({ open: false, template: null, steps: [{ approver_id: 0, approval_order: 1 }] })} maxWidth="sm" fullWidth>
+        <DialogTitle>Submit Template For Approval - {showApprovals.template?.name}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>Define approvers in order:</Typography>
+          {showApprovals.steps.map((s, idx) => (
+            <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <Autocomplete
+                options={userOptions}
+                loading={loadingUsers}
+                getOptionLabel={(opt) => opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username}
+                value={userOptions.find(o => o.id === s.approver_id) || null}
+                onChange={(_, val) => {
+                  setShowApprovals(prev => {
+                    const steps = [...prev.steps];
+                    steps[idx] = { ...steps[idx], approver_id: val ? val.id : 0, approval_order: idx + 1 };
+                    return { ...prev, steps };
+                  });
+                }}
+                onInputChange={(_, val) => setUserSearch(val)}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => (
+                  <TextField {...params} label={`Approver (Step ${idx + 1})`} placeholder="Search user..." fullWidth />
+                )}
+              />
+            </Box>
+          ))}
+          <Button size="small" onClick={() => setShowApprovals(prev => ({ ...prev, steps: [...prev.steps, { approver_id: 0, approval_order: prev.steps.length + 1 }] }))}>Add Step</Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowApprovals({ open: false, template: null, steps: [{ approver_id: 0, approval_order: 1 }] })}>Cancel</Button>
+          <Button variant="contained" onClick={handleSubmitTemplateApproval}>Submit</Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

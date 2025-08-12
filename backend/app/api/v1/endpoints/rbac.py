@@ -12,8 +12,47 @@ from app.schemas.rbac import (
 )
 from app.schemas.common import ResponseModel, PaginatedResponse
 from app.services.rbac_service import RBACService
+from app.models.audit import AuditLog
+from sqlalchemy import and_, desc
+from app.core.security import require_permission
 
 router = APIRouter()
+# Audit Logs Admin Endpoints
+@router.get("/audits", response_model=ResponseModel)
+async def get_audit_logs(
+    page: int = 1,
+    size: int = 20,
+    user_id: Optional[int] = Query(None),
+    action: Optional[str] = Query(None),
+    resource_type: Optional[str] = Query(None),
+    current_user: User = Depends(require_permission("audits:read")),
+    db: Session = Depends(get_db),
+):
+    query = db.query(AuditLog)
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
+    if action:
+        query = query.filter(AuditLog.action.ilike(f"%{action}%"))
+    if resource_type:
+        query = query.filter(AuditLog.resource_type == resource_type)
+    total = query.count()
+    logs = query.order_by(desc(AuditLog.created_at)).offset((page - 1) * size).limit(size).all()
+    items = [
+        {
+            "id": log.id,
+            "user_id": log.user_id,
+            "action": log.action,
+            "resource_type": log.resource_type,
+            "resource_id": log.resource_id,
+            "details": log.details,
+            "ip_address": log.ip_address,
+            "user_agent": log.user_agent,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
+    return ResponseModel(success=True, message="Audit logs retrieved", data={"items": items, "total": total, "page": page, "size": size})
+
 
 
 # Permission endpoints

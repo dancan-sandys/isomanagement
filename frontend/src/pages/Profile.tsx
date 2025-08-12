@@ -48,6 +48,7 @@ import {
 } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import api, { settingsAPI, authAPI } from '../services/api';
 
 // Interfaces
 interface UserProfile {
@@ -145,22 +146,24 @@ const Profile: React.FC = () => {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      // Mock data for now - replace with actual API call
-      const mockProfile: UserProfile = {
-        id: currentUser?.id || 1,
-        username: currentUser?.username || 'admin',
-        email: currentUser?.email || 'admin@dairy.com',
-        full_name: currentUser?.full_name || 'System Administrator',
-        role: currentUser?.role_name || 'ADMIN',
-        department: currentUser?.department || 'IT',
-        position: currentUser?.position || 'System Administrator',
-        phone: currentUser?.phone || '+1234567890',
-        employee_id: currentUser?.employee_id || 'EMP001',
-        profile_picture: currentUser?.profile_picture,
-        bio: 'Experienced food safety management professional with expertise in ISO 22000 implementation and dairy processing operations.',
-        last_login: currentUser?.last_login || new Date().toISOString()
+      const resp = await api.get('/profile/me');
+      const data = resp?.data?.data || resp?.data || resp;
+      // Backend returns UserProfile shape; adapt role field for local UI type if needed
+      const adapted: UserProfile = {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        full_name: data.full_name,
+        role: data.role_name || '',
+        department: data.department,
+        position: data.position,
+        phone: data.phone,
+        employee_id: data.employee_id,
+        profile_picture: data.profile_picture,
+        bio: data.bio,
+        last_login: data.last_login,
       };
-      setProfile(mockProfile);
+      setProfile(adapted);
     } catch (err) {
       setError('Failed to load profile');
       console.error(err);
@@ -171,34 +174,9 @@ const Profile: React.FC = () => {
 
   const fetchPreferences = async () => {
     try {
-      // Mock data for now - replace with actual API call
-      const mockPreferences: UserPreference[] = [
-        {
-          id: 1,
-          user_id: currentUser?.id || 1,
-          key: 'theme',
-          value: 'light',
-          setting_type: 'STRING',
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 2,
-          user_id: currentUser?.id || 1,
-          key: 'notifications',
-          value: 'true',
-          setting_type: 'BOOLEAN',
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 3,
-          user_id: currentUser?.id || 1,
-          key: 'language',
-          value: 'en',
-          setting_type: 'STRING',
-          created_at: new Date().toISOString()
-        }
-      ];
-      setPreferences(mockPreferences);
+      const resp = await api.get('/settings/preferences/me');
+      const prefs = resp?.data || [];
+      setPreferences(prefs);
     } catch (err) {
       console.error('Failed to load preferences:', err);
     }
@@ -206,15 +184,9 @@ const Profile: React.FC = () => {
 
   const fetchActivityData = async () => {
     try {
-      // Mock data for now - replace with actual API call
-      const mockActivity: ActivityData = {
-        last_login: new Date().toISOString(),
-        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-        updated_at: new Date().toISOString(),
-        failed_login_attempts: 0,
-        is_locked: false
-      };
-      setActivityData(mockActivity);
+      const resp = await api.get('/profile/me/activity');
+      const data = resp?.data?.data || resp?.data || null;
+      setActivityData(data);
     } catch (err) {
       console.error('Failed to load activity data:', err);
     }
@@ -222,16 +194,9 @@ const Profile: React.FC = () => {
 
   const fetchSecurityData = async () => {
     try {
-      // Mock data for now - replace with actual API call
-      const mockSecurity: SecurityData = {
-        is_active: true,
-        is_verified: true,
-        failed_login_attempts: 0,
-        last_login: new Date().toISOString(),
-        account_created: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        last_updated: new Date().toISOString()
-      };
-      setSecurityData(mockSecurity);
+      const resp = await api.get('/profile/me/security');
+      const data = resp?.data?.data || resp?.data || null;
+      setSecurityData(data);
     } catch (err) {
       console.error('Failed to load security data:', err);
     }
@@ -240,8 +205,13 @@ const Profile: React.FC = () => {
   const handleProfileUpdate = async () => {
     try {
       setLoading(true);
-      // Mock API call - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const form = new FormData();
+      if (editedProfile.full_name !== undefined) form.append('full_name', editedProfile.full_name);
+      if (editedProfile.department !== undefined) form.append('department', editedProfile.department);
+      if (editedProfile.position !== undefined) form.append('position', editedProfile.position);
+      if (editedProfile.phone !== undefined) form.append('phone', editedProfile.phone);
+      if (editedProfile.bio !== undefined) form.append('bio', editedProfile.bio);
+      await api.put('/profile/me', form);
       
       if (profile) {
         setProfile({ ...profile, ...editedProfile });
@@ -265,8 +235,10 @@ const Profile: React.FC = () => {
 
     try {
       setLoading(true);
-      // Mock API call - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await api.post('/profile/me/change-password', {
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password,
+      });
       
       setSuccess('Password changed successfully!');
       setPasswordDialogOpen(false);
@@ -288,8 +260,11 @@ const Profile: React.FC = () => {
 
     try {
       setLoading(true);
-      // Mock API call - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const form = new FormData();
+      form.append('file', selectedFile);
+      await api.post('/profile/me/upload-avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       
       setSuccess('Avatar uploaded successfully!');
       setAvatarDialogOpen(false);

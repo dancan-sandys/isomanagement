@@ -550,3 +550,86 @@ class NoncompliantDeliveryAlertList(BaseModel):
     total_alerts: int
     critical_alerts: int
     warning_alerts: int 
+
+
+# Analytics and Alerts schemas
+class PerformanceTrendPoint(BaseModel):
+    date: str
+    average_score: float
+
+
+class CategoryPerformancePoint(BaseModel):
+    category: str
+    average_score: float
+
+
+class RiskDistributionPoint(BaseModel):
+    risk_level: str
+    count: int
+
+
+class PerformanceAnalyticsResponse(BaseModel):
+    trends: List[PerformanceTrendPoint]
+    category_performance: List[CategoryPerformancePoint]
+    risk_distribution: List[RiskDistributionPoint]
+
+
+class RiskTrendPoint(BaseModel):
+    date: str
+    high_risk_count: int
+
+
+class RiskAssessmentResponse(BaseModel):
+    risk_matrix: List[Dict[str, Any]]
+    high_risk_suppliers: List[SupplierResponse]
+    risk_trends: List[RiskTrendPoint]
+
+
+class AlertItem(BaseModel):
+    id: str
+    type: str
+    severity: str
+    title: str
+    description: str
+    created_at: datetime
+    resolved: bool = False
+
+
+class AlertsPaginatedResponse(BaseModel):
+    items: List[AlertItem]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+# High-level stats schemas
+class SupplierStatsResponse(BaseModel):
+    total_suppliers: int
+    active_suppliers: int
+    pending_approval: int
+    suspended_suppliers: int
+    blacklisted_suppliers: int
+    overdue_evaluations: int
+    upcoming_evaluations: int
+    recent_deliveries: int
+    quality_alerts: int
+
+
+class MaterialStatsResponse(BaseModel):
+    total_materials: int
+    approved_materials: int
+    pending_materials: int
+    rejected_materials: int
+    materials_by_category: List[Dict[str, Any]]
+    materials_by_supplier: List[Dict[str, Any]]
+
+
+class EvaluationStatsResponse(BaseModel):
+    total_evaluations: int
+    completed_evaluations: int
+    in_progress_evaluations: int
+    scheduled_evaluations: int
+    overdue_evaluations: int
+    average_score: float
+    evaluations_by_month: List[Dict[str, Any]]

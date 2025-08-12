@@ -22,9 +22,7 @@ import {
   EvaluationFilters,
   DeliveryFilters,
   PaginatedResponse,
-  ApiResponse,
   BulkStatusUpdate,
-  QualityAlert,
 } from '../../types/supplier';
 
 // Async Thunks

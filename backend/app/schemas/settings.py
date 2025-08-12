@@ -457,3 +457,31 @@ DEFAULT_SETTINGS = [
         "group_name": "System Integration"
     }
 ] 
+
+# Retention policy defaults per document category (days)
+DEFAULT_SETTINGS.extend([
+    {
+        "key": "retention.haccp.days",
+        "value": "1825",
+        "setting_type": SettingType.INTEGER,
+        "category": SettingCategory.GENERAL,
+        "display_name": "Retention (days) - HACCP",
+        "group_name": "Retention Policy",
+    },
+    {
+        "key": "retention.prp.days",
+        "value": "1095",
+        "setting_type": SettingType.INTEGER,
+        "category": SettingCategory.GENERAL,
+        "display_name": "Retention (days) - PRP",
+        "group_name": "Retention Policy",
+    },
+    {
+        "key": "retention.record.days",
+        "value": "3650",
+        "setting_type": SettingType.INTEGER,
+        "category": SettingCategory.GENERAL,
+        "display_name": "Retention (days) - Records",
+        "group_name": "Retention Policy",
+    },
+])
