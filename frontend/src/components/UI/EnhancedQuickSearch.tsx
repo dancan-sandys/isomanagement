@@ -174,7 +174,7 @@ const EnhancedQuickSearch: React.FC<EnhancedQuickSearchProps> = ({
   const performSearch = async (searchQuery: string) => {
     setLoading(true);
     try {
-      const response = await searchAPI.smartSearch(searchQuery, user?.id);
+      const response = await searchAPI.smartSearch(searchQuery, user?.id ? String(user.id) : undefined);
       
       // Transform backend results to component format
       const transformedResults = response.results?.map((result: any) => ({
@@ -213,7 +213,7 @@ const EnhancedQuickSearch: React.FC<EnhancedQuickSearchProps> = ({
 
       // Track search analytics
       if (user?.id) {
-        searchAPI.trackSearch(user.id, searchQuery, transformedResults.length);
+        searchAPI.trackSearch(String(user.id), searchQuery, transformedResults.length);
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -267,7 +267,7 @@ const EnhancedQuickSearch: React.FC<EnhancedQuickSearchProps> = ({
     
     // Track selection analytics
     if (user?.id) {
-      searchAPI.trackSearch(user.id, query, results.length, result.id);
+      searchAPI.trackSearch(String(user.id), query, results.length, result.id);
     }
     
     navigate(result.path);

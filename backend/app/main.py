@@ -37,11 +37,24 @@ app.add_middleware(
     allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"]
 )
 
-# Request timing middleware
+# Request timing middleware (client-disconnect safe)
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     start_time = time.time()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:  # Handle client disconnects gracefully
+        try:
+            import anyio  # type: ignore
+            EndOfStream = getattr(anyio, "EndOfStream", None)
+        except Exception:
+            EndOfStream = None
+        import asyncio
+        if isinstance(exc, (asyncio.CancelledError, EndOfStream if EndOfStream else Exception)):
+            from starlette.responses import Response as _Response
+            response = _Response(status_code=204)
+        else:
+            raise
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
     # System-wide audit logging (non-blocking)

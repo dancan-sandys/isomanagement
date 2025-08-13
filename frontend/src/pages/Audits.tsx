@@ -28,9 +28,15 @@ const Audits: React.FC = () => {
     setLoading(true);
     try {
       const resp = await auditsAPI.listAudits({ search });
-      setAudits(resp.data?.items || resp.items || []);
-      const s = await auditsAPI.getStats();
-      setStats(s);
+      setAudits(resp?.data?.items || resp?.items || resp || []);
+      try {
+        const s = await auditsAPI.getStats();
+        setStats(s?.data || s || null);
+      } catch (e) {
+        setStats(null);
+      }
+    } catch (e) {
+      setAudits([]);
     } finally {
       setLoading(false);
     }
@@ -88,8 +94,12 @@ const Audits: React.FC = () => {
   const deleteAudit = async (row: any) => { if (window.confirm('Delete this audit?')) { await auditsAPI.deleteAudit(row.id); load(); } };
   const openAttachments = async (auditId: number) => {
     setAttachmentsAuditId(auditId);
-    const list = await auditsAPI.listAttachments(auditId);
-    setAttachments(list);
+    try {
+      const list = await auditsAPI.listAttachments(auditId);
+      setAttachments(list?.data || list || []);
+    } catch (e) {
+      setAttachments([]);
+    }
     setAttachmentsOpen(true);
   };
   const removeAttachment = async (attachmentId: number) => {

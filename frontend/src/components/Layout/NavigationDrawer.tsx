@@ -194,15 +194,6 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                                       sx={{ height: 20, fontSize: '0.625rem' }}
                                     />
                                   )}
-                                  {item.comingSoon && (
-                                    <Chip
-                                      label="Soon"
-                                      size="small"
-                                      color="warning"
-                                      variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.625rem' }}
-                                    />
-                                  )}
                                 </Box>
                               }
                             />

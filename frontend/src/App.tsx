@@ -25,7 +25,6 @@ import Users from './pages/Users';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import RBAC from './pages/RBAC';
-import ComingSoon from './components/UI/ComingSoon';
 import EquipmentPage from './pages/Equipment';
 import ComplaintsPage from './pages/Complaints';
 import ComplaintDetail from './pages/ComplaintDetail';
@@ -40,6 +39,8 @@ import ManagementReviews from './pages/ManagementReviews';
 import ManagementReviewDetail from './pages/ManagementReviewDetail';
 import RiskDetail from './pages/RiskDetail';
 import AllergenLabel from './pages/AllergenLabel';
+import AdvancedReporting from './pages/AdvancedReporting';
+import AdvancedSecurity from './pages/AdvancedSecurity';
 
 function App() {
   return (
@@ -83,14 +84,7 @@ function App() {
                       <Route path="/suppliers" element={<Suppliers />} />
                       <Route path="/suppliers/evaluation" element={<Navigate to="/suppliers?tab=3" replace />} />
                       <Route path="/suppliers/approved" element={<Navigate to="/suppliers?tab=1" replace />} />
-                      <Route path="/suppliers/audits" element={
-                        <ComingSoon 
-                          title="Supplier Audits"
-                          description="Supplier audit management is coming soon."
-                          parentPath="/suppliers"
-                          parentTitle="Suppliers"
-                        />
-                      } />
+                      <Route path="/suppliers/audits" element={<Navigate to="/audits?type=supplier" replace />} />
                       <Route path="/suppliers/metrics" element={<SuppliersMetrics />} />
                       
                       {/* Traceability - Production and QA roles */}
@@ -114,115 +108,30 @@ function App() {
                       <Route path="/audits/internal" element={<Audits />} />
                       <Route path="/audits/external" element={<Audits />} />
                       <Route path="/audits/:id" element={<AuditDetail />} />
-                      <Route path="/audits/schedule" element={
-                        <ComingSoon 
-                          title="Audit Schedule"
-                          description="Audit scheduling is coming soon."
-                        />
-                      } />
-                      <Route path="/audits/findings" element={
-                        <ComingSoon 
-                          title="Findings & NCs"
-                          description="Audit findings management is coming soon."
-                        />
-                      } />
-                      <Route path="/audits/reports" element={
-                        <ComingSoon 
-                          title="Audit Reports"
-                          description="Audit reporting is coming soon."
-                        />
-                      } />
+                      <Route path="/audits/schedule" element={<Navigate to="/audits?tab=schedule" replace />} />
+                      <Route path="/audits/findings" element={<Navigate to="/audits?tab=findings" replace />} />
+                      <Route path="/audits/reports" element={<Navigate to="/audits?tab=reports" replace />} />
                       
                       {/* Training & Competence - QA and HR roles */}
-                      <Route path="/training/programs" element={
-                        <ComingSoon 
-                          title="Training Programs"
-                          description="Training program management is coming soon."
-                        />
-                      } />
-                      <Route path="/training/assessment" element={
-                        <ComingSoon 
-                          title="Competence Assessment"
-                          description="Competence assessment tools are coming soon."
-                        />
-                      } />
-                      <Route path="/training/records" element={
-                        <ComingSoon 
-                          title="Training Records"
-                          description="Training record management is coming soon."
-                        />
-                      } />
-                      <Route path="/training/certification" element={
-                        <ComingSoon 
-                          title="Certification Tracking"
-                          description="Certification tracking is coming soon."
-                        />
-                      } />
-                      <Route path="/training/calendar" element={
-                        <ComingSoon 
-                          title="Training Calendar"
-                          description="Training calendar management is coming soon."
-                        />
-                      } />
+                      <Route path="/training/programs" element={<Navigate to="/training" replace />} />
+                      <Route path="/training/assessment" element={<Navigate to="/training?tab=assessment" replace />} />
+                      <Route path="/training/records" element={<Navigate to="/training?tab=records" replace />} />
+                      <Route path="/training/certification" element={<Navigate to="/training?tab=certification" replace />} />
+                      <Route path="/training/calendar" element={<Navigate to="/training?tab=calendar" replace />} />
                       
                       {/* Maintenance - Maintenance roles */}
                       <Route path="/maintenance/equipment" element={<EquipmentPage />} />
-                      <Route path="/maintenance/preventive" element={
-                        <ComingSoon 
-                          title="Preventive Maintenance"
-                          description="Preventive maintenance management is coming soon."
-                        />
-                      } />
-                      <Route path="/maintenance/work-orders" element={
-                        <ComingSoon 
-                          title="Work Orders"
-                          description="Work order management is coming soon."
-                        />
-                      } />
-                      <Route path="/maintenance/calibration" element={
-                        <ComingSoon 
-                          title="Calibration"
-                          description="Calibration management is coming soon."
-                        />
-                      } />
-                      <Route path="/maintenance/history" element={
-                        <ComingSoon 
-                          title="Maintenance History"
-                          description="Maintenance history tracking is coming soon."
-                        />
-                      } />
+                      <Route path="/maintenance/preventive" element={<Navigate to="/maintenance/equipment?tab=preventive" replace />} />
+                      <Route path="/maintenance/work-orders" element={<Navigate to="/maintenance/equipment?tab=work-orders" replace />} />
+                      <Route path="/maintenance/calibration" element={<Navigate to="/maintenance/equipment?tab=calibration" replace />} />
+                      <Route path="/maintenance/history" element={<Navigate to="/maintenance/equipment?tab=history" replace />} />
                       
                       {/* Inventory Management - Production and Warehouse roles */}
-                      <Route path="/inventory/materials" element={
-                        <ComingSoon 
-                          title="Raw Materials"
-                          description="Raw material management is coming soon."
-                        />
-                      } />
-                      <Route path="/inventory/products" element={
-                        <ComingSoon 
-                          title="Finished Products"
-                          description="Finished product management is coming soon."
-                        />
-                      } />
-                      <Route path="/inventory/stock" element={
-                        <ComingSoon 
-                          title="Stock Levels"
-                          description="Stock level management is coming soon."
-                        />
-                      } />
-                      <Route path="/inventory/counts" element={
-                        <ComingSoon 
-                          title="Inventory Counts"
-                          description="Inventory count management is coming soon."
-                        />
-                      } />
-                      <Route path="/inventory/reports" element={
-                        <ComingSoon 
-                          title="Inventory Reports"
-                          description="Inventory reporting is coming soon."
-                        />
-                      } />
+                      <Route path="/inventory/materials" element={<Navigate to="/traceability?tab=materials" replace />} />
+                      <Route path="/inventory/products" element={<Navigate to="/traceability?tab=products" replace />} />
+                      <Route path="/inventory/stock" element={<Navigate to="/traceability?tab=stock" replace />} />
+                      <Route path="/inventory/counts" element={<Navigate to="/traceability?tab=counts" replace />} />
+                      <Route path="/inventory/reports" element={<Navigate to="/traceability?tab=reports" replace />} />
                       
                       {/* Complaints */}
                       <Route path="/complaints" element={<ComplaintsPage />} />
@@ -236,51 +145,17 @@ function App() {
                       <Route path="/management-reviews/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewDetail} />} />
                       <Route path="/compliance/risk/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskDetail} />} />
                       <Route path="/compliance/allergen-label" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={AllergenLabel} />} />
-                      <Route path="/compliance/regulatory" element={
-                        <ComingSoon 
-                          title="Regulatory Requirements"
-                          description="Regulatory requirement management is coming soon."
-                        />
-                      } />
+                      <Route path="/compliance/regulatory" element={<Navigate to="/compliance/risks" replace />} />
                       <Route path="/compliance/risk" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskRegister} />} />
-                      <Route path="/compliance/monitoring" element={
-                        <ComingSoon 
-                          title="Compliance Monitoring"
-                          description="Compliance monitoring tools are coming soon."
-                        />
-                      } />
-                      <Route path="/compliance/reports" element={
-                        <ComingSoon 
-                          title="Compliance Reports"
-                          description="Compliance reporting is coming soon."
-                        />
-                      } />
-                      <Route path="/compliance/updates" element={
-                        <ComingSoon 
-                          title="Regulatory Updates"
-                          description="Regulatory update management is coming soon."
-                        />
-                      } />
+                      <Route path="/compliance/monitoring" element={<Navigate to="/dashboard/analytics" replace />} />
+                      <Route path="/compliance/reports" element={<Navigate to="/dashboard/reports" replace />} />
+                      <Route path="/compliance/updates" element={<Navigate to="/documents?category=regulatory" replace />} />
                       
                       {/* User Management - System Administrators and QA Managers only */}
                       <Route path="/users" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager"]} component={Users} />} />
                       <Route path="/rbac" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager"]} component={RBAC} />} />
-                      <Route path="/users/groups" element={
-                        <ComingSoon 
-                          title="User Groups"
-                          description="User group management is coming soon."
-                          parentPath="/users"
-                          parentTitle="Users"
-                        />
-                      } />
-                      <Route path="/users/logs" element={
-                        <ComingSoon 
-                          title="Access Logs"
-                          description="Access log management is coming soon."
-                          parentPath="/users"
-                          parentTitle="Users"
-                        />
-                      } />
+                      <Route path="/users/groups" element={<Navigate to="/rbac" replace />} />
+                      <Route path="/users/logs" element={<Navigate to="/settings?tab=logs" replace />} />
                       
                       {/* System Settings - System Administrators only */}
                       <Route path="/settings" element={<RoleBasedRoute allowedRoles={["System Administrator"]} component={Settings} />} />
@@ -295,6 +170,9 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Advanced Features Routes */}
+        <Route path="/advanced-reporting" element={<AdvancedReporting />} />
+        <Route path="/advanced-security" element={<AdvancedSecurity />} />
       </Routes>
     </Box>
   );

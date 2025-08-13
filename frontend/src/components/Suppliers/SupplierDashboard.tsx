@@ -183,7 +183,7 @@ const SupplierDashboard: React.FC = () => {
     <Grid container spacing={3} mb={3}>
       {/* Total Suppliers */}
       <Grid item xs={12} sm={6} md={3}>
-        <EnhancedCard title="Suppliers Overview">
+        <EnhancedCard title="Suppliers Overview" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box>
@@ -204,7 +204,7 @@ const SupplierDashboard: React.FC = () => {
 
       {/* Active Suppliers */}
       <Grid item xs={12} sm={6} md={3}>
-        <EnhancedCard title="Category Breakdown">
+        <EnhancedCard title="Category Breakdown" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box>
@@ -225,7 +225,7 @@ const SupplierDashboard: React.FC = () => {
 
       {/* Overdue Evaluations */}
       <Grid item xs={12} sm={6} md={3}>
-        <EnhancedCard title="Risk Distribution">
+        <EnhancedCard title="Risk Distribution" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box>
@@ -246,7 +246,7 @@ const SupplierDashboard: React.FC = () => {
 
       {/* Recent Deliveries */}
       <Grid item xs={12} sm={6} md={3}>
-        <EnhancedCard title="Upcoming Evaluations">
+        <EnhancedCard title="Upcoming Evaluations" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box>
@@ -270,7 +270,7 @@ const SupplierDashboard: React.FC = () => {
   const renderCategoryDistribution = () => (
     <Grid container spacing={3} mb={3}>
       <Grid item xs={12} md={6}>
-        <EnhancedCard title="Recent Deliveries">
+        <EnhancedCard title="Recent Deliveries" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               Suppliers by Category
@@ -301,7 +301,7 @@ const SupplierDashboard: React.FC = () => {
       </Grid>
 
       <Grid item xs={12} md={6}>
-        <EnhancedCard title="Quality Alerts">
+        <EnhancedCard title="Quality Alerts" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               Suppliers by Risk Level
@@ -326,7 +326,7 @@ const SupplierDashboard: React.FC = () => {
   const renderPerformanceTrends = () => (
     <Grid container spacing={3} mb={3}>
       <Grid item xs={12}>
-        <EnhancedCard title="Performance Trends">
+        <EnhancedCard title="Performance Trends" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               Performance Trends
@@ -358,7 +358,7 @@ const SupplierDashboard: React.FC = () => {
   const renderRecentActivity = () => (
     <Grid container spacing={3} mb={3}>
       <Grid item xs={12} md={6}>
-        <EnhancedCard title="Top Suppliers">
+        <EnhancedCard title="Top Suppliers" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               Recent Evaluations
@@ -391,7 +391,7 @@ const SupplierDashboard: React.FC = () => {
       </Grid>
 
       <Grid item xs={12} md={6}>
-        <EnhancedCard title="Actions">
+        <EnhancedCard title="Actions" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               Recent Deliveries
@@ -427,7 +427,7 @@ const SupplierDashboard: React.FC = () => {
   const renderAlerts = () => (
     <Grid container spacing={3} mb={3}>
       <Grid item xs={12}>
-        <EnhancedCard title="Notifications">
+        <EnhancedCard title="Notifications" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6" fontWeight="bold">
@@ -501,7 +501,7 @@ const SupplierDashboard: React.FC = () => {
   const renderQuickActions = () => (
     <Grid container spacing={3} mb={3}>
       <Grid item xs={12}>
-        <EnhancedCard title="Exports">
+        <EnhancedCard title="Exports" borderRadius={10} sx={{ background: 'white' }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               Quick Actions

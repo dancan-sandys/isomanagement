@@ -15,6 +15,8 @@ import {
   Receipt,
   Report,
   VerifiedUser,
+  ReportProblem,
+  SupportAgent,
 } from '@mui/icons-material';
 
 // Navigation item interface
@@ -107,7 +109,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   
   nonconformance: {
     title: 'Non-Conformance & CAPA',
-    icon: Receipt,
+    icon: ReportProblem,
     order: 7,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
@@ -117,7 +119,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   },
   complaints: {
     title: 'Customer Complaints',
-    icon: Receipt,
+    icon: SupportAgent,
     order: 8,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
@@ -133,9 +135,9 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     items: [
       { text: 'Internal Audits', path: '/audits/internal' },
       { text: 'External Audits', path: '/audits/external' },
-      { text: 'Audit Schedule', path: '/audits/schedule', comingSoon: true },
-      { text: 'Findings & NCs', path: '/audits/findings', comingSoon: true },
-      { text: 'Audit Reports', path: '/audits/reports', comingSoon: true },
+      { text: 'Audit Schedule', path: '/audits/schedule' },
+      { text: 'Findings & NCs', path: '/audits/findings' },
+      { text: 'Audit Reports', path: '/audits/reports' },
     ],
   },
   
@@ -147,10 +149,10 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     items: [
       { text: 'Training Programs', path: '/training' },
       { text: 'My Training Matrix', path: '/training/matrix' },
-      { text: 'Competence Assessment', path: '/training/assessment', comingSoon: true },
-      { text: 'Training Records', path: '/training/records', comingSoon: true },
-      { text: 'Certification Tracking', path: '/training/certification', comingSoon: true },
-      { text: 'Training Calendar', path: '/training/calendar', comingSoon: true },
+      { text: 'Competence Assessment', path: '/training/assessment' },
+      { text: 'Training Records', path: '/training/records' },
+      { text: 'Certification Tracking', path: '/training/certification' },
+      { text: 'Training Calendar', path: '/training/calendar' },
     ],
   },
   
@@ -160,11 +162,11 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 10,
     requiredRoles: ['Maintenance Manager', 'Maintenance Technician', 'Production Manager', 'System Administrator'],
     items: [
-      { text: 'Equipment Register', path: '/maintenance/equipment', comingSoon: true },
-      { text: 'Preventive Maintenance', path: '/maintenance/preventive', comingSoon: true },
-      { text: 'Work Orders', path: '/maintenance/work-orders', comingSoon: true },
-      { text: 'Calibration', path: '/maintenance/calibration', comingSoon: true },
-      { text: 'Maintenance History', path: '/maintenance/history', comingSoon: true },
+      { text: 'Equipment Register', path: '/maintenance/equipment' },
+      { text: 'Preventive Maintenance', path: '/maintenance/preventive' },
+      { text: 'Work Orders', path: '/maintenance/work-orders' },
+      { text: 'Calibration', path: '/maintenance/calibration' },
+      { text: 'Maintenance History', path: '/maintenance/history' },
     ],
   },
   
@@ -174,11 +176,11 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 11,
     requiredRoles: ['Production Manager', 'Production Operator', 'Warehouse Manager', 'System Administrator'],
     items: [
-      { text: 'Raw Materials', path: '/inventory/materials', comingSoon: true },
-      { text: 'Finished Products', path: '/inventory/products', comingSoon: true },
-      { text: 'Stock Levels', path: '/inventory/stock', comingSoon: true },
-      { text: 'Inventory Counts', path: '/inventory/counts', comingSoon: true },
-      { text: 'Inventory Reports', path: '/inventory/reports', comingSoon: true },
+      { text: 'Raw Materials', path: '/inventory/materials' },
+      { text: 'Finished Products', path: '/inventory/products' },
+      { text: 'Stock Levels', path: '/inventory/stock' },
+      { text: 'Inventory Counts', path: '/inventory/counts' },
+      { text: 'Inventory Reports', path: '/inventory/reports' },
     ],
   },
   
@@ -222,6 +224,16 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     items: [
       { text: 'Settings', path: '/settings' },
       // Submenus removed until implemented
+    ],
+  },
+
+  advanced: {
+    title: 'Advanced Features',
+    icon: Settings,
+    order: 16,
+    items: [
+      { text: 'Advanced Reporting', path: '/advanced-reporting' },
+      { text: 'Advanced Security', path: '/advanced-security' },
     ],
   },
 };

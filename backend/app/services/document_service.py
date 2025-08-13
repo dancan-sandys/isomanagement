@@ -251,6 +251,15 @@ class DocumentService:
     def get_document_stats(self) -> Dict[str, Any]:
         """Get document statistics"""
         
+        # Helper to safely get enum values
+        def to_value(val: Any) -> str:
+            try:
+                if val is None:
+                    return "unknown"
+                return val.value if hasattr(val, "value") else str(val)
+            except Exception:
+                return "unknown"
+        
         # Total documents
         total_documents = self.db.query(Document).count()
         
@@ -258,19 +267,19 @@ class DocumentService:
         status_counts = self.db.query(
             Document.status, func.count(Document.id)
         ).group_by(Document.status).all()
-        documents_by_status = {status.value: count for status, count in status_counts}
+        documents_by_status = {to_value(status): count for status, count in status_counts}
         
         # Documents by category
         category_counts = self.db.query(
             Document.category, func.count(Document.id)
         ).group_by(Document.category).all()
-        documents_by_category = {category.value: count for category, count in category_counts}
+        documents_by_category = {to_value(category): count for category, count in category_counts}
         
         # Documents by type
         type_counts = self.db.query(
             Document.document_type, func.count(Document.id)
         ).group_by(Document.document_type).all()
-        documents_by_type = {doc_type.value: count for doc_type, count in type_counts}
+        documents_by_type = {to_value(doc_type): count for doc_type, count in type_counts}
         
         # Pending reviews (documents with review_date in the past)
         pending_reviews = self.db.query(Document).filter(

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
   Box,
   AppBar,
@@ -32,11 +32,12 @@ import { logout } from '../../store/slices/authSlice';
 import { fetchNotificationSummary } from '../../store/slices/notificationSlice';
 import NotificationPopup from '../Notifications/NotificationPopup';
 import NavigationDrawer from './NavigationDrawer';
+import SideRail from './SideRail';
 import AccessibilityPanel from '../Accessibility/AccessibilityPanel';
 import { useTheme } from '../../theme/ThemeProvider';
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const drawerWidth = 280;
@@ -128,8 +129,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <AppBar
           position="fixed"
           sx={{
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
-            ml: { sm: `${drawerWidth}px` },
+            // Full width on mobile; account for compact rail on md+
+            width: { md: 'calc(100% - 72px)' },
+            ml: { md: '72px' },
             backgroundColor: 'background.paper',
             color: 'text.primary',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
@@ -149,7 +151,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={handleDrawerToggle}
                 sx={{ 
                   mr: 2, 
-                  display: { sm: 'none' },
+                  display: { md: 'none' },
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     transform: 'scale(1.1)',
@@ -393,22 +395,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Toolbar>
         </AppBar>
 
-        {/* Enhanced Navigation Drawer */}
-        <Box
-          component="nav"
-          id="navigation"
-          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-        >
+        {/* Navigation: Mobile gets Drawer; Desktop gets compact SideRail */}
+        <Box component="nav" id="navigation">
           {/* Mobile drawer */}
           <Drawer
             variant="temporary"
             open={mobileOpen}
             onClose={handleDrawerToggle}
-            ModalProps={{
-              keepMounted: true, // Better open performance on mobile.
-            }}
+            ModalProps={{ keepMounted: true }}
             sx={{
-              display: { xs: 'block', sm: 'none' },
+              display: { xs: 'block', md: 'none' },
               '& .MuiDrawer-paper': { 
                 boxSizing: 'border-box', 
                 width: drawerWidth,
@@ -416,30 +412,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               },
             }}
           >
-            <NavigationDrawer
-              onNavigate={handleNavigation}
-              isSelected={isSelected}
-            />
+            <NavigationDrawer onNavigate={handleNavigation} isSelected={isSelected} />
           </Drawer>
-          
-          {/* Desktop drawer */}
-          <Drawer
-            variant="permanent"
+
+          {/* Desktop compact rail */}
+          {/* Extend a subtle background behind the AppBar to eliminate corner gap */}
+          <Box
             sx={{
-              display: { xs: 'none', sm: 'block' },
-              '& .MuiDrawer-paper': { 
-                boxSizing: 'border-box', 
-                width: drawerWidth,
-                backdropFilter: 'blur(10px)',
-              },
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: 72,
+              height: { xs: 56, sm: 64 },
+              display: { xs: 'none', md: 'block' },
+              background: (theme) => theme.palette.mode === 'light' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)',
+              borderRight: '1px solid',
+              borderColor: 'divider',
+              zIndex: 1200,
             }}
-            open
-          >
-            <NavigationDrawer
-              onNavigate={handleNavigation}
-              isSelected={isSelected}
-            />
-          </Drawer>
+          />
+          <SideRail onNavigate={handleNavigation} isSelected={isSelected} />
         </Box>
 
         {/* Enhanced Main Content */}
@@ -450,7 +442,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           sx={{
             flexGrow: 1,
             p: 3,
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            // Leave space for the compact rail on desktop
+            ml: { md: `72px` },
+            width: { sm: '100%' },
             mt: 8, // Account for AppBar height
             backgroundColor: 'background.default',
             minHeight: '100vh',
@@ -460,7 +454,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           }}
         >
           <Box sx={{ minHeight: '100%' }}>
-            {children}
+            {children ? children : <Outlet />}
           </Box>
         </Box>
 

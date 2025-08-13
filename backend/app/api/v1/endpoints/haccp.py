@@ -468,9 +468,37 @@ async def create_hazard(
                 detail="Product not found"
             )
         
-        # Calculate risk score
-        likelihood = hazard_data.get("likelihood", 1)
-        severity = hazard_data.get("severity", 1)
+        # Validate required fields
+        required_fields = ["process_step_id", "hazard_type", "hazard_name"]
+        missing = [f for f in required_fields if hazard_data.get(f) in (None, "")]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required fields: {', '.join(missing)}"
+            )
+
+        # Ensure process step exists and belongs to product
+        step_id = int(hazard_data.get("process_step_id"))
+        step = db.query(ProcessFlow).filter(ProcessFlow.id == step_id, ProcessFlow.product_id == product_id).first()
+        if not step:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid process_step_id for this product")
+
+        # Parse hazard type
+        try:
+            hz_type = HazardType(hazard_data.get("hazard_type"))
+        except Exception:
+            allowed = ", ".join([t.value for t in HazardType])
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid hazard_type. Allowed: {allowed}")
+
+        # Calculate risk score (coerce to int)
+        try:
+            likelihood = int(hazard_data.get("likelihood", 1) or 1)
+        except Exception:
+            likelihood = 1
+        try:
+            severity = int(hazard_data.get("severity", 1) or 1)
+        except Exception:
+            severity = 1
         risk_score = likelihood * severity
         
         # Determine risk level
@@ -485,8 +513,8 @@ async def create_hazard(
         
         hazard = Hazard(
             product_id=product_id,
-            process_step_id=hazard_data["process_step_id"],
-            hazard_type=HazardType(hazard_data["hazard_type"]),
+            process_step_id=step_id,
+            hazard_type=hz_type,
             hazard_name=hazard_data["hazard_name"],
             description=hazard_data.get("description"),
             likelihood=likelihood,

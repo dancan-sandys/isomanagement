@@ -145,6 +145,7 @@ const Documents: React.FC = () => {
   const [distributeDialog, setDistributeDialog] = useState<{ open: boolean; doc: any | null }>( { open: false, doc: null } );
   const [distributionUsers, setDistributionUsers] = useState<any[]>([]);
   const [selectedDistributionUserIds, setSelectedDistributionUserIds] = useState<number[]>([]);
+  const [searchText, setSearchText] = useState<string>(filters?.search || '');
 
   // Role-based permissions
   const canCreateDocuments = hasRole(currentUser, 'QA Manager') || 
@@ -168,6 +169,18 @@ const Documents: React.FC = () => {
     loadStats();
     dispatch(fetchPendingApprovals());
   }, [pagination.page, filters]);
+
+  // Debounce search to reduce churn and make UX fluid
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (searchText !== filters.search) {
+        dispatch(setFilters({ search: searchText }));
+        dispatch(setPagination({ page: 1 }));
+      }
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchText]);
 
   const loadDocuments = () => {
     const params = {
@@ -310,12 +323,38 @@ const Documents: React.FC = () => {
     }
   };
 
-  const getDocumentTypeLabel = (type: string) => {
+  const getDocumentTypeLabel = (type?: string) => {
+    if (!type || typeof type !== 'string') return 'Unknown';
     return type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const renderDocumentRegister = () => (
     <Box>
+      {/* Guided process header */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Chip label="Upload" color="primary" variant="outlined" onClick={() => setUploadDialogOpen(true)} />
+              <Typography variant="body2">→</Typography>
+              <Chip label="Review" color="info" variant="outlined" onClick={() => setSelectedTab(1)} />
+              <Typography variant="body2">→</Typography>
+              <Chip label="Approve" color="success" variant="outlined" onClick={() => setSelectedTab(1)} />
+              <Typography variant="body2">→</Typography>
+              <Chip label="Distribute" color="secondary" variant="outlined" onClick={() => setSelectedTab(0)} />
+              <Typography variant="body2">→</Typography>
+              <Chip label="Acknowledge" variant="outlined" />
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" size="small" startIcon={<Add />} onClick={() => setUploadDialogOpen(true)}>New Document</Button>
+              <Button variant="outlined" size="small" startIcon={<Approval />} onClick={() => setSelectedTab(1)}>
+                Pending Approvals ({pendingApprovals?.length || 0})
+              </Button>
+              <Button variant="outlined" size="small" startIcon={<EditNote />} onClick={() => setTemplatesDialogOpen(true)}>Templates</Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
       {/* Filters */}
       {showFilters && (
         <Card sx={{ mb: 3 }}>
@@ -326,8 +365,8 @@ const Documents: React.FC = () => {
                   fullWidth
                   size="small"
                   placeholder="Search documents..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
                   InputProps={{
                     startAdornment: <FilterAlt sx={{ mr: 1, color: 'text.secondary' }} />
                   }}
@@ -479,7 +518,54 @@ const Documents: React.FC = () => {
         </Card>
       )}
 
+      {/* Active filter chips */}
+      {(() => {
+        const active: Array<{ key: string; label: string; value: string }> = [];
+        const labelMap: Record<string, string> = {
+          category: 'Category',
+          status: 'Status',
+          document_type: 'Type',
+          department: 'Department',
+          date_from: 'Created From',
+          date_to: 'Created To',
+          review_date_from: 'Review From',
+          review_date_to: 'Review To',
+        };
+        Object.entries(filters || {}).forEach(([k, v]) => {
+          if (k === 'search') return;
+          if (v) active.push({ key: k, label: labelMap[k] || k, value: String(v) });
+        });
+        return active.length > 0 ? (
+          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+            {active.map((f) => (
+              <Chip
+                key={f.key}
+                label={`${f.label}: ${f.value}`}
+                onDelete={() => handleFilterChange(f.key, '')}
+                variant="outlined"
+                size="small"
+              />
+            ))}
+            <Button size="small" onClick={handleFilterClear} startIcon={<Clear />}>Clear All</Button>
+          </Stack>
+        ) : null;
+      })()}
+
       {/* Document Table */}
+      {selectedDocuments.length > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button size="small" onClick={() => handleBulkAction('approve')} startIcon={<CheckCircle />}>Approve</Button>
+              <Button size="small" onClick={() => handleBulkAction('archive')} startIcon={<Archive />}>Archive</Button>
+              <Button size="small" color="warning" onClick={() => handleBulkAction('obsolete')} startIcon={<Warning />}>Mark Obsolete</Button>
+              <Button size="small" variant="outlined" onClick={() => setSelectedDocuments([])}>Clear</Button>
+            </Stack>
+          }
+        >
+          {selectedDocuments.length} selected
+        </Alert>
+      )}
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
@@ -501,15 +587,15 @@ const Documents: React.FC = () => {
               <TableCell>Type</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Department</TableCell>
-              <TableCell>Created By</TableCell>
-              <TableCell>Last Modified</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>Owner</TableCell>
+              <TableCell>Review Date</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {documents.map((document) => (
-              <TableRow key={document.id} hover>
-                <TableCell padding="checkbox">
+              <TableRow key={document.id} hover onClick={() => handleDocumentSelect(document)} sx={{ cursor: 'pointer' }}>
+                <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedDocuments.includes(document.id)}
                     onChange={(e) => {
@@ -528,8 +614,8 @@ const Documents: React.FC = () => {
                       <Typography variant="body2" fontWeight={600}>
                         {document.title}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {document.document_number} • v{document.version}
+                  <Typography variant="caption" color="text.secondary">
+                        {document.document_number || '—'} • v{document.version}
                       </Typography>
                     </Box>
                   </Box>
@@ -547,17 +633,14 @@ const Documents: React.FC = () => {
                            document.status === 'under_review' ? 'pending' : 
                            document.status === 'draft' ? 'warning' : 
                            document.status === 'obsolete' ? 'nonConformance' : 'info'}
-                    label={document.status.replace('_', ' ')}
+                    label={(document.status || 'unknown').replace('_', ' ')}
                   />
                 </TableCell>
                 <TableCell>{document.department || '-'}</TableCell>
-                <TableCell>{document.created_by}</TableCell>
-                <TableCell>
-                  {document.updated_at ? new Date(document.updated_at).toLocaleDateString() : 
-                   new Date(document.created_at).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1}>
+                <TableCell>{(document as any).owner_name || document.created_by || '—'}</TableCell>
+                <TableCell>{document.review_date ? new Date(document.review_date).toLocaleDateString() : '—'}</TableCell>
+                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
                     <Tooltip title="View Document">
                       <IconButton 
                         size="small" 
