@@ -75,9 +75,15 @@ import { dashboardAPI } from '../services/api';
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
+<<<<<<< HEAD
+  const [error, setError] = useState<string | null>(null);
+
+  // Real data from API
+=======
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
 
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
@@ -96,7 +102,69 @@ const Dashboard: React.FC = () => {
 
   const loadDashboardData = async () => {
     setLoading(true);
+    setError(null);
     try {
+<<<<<<< HEAD
+      // Use real API call
+      const response = await dashboardAPI.getDashboard();
+      setDashboardData(response.data);
+    } catch (error: any) {
+      console.error('Failed to load dashboard data:', error);
+      setError(error.response?.data?.detail || 'Failed to load dashboard data');
+      // Fallback to mock data if API fails
+      const mockData = getMockDashboardData();
+      setDashboardData(mockData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getMockDashboardData = () => {
+    if (isSystemAdministrator(user)) {
+      return {
+        totalDocuments: 25,
+        totalHaccpPlans: 5,
+        totalPrpPrograms: 8,
+        totalSuppliers: 12,
+        pendingApprovals: 3,
+        complianceScore: 98,
+        openIssues: 2,
+        totalUsers: 25,
+        activeUsers: 20,
+        systemStatus: 'online',
+        nextAuditDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        recentDocuments: [
+          { id: 1, title: 'Quality Manual v2.1', category: 'manual', created_at: new Date().toISOString(), status: 'active' },
+          { id: 2, title: 'HACCP Plan - Milk Processing', category: 'haccp', created_at: new Date().toISOString(), status: 'active' },
+        ]
+      };
+    } else if (hasRole(user, 'QA Manager')) {
+      return {
+        openNCs: 12,
+        capaCompletion: 87,
+        documentUpdates: 5,
+        auditSchedule: 2,
+        ncTrends: [
+          { id: 1, title: 'Temperature Deviation', status: 'open', priority: 'high', assignedTo: 'John Doe', dueDate: '2024-01-15' },
+          { id: 2, title: 'Document Version Mismatch', status: 'pending', priority: 'medium', assignedTo: 'Jane Smith', dueDate: '2024-01-20' },
+        ],
+        capaDeadlines: [
+          { id: 1, title: 'Equipment Calibration', dueDate: '2024-01-18', status: 'in_progress' },
+          { id: 2, title: 'Staff Training Update', dueDate: '2024-01-25', status: 'pending' },
+        ]
+      };
+    } else {
+      return {
+        dailyTasks: 8,
+        completedTasks: 6,
+        pendingReviews: 2,
+        upcomingDeadlines: 3,
+        recentActivities: [
+          { id: 1, action: 'Completed daily checklist', time: '2 hours ago', type: 'success' },
+          { id: 2, title: 'Updated process log', time: '4 hours ago', type: 'info' },
+        ]
+      };
+=======
       const [statsResp, activityResp] = await Promise.all([
         dashboardAPI.getStats(),
         dashboardAPI.getRecentActivity(),
@@ -142,6 +210,7 @@ const Dashboard: React.FC = () => {
       setDashboardData(null);
     } finally {
       setLoading(false);
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     }
   };
 
@@ -659,6 +728,15 @@ const Dashboard: React.FC = () => {
         isFirstTime={isFirstTime}
       />
 
+<<<<<<< HEAD
+      {error && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {error} - Showing fallback data
+        </Alert>
+      )}
+
+      {renderDashboard()}
+=======
       {/* Modern Smart Dashboard */}
       <SmartDashboard />
 
@@ -680,6 +758,7 @@ const Dashboard: React.FC = () => {
           </Tooltip>
         </Box>
       )}
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     </Box>
   );
 };

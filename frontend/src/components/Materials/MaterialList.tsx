@@ -46,6 +46,7 @@ import {
   AddCircle,
   Inventory2,
   Cancel,
+  CheckCircle,
   Coronavirus as Allergen,
   Inventory,
   Science,
@@ -72,7 +73,11 @@ import { RootState, AppDispatch } from '../../store';
 import { Material, MaterialFilters } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
 import { EnhancedStatusChip } from '../UI';
+<<<<<<< HEAD
+import DataTable from '../UI/DataTable';
+=======
  
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 import { NotificationToast } from '../UI';
 
 interface MaterialListProps {
@@ -128,8 +133,13 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
+<<<<<<< HEAD
+      if (searchTerm !== (filters.materials?.search || '')) {
+        dispatch(setMaterialFilters({ search: searchTerm }));
+=======
       if (searchTerm !== (filters.materials as any).search) {
         dispatch(setMaterialFilters({ ...(filters.materials || {}), search: searchTerm } as any));
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
       }
     }, 500);
 
@@ -158,14 +168,18 @@ const MaterialList: React.FC<MaterialListProps> = ({
   };
 
   const handleFilterChange = () => {
+<<<<<<< HEAD
+    const newFilters: MaterialFilters = {} as MaterialFilters;
+=======
     const newFilters: MaterialFilters & { date_from?: string; date_to?: string } = {};
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     
     if (filterCategory) newFilters.category = filterCategory;
     if (filterSupplier) newFilters.supplier_id = parseInt(filterSupplier);
     if (filterApprovalStatus) newFilters.approval_status = filterApprovalStatus;
     if (filterAllergens.length > 0) newFilters.allergens = filterAllergens;
-    if (filterDateFrom) newFilters.date_from = format(filterDateFrom, 'yyyy-MM-dd');
-    if (filterDateTo) newFilters.date_to = format(filterDateTo, 'yyyy-MM-dd');
+    if (filterDateFrom) (newFilters as any).date_from = format(filterDateFrom, 'yyyy-MM-dd');
+    if (filterDateTo) (newFilters as any).date_to = format(filterDateTo, 'yyyy-MM-dd');
 
     // Cast to any because store typing for MaterialFilters currently omits date range
     dispatch(setMaterialFilters(newFilters as any));
@@ -332,14 +346,14 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'raw_milk': return <Inventory />;
+      case 'raw_milk': return <Inventory2 />;
       case 'additives': return <AddCircle />;
-      case 'cultures': return <Science />;
+      case 'cultures': return <Allergen />;
       case 'packaging': return <Inventory2 />;
-      case 'equipment': return <Build />;
-      case 'chemicals': return <Science />;
-      case 'services': return <Support />;
-      default: return <Inventory />;
+      case 'equipment': return <Inventory2 />;
+      case 'chemicals': return <Allergen />;
+      case 'services': return <Inventory2 />;
+      default: return <Inventory2 />;
     }
   };
 
@@ -423,7 +437,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
                 </TableCell>
                 <TableCell>
                   <EnhancedStatusChip
-                    status={material.approval_status}
+                    status={material.approval_status as any}
                     label={getApprovalStatusDisplayName(material.approval_status)}
                   />
                 </TableCell>
@@ -590,7 +604,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
                     {material.supplier_name}
                   </Typography>
                   <EnhancedStatusChip
-                    status={material.approval_status}
+                    status={material.approval_status as any}
                     label={getApprovalStatusDisplayName(material.approval_status)}
                   />
                 </Box>

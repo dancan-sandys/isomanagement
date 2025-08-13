@@ -158,6 +158,12 @@ const validationSchema = Yup.object({
     .max(50, 'Company type must not exceed 50 characters')
     .notRequired(),
   year_established: Yup.number()
+    .transform((value, originalValue) => {
+      if (originalValue === '' || originalValue === null || typeof originalValue === 'undefined') {
+        return undefined as any;
+      }
+      return Number(originalValue);
+    })
     .min(1800, 'Year established must be after 1800')
     .max(new Date().getFullYear(), 'Year established cannot be in the future')
     .notRequired(),
@@ -291,7 +297,13 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
         if (mode === 'create') {
           const payload = {
             ...values,
+<<<<<<< HEAD
+            year_established: values.year_established === ''
+              ? undefined
+              : Number(values.year_established),
+=======
             year_established: values.year_established ? Number(values.year_established) : undefined,
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
           } as any;
           const response = await dispatch(createSupplier(payload)).unwrap();
           setNotification({
@@ -301,12 +313,22 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
           });
           onSave?.(response);
         } else if (mode === 'edit' && supplierId) {
+          const payload = {
+            ...values,
+            year_established: values.year_established === ''
+              ? undefined
+              : Number(values.year_established),
+          } as any;
           const response = await dispatch(updateSupplier({
             supplierId,
+<<<<<<< HEAD
+            supplierData: payload,
+=======
             supplierData: {
               ...values,
               year_established: values.year_established ? Number(values.year_established) : undefined,
             } as any,
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
           })).unwrap();
           setNotification({
             open: true,

@@ -30,9 +30,13 @@ import {
 // Supplier Management
 export const fetchSuppliers = createAsyncThunk(
   'supplier/fetchSuppliers',
-  async (params?: SupplierFilters & { page?: number; size?: number }) => {
-    const response = await supplierAPI.getSuppliers(params);
-    return response.data;
+  async (params?: SupplierFilters & { page?: number; size?: number }, { rejectWithValue }) => {
+    try {
+      const response = await supplierAPI.getSuppliers(params);
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch suppliers');
+    }
   }
 );
 
@@ -46,17 +50,25 @@ export const fetchSupplier = createAsyncThunk(
 
 export const createSupplier = createAsyncThunk(
   'supplier/createSupplier',
-  async (supplierData: SupplierCreate) => {
-    const response = await supplierAPI.createSupplier(supplierData);
-    return response.data;
+  async (supplierData: SupplierCreate, { rejectWithValue }) => {
+    try {
+      const response = await supplierAPI.createSupplier(supplierData);
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to create supplier');
+    }
   }
 );
 
 export const updateSupplier = createAsyncThunk(
   'supplier/updateSupplier',
-  async ({ supplierId, supplierData }: { supplierId: number; supplierData: SupplierUpdate }) => {
-    const response = await supplierAPI.updateSupplier(supplierId, supplierData);
-    return response.data;
+  async ({ supplierId, supplierData }: { supplierId: number; supplierData: SupplierUpdate }, { rejectWithValue }) => {
+    try {
+      const response = await supplierAPI.updateSupplier(supplierId, supplierData);
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update supplier');
+    }
   }
 );
 
@@ -325,9 +337,13 @@ export const verifyDocument = createAsyncThunk(
 // Dashboard and Analytics
 export const fetchSupplierDashboard = createAsyncThunk(
   'supplier/fetchDashboard',
-  async () => {
-    const response = await supplierAPI.getDashboard();
-    return response.data;
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await supplierAPI.getDashboard();
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch dashboard');
+    }
   }
 );
 

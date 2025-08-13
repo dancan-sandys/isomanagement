@@ -40,6 +40,18 @@ import {
   LocalShipping,
   Refresh,
   Add,
+<<<<<<< HEAD
+  Schedule,
+  Error as ErrorIcon,
+  Inventory,
+  Info,
+  Assessment,
+  Analytics,
+  Science,
+  Build,
+  Support,
+  Notifications,
+=======
   Inventory,
   Science,
   Build,
@@ -50,6 +62,7 @@ import {
   Error,
   Info,
   Analytics,
+>>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -409,10 +422,10 @@ const SupplierDashboard: React.FC = () => {
                       primary={delivery.supplier_name}
                       secondary={`${delivery.material_name} | ${format(parseISO(delivery.delivery_date), 'MMM dd, yyyy')}`}
                     />
-                    <EnhancedStatusChip
-                      status={delivery.inspection_status}
-                      label={delivery.inspection_status.replace('_', ' ')}
-                    />
+                      <EnhancedStatusChip
+                        status={delivery.inspection_status as any}
+                        label={delivery.inspection_status.replace('_', ' ')}
+                      />
                   </ListItem>
                   {index < 4 && <Divider />}
                 </React.Fragment>
@@ -492,7 +505,7 @@ const SupplierDashboard: React.FC = () => {
     switch (type) {
       case 'expired_certificate': return <Warning />;
       case 'overdue_evaluation': return <Schedule />;
-      case 'quality_alert': return <Error />;
+      case 'quality_alert': return <ErrorIcon />;
       case 'expired_material': return <Inventory />;
       default: return <Info />;
     }

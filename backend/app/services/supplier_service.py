@@ -9,6 +9,7 @@ from app.models.supplier import (
     SupplierDocument, SupplierStatus, SupplierCategory, 
     EvaluationStatus, InspectionStatus, InspectionChecklist, InspectionChecklistItem
 )
+from app.models.user import User
 from app.schemas.supplier import (
     SupplierCreate, SupplierUpdate, MaterialCreate, MaterialUpdate,
     SupplierEvaluationCreate, SupplierEvaluationUpdate, IncomingDeliveryCreate,
@@ -68,9 +69,12 @@ class SupplierService:
         offset = (filter_params.page - 1) * filter_params.size
         suppliers = query.offset(offset).limit(filter_params.size).all()
 
-        # Add materials count
+        # Add materials count and creator name
         for supplier in suppliers:
             supplier.materials_count = len(supplier.materials)
+            # Get creator name
+            creator = self.db.query(User).filter(User.id == supplier.created_by).first()
+            supplier.created_by_name = creator.full_name if creator else "Unknown"
 
         return {
             "items": suppliers,

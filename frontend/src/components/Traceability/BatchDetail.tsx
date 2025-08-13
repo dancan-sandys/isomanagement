@@ -107,7 +107,7 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
   const handlePrintLabel = async () => {
     try {
       setLoading(true);
-      await traceabilityAPI.printBarcode(batch.id, 'pdf');
+      await traceabilityAPI.printBarcode(batch.id);
       // Handle print response
     } catch (err: any) {
       setError('Failed to print label');

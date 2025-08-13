@@ -426,7 +426,11 @@ const haccpSlice = createSlice({
       })
       .addCase(createProduct.fulfilled, (state, action) => {
         state.loading = false;
-        state.products.unshift(action.payload.data);
+        const newProduct = {
+          ...action.payload.data,
+          ccp_count: 0 // Add default ccp_count for new products
+        };
+        state.products.unshift(newProduct);
         state.error = null;
       })
       .addCase(createProduct.rejected, (state, action) => {
@@ -442,7 +446,10 @@ const haccpSlice = createSlice({
       })
       .addCase(updateProduct.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedProduct = action.payload.data;
+        const updatedProduct = {
+          ...action.payload.data,
+          ccp_count: state.products.find(p => p.id === action.payload.data.id)?.ccp_count || 0
+        };
         const index = state.products.findIndex(p => p.id === updatedProduct.id);
         if (index !== -1) {
           state.products[index] = updatedProduct;
