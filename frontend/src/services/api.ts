@@ -1,8 +1,23 @@
 import axios, { AxiosResponse } from 'axios';
 
+// Resolve API base URL intelligently for dev/prod
+function resolveBaseURL(): string {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl && envUrl.trim().length > 0) return envUrl.trim();
+  const isCRADev = typeof window !== 'undefined' && window.location && window.location.port === '3000';
+  if (isCRADev) {
+    // Let CRA dev proxy forward to backend (see package.json proxy)
+    return '/api/v1';
+  }
+  // Same-origin reverse proxy in production
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return origin ? `${origin}/api/v1` : '/api/v1';
+}
+
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1',
+  // Prefer env; otherwise dynamic resolution for dev/prod
+  baseURL: resolveBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -36,7 +51,7 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
           const response = await axios.post(
-            `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/auth/refresh`,
+            `${process.env.REACT_APP_API_URL || '/api/v1'}/auth/refresh`,
             { refresh_token: refreshToken }
           );
 
@@ -93,7 +108,7 @@ export const authAPI = {
 
   refresh: async (refreshToken: string) => {
     // Use a bare axios call to avoid interceptor recursion and stale Authorization headers
-    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+    const baseURL = process.env.REACT_APP_API_URL || '/api/v1';
     const response: AxiosResponse = await axios.post(
       `${baseURL}/auth/refresh`,
       { refresh_token: refreshToken },
@@ -238,9 +253,13 @@ export const documentsAPI = {
     approvalId: number,
     payload?: { password?: string; comments?: string }
   ) => {
+    const form = new FormData();
+    if (payload?.password) form.append('password', payload.password);
+    if (payload?.comments) form.append('comments', payload.comments);
     const response: AxiosResponse = await api.post(
       `/documents/${documentId}/approvals/${approvalId}/approve`,
-      payload || {}
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return response.data;
   },
@@ -250,9 +269,12 @@ export const documentsAPI = {
     approvalId: number,
     payload?: { comments?: string }
   ) => {
+    const form = new FormData();
+    if (payload?.comments) form.append('comments', payload.comments);
     const response: AxiosResponse = await api.post(
       `/documents/${documentId}/approvals/${approvalId}/reject`,
-      payload || {}
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return response.data;
   },
@@ -292,7 +314,7 @@ export const documentsAPI = {
   },
 
   linkDocumentToProducts: async (documentId: number, productIds: number[]) => {
-    const response: AxiosResponse = await api.post(`/documents/${documentId}/products`, productIds);
+    const response: AxiosResponse = await api.post(`/documents/${documentId}/products`, { product_ids: productIds });
     return response.data;
   },
 
@@ -429,7 +451,8 @@ export const documentsAPI = {
   // Document Statistics
   getDocumentStats: async () => {
     const response: AxiosResponse = await api.get('/documents/stats/overview');
-    return response.data;
+    // Some endpoints return { success, data }, others raw
+    return response.data?.data || response.data;
   },
 
   // Bulk Operations
@@ -469,13 +492,7 @@ export const documentsAPI = {
     templateId: number,
     payload: { change_description: string; change_reason: string; template_content?: string }
   ) => {
-    const form = new FormData();
-    form.append('change_description', payload.change_description);
-    form.append('change_reason', payload.change_reason);
-    if (payload.template_content) form.append('template_content', payload.template_content);
-    const response: AxiosResponse = await api.post(`/documents/templates/${templateId}/versions`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response: AxiosResponse = await api.post(`/documents/templates/${templateId}/versions`, payload);
     return response.data;
   },
 
@@ -497,9 +514,13 @@ export const documentsAPI = {
     approvalId: number,
     payload?: { password?: string; comments?: string }
   ) => {
+    const form = new FormData();
+    if (payload?.password) form.append('password', payload.password);
+    if (payload?.comments) form.append('comments', payload.comments);
     const response: AxiosResponse = await api.post(
       `/documents/templates/${templateId}/approvals/${approvalId}/approve`,
-      payload || {}
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return response.data;
   },
@@ -509,9 +530,12 @@ export const documentsAPI = {
     approvalId: number,
     payload?: { comments?: string }
   ) => {
+    const form = new FormData();
+    if (payload?.comments) form.append('comments', payload.comments);
     const response: AxiosResponse = await api.post(
       `/documents/templates/${templateId}/approvals/${approvalId}/reject`,
-      payload || {}
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return response.data;
   },
@@ -712,6 +736,16 @@ export const dashboardAPI = {
     return response.data;
   },
 
+  getComplianceMetrics: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/compliance-metrics');
+    return response.data;
+  },
+
+  getSystemStatus: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/system-status');
+    return response.data;
+  },
+
   // Enhanced UX Methods (fallback to existing data if new endpoints not available)
   getUserMetrics: async (userId: string) => {
     try {
@@ -827,12 +861,12 @@ export const searchAPI = {
 
   fallbackSearch: async (query: string, limit: number = 10) => {
     // Search across multiple existing endpoints
-    const searchPromises = [];
+      const searchPromises: Array<Promise<any[]>> = [];
     
     // Search documents
     try {
       searchPromises.push(
-        documentAPI.getDocuments({ search: query, size: 3 }).then(res => 
+        documentsAPI.getDocuments({ search: query, size: 3 }).then((res: any) => 
           res?.data?.documents?.map((doc: any) => ({
             id: doc.id,
             title: doc.title,
@@ -851,8 +885,8 @@ export const searchAPI = {
     // Search HACCP products
     try {
       searchPromises.push(
-        haccpAPI.getProducts({ search: query, size: 3 }).then(res =>
-          res?.data?.products?.map((product: any) => ({
+        haccpAPI.getProducts().then((res: any) =>
+          (res?.data?.products || res?.products || res || []).map((product: any) => ({
             id: product.id,
             title: product.name,
             description: `HACCP Product - ${product.product_type}`,

@@ -44,9 +44,34 @@ class Document(Base):
     document_number = Column(String(50), unique=True, index=True, nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text)
-    document_type = Column(Enum(DocumentType), nullable=False)
-    category = Column(Enum(DocumentCategory), nullable=False)
-    status = Column(Enum(DocumentStatus), nullable=False, default=DocumentStatus.DRAFT)
+    document_type = Column(
+        Enum(
+            DocumentType,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+    category = Column(
+        Enum(
+            DocumentCategory,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+    status = Column(
+        Enum(
+            DocumentStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+        default=DocumentStatus.DRAFT,
+    )
     version = Column(String(20), nullable=False, default="1.0")
     
     # File information
@@ -162,8 +187,24 @@ class DocumentTemplate(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    document_type = Column(Enum(DocumentType), nullable=False)
-    category = Column(Enum(DocumentCategory), nullable=False)
+    document_type = Column(
+        Enum(
+            DocumentType,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+    category = Column(
+        Enum(
+            DocumentCategory,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     template_file_path = Column(String(500))
     template_content = Column(Text)  # For rich text templates
     

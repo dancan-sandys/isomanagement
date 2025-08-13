@@ -12,6 +12,7 @@ import {
   Fade,
   Grow,
 } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import {
   MoreVert,
   TrendingUp,
@@ -52,6 +53,8 @@ interface EnhancedCardProps {
   elevation?: 'light' | 'medium' | 'heavy';
   animation?: 'fade' | 'grow' | 'slide';
   delay?: number;
+  borderRadius?: number;
+  sx?: SxProps<Theme>;
 }
 
 const EnhancedCard: React.FC<EnhancedCardProps> = ({
@@ -72,6 +75,8 @@ const EnhancedCard: React.FC<EnhancedCardProps> = ({
   elevation = 'light',
   animation = 'fade',
   delay = 0,
+  borderRadius,
+  sx,
 }) => {
   const getTrendIcon = (direction: 'up' | 'down' | 'neutral') => {
     switch (direction) {
@@ -143,7 +148,8 @@ const EnhancedCard: React.FC<EnhancedCardProps> = ({
         flexDirection: 'column',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        borderRadius: variant === 'featured' ? 24 : 16,
+        // Allow overrides; default tighter radius to avoid overly pill/oval look on wide cards
+        borderRadius: typeof borderRadius === 'number' ? borderRadius : (variant === 'featured' ? 16 : 12),
         background: variant === 'featured' 
           ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
           : 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
@@ -172,6 +178,7 @@ const EnhancedCard: React.FC<EnhancedCardProps> = ({
         '&:hover::before': variant === 'featured' ? {
           transform: 'translateX(100%)',
         } : {},
+        ...(sx as any),
       }}
       onClick={onClick}
     >

@@ -96,9 +96,9 @@ const SmartDashboard: React.FC = () => {
     try {
       // Load data from real backend APIs
       const [metricsResponse, tasksResponse, insightsResponse] = await Promise.all([
-        dashboardAPI.getUserMetrics(user?.id || ''),
-        dashboardAPI.getPriorityTasks(user?.id || ''),
-        dashboardAPI.getInsights(user?.id || '')
+        dashboardAPI.getUserMetrics(String(user?.id || '')),
+        dashboardAPI.getPriorityTasks(String(user?.id || '')),
+        dashboardAPI.getInsights(String(user?.id || ''))
       ]);
 
       // Transform backend data to component format

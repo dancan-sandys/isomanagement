@@ -113,7 +113,8 @@ export const TYPOGRAPHY = {
 // Enhanced Component Styles with better animations and effects
 export const COMPONENT_STYLES = {
   card: {
-    borderRadius: 16,
+    // Reduce default radius to avoid overly rounded/oval cards
+    borderRadius: 12,
     boxShadow: PROFESSIONAL_COLORS.shadow.light,
     border: '1px solid #E2E8F0',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -126,7 +127,7 @@ export const COMPONENT_STYLES = {
     },
   },
   elevatedCard: {
-    borderRadius: 20,
+    borderRadius: 14,
     boxShadow: PROFESSIONAL_COLORS.shadow.heavy,
     border: '1px solid #E2E8F0',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -399,8 +400,8 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
       MuiPaper: {
         styleOverrides: {
           root: {
-            backgroundImage: 'none',
-            borderRadius: 16,
+        backgroundImage: 'none',
+        borderRadius: 12,
           },
           elevation1: {
             boxShadow: PROFESSIONAL_COLORS.shadow.light,
