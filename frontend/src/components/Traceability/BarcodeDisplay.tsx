@@ -15,6 +15,7 @@ import {
   ContentCopy as CopyIcon
 } from '@mui/icons-material';
 import { BarcodeData } from '../../types/traceability';
+import { traceabilityAPI } from '../../services/traceabilityAPI';
 
 interface BarcodeDisplayProps {
   barcodeData: BarcodeData;
@@ -25,14 +26,18 @@ const BarcodeDisplay: React.FC<BarcodeDisplayProps> = ({
   barcodeData,
   showActions = true
 }) => {
-  const handlePrint = () => {
-    // Implement print functionality
-    console.log('Print barcode:', barcodeData.barcode);
+  const handlePrint = async () => {
+    try {
+      await traceabilityAPI.printBarcode(barcodeData.batch_id as any, 'pdf');
+    } catch (e) { /* noop */ }
   };
 
   const handleDownload = () => {
-    // Implement download functionality
-    console.log('Download barcode:', barcodeData.barcode);
+    if (!barcodeData.barcode_image) return;
+    const a = document.createElement('a');
+    a.href = barcodeData.barcode_image;
+    a.download = `barcode_${barcodeData.batch_id || 'batch'}.png`;
+    a.click();
   };
 
   const handleCopy = () => {

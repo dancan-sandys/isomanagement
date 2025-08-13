@@ -806,12 +806,22 @@ const Traceability: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Starting Batch ID"
-                type="number"
-                value={traceForm.starting_batch_id}
-                onChange={(e) => setTraceForm({ ...traceForm, starting_batch_id: e.target.value })}
+              <Autocomplete
+                options={batches}
+                getOptionLabel={(b: any) => (b.batch_number ? `${b.batch_number} — ${b.product_name}` : String(b.id))}
+                value={batches.find(b => String(b.id) === String(traceForm.starting_batch_id)) || null}
+                onChange={(_, val) => setTraceForm({ ...traceForm, starting_batch_id: val ? String(val.id) : '' })}
+                onInputChange={(_, val) => {
+                  // lightweight client filter; could wire backend soon
+                  if (!val) return;
+                  const lc = val.toLowerCase();
+                  const filtered = (batches || []).filter(b => (b.batch_number || '').toLowerCase().includes(lc) || (b.product_name || '').toLowerCase().includes(lc));
+                  if (filtered.length > 0) setBatches(filtered as any);
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Starting Batch" placeholder="Search batch number or product" fullWidth />
+                )}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
               />
             </Grid>
             <Grid item xs={12}>

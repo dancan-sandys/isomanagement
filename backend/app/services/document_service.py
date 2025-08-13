@@ -184,68 +184,125 @@ class DocumentService:
         return version
     
     def get_documents(self, filters: DocumentFilter, page: int = 1, size: int = 10) -> Dict[str, Any]:
-        """Get documents with filtering and pagination"""
-        
-        query = self.db.query(Document)
-        
-        # Apply filters
+        """Get documents with filtering and pagination.
+
+        IMPORTANT: Use column casts to String for enum columns to avoid runtime errors when
+        legacy rows contain uppercase or unexpected enum strings (e.g., 'FORM').
+        """
+        from sqlalchemy import cast, String
+
+        # Base selectable with safe string casts for enum columns
+        base_query = self.db.query(
+            Document.id,
+            Document.document_number,
+            Document.title,
+            Document.description,
+            cast(Document.document_type, String).label("document_type"),
+            cast(Document.category, String).label("category"),
+            cast(Document.status, String).label("status"),
+            Document.version,
+            Document.file_path,
+            Document.file_size,
+            Document.file_type,
+            Document.original_filename,
+            Document.department,
+            Document.product_line,
+            Document.applicable_products,
+            Document.keywords,
+            Document.created_by,
+            Document.created_at,
+            Document.updated_at,
+        )
+
+        # Apply filters (convert enums to their values)
         if filters.search:
             search_term = f"%{filters.search}%"
-            query = query.filter(
+            base_query = base_query.filter(
                 or_(
-                    Document.title.contains(search_term),
-                    Document.document_number.contains(search_term),
-                    Document.description.contains(search_term),
-                    Document.keywords.contains(search_term)
+                    Document.title.ilike(search_term),
+                    Document.document_number.ilike(search_term),
+                    Document.description.ilike(search_term),
+                    Document.keywords.ilike(search_term),
                 )
             )
-        
+
         if filters.category:
-            query = query.filter(Document.category == filters.category)
-        
+            base_query = base_query.filter(cast(Document.category, String) == filters.category.value)
+
         if filters.status:
-            query = query.filter(Document.status == filters.status)
-        
+            base_query = base_query.filter(cast(Document.status, String) == filters.status.value)
+
         if filters.document_type:
-            query = query.filter(Document.document_type == filters.document_type)
-        
+            base_query = base_query.filter(cast(Document.document_type, String) == filters.document_type.value)
+
         if filters.department:
-            query = query.filter(Document.department == filters.department)
-        
+            base_query = base_query.filter(Document.department == filters.department)
+
         if filters.product_line:
-            query = query.filter(Document.product_line == filters.product_line)
-        
+            base_query = base_query.filter(Document.product_line == filters.product_line)
+
         if filters.created_by:
-            query = query.filter(Document.created_by == filters.created_by)
-        
+            base_query = base_query.filter(Document.created_by == filters.created_by)
+
         if filters.date_from:
-            query = query.filter(Document.created_at >= filters.date_from)
-        
+            base_query = base_query.filter(Document.created_at >= filters.date_from)
+
         if filters.date_to:
-            query = query.filter(Document.created_at <= filters.date_to)
-        
+            base_query = base_query.filter(Document.created_at <= filters.date_to)
+
         if filters.review_date_from:
-            query = query.filter(Document.review_date >= filters.review_date_from)
-        
+            base_query = base_query.filter(Document.review_date >= filters.review_date_from)
+
         if filters.review_date_to:
-            query = query.filter(Document.review_date <= filters.review_date_to)
-        
+            base_query = base_query.filter(Document.review_date <= filters.review_date_to)
+
         if filters.keywords:
             keywords_term = f"%{filters.keywords}%"
-            query = query.filter(Document.keywords.contains(keywords_term))
-        
-        # Get total count
-        total = query.count()
-        
-        # Apply pagination
-        documents = query.order_by(desc(Document.updated_at)).offset((page - 1) * size).limit(size).all()
-        
+            base_query = base_query.filter(Document.keywords.ilike(keywords_term))
+
+        # Count total (subquery for performance correctness)
+        total = base_query.count()
+
+        # Pagination and ordering
+        rows = (
+            base_query.order_by(desc(Document.updated_at))
+            .offset((page - 1) * size)
+            .limit(size)
+            .all()
+        )
+
+        # Normalize enum strings to lowercase for consistency
+        items: List[Dict[str, Any]] = []
+        for r in rows:
+            # r is a KeyedTuple
+            items.append({
+                "id": r.id,
+                "document_number": r.document_number,
+                "title": r.title,
+                "description": r.description,
+                "document_type": (r.document_type or "").lower() or None,
+                "category": (r.category or "").lower() or None,
+                "status": (r.status or "").lower() or None,
+                "version": r.version,
+                "file_path": r.file_path,
+                "file_size": r.file_size,
+                "file_type": r.file_type,
+                "original_filename": r.original_filename,
+                "department": r.department,
+                "product_line": r.product_line,
+                "applicable_products": r.applicable_products,
+                "keywords": r.keywords,
+                "created_by": r.created_by,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            })
+
         return {
-            "items": documents,
+            "items": items,
             "total": total,
             "page": page,
             "size": size,
-            "pages": (total + size - 1) // size
+            "pages": (total + size - 1) // size,
         }
     
     def get_document_stats(self) -> Dict[str, Any]:

@@ -52,7 +52,7 @@ import {
 import { documentsAPI } from '../../services/api';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../../store';
-import { approveVersion } from '../../store/slices/documentSlice';
+// Legacy approveVersion removed; use approvals API chain instead
 
 interface WorkflowStep {
   id: number;
@@ -191,17 +191,19 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
     setError(null);
 
     try {
-      // Get the current version of the document
-      const versionResponse = await documentsAPI.getVersionHistory(document.id);
-      const currentVersion = versionResponse.data.versions?.find((v: any) => v.is_current);
-      
-      if (!currentVersion) {
-        const error = new Error('No current version found for this document');
-        throw error;
+      // Find user's pending approval step for this document and act on it
+      const pending = await documentsAPI.getPendingApprovals();
+      const record = (pending?.data?.items || pending?.data || []).find((i: any) => i.document_id === document.id);
+      if (!record || !record.approval_id) {
+        throw new Error('No pending approval step found for this document');
       }
 
-      // Call the approval API directly
-      await documentsAPI.approveVersion(document.id, currentVersion.id, comments);
+      if (action === 'approve') {
+        await documentsAPI.approveApprovalStep(document.id, record.approval_id, { comments });
+      } else {
+        // For 'reject' and 'request_changes', use reject; backend treats comments as reason
+        await documentsAPI.rejectApprovalStep(document.id, record.approval_id, { comments });
+      }
 
       // Reload the workflow to get updated status
       await loadWorkflow();

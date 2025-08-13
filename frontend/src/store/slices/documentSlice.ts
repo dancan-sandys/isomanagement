@@ -244,17 +244,7 @@ export const createNewVersion = createAsyncThunk(
   }
 );
 
-export const approveVersion = createAsyncThunk(
-  'documents/approveVersion',
-  async ({ documentId, versionId, comments }: { documentId: number; versionId: number; comments?: string }, { rejectWithValue }) => {
-    try {
-      const response = await documentsAPI.approveVersion(documentId, versionId, comments);
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || error.message || 'Failed to approve version');
-    }
-  }
-);
+// Legacy direct version approval removed in favor of workflow approvals chain
 
 export const fetchChangeLog = createAsyncThunk(
   'documents/fetchChangeLog',
@@ -507,25 +497,7 @@ const documentSlice = createSlice({
         state.error = typeof action.payload === 'string' ? action.payload : 'Failed to create new version';
       })
 
-      // Approve Version
-      .addCase(approveVersion.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(approveVersion.fulfilled, (state, action) => {
-        state.loading = false;
-        // Update the document status in the list
-        const documentIndex = state.documents.findIndex(doc => doc.id === action.payload.document_id);
-        if (documentIndex !== -1) {
-          state.documents[documentIndex].status = 'approved';
-          state.documents[documentIndex].approved_by = action.payload.approved_by;
-          state.documents[documentIndex].approved_at = action.payload.approved_at;
-        }
-      })
-      .addCase(approveVersion.rejected, (state, action) => {
-        state.loading = false;
-        state.error = typeof action.payload === 'string' ? action.payload : 'Failed to approve version';
-      })
+      // Direct version approval removed; workflow updates list via refresh/fetch
 
       // Fetch Change Log
       .addCase(fetchChangeLog.pending, (state) => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -27,6 +27,8 @@ import {
 } from '@mui/icons-material';
 import { BatchFormData } from '../../types/traceability';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
+import { haccpAPI } from '../../services/haccpAPI';
+import { supplierAPI } from '../../services/supplierAPI';
 
 interface BatchRegistrationFormProps {
   open: boolean;
@@ -77,6 +79,88 @@ const BatchRegistrationForm: React.FC<BatchRegistrationFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Searchable options
+  const [productOptions, setProductOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [productInput, setProductInput] = useState('');
+  const filteredProductOptions = useMemo(() => {
+    if (!productInput) return productOptions;
+    const q = productInput.toLowerCase();
+    return productOptions.filter(p => p.name.toLowerCase().includes(q));
+  }, [productInput, productOptions]);
+
+  const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; supplier_code?: string }>>([]);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [selectedSupplier, setSelectedSupplier] = useState<{ id: number; name: string; supplier_code?: string } | null>(null);
+
+  // Load products once when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const res: any = await haccpAPI.getProducts();
+        const products = (res?.data?.products || res?.products || res || []).map((p: any) => ({ id: p.id, name: p.name || p.product_name || p.title || '' }));
+        setProductOptions(products.filter((p: any) => p.name));
+      } catch (e) {
+        // Silent: fallback is free text if products fail
+      }
+    })();
+  }, [open]);
+
+  // Debounced supplier search
+  useEffect(() => {
+    let active = true;
+    if (!open) return;
+    setSupplierLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        let suppliers: any[] = [];
+        if (supplierSearch && supplierSearch.trim().length > 0) {
+          const res: any = await supplierAPI.searchSuppliers(supplierSearch, { limit: 10 });
+          suppliers = res?.data || res?.suppliers || res || [];
+        } else {
+          const res: any = await supplierAPI.getSuppliers({ size: 10 });
+          suppliers = res?.data?.items || res?.data?.suppliers || res?.items || res?.suppliers || [];
+        }
+        if (active) {
+          const options = suppliers.map((s: any) => ({ id: s.id, name: s.name, supplier_code: s.supplier_code || '' }));
+          // Ensure currently selected supplier stays in options to prevent flicker
+          if (selectedSupplier && !options.find(o => o.id === selectedSupplier.id)) {
+            options.unshift(selectedSupplier);
+          }
+          setSupplierOptions(options);
+        }
+      } catch (e) {
+        if (active) setSupplierOptions([]);
+      } finally {
+        if (active) setSupplierLoading(false);
+      }
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(handle);
+    };
+  }, [supplierSearch, open]);
+
+  // Load selected supplier details for edit state
+  useEffect(() => {
+    (async () => {
+      if (!open) return;
+      if (initialData?.supplier_id) {
+        try {
+          const res: any = await supplierAPI.getSupplier(initialData.supplier_id as number);
+          const s = res?.data || res;
+          const opt = s ? { id: s.id, name: s.name, supplier_code: s.supplier_code || '' } : null;
+          setSelectedSupplier(opt);
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        setSelectedSupplier(null);
+      }
+    })();
+  }, [open, initialData?.supplier_id]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -228,15 +312,28 @@ const BatchRegistrationForm: React.FC<BatchRegistrationFormProps> = ({
             </FormControl>
           </Grid>
 
-          {/* Product Name */}
+          {/* Product Name (searchable) */}
           <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Product Name *"
+            <Autocomplete
+              freeSolo
+              options={filteredProductOptions.map(p => p.name)}
               value={formData.product_name}
-              onChange={(e) => handleInputChange('product_name', e.target.value)}
-              error={!!validationErrors.product_name}
-              helperText={validationErrors.product_name}
+              onChange={(_, val) => handleInputChange('product_name', (val as string) || '')}
+              inputValue={formData.product_name}
+              onInputChange={(_, val, reason) => {
+                if (reason === 'input') {
+                  setProductInput(val);
+                  handleInputChange('product_name', val);
+                }
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Product Name *"
+                  error={!!validationErrors.product_name}
+                  helperText={validationErrors.product_name}
+                />
+              )}
             />
           </Grid>
 
@@ -346,19 +443,29 @@ const BatchRegistrationForm: React.FC<BatchRegistrationFormProps> = ({
             </FormControl>
           </Grid>
 
-          {/* Supplier ID */}
+          {/* Supplier (searchable) */}
           <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Supplier ID"
-              type="number"
-              value={formData.supplier_id || ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                const parsedValue = value === '' ? '' : parseInt(value);
-                handleInputChange('supplier_id', parsedValue);
+            <Autocomplete
+              options={supplierOptions}
+              loading={supplierLoading}
+              getOptionLabel={(opt) => (opt.name ? `${opt.name}${opt.supplier_code ? ` (${opt.supplier_code})` : ''}` : '')}
+              value={selectedSupplier}
+              onChange={(_, val) => {
+                setSelectedSupplier(val);
+                handleInputChange('supplier_id', val ? (val.id as number) : (undefined as any));
               }}
-              helperText="Optional"
+              onInputChange={(_, val, reason) => {
+                if (reason === 'input') setSupplierSearch(val);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Supplier (optional)"
+                  placeholder="Search supplier by name/code"
+                  helperText="Type to search suppliers"
+                />
+              )}
+              isOptionEqualToValue={(opt, val) => opt.id === val.id}
             />
           </Grid>
         </Grid>

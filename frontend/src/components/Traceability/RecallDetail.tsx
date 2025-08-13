@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -83,6 +83,17 @@ const RecallDetail: React.FC<RecallDetailProps> = ({ open, onClose, recallId, re
 
   useEffect(() => {
     if (!open) return;
+    // initial users load
+    (async () => {
+      try {
+        const res: any = await usersAPI.getUsers({ size: 10 });
+        const items = res?.data?.items || res?.data?.users || res?.items || res?.users || [];
+        setAssigneeOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to load initial users');
+      }
+    })();
     const loadAll = async () => {
       setLoading(true);
       try {
@@ -107,6 +118,22 @@ const RecallDetail: React.FC<RecallDetailProps> = ({ open, onClose, recallId, re
     };
     loadAll();
   }, [open, recallId]);
+
+  // Debounced user search for Autocomplete fields to avoid empty options
+  useEffect(() => {
+    if (!open) return;
+    const handle = setTimeout(async () => {
+      try {
+        const res: any = await usersAPI.getUsers({ search: assigneeInput, size: 10 });
+        const items = res?.data?.items || res?.data?.users || res?.items || res?.users || [];
+        setAssigneeOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('User search failed');
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [assigneeInput, open]);
 
   const handleCreateAction = async () => {
     if (!actionForm.description.trim()) {

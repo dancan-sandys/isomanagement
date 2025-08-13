@@ -439,7 +439,8 @@ async def bulk_update_suppliers(
 
 
 # Material endpoints
-@router.get("/materials/", response_model=ResponseModel[MaterialListResponse])
+@router.get("/materials/", response_model=ResponseModel)
+@router.get("/materials", response_model=ResponseModel)
 async def get_materials(
     search: Optional[str] = Query(None, description="Search by name or code"),
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -916,7 +917,7 @@ async def create_batch_from_delivery(
 
 
 # Delivery endpoints
-@router.get("/deliveries/", response_model=DeliveryListResponse)
+@router.get("/deliveries/", response_model=ResponseModel)
 async def get_deliveries(
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
     material_id: Optional[int] = Query(None, description="Filter by material"),
@@ -942,12 +943,16 @@ async def get_deliveries(
     service = SupplierService(db)
     result = service.get_deliveries(filter_params)
     
-    return DeliveryListResponse(
-        items=result["items"],
-        total=result["total"],
-        page=result["page"],
-        size=result["size"],
-        pages=result["pages"]
+    return ResponseModel(
+        success=True,
+        message="Deliveries retrieved successfully",
+        data={
+            "items": result["items"],
+            "total": result["total"],
+            "page": result["page"],
+            "size": result["size"],
+            "pages": result["pages"],
+        },
     )
 
 

@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../../store';
-import { approveVersion } from '../../store/slices/documentSlice';
+// Use workflow approval chain only; remove direct approveVersion
 import { documentsAPI } from '../../services/api';
 
 interface DocumentApprovalDialogProps {
@@ -60,27 +60,23 @@ const DocumentApprovalDialog: React.FC<DocumentApprovalDialogProps> = ({
     setError(null);
 
     try {
-      // Get the current version of the document
-      const versionResponse = await documentsAPI.getVersionHistory(document.id);
-      const currentVersion = versionResponse.data.versions?.find((v: any) => v.is_current);
-      
-      if (!currentVersion) {
-        const error = new Error('No current version found for this document');
-        throw error;
+      // Submit the workflow approval step for this document via approvals API
+      // First, get pending approvals for current user and find the one for this document
+      const pending = await documentsAPI.getPendingApprovals();
+      const record = (pending?.data?.items || pending?.data || []).find((i: any) => i.document_id === document.id);
+      if (!record || !record.approval_id) {
+        throw new Error('No pending approval step found for this document');
       }
 
-      // Call the real approval API
-      await dispatch(approveVersion({
-        documentId: document.id,
-        versionId: currentVersion.id,
-        comments: approvalData.comments
-      })).unwrap();
+      const form = new FormData();
+      if (approvalData.comments) form.append('comments', approvalData.comments);
+      await documentsAPI.approveApprovalStep(document.id, record.approval_id, { comments: approvalData.comments });
       
       setSuccess(true);
       setTimeout(() => {
         handleClose();
         onSuccess();
-      }, 2000);
+      }, 1200);
     } catch (error: any) {
       setError(error.message || 'Failed to approve document');
     } finally {

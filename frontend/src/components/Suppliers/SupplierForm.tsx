@@ -115,44 +115,52 @@ const validationSchema = Yup.object({
     .required('Email is required'),
   phone: Yup.string()
     .required('Phone number is required')
-    .matches(/^[\+]?[1-9][\d]{0,15}$/, 'Invalid phone number'),
+    // Allow +, digits, spaces, dashes, parentheses; 7-20 chars typical
+    .matches(/^[+]?[\d\s\-()]{7,20}$/, 'Invalid phone number'),
   website: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .url('Invalid website URL')
-    .optional(),
+    .notRequired(),
   address_line1: Yup.string()
     .required('Address is required')
     .min(5, 'Address must be at least 5 characters')
     .max(100, 'Address must not exceed 100 characters'),
   address_line2: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .max(100, 'Address line 2 must not exceed 100 characters')
-    .optional(),
+    .notRequired(),
   city: Yup.string()
     .required('City is required')
     .min(2, 'City must be at least 2 characters')
     .max(50, 'City must not exceed 50 characters'),
   state: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .max(50, 'State must not exceed 50 characters')
-    .optional(),
+    .notRequired(),
   postal_code: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .max(20, 'Postal code must not exceed 20 characters')
-    .optional(),
+    .notRequired(),
   country: Yup.string()
     .required('Country is required')
     .min(2, 'Country must be at least 2 characters')
     .max(50, 'Country must not exceed 50 characters'),
   business_registration_number: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .max(50, 'Business registration number must not exceed 50 characters')
-    .optional(),
+    .notRequired(),
   tax_identification_number: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .max(50, 'Tax identification number must not exceed 50 characters')
-    .optional(),
+    .notRequired(),
   company_type: Yup.string()
+    .transform((value) => (value === '' ? undefined : value))
     .max(50, 'Company type must not exceed 50 characters')
-    .optional(),
+    .notRequired(),
   year_established: Yup.number()
     .min(1800, 'Year established must be after 1800')
     .max(new Date().getFullYear(), 'Year established cannot be in the future')
-    .optional(),
+    .notRequired(),
   risk_level: Yup.string()
     .required('Risk level is required')
     .oneOf(['low', 'medium', 'high', 'critical'], 'Invalid risk level'),
@@ -187,6 +195,73 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     'Risk Assessment',
     'Review & Save',
   ];
+
+  // Step-specific validation schemas to avoid blocking Next with future-step fields
+  const stepSchemas: Array<Yup.ObjectSchema<any> | null> = [
+    Yup.object({
+      supplier_code: validationSchema.fields.supplier_code,
+      name: validationSchema.fields.name,
+      category: validationSchema.fields.category,
+      contact_person: validationSchema.fields.contact_person,
+    }) as Yup.ObjectSchema<any>,
+    Yup.object({
+      email: validationSchema.fields.email,
+      phone: validationSchema.fields.phone,
+      website: validationSchema.fields.website,
+    }) as Yup.ObjectSchema<any>,
+    Yup.object({
+      address_line1: validationSchema.fields.address_line1,
+      address_line2: validationSchema.fields.address_line2,
+      city: validationSchema.fields.city,
+      state: validationSchema.fields.state,
+      postal_code: validationSchema.fields.postal_code,
+      country: validationSchema.fields.country,
+    }) as Yup.ObjectSchema<any>,
+    Yup.object({
+      business_registration_number: validationSchema.fields.business_registration_number,
+      tax_identification_number: validationSchema.fields.tax_identification_number,
+      company_type: validationSchema.fields.company_type,
+      year_established: validationSchema.fields.year_established,
+    }) as Yup.ObjectSchema<any>,
+    Yup.object({
+      risk_level: validationSchema.fields.risk_level,
+      notes: validationSchema.fields.notes,
+    }) as Yup.ObjectSchema<any>,
+    null,
+  ];
+
+  const stepFields: string[][] = [
+    ['supplier_code', 'name', 'category', 'contact_person'],
+    ['email', 'phone', 'website'],
+    ['address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country'],
+    ['business_registration_number', 'tax_identification_number', 'company_type', 'year_established'],
+    ['risk_level', 'notes'],
+    [],
+  ];
+
+  // Defer computing step validity until after formik is defined
+  let isStepValid = true;
+
+  const touchCurrentStepFields = () => {
+    const fields = stepFields[activeStep] || [];
+    const touched: Record<string, boolean> = {};
+    fields.forEach((f) => { touched[f] = true; });
+    formik.setTouched({ ...formik.touched, ...touched }, true);
+  };
+
+  const scrollToFirstError = () => {
+    const fields = stepFields[activeStep] || [];
+    for (const field of fields) {
+      if ((formik.touched as any)[field] && (formik.errors as any)[field]) {
+        const el = document.querySelector(`[name="${field}"]`);
+        if (el && 'scrollIntoView' in el) {
+          (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+          (el as HTMLElement).focus();
+        }
+        break;
+      }
+    }
+  };
 
   const formik = useFormik({
     initialValues: {
@@ -285,8 +360,17 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
   const handleNext = () => {
     if (activeStep === steps.length - 1) {
       formik.submitForm();
+      return;
+    }
+    // Validate only current step; prevent advancement if invalid
+    const schema = stepSchemas[activeStep];
+    if (schema) {
+      schema
+        .validate(formik.values, { abortEarly: false })
+        .then(() => setActiveStep((prev) => prev + 1))
+        .catch(() => { touchCurrentStepFields(); scrollToFirstError(); });
     } else {
-      setActiveStep((prevActiveStep) => prevActiveStep + 1);
+      setActiveStep((prev) => prev + 1);
     }
   };
 
@@ -736,6 +820,19 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     }
   };
 
+  // Compute per-step validity after formik is initialized
+  const computeStepValid = () => {
+    const schema = stepSchemas[activeStep];
+    if (!schema) return true;
+    try {
+      schema.validateSync(formik.values, { abortEarly: false });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  isStepValid = computeStepValid();
+
   if (suppliersLoading) {
     return (
       <Box>
@@ -771,7 +868,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
               variant="contained"
               onClick={handleNext}
               startIcon={<Save />}
-              disabled={!formik.isValid || formik.isSubmitting}
+              disabled={formik.isSubmitting}
             >
               {activeStep === steps.length - 1 ? 'Save Supplier' : 'Next'}
             </Button>
@@ -799,11 +896,11 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
 
       {/* Form Content */}
       <Paper sx={{ p: 3 }}>
-        <form onSubmit={formik.handleSubmit}>
+        <form onSubmit={formik.handleSubmit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); } }}>
           {renderStepContent(activeStep)}
           
           {/* Navigation */}
-          <Box display="flex" justifyContent="space-between" mt={4}>
+          <Box display="flex" justifyContent="space-between" mt={4} sx={{ position: 'sticky', bottom: 0, py: 2, backgroundColor: 'background.paper', borderTop: '1px solid', borderColor: 'divider', zIndex: 1 }}>
             <Button
               disabled={activeStep === 0}
               onClick={handleBack}
@@ -830,7 +927,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
                 <Button
                   variant="contained"
                   onClick={handleNext}
-                  disabled={!formik.isValid}
+                  disabled={false}
                 >
                   Next
                 </Button>

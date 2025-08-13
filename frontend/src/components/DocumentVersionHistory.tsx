@@ -371,20 +371,7 @@ const DocumentVersionHistory: React.FC<DocumentVersionHistoryProps> = ({
                         <Download />
                       </IconButton>
                     </Tooltip>
-                    {!version.approved_by && (
-                      <Tooltip title="Approve Version">
-                        <IconButton
-                          size="small"
-                          color="success"
-                          onClick={() => {
-                            setSelectedVersion(version);
-                            setApproveDialogOpen(true);
-                          }}
-                        >
-                          <CheckCircle />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    {/* Approval through workflow only; direct approve removed */}
                   </Box>
                 </TableCell>
               </TableRow>

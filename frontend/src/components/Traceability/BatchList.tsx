@@ -453,17 +453,25 @@ const BatchList: React.FC<BatchListProps> = ({
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Trace Chain">
-                            <IconButton size="small">
+                            <IconButton size="small" onClick={() => handleBatchSelect(batch)}>
                               <TimelineIcon />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Generate QR Code">
-                            <IconButton size="small">
+                            <IconButton size="small" onClick={() => { setSelectedBatch(batch); setBatchDetailOpen(true); }}>
                               <QrCodeIcon />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Print Label">
-                            <IconButton size="small">
+                            <IconButton size="small" onClick={async () => { 
+                              try { 
+                                const blob = await traceabilityAPI.printBarcode(batch.id, 'pdf');
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, '_blank');
+                                // optional: revoke after a while
+                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              } catch(e) { /* noop */ }
+                            }}>
                               <PrintIcon />
                             </IconButton>
                           </Tooltip>

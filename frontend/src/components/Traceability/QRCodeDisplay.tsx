@@ -27,13 +27,22 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   showActions = true
 }) => {
   const handlePrint = () => {
-    // Implement print functionality
-    console.log('Print QR code:', qrCodeData.qr_code);
+    if (!qrCodeData.qr_code_image) return;
+    const w = window.open('');
+    if (!w) return;
+    w.document.write(`<img src="${qrCodeData.qr_code_image}" style="max-width:100%" />`);
+    w.document.close();
+    w.focus();
+    w.print();
+    w.close();
   };
 
   const handleDownload = () => {
-    // Implement download functionality
-    console.log('Download QR code:', qrCodeData.qr_code);
+    if (!qrCodeData.qr_code_image) return;
+    const a = document.createElement('a');
+    a.href = qrCodeData.qr_code_image;
+    a.download = `qrcode_${qrCodeData.batch_id || 'batch'}.png`;
+    a.click();
   };
 
   const handleCopy = () => {

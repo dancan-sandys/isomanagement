@@ -562,9 +562,9 @@ async def get_documents(
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(None),
-    category: Optional[DocumentCategory] = Query(None),
-    doc_status: Optional[DocumentStatus] = Query(None, alias="status"),
-    document_type: Optional[DocumentType] = Query(None),
+    category: Optional[str] = Query(None),
+    doc_status: Optional[str] = Query(None, alias="status"),
+    document_type: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     product_line: Optional[str] = Query(None),
     created_by: Optional[int] = Query(None),
@@ -579,12 +579,32 @@ async def get_documents(
     Get paginated list of documents with advanced filtering
     """
     try:
+        # Normalize enum query params to accept case-insensitive values
+        cat_enum = None
+        status_enum = None
+        type_enum = None
+        try:
+            if isinstance(category, str) and category.strip():
+                cat_enum = DocumentCategory(category.strip().lower())
+        except Exception:
+            cat_enum = None
+        try:
+            if isinstance(doc_status, str) and doc_status.strip():
+                status_enum = DocumentStatus(doc_status.strip().lower())
+        except Exception:
+            status_enum = None
+        try:
+            if isinstance(document_type, str) and document_type.strip():
+                type_enum = DocumentType(document_type.strip().lower())
+        except Exception:
+            type_enum = None
+
         # Create filter object
         filters = DocumentFilter(
             search=search,
-            category=category,
-            status=doc_status,
-            document_type=document_type,
+            category=cat_enum,
+            status=status_enum,
+            document_type=type_enum,
             department=department,
             product_line=product_line,
             created_by=created_by,
@@ -599,41 +619,58 @@ async def get_documents(
         document_service = DocumentService(db)
         result = document_service.get_documents(filters, page, size)
         
-        # Convert to response format
+        # Convert to response format (supports rows as ORM objects or dicts)
+        def getv(o, key):
+            if isinstance(o, dict):
+                return o.get(key)
+            return getattr(o, key, None)
+
         items = []
         for doc in result["items"]:
-            # Get creator name
-            creator = db.query(User).filter(User.id == doc.created_by).first()
-            creator_name = creator.full_name if creator else "Unknown"
+            created_by_id = getv(doc, "created_by")
+            creator_name = None
+            if created_by_id is not None:
+                try:
+                    creator = db.query(User).filter(User.id == created_by_id).first()
+                    creator_name = (creator.full_name if creator else None)
+                except Exception:
+                    creator_name = None
             
             # Parse applicable_products
             applicable_products = None
-            if doc.applicable_products:
-                try:
-                    applicable_products = json.loads(doc.applicable_products)
-                except:
-                    applicable_products = None
+            ap = getv(doc, "applicable_products")
+            if ap:
+                if isinstance(ap, str):
+                    try:
+                        applicable_products = json.loads(ap)
+                    except Exception:
+                        applicable_products = None
+                else:
+                    applicable_products = ap
+
+            created_at = getv(doc, "created_at")
+            updated_at = getv(doc, "updated_at")
             
             items.append({
-                "id": doc.id,
-                "document_number": doc.document_number,
-                "title": doc.title,
-                "description": doc.description,
-                "document_type": enum_value(doc.document_type),
-                "category": enum_value(doc.category),
-                "status": enum_value(doc.status),
-                "version": doc.version,
-                "file_path": doc.file_path,
-                "file_size": doc.file_size,
-                "file_type": doc.file_type,
-                "original_filename": doc.original_filename,
-                "department": doc.department,
-                "product_line": doc.product_line,
+                "id": getv(doc, "id"),
+                "document_number": getv(doc, "document_number"),
+                "title": getv(doc, "title"),
+                "description": getv(doc, "description"),
+                "document_type": enum_value(getv(doc, "document_type")),
+                "category": enum_value(getv(doc, "category")),
+                "status": enum_value(getv(doc, "status")),
+                "version": getv(doc, "version"),
+                "file_path": getv(doc, "file_path"),
+                "file_size": getv(doc, "file_size"),
+                "file_type": getv(doc, "file_type"),
+                "original_filename": getv(doc, "original_filename"),
+                "department": getv(doc, "department"),
+                "product_line": getv(doc, "product_line"),
                 "applicable_products": applicable_products,
-                "keywords": doc.keywords,
-                "created_by": creator_name,
-                "created_at": doc.created_at.isoformat() if doc.created_at else None,
-                "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+                "keywords": getv(doc, "keywords"),
+                "created_by": creator_name or created_by_id,
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else created_at,
+                "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") else updated_at,
             })
         
         return ResponseModel(
@@ -2138,19 +2175,25 @@ async def get_my_pending_approvals(
     db: Session = Depends(get_db)
 ):
     """
-    List pending approvals assigned to the current user.
+    Pending list shows:
+      1) Approvals assigned to the current user with status 'pending'
+      2) All documents whose status is anything other than 'approved'
+    Combined and de-duplicated by document_id.
     """
     try:
-        query = db.query(DocumentApproval).filter(DocumentApproval.approver_id == current_user.id, DocumentApproval.status == "pending")
-        total = query.count()
-        rows = query.order_by(DocumentApproval.approval_order).offset((page - 1) * size).limit(size).all()
+        # 1) Approvals assigned to the current user
+        approvals_q = db.query(DocumentApproval).filter(
+            DocumentApproval.approver_id == current_user.id,
+            DocumentApproval.status == "pending",
+        )
+        approval_rows = approvals_q.order_by(DocumentApproval.approval_order).all()
 
-        items = []
-        for row in rows:
+        items_by_doc: dict[int, dict] = {}
+        for row in approval_rows:
             doc = db.query(Document).filter(Document.id == row.document_id).first()
             if not doc:
                 continue
-            items.append({
+            items_by_doc[doc.id] = {
                 "approval_id": row.id,
                 "document_id": doc.id,
                 "document_number": doc.document_number,
@@ -2158,12 +2201,40 @@ async def get_my_pending_approvals(
                 "version": doc.version,
                 "approval_order": row.approval_order,
                 "status": row.status,
-                "submitted_at": row.created_at.isoformat() if row.created_at else None
-            })
+                "submitted_at": row.created_at.isoformat() if row.created_at else None,
+            }
 
-        return ResponseModel(success=True, message="Pending approvals retrieved", data={"items": items, "total": total, "page": page, "size": size})
+        # 2) All documents with status != approved
+        from app.models.document import DocumentStatus
+        pending_docs = db.query(Document).filter(Document.status != DocumentStatus.APPROVED).order_by(desc(Document.updated_at)).all()
+        for doc in pending_docs:
+            if doc.id in items_by_doc:
+                continue
+            items_by_doc[doc.id] = {
+                "approval_id": None,
+                "document_id": doc.id,
+                "document_number": doc.document_number,
+                "title": doc.title,
+                "version": doc.version,
+                "approval_order": None,
+                "status": enum_value(doc.status) or "pending",
+                "submitted_at": doc.created_at.isoformat() if doc.created_at else None,
+            }
+
+        # Pagination over combined results
+        combined = list(items_by_doc.values())
+        total = len(combined)
+        start = (page - 1) * size
+        end = start + size
+        page_items = combined[start:end]
+
+        return ResponseModel(
+            success=True,
+            message="Pending items retrieved",
+            data={"items": page_items, "total": total, "page": page, "size": size},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve pending approvals: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve pending items: {str(e)}")
 
 
 def _is_current_approval_gate(db: Session, document_id: int, approval_order: int) -> bool:

@@ -467,7 +467,7 @@ const SupplierList: React.FC<SupplierListProps> = ({
       ) : (
         suppliers?.items.map((supplier) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={supplier.id}>
-            <EnhancedCard title={supplier.name || 'Supplier'}>
+            <EnhancedCard title={supplier.name || 'Supplier'} borderRadius={0} sx={{ background: 'white', borderRadius: 0 }}>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                   <Box>

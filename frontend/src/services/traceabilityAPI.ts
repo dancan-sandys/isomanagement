@@ -72,8 +72,9 @@ export const traceabilityAPI = {
   printBarcode: async (batchId: number, format: string = 'pdf') => {
     const response = await api.get(`/traceability/batches/${batchId}/barcode/print`, {
       params: { format },
+      responseType: 'blob',
     });
-    return response.data;
+    return response.data as Blob;
   },
 
   // Traceability Chain
