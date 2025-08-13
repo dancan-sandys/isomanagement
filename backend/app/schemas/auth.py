@@ -72,7 +72,7 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     employee_id: Optional[str] = None
     is_active: bool
-    is_verified: bool
+    is_verified: Optional[bool] = False
     last_login: Optional[datetime] = None
     created_at: Optional[datetime] = None # Made optional
     updated_at: Optional[datetime] = None # Made optional

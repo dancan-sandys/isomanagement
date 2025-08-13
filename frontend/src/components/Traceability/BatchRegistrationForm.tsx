@@ -89,10 +89,10 @@ const BatchRegistrationForm: React.FC<BatchRegistrationFormProps> = ({
     return productOptions.filter(p => p.name.toLowerCase().includes(q));
   }, [productInput, productOptions]);
 
-  const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; supplier_code?: string }>>([]);
+  const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; supplier_code: string }>>([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierSearch, setSupplierSearch] = useState('');
-  const [selectedSupplier, setSelectedSupplier] = useState<{ id: number; name: string; supplier_code?: string } | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<{ id: number; name: string; supplier_code: string } | null>(null);
 
   // Load products once when dialog opens
   useEffect(() => {

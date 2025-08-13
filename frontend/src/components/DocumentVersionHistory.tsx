@@ -142,20 +142,21 @@ const DocumentVersionHistory: React.FC<DocumentVersionHistoryProps> = ({
 
     try {
       setApproving(true);
-      const response = await documentsAPI.approveVersion(
-        documentId,
-        selectedVersion.id,
-        approveComments
-      );
-      
-      if (response.data.success) {
-        setApproveDialogOpen(false);
-        setApproveComments('');
-        setSelectedVersion(null);
-        fetchVersionHistory(); // Refresh the list
+      // Route approval via workflow: find pending approval for this document and submit
+      const pending = await documentsAPI.getPendingApprovals();
+      const record = (pending?.data?.items || pending?.data || []).find((i: any) => i.document_id === documentId);
+      if (!record || !record.approval_id) {
+        throw new Error('No pending approval step found for this document');
       }
+
+      await documentsAPI.approveApprovalStep(documentId, record.approval_id, { comments: approveComments });
+
+      setApproveDialogOpen(false);
+      setApproveComments('');
+      setSelectedVersion(null);
+      fetchVersionHistory();
     } catch (err) {
-      console.error('Error approving version:', err);
+      console.error('Error approving via workflow:', err);
     } finally {
       setApproving(false);
     }
