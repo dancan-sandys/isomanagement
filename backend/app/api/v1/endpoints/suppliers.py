@@ -255,7 +255,7 @@ async def get_evaluation_stats(
     )
 
 # Dashboard endpoints (must come before path parameter endpoints)
-@router.get("/dashboard/stats", response_model=ResponseModel[SupplierDashboardStats])
+@router.get("/dashboard/stats", response_model=ResponseModel)
 async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -272,7 +272,7 @@ async def get_dashboard_stats(
 
 
 # Supplier endpoints
-@router.get("/", response_model=ResponseModel[SupplierListResponse])
+@router.get("/", response_model=ResponseModel)
 async def get_suppliers(
     search: Optional[str] = Query(None, description="Search by name, code, or contact person"),
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -295,19 +295,10 @@ async def get_suppliers(
     
     service = SupplierService(db)
     result = service.get_suppliers(filter_params)
-    
-    response_data = SupplierListResponse(
-        items=result["items"],
-        total=result["total"],
-        page=result["page"],
-        size=result["size"],
-        pages=result["pages"]
-    )
-
     return ResponseModel(
         success=True,
         message="Suppliers retrieved successfully",
-        data=response_data
+        data=result
     )
 
 

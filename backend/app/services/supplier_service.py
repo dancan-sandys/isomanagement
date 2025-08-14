@@ -54,10 +54,23 @@ class SupplierService:
             )
 
         if filter_params.category:
-            query = query.filter(Supplier.category == filter_params.category)
+            # Accept both enum values and raw strings (case-insensitive)
+            try:
+                from app.models.supplier import SupplierCategory as _SC
+                enum_val = _SC(filter_params.category) if not isinstance(filter_params.category, str) else _SC[filter_params.category.upper()] if filter_params.category.upper() in _SC.__members__ else _SC(filter_params.category)
+                query = query.filter(Supplier.category == enum_val)
+            except Exception:
+                from sqlalchemy import cast, String
+                query = query.filter(cast(Supplier.category, String) == str(filter_params.category))
 
         if filter_params.status:
-            query = query.filter(Supplier.status == filter_params.status)
+            try:
+                from app.models.supplier import SupplierStatus as _SS
+                enum_val = _SS(filter_params.status) if not isinstance(filter_params.status, str) else _SS[filter_params.status.upper()] if filter_params.status.upper() in _SS.__members__ else _SS(filter_params.status)
+                query = query.filter(Supplier.status == enum_val)
+            except Exception:
+                from sqlalchemy import cast, String
+                query = query.filter(cast(Supplier.status, String) == str(filter_params.status))
 
         if filter_params.risk_level:
             query = query.filter(Supplier.risk_level == filter_params.risk_level)
@@ -69,15 +82,51 @@ class SupplierService:
         offset = (filter_params.page - 1) * filter_params.size
         suppliers = query.offset(offset).limit(filter_params.size).all()
 
-        # Add materials count and creator name
-        for supplier in suppliers:
-            supplier.materials_count = len(supplier.materials)
-            # Get creator name
-            creator = self.db.query(User).filter(User.id == supplier.created_by).first()
-            supplier.created_by_name = creator.full_name if creator else "Unknown"
+        def normalize_enum(val: Any) -> str:
+            try:
+                return (val.value if hasattr(val, "value") else str(val)).lower()
+            except Exception:
+                return str(val).lower() if val is not None else ""
+
+        # Serialize suppliers with normalized enums to satisfy Pydantic schemas
+        items: List[Dict[str, Any]] = []
+        for s in suppliers:
+            creator = self.db.query(User).filter(User.id == s.created_by).first()
+            created_by_name = creator.full_name if creator and creator.full_name else (creator.username if creator else "Unknown")
+            items.append({
+                "id": s.id,
+                "supplier_code": s.supplier_code,
+                "name": s.name,
+                "category": normalize_enum(getattr(s, "category", None)),
+                "status": normalize_enum(getattr(s, "status", None)),
+                "contact_person": s.contact_person,
+                "email": s.email,
+                "phone": s.phone,
+                "website": s.website,
+                "address_line1": s.address_line1,
+                "address_line2": s.address_line2,
+                "city": s.city,
+                "state": s.state,
+                "postal_code": s.postal_code,
+                "country": s.country,
+                "business_registration_number": s.business_registration_number,
+                "tax_identification_number": s.tax_identification_number,
+                "company_type": s.company_type,
+                "year_established": s.year_established,
+                "risk_level": s.risk_level,
+                "notes": s.notes,
+                "overall_score": float(s.overall_score or 0.0),
+                "last_evaluation_date": s.last_evaluation_date,
+                "next_evaluation_date": s.next_evaluation_date,
+                "materials_count": len(getattr(s, "materials", []) or []),
+                "created_at": s.created_at,
+                "updated_at": s.updated_at,
+                "created_by": s.created_by,
+                "created_by_name": created_by_name,
+            })
 
         return {
-            "items": suppliers,
+            "items": items,
             "total": total,
             "page": filter_params.page,
             "size": filter_params.size,
@@ -654,8 +703,8 @@ class SupplierService:
             )
         ).count()
 
-        # Suppliers by category
-        suppliers_by_category = self.db.query(
+        # Suppliers by category (normalize to strings)
+        suppliers_by_category_raw = self.db.query(
             Supplier.category,
             func.count(Supplier.id).label('count')
         ).group_by(Supplier.category).all()
@@ -691,8 +740,13 @@ class SupplierService:
             "active_suppliers": active_suppliers,
             "overdue_evaluations": overdue_evaluations,
             "suppliers_by_category": [
-                {"category": item.category, "count": item.count} 
-                for item in suppliers_by_category
+                {
+                    "category": (
+                        item[0].value if hasattr(item[0], "value") else str(item[0] or "unknown")
+                    ).lower(),
+                    "count": int(item[1] or 0),
+                }
+                for item in suppliers_by_category_raw
             ],
             "suppliers_by_risk": [
                 {"risk_level": item.risk_level, "count": item.count} 

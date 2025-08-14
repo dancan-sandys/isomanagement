@@ -12,11 +12,13 @@ import time
 from typing import Dict, Tuple, Callable, Optional
 
 import requests
+import os
 
 
-API_BASE = "http://127.0.0.1:8000/api/v1"
-USERNAME = "admin"
-PASSWORD = "admin123"
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000/api/v1")
+# Allow overriding creds via env. Fallback to commonly used defaults
+USERNAME = os.getenv("SMOKE_USER", "admin")
+PASSWORD = os.getenv("SMOKE_PASS", "admin123")
 
 
 def login(username: str, password: str) -> Tuple[Optional[str], Optional[str], Dict]:

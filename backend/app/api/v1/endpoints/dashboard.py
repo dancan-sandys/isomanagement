@@ -74,11 +74,17 @@ async def get_dashboard_stats(
                 print(f"Error processing document {doc.id}: {doc_error}")
                 continue
         
+        # Normalize doc type counts to a serializable structure
+        doc_type_counts_data = [
+            {"type": (t or "unknown"), "count": int(c or 0)} for t, c in (doc_type_counts or [])
+        ]
+
         stats = {
             "totalDocuments": total_documents,
             "totalHaccpPlans": total_haccp_plans,
             "totalPrpPrograms": total_prp_programs,
             "totalSuppliers": total_suppliers,
+            "docTypeCounts": doc_type_counts_data,
             "pendingApprovals": pending_approvals,
             "complianceScore": compliance_score,
             "openIssues": open_issues,
@@ -112,8 +118,21 @@ async def get_recent_activity(
     Get recent activities across the FSMS system
     """
     try:
-        # Get recent documents
-        recent_docs = db.query(Document).order_by(desc(Document.updated_at)).limit(3).all()
+        # Get recent documents using projection and string casts to avoid enum coercion issues
+        from sqlalchemy import cast, String
+        recent_docs = (
+            db.query(
+                Document.id,
+                Document.title,
+                Document.created_at,
+                Document.updated_at,
+                cast(Document.status, String).label("status"),
+                cast(Document.category, String).label("category"),
+            )
+            .order_by(desc(Document.updated_at))
+            .limit(3)
+            .all()
+        )
         
         # Get recent users (for demonstration)
         recent_users = db.query(User).order_by(desc(User.created_at)).limit(2).all()
@@ -125,8 +144,14 @@ async def get_recent_activity(
             try:
                 # Get user name for created_by
                 user_name = "System"
-                if doc.created_by:
-                    user = db.query(User).filter(User.id == doc.created_by).first()
+                # created_by may not be available in this projection; fetch from Document table if needed
+                user_name = "System"
+                try:
+                    creator_id = db.query(Document.created_by).filter(Document.id == doc.id).scalar()
+                except Exception:
+                    creator_id = None
+                if creator_id:
+                    user = db.query(User).filter(User.id == creator_id).first()
                     if user:
                         user_name = user.full_name or user.username
                 

@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { dashboardAPI } from '../../services/api';
+import { PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
 interface SmartMetric {
   id: string;
@@ -83,6 +84,8 @@ const SmartDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<SmartMetric[]>([]);
   const [tasks, setTasks] = useState<SmartTask[]>([]);
   const [insights, setInsights] = useState<SmartInsight[]>([]);
+  const [docTypeSeries, setDocTypeSeries] = useState<Array<{ name: string; value: number }>>([]);
+  const [operationalSeries, setOperationalSeries] = useState<Array<{ name: string; value: number }>>([]);
 
   // Load real data from backend
   useEffect(() => {
@@ -95,10 +98,13 @@ const SmartDashboard: React.FC = () => {
     setLoading(true);
     try {
       // Load data from real backend APIs
-      const [metricsResponse, tasksResponse, insightsResponse] = await Promise.all([
+      const [metricsResponse, tasksResponse, insightsResponse, statsResponse, kpiResponse, fsmsResponse] = await Promise.all([
         dashboardAPI.getUserMetrics(String(user?.id || '')),
         dashboardAPI.getPriorityTasks(String(user?.id || '')),
-        dashboardAPI.getInsights(String(user?.id || ''))
+        dashboardAPI.getInsights(String(user?.id || '')),
+        dashboardAPI.getStats(),
+        dashboardAPI.getCrossModuleKpis ? dashboardAPI.getCrossModuleKpis('month') : Promise.resolve(null),
+        dashboardAPI.getFsmsComplianceScore ? dashboardAPI.getFsmsComplianceScore() : Promise.resolve(null)
       ]);
 
       // Transform backend data to component format
@@ -106,6 +112,39 @@ const SmartDashboard: React.FC = () => {
       setMetrics(roleData.metrics);
       setTasks(roleData.tasks);
       setInsights(roleData.insights);
+
+      // Map stats to chart series
+      const stats = statsResponse?.data || statsResponse;
+      const docCounts = (stats?.docTypeCounts || []).map((d: any) => ({ name: d.type, value: d.count }));
+      setDocTypeSeries(docCounts);
+
+      const kpis = kpiResponse?.data || kpiResponse;
+      const ops = kpis?.operational_metrics || {};
+      // Optionally enrich metrics with FSMS overall score for top card prominence
+      const fsms = fsmsResponse?.data || fsmsResponse;
+      if (fsms?.overall_score !== undefined) {
+        setMetrics((prev) => [
+          {
+            id: 'fsms_overall',
+            title: 'FSMS Compliance',
+            value: `${fsms.overall_score}%`,
+            change: 0,
+            trend: 'stable',
+            icon: <CheckCircle />,
+            color: 'success',
+            insight: fsms.compliance_level?.replace('_',' '),
+            quickAction: { label: 'View Factors', action: () => window.location.href = '/dashboard/analytics' }
+          },
+          ...prev,
+        ]);
+      }
+      const opsSeries = [
+        { name: 'Documents', value: Number(ops.documents_processed || 0) },
+        { name: 'Audits', value: Number(ops.audits_completed || 0) },
+        { name: 'Training', value: Number(ops.training_sessions || 0) },
+        { name: 'Supplier Evals', value: Number(ops.supplier_evaluations || 0) },
+      ];
+      setOperationalSeries(opsSeries);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       // Fallback to basic data on error
@@ -537,7 +576,7 @@ const SmartDashboard: React.FC = () => {
         </Box>
       </Fade>
 
-      {/* Smart Tasks and Insights */}
+      {/* Smart Tasks, Insights and Quick Charts */}
       <Grid container spacing={3}>
         {/* Priority Tasks */}
         <Grid item xs={12} md={8}>
@@ -680,6 +719,46 @@ const SmartDashboard: React.FC = () => {
               </CardContent>
             </Card>
           </Fade>
+        </Grid>
+
+        {/* Quick Charts Row */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Documents by Type</Typography>
+              <Box sx={{ width: '100%', height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie dataKey="value" data={docTypeSeries} nameKey="name" outerRadius={90} label>
+                      {docTypeSeries.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#06B6D4","#84CC16"][index % 7]} />
+                      ))}
+                    </Pie>
+                    <RechartTooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Operational KPIs (30 days)</Typography>
+              <Box sx={{ width: '100%', height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={operationalSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <Legend />
+                    <RechartTooltip />
+                    <Bar dataKey="value" name="Count" fill="#3B82F6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
     </Box>

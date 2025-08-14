@@ -775,6 +775,16 @@ export const dashboardAPI = {
     return response.data;
   },
 
+  getCrossModuleKpis: async (period: 'week' | 'month' | 'quarter' | 'year' = 'month') => {
+    const response: AxiosResponse = await api.get('/dashboard/cross-module-kpis', { params: { period } });
+    return response.data;
+  },
+
+  getFsmsComplianceScore: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/fsms-compliance-score');
+    return response.data;
+  },
+
   // Enhanced UX Methods (fallback to existing data if new endpoints not available)
   getUserMetrics: async (userId: string) => {
     try {
