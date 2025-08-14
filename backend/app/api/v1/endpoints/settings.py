@@ -40,6 +40,7 @@ async def get_settings(
     
     # Group settings by category
     categories_dict = {}
+    
     for setting in settings:
         if setting.category not in categories_dict:
             categories_dict[setting.category] = []
