@@ -122,6 +122,22 @@ def insert_suppliers(conn):
         ), {"code": s[0], "name": s[1], "status": s[2], "cat": s[3], "notes": s[4], "email": s[5], "uid": 1, "now": datetime.utcnow().isoformat()})
     print("✅ Suppliers created")
 
+    # Ensure materials exist for suppliers (used by deliveries)
+    print("📦 Creating supplier materials…")
+    materials = [
+        ("MAT-STEEL-A36", "Steel Plate A36", "MAT-STEEL", "metal"),
+        ("COAT-ZN-SVC", "Zinc Coating Service", "COAT-ZINC", "service"),
+        ("LAB-CAL-SVC", "Calibration Service", "LAB-METRO", "service"),
+    ]
+    for mcode, name, scode, mcat in materials:
+        conn.execute(text(
+            """
+            INSERT INTO materials (material_code, name, supplier_id, category, is_active, approval_status, created_by, created_at)
+            SELECT :mcode, :name, (SELECT id FROM suppliers WHERE supplier_code=:scode), :mcat, 1, 'approved', 1, :now
+            WHERE NOT EXISTS (SELECT 1 FROM materials WHERE material_code=:mcode)
+            """
+        ), {"mcode": mcode, "name": name, "scode": scode, "mcat": mcat, "now": datetime.utcnow().isoformat()})
+
     # Supplier evaluations to power supplier KPIs
     evaluation_rows = [
         ("MAT-STEEL", "Q2 2025", 4.6, 4.7, 4.2, 4.5, 4.0, 4.5),
@@ -160,7 +176,7 @@ def insert_suppliers(conn):
                 inspection_status, inspected_by, created_by
             )
             SELECT :dnum, (SELECT id FROM suppliers WHERE supplier_code=:scode),
-                   (SELECT id FROM materials ORDER BY id LIMIT 1), :ddate, :qty, :unit, :lot,
+                   (SELECT id FROM materials WHERE supplier_id=(SELECT id FROM suppliers WHERE supplier_code=:scode) ORDER BY id LIMIT 1), :ddate, :qty, :unit, :lot,
                    :istatus, 1, 1
             WHERE NOT EXISTS (SELECT 1 FROM incoming_deliveries WHERE delivery_number=:dnum)
             """

@@ -45,7 +45,14 @@ async def get_batches(
     query = db.query(Batch)
     
     if batch_type:
-        query = query.filter(Batch.batch_type == batch_type)
+        # Accept both enum and raw lowercase/uppercase strings
+        try:
+            normalized = batch_type.value if hasattr(batch_type, 'value') else str(batch_type).upper()
+            from sqlalchemy import cast, String
+            query = query.filter(cast(Batch.batch_type, String) == normalized.lower())
+        except Exception:
+            from sqlalchemy import cast, String
+            query = query.filter(cast(Batch.batch_type, String) == str(batch_type))
     if status:
         query = query.filter(Batch.status == status)
     if product_name:

@@ -39,8 +39,38 @@ class SupplierService:
         return supplier
 
     def get_suppliers(self, filter_params: SupplierFilter) -> Dict[str, Any]:
-        """Get suppliers with filtering and pagination"""
-        query = self.db.query(Supplier)
+        """Get suppliers with filtering and pagination (robust to invalid enum rows)."""
+        from sqlalchemy import cast, String
+        # Project columns and cast enum columns to String to avoid coercion errors on bad rows
+        query = self.db.query(
+            Supplier.id,
+            Supplier.supplier_code,
+            Supplier.name,
+            cast(Supplier.category, String).label("category"),
+            cast(Supplier.status, String).label("status"),
+            Supplier.contact_person,
+            Supplier.email,
+            Supplier.phone,
+            Supplier.website,
+            Supplier.address_line1,
+            Supplier.address_line2,
+            Supplier.city,
+            Supplier.state,
+            Supplier.postal_code,
+            Supplier.country,
+            Supplier.business_registration_number,
+            Supplier.tax_identification_number,
+            Supplier.company_type,
+            Supplier.year_established,
+            Supplier.risk_level,
+            Supplier.notes,
+            Supplier.overall_score,
+            Supplier.last_evaluation_date,
+            Supplier.next_evaluation_date,
+            Supplier.created_at,
+            Supplier.updated_at,
+            Supplier.created_by,
+        )
 
         # Apply filters
         if filter_params.search:
@@ -54,23 +84,10 @@ class SupplierService:
             )
 
         if filter_params.category:
-            # Accept both enum values and raw strings (case-insensitive)
-            try:
-                from app.models.supplier import SupplierCategory as _SC
-                enum_val = _SC(filter_params.category) if not isinstance(filter_params.category, str) else _SC[filter_params.category.upper()] if filter_params.category.upper() in _SC.__members__ else _SC(filter_params.category)
-                query = query.filter(Supplier.category == enum_val)
-            except Exception:
-                from sqlalchemy import cast, String
-                query = query.filter(cast(Supplier.category, String) == str(filter_params.category))
+            query = query.filter(cast(Supplier.category, String) == str(filter_params.category))
 
         if filter_params.status:
-            try:
-                from app.models.supplier import SupplierStatus as _SS
-                enum_val = _SS(filter_params.status) if not isinstance(filter_params.status, str) else _SS[filter_params.status.upper()] if filter_params.status.upper() in _SS.__members__ else _SS(filter_params.status)
-                query = query.filter(Supplier.status == enum_val)
-            except Exception:
-                from sqlalchemy import cast, String
-                query = query.filter(cast(Supplier.status, String) == str(filter_params.status))
+            query = query.filter(cast(Supplier.status, String) == str(filter_params.status))
 
         if filter_params.risk_level:
             query = query.filter(Supplier.risk_level == filter_params.risk_level)
@@ -118,7 +135,7 @@ class SupplierService:
                 "overall_score": float(s.overall_score or 0.0),
                 "last_evaluation_date": s.last_evaluation_date,
                 "next_evaluation_date": s.next_evaluation_date,
-                "materials_count": len(getattr(s, "materials", []) or []),
+                "materials_count": 0,
                 "created_at": s.created_at,
                 "updated_at": s.updated_at,
                 "created_by": s.created_by,

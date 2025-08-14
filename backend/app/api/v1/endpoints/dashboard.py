@@ -8,9 +8,12 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.document import Document
-from app.models.haccp import Product
-from app.models.prp import PRPProgram
-from app.models.supplier import Supplier
+from app.models.haccp import Product, Hazard
+from app.models.prp import PRPProgram, PRPChecklist
+from app.models.supplier import Supplier, SupplierEvaluation
+from app.models.training import TrainingAttendance
+from app.models.nonconformance import NonConformance, CAPAAction
+from app.models.audit_mgmt import Audit
 from app.schemas.common import ResponseModel
 
 router = APIRouter()
@@ -78,7 +81,7 @@ async def get_dashboard_stats(
         doc_type_counts_data = [
             {"type": (t or "unknown"), "count": int(c or 0)} for t, c in (doc_type_counts or [])
         ]
-
+        
         stats = {
             "totalDocuments": total_documents,
             "totalHaccpPlans": total_haccp_plans,
@@ -133,105 +136,135 @@ async def get_recent_activity(
             .limit(3)
             .all()
         )
-        
-        # Get recent users (for demonstration)
-        recent_users = db.query(User).order_by(desc(User.created_at)).limit(2).all()
-        
+        # Build activities with safe, minimal fields
         activities = []
-        
-        # Add document activities
         for doc in recent_docs:
             try:
-                # Get user name for created_by
-                user_name = "System"
-                # created_by may not be available in this projection; fetch from Document table if needed
                 user_name = "System"
                 try:
                     creator_id = db.query(Document.created_by).filter(Document.id == doc.id).scalar()
                 except Exception:
                     creator_id = None
                 if creator_id:
-                    user = db.query(User).filter(User.id == creator_id).first()
-                    if user:
-                        user_name = user.full_name or user.username
-                
+                    u = db.query(User).filter(User.id == creator_id).first()
+                    if u:
+                        user_name = u.full_name or u.username or "System"
                 activities.append({
                     "id": len(activities) + 1,
                     "action": "updated" if doc.updated_at and doc.updated_at > doc.created_at else "created",
                     "resource_type": "document",
                     "resource_id": doc.id,
                     "user": user_name,
-                    "timestamp": doc.updated_at.isoformat() if doc.updated_at else doc.created_at.isoformat(),
-                    "title": doc.title
+                    "timestamp": (doc.updated_at or doc.created_at).isoformat() if (doc.updated_at or doc.created_at) else datetime.utcnow().isoformat(),
+                    "title": doc.title,
                 })
-            except Exception as doc_error:
-                print(f"Error processing document activity {doc.id}: {doc_error}")
+            except Exception:
                 continue
-        
-        # Add user activities (mock for now)
-        for user in recent_users:
-            try:
-                activities.append({
-                    "id": len(activities) + 1,
-                    "action": "created",
-                    "resource_type": "user",
-                    "resource_id": user.id,
-                    "user": "System",
-                    "timestamp": user.created_at.isoformat() if user.created_at else datetime.utcnow().isoformat(),
-                    "title": f"User {user.username}"
-                })
-            except Exception as user_error:
-                print(f"Error processing user activity {user.id}: {user_error}")
-                continue
-        
-        # Add some mock activities for demonstration
-        mock_activities = [
-            {
-                "id": len(activities) + 1,
-                "action": "approved",
-                "resource_type": "haccp_plan",
-                "resource_id": 1,
-                "user": "QA Manager",
-                "timestamp": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
-                "title": "Milk Processing HACCP Plan"
-            },
-            {
-                "id": len(activities) + 2,
-                "action": "completed",
-                "resource_type": "prp_checklist",
-                "resource_id": 5,
-                "user": "Production Supervisor",
-                "timestamp": (datetime.utcnow() - timedelta(hours=4)).isoformat(),
-                "title": "Daily Sanitation Checklist"
-            },
-            {
-                "id": len(activities) + 3,
-                "action": "registered",
-                "resource_type": "supplier",
-                "resource_id": 3,
-                "user": "Procurement Manager",
-                "timestamp": (datetime.utcnow() - timedelta(hours=6)).isoformat(),
-                "title": "New Milk Supplier Registration"
-            }
-        ]
-        
-        activities.extend(mock_activities)
-        
-        # Sort by timestamp (most recent first)
-        activities.sort(key=lambda x: x["timestamp"], reverse=True)
-        
-        return ResponseModel(
-            success=True,
-            message="Recent activity retrieved successfully",
-            data={"activities": activities[:10]}  # Wrap in dictionary
-        )
-        
+
+        return ResponseModel(success=True, message="Recent activity retrieved successfully", data={"activities": activities})
     except Exception as e:
         print(f"Recent activity error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve recent activity: {str(e)}"
         )
+
+
+@router.get("/iso-summary")
+async def get_iso_executive_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Executive summary for dashboard with ISO-centric KPIs and trends."""
+    try:
+        from sqlalchemy import cast, String
+
+        # Compliance metrics
+        total_docs = db.query(func.count(Document.id)).scalar() or 0
+        approved_docs = db.query(func.count(Document.id)).filter(cast(Document.status, String) == "approved").scalar() or 0
+        doc_compliance = round((approved_docs / total_docs) * 100, 2) if total_docs else 0.0
+
+        total_hazards = db.query(func.count(Hazard.id)).scalar() or 0
+        controlled_hazards = db.query(func.count(Hazard.id)).filter(Hazard.is_controlled == True).scalar() or 0
+        haccp_score = round((controlled_hazards / total_hazards) * 100, 2) if total_hazards else 0.0
+
+        total_prp = db.query(func.count(PRPChecklist.id)).scalar() or 0
+        completed_prp = db.query(func.count(PRPChecklist.id)).filter(cast(PRPChecklist.status, String) == "completed").scalar() or 0
+        prp_score = round((completed_prp / total_prp) * 100, 2) if total_prp else 0.0
+
+        total_suppliers = db.query(func.count(Supplier.id)).scalar() or 0
+        avg_supplier_score = db.query(func.avg(SupplierEvaluation.overall_score)).scalar() or 0.0
+        supplier_score = round((avg_supplier_score / 5.0) * 100, 2) if avg_supplier_score else (100.0 if total_suppliers and avg_supplier_score == 0 else 0.0)
+
+        total_users = db.query(func.count(User.id)).scalar() or 0
+        trained_users = db.query(func.count(func.distinct(TrainingAttendance.user_id))).filter(TrainingAttendance.attended == True).scalar() or 0
+        training_score = round((trained_users / total_users) * 100, 2) if total_users else 0.0
+
+        overall = round((doc_compliance + haccp_score + prp_score + supplier_score + training_score) / 5.0, 2)
+
+        # Risk distribution from NC severity
+        high_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity.in_(["high", "critical"])) .scalar() or 0
+        med_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity == "medium").scalar() or 0
+        low_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity == "low").scalar() or 0
+
+        # Performance counts
+        nc_count = db.query(func.count(NonConformance.id)).scalar() or 0
+        capa_count = db.query(func.count(CAPAAction.id)).scalar() or 0
+        audit_count = db.query(func.count(Audit.id)).scalar() or 0
+        training_count = db.query(func.count(TrainingAttendance.id)).filter(TrainingAttendance.attended == True).scalar() or 0
+
+        # Trends (last 6 months)
+        # SQLite-compatible month key
+        month_fmt = "%Y-%m"
+        now = datetime.utcnow()
+        months = [(now - timedelta(days=30*i)).strftime(month_fmt) for i in reversed(range(6))]
+
+        # NC per month
+        nc_per_month = dict(
+            db.query(func.strftime(month_fmt, NonConformance.reported_date), func.count(NonConformance.id))
+              .group_by(func.strftime(month_fmt, NonConformance.reported_date)).all()
+        )
+        # Training attendance per month
+        tr_per_month = dict(
+            db.query(func.strftime(month_fmt, TrainingAttendance.created_at), func.count(TrainingAttendance.id))
+              .group_by(func.strftime(month_fmt, TrainingAttendance.created_at)).all()
+        )
+
+        trend_data = []
+        for m in months:
+            # Approximate compliance trend using document compliance as proxy
+            trend_data.append({
+                "month": m.split("-")[-1],
+                "compliance": overall,
+                "incidents": int(nc_per_month.get(m, 0) or 0),
+                "training": int(tr_per_month.get(m, 0) or 0),
+            })
+
+        payload = {
+            "complianceMetrics": {
+                "overall": overall,
+                "haccp": haccp_score,
+                "prp": prp_score,
+                "supplier": supplier_score,
+                "training": training_score,
+            },
+            "riskMetrics": {
+                "high": int(high_nc),
+                "medium": int(med_nc),
+                "low": int(low_nc),
+            },
+            "performanceMetrics": {
+                "ncCount": int(nc_count),
+                "capaCount": int(capa_count),
+                "auditCount": int(audit_count),
+                "trainingCount": int(training_count),
+            },
+            "trendData": trend_data,
+        }
+
+        return ResponseModel(success=True, message="ISO executive summary", data=payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get ISO summary: {e}")
 
 
 # Frontend-expected auxiliary dashboard endpoints
