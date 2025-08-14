@@ -10,10 +10,11 @@ from app.models.user import User
 from app.models.document import Document
 from app.models.haccp import Product, Hazard
 from app.models.prp import PRPProgram, PRPChecklist
-from app.models.supplier import Supplier, SupplierEvaluation
-from app.models.training import TrainingAttendance
+from app.models.supplier import Supplier, SupplierEvaluation, SupplierDocument, IncomingDelivery
+from app.models.training import TrainingAttendance, TrainingProgram, TrainingSession
 from app.models.nonconformance import NonConformance, CAPAAction
-from app.models.audit_mgmt import Audit
+from app.models.audit_mgmt import Audit, AuditFinding
+from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.schemas.common import ResponseModel
 
 router = APIRouter()
@@ -160,7 +161,7 @@ async def get_recent_activity(
                 })
             except Exception:
                 continue
-
+        
         return ResponseModel(success=True, message="Recent activity retrieved successfully", data={"activities": activities})
     except Exception as e:
         print(f"Recent activity error: {str(e)}")
@@ -265,6 +266,123 @@ async def get_iso_executive_summary(
         return ResponseModel(success=True, message="ISO executive summary", data=payload)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get ISO summary: {e}")
+
+
+@router.get("/overview")
+async def get_overview(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return a comprehensive, ISO-grade overview for the dashboard."""
+    try:
+        from sqlalchemy import cast, String
+        now = datetime.utcnow()
+        in_30 = now + timedelta(days=30)
+        last_90 = now - timedelta(days=90)
+
+        # Documents
+        total_docs = db.query(func.count(Document.id)).scalar() or 0
+        docs_by_status = dict(
+            db.query(cast(Document.status, String), func.count(Document.id)).group_by(cast(Document.status, String)).all()
+        )
+        docs_by_type = dict(
+            db.query(cast(Document.document_type, String), func.count(Document.id)).group_by(cast(Document.document_type, String)).all()
+        )
+        approved_docs = int(docs_by_status.get("approved", 0) or 0)
+        document_compliance = round((approved_docs / total_docs) * 100, 2) if total_docs else 0.0
+        pending_approvals = int(docs_by_status.get("under_review", 0) or 0)
+        upcoming_reviews = db.query(func.count(Document.id)).filter(Document.review_date != None, Document.review_date <= in_30).scalar() or 0
+
+        # Suppliers
+        total_suppliers = db.query(func.count(Supplier.id)).scalar() or 0
+        avg_supplier_score = db.query(func.avg(SupplierEvaluation.overall_score)).scalar() or 0.0
+        supplier_performance = round((avg_supplier_score / 5.0) * 100, 2) if avg_supplier_score else 0.0
+        expiring_supplier_docs = db.query(func.count(SupplierDocument.id)).filter(SupplierDocument.expiry_date != None, SupplierDocument.expiry_date <= in_30).scalar() or 0
+        deliveries_last_90 = db.query(func.count(IncomingDelivery.id)).filter(IncomingDelivery.delivery_date >= last_90).scalar() or 0
+        deliveries_passed_last_90 = db.query(func.count(IncomingDelivery.id)).filter(IncomingDelivery.delivery_date >= last_90, IncomingDelivery.inspection_status == "passed").scalar() or 0
+        delivery_pass_rate = round((deliveries_passed_last_90 / deliveries_last_90) * 100, 2) if deliveries_last_90 else 0.0
+
+        # PRP
+        total_prp_checklists = db.query(func.count(PRPChecklist.id)).scalar() or 0
+        completed_prp = db.query(func.count(PRPChecklist.id)).filter(cast(PRPChecklist.status, String) == "completed").scalar() or 0
+        prp_completion = round((completed_prp / total_prp_checklists) * 100, 2) if total_prp_checklists else 0.0
+
+        # HACCP
+        total_hazards = db.query(func.count(Hazard.id)).scalar() or 0
+        controlled_hazards = db.query(func.count(Hazard.id)).filter(Hazard.is_controlled == True).scalar() or 0
+        ccp_compliance = round((controlled_hazards / total_hazards) * 100, 2) if total_hazards else 0.0
+
+        # Training
+        total_users = db.query(func.count(User.id)).scalar() or 0
+        trained_last_90 = db.query(func.count(func.distinct(TrainingAttendance.user_id))).filter(TrainingAttendance.created_at >= last_90, TrainingAttendance.attended == True).scalar() or 0
+        training_completion = round((trained_last_90 / total_users) * 100, 2) if total_users else 0.0
+        upcoming_sessions = db.query(func.count(TrainingSession.id)).filter(TrainingSession.session_date >= now, TrainingSession.session_date <= in_30).scalar() or 0
+
+        # Audits
+        audits_by_status = dict(db.query(cast(Audit.status, String), func.count(Audit.id)).group_by(cast(Audit.status, String)).all())
+        findings_by_severity = dict(db.query(cast(AuditFinding.severity, String), func.count(AuditFinding.id)).group_by(cast(AuditFinding.severity, String)).all())
+
+        # NC/CAPA
+        nc_open = db.query(func.count(NonConformance.id)).filter(NonConformance.status.in_(["open", "in_progress"])) .scalar() or 0
+        capa_open = db.query(func.count(CAPAAction.id)).filter(CAPAAction.status.in_(["open", "in_progress"])) .scalar() or 0
+
+        # Equipment
+        maintenance_due = db.query(func.count(MaintenancePlan.id)).filter(MaintenancePlan.next_due_at != None, MaintenancePlan.next_due_at <= in_30).scalar() or 0
+        calibration_due = db.query(func.count(CalibrationPlan.id)).filter(CalibrationPlan.next_due_at != None, CalibrationPlan.next_due_at <= in_30).scalar() or 0
+
+        # Trends (6 months) for NC and training
+        month_fmt = "%Y-%m"
+        months = [(now - timedelta(days=30*i)).strftime(month_fmt) for i in reversed(range(6))]
+        nc_per_month = dict(db.query(func.strftime(month_fmt, NonConformance.reported_date), func.count(NonConformance.id)).group_by(func.strftime(month_fmt, NonConformance.reported_date)).all())
+        capa_per_month = dict(db.query(func.strftime(month_fmt, CAPAAction.created_at), func.count(CAPAAction.id)).group_by(func.strftime(month_fmt, CAPAAction.created_at)).all())
+        tr_per_month = dict(db.query(func.strftime(month_fmt, TrainingAttendance.created_at), func.count(TrainingAttendance.id)).group_by(func.strftime(month_fmt, TrainingAttendance.created_at)).all())
+        trend = [{
+            "month": m,
+            "nc": int(nc_per_month.get(m, 0) or 0),
+            "capa": int(capa_per_month.get(m, 0) or 0),
+            "training": int(tr_per_month.get(m, 0) or 0)
+        } for m in months]
+
+        payload = {
+            "kpis": {
+                "overallCompliance": round((document_compliance + prp_completion + ccp_compliance + supplier_performance + training_completion) / 5.0, 2),
+                "documentCompliance": document_compliance,
+                "supplierPerformance": supplier_performance,
+                "trainingCompletion": training_completion,
+                "prpCompletion": prp_completion,
+                "ccpCompliance": ccp_compliance,
+            },
+            "documents": {
+                "total": int(total_docs),
+                "byStatus": docs_by_status,
+                "byType": docs_by_type,
+                "pendingApprovals": int(pending_approvals),
+                "upcomingReviews": int(upcoming_reviews),
+            },
+            "suppliers": {
+                "total": int(total_suppliers),
+                "avgScorePct": supplier_performance,
+                "expiringCertificates": int(expiring_supplier_docs),
+                "deliveryPassRate": delivery_pass_rate,
+            },
+            "audits": {
+                "byStatus": audits_by_status,
+                "findingsBySeverity": findings_by_severity,
+            },
+            "training": {
+                "completionLast90": training_completion,
+                "upcomingSessions": int(upcoming_sessions),
+            },
+            "equipment": {
+                "maintenanceDue30": int(maintenance_due),
+                "calibrationDue30": int(calibration_due),
+            },
+            "ncCapaTrend": trend,
+        }
+
+        return ResponseModel(success=True, message="Overview ready", data=payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to build overview: {e}")
 
 
 # Frontend-expected auxiliary dashboard endpoints

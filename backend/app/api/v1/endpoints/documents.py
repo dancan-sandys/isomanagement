@@ -2233,8 +2233,19 @@ async def get_document_approvals(
     and steps[].assigned_to is a user-friendly name.
     """
     try:
-        doc = db.query(Document).filter(Document.id == document_id).first()
-        if not doc:
+        # Project only safe fields and cast enum to String to avoid enum coercion errors
+        doc_row = (
+            db.query(
+                Document.id.label("id"),
+                cast(Document.status, String).label("status"),
+                Document.created_at.label("created_at"),
+                Document.updated_at.label("updated_at"),
+                Document.created_by.label("created_by"),
+            )
+            .filter(Document.id == document_id)
+            .first()
+        )
+        if not doc_row:
             raise HTTPException(status_code=404, detail="Document not found")
 
         # Fetch approval rows ordered by approval_order
@@ -2281,23 +2292,24 @@ async def get_document_approvals(
                     break
 
         if current_step_index is None:
-            # All steps completed or rejected; infer from document status
-            if doc.status == DocumentStatus.APPROVED:
+            # All steps completed or rejected; infer from document status string
+            status_str = (doc_row.status or "").lower()
+            if status_str == "approved":
                 current_step_index = len(steps_db)
             else:
-                # No approvals configured; treat as pending none
+                # No approvals configured; treat as first step pending
                 current_step_index = 0
 
         # Prepend a synthetic "Document Creation" step for visualization
-        creator = db.query(User).filter(User.id == doc.created_by).first() if getattr(doc, "created_by", None) else None
+        creator = db.query(User).filter(User.id == doc_row.created_by).first() if getattr(doc_row, "created_by", None) else None
         creator_name = creator.full_name if creator and creator.full_name else (creator.username if creator else "")
         creation_step = {
             "id": 0,
             "name": "Document Creation",
             "status": "completed",
             "assigned_to": creator_name,
-            "assigned_at": doc.created_at.isoformat() if doc.created_at else None,
-            "completed_at": doc.created_at.isoformat() if doc.created_at else None,
+            "assigned_at": doc_row.created_at.isoformat() if doc_row.created_at else None,
+            "completed_at": doc_row.created_at.isoformat() if doc_row.created_at else None,
             "comments": None,
             "order": 0,
         }
@@ -2308,9 +2320,9 @@ async def get_document_approvals(
         data = {
             "document_id": document_id,
             "current_step": current_step_display,
-            "status": (doc.status.value if hasattr(doc.status, "value") else str(doc.status) or "draft"),
-            "created_at": doc.created_at.isoformat() if getattr(doc, "created_at", None) else None,
-            "updated_at": doc.updated_at.isoformat() if getattr(doc, "updated_at", None) else None,
+            "status": (doc_row.status or "draft"),
+            "created_at": doc_row.created_at.isoformat() if getattr(doc_row, "created_at", None) else None,
+            "updated_at": doc_row.updated_at.isoformat() if getattr(doc_row, "updated_at", None) else None,
             "steps": steps,
         }
         return ResponseModel(success=True, message="Document approvals retrieved", data=data)
