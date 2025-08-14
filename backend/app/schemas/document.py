@@ -34,6 +34,9 @@ class DocumentCategory(str, Enum):
     QUALITY = "quality"
     SAFETY = "safety"
     GENERAL = "general"
+    PRODUCTION = "production"
+    HR = "hr"
+    FINANCE = "finance"
 
 
 class DocumentCreate(BaseModel):

@@ -35,6 +35,9 @@ class DocumentCategory(str, enum.Enum):
     QUALITY = "quality"
     SAFETY = "safety"
     GENERAL = "general"
+    PRODUCTION = "production"
+    HR = "hr"
+    FINANCE = "finance"
 
 
 class Document(Base):

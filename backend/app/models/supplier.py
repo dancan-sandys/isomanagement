@@ -43,8 +43,25 @@ class Supplier(Base):
     id = Column(Integer, primary_key=True, index=True)
     supplier_code = Column(String(50), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
-    status = Column(Enum(SupplierStatus), nullable=False, default=SupplierStatus.PENDING_APPROVAL)
-    category = Column(Enum(SupplierCategory), nullable=False)
+    status = Column(
+        Enum(
+            SupplierStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+        default=SupplierStatus.PENDING_APPROVAL,
+    )
+    category = Column(
+        Enum(
+            SupplierCategory,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     
     # Contact information
     contact_person = Column(String(100))

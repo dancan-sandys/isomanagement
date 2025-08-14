@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, cast, String
+from sqlalchemy import func, desc, cast, String, select, update as sa_update
 import uuid
 import io
 from reportlab.lib.pagesizes import A4
@@ -876,7 +876,7 @@ async def update_document(
     description: Optional[str] = Form(None),
     document_type: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
-    status: Optional[str] = Form(None),
+    doc_status: Optional[str] = Form(None, alias="status"),
     department: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
@@ -886,50 +886,78 @@ async def update_document(
     Update an existing document (metadata only, use version endpoint for file changes)
     """
     try:
-        document = db.query(Document).filter(Document.id == document_id).first()
-        
-        if not document:
+        # Read minimal columns to avoid enum hydration issues on invalid stored values
+        row = db.execute(
+            select(Document.__table__.c.id, Document.__table__.c.version).where(Document.__table__.c.id == document_id)
+        ).first()
+        if not row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Document not found"
             )
-        
-        old_version = document.version
-        
-        # Update fields
+
+        old_version = row.version
+
+        # Build partial update dict with validated/coerced values
+        updates = {}
         if title is not None:
-            document.title = title
+            updates["title"] = title
         if description is not None:
-            document.description = description
+            updates["description"] = description
         if document_type is not None:
-            document.document_type = DocumentType(document_type)
+            try:
+                updates["document_type"] = DocumentType((document_type or "").strip().lower()).value
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid document_type"
+                )
         if category is not None:
-            document.category = DocumentCategory(category)
-        if status is not None:
-            document.status = DocumentStatus(status)
+            try:
+                updates["category"] = DocumentCategory((category or "").strip().lower()).value
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid category"
+                )
+        if doc_status is not None:
+            try:
+                updates["status"] = DocumentStatus((doc_status or "").strip().lower()).value
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid status"
+                )
         if department is not None:
-            document.department = department
-        
-        document.updated_at = datetime.utcnow()
-        db.commit()
-        
-        # Create change log for metadata update
-        create_change_log(
-            db=db,
-            document_id=document.id,
-            change_type="updated",
-            change_description="Document metadata updated",
-            old_version=old_version,
-            new_version=document.version,
-            changed_by=current_user.id
-        )
-        
+            updates["department"] = department
+
+        updates["updated_at"] = datetime.utcnow()
+
+        if updates:
+            result = db.execute(
+                sa_update(Document.__table__).where(Document.__table__.c.id == document_id).values(**updates)
+            )
+            db.commit()
+            if result.rowcount == 0:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+            # Create change log for metadata update
+            create_change_log(
+                db=db,
+                document_id=row.id if hasattr(row, "id") else document_id,
+                change_type="updated",
+                change_description="Document metadata updated",
+                old_version=old_version,
+                new_version=old_version,
+                changed_by=current_user.id
+            )
+
         resp = ResponseModel(
             success=True,
             message="Document updated successfully"
         )
         try:
-            audit_event(db, current_user.id, "document_updated", "documents", str(document.id))
+            audit_event(db, current_user.id, "document_updated", "documents", str(row.id))
         except Exception:
             pass
         return resp

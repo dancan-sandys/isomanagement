@@ -721,10 +721,11 @@ class SupplierService:
         ).count()
 
         # Suppliers by category (normalize to strings)
+        from sqlalchemy import cast, String
         suppliers_by_category_raw = self.db.query(
-            Supplier.category,
+            cast(Supplier.category, String),
             func.count(Supplier.id).label('count')
-        ).group_by(Supplier.category).all()
+        ).group_by(cast(Supplier.category, String)).all()
 
         # Suppliers by risk level
         suppliers_by_risk = self.db.query(
@@ -758,9 +759,7 @@ class SupplierService:
             "overdue_evaluations": overdue_evaluations,
             "suppliers_by_category": [
                 {
-                    "category": (
-                        item[0].value if hasattr(item[0], "value") else str(item[0] or "unknown")
-                    ).lower(),
+                    "category": str(item[0] or "unknown").lower(),
                     "count": int(item[1] or 0),
                 }
                 for item in suppliers_by_category_raw

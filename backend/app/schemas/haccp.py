@@ -54,6 +54,7 @@ class ProductUpdate(BaseModel):
     storage_conditions: Optional[str] = None
     packaging_type: Optional[str] = Field(None, max_length=100)
     haccp_plan_approved: Optional[bool] = None
+    haccp_plan_version: Optional[str] = None
 
 
 class ProductResponse(BaseModel):

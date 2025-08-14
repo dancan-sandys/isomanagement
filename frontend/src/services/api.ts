@@ -142,7 +142,7 @@ export const usersAPI = {
         }
       });
     }
-    const response: AxiosResponse = await api.get('/users', { params: filteredParams });
+    const response: AxiosResponse = await api.get('/users/', { params: filteredParams });
     return response.data;
   },
 
@@ -152,7 +152,7 @@ export const usersAPI = {
   },
 
   createUser: async (userData: any) => {
-    const response: AxiosResponse = await api.post('/users', userData);
+    const response: AxiosResponse = await api.post('/users/', userData);
     return response.data;
   },
 
