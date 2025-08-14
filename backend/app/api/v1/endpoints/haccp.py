@@ -2313,5 +2313,4 @@ async def get_ccp_alerts_summary(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve alerts summary: {str(e)}"
->>>>>>> 1a95b881e6689185fd4a1d1f2d3dd39a0111cc2f
         ) 
