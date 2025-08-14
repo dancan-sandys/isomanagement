@@ -39,7 +39,7 @@ import {
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { dashboardAPI } from '../../services/api';
-import { PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
 
 interface SmartMetric {
   id: string;
@@ -86,6 +86,9 @@ const SmartDashboard: React.FC = () => {
   const [insights, setInsights] = useState<SmartInsight[]>([]);
   const [docTypeSeries, setDocTypeSeries] = useState<Array<{ name: string; value: number }>>([]);
   const [operationalSeries, setOperationalSeries] = useState<Array<{ name: string; value: number }>>([]);
+  const [overview, setOverview] = useState<any>(null);
+  const [docStatusSeries, setDocStatusSeries] = useState<Array<{ name: string; value: number }>>([]);
+  const [ncCapaTrend, setNcCapaTrend] = useState<Array<{ month: string; nc: number; capa: number; training: number }>>([]);
 
   // Load real data from backend
   useEffect(() => {
@@ -98,13 +101,17 @@ const SmartDashboard: React.FC = () => {
     setLoading(true);
     try {
       // Load data from real backend APIs
-      const [metricsResponse, tasksResponse, insightsResponse, statsResponse, kpiResponse, fsmsResponse] = await Promise.all([
+      const [metricsResponse, tasksResponse, insightsResponse, statsResponse, kpiResponse, fsmsResponse, isoSummaryResponse, overviewResponse] = await Promise.all([
         dashboardAPI.getUserMetrics(String(user?.id || '')),
         dashboardAPI.getPriorityTasks(String(user?.id || '')),
         dashboardAPI.getInsights(String(user?.id || '')),
         dashboardAPI.getStats(),
         dashboardAPI.getCrossModuleKpis ? dashboardAPI.getCrossModuleKpis('month') : Promise.resolve(null),
-        dashboardAPI.getFsmsComplianceScore ? dashboardAPI.getFsmsComplianceScore() : Promise.resolve(null)
+        dashboardAPI.getFsmsComplianceScore ? dashboardAPI.getFsmsComplianceScore() : Promise.resolve(null),
+        // New ISO executive summary
+        (dashboardAPI as any).getIsoSummary ? (dashboardAPI as any).getIsoSummary() : Promise.resolve(null),
+        // Comprehensive overview
+        (dashboardAPI as any).getOverview ? (dashboardAPI as any).getOverview() : Promise.resolve(null)
       ]);
 
       // Transform backend data to component format
@@ -137,6 +144,57 @@ const SmartDashboard: React.FC = () => {
           },
           ...prev,
         ]);
+      }
+
+      // Use ISO summary to populate top KPIs and trend if present
+      const iso = isoSummaryResponse?.data || isoSummaryResponse;
+      if (iso?.complianceMetrics?.overall !== undefined) {
+        // Add/override primary metrics
+        setMetrics((prev) => [
+          {
+            id: 'overall_compliance',
+            title: 'Overall Compliance',
+            value: `${iso.complianceMetrics.overall}%`,
+            change: 0,
+            trend: 'stable',
+            icon: <CheckCircle />,
+            color: 'success',
+            insight: 'ISO overview'
+          },
+          ...prev
+        ]);
+        // Replace chart series with ISO exec trend
+        const td = (iso.trendData || []).map((t: any) => ({ name: t.month, value: t.compliance }));
+        if (td.length) {
+          setOperationalSeries(td);
+        }
+        const pie = [
+          { name: 'HACCP', value: iso.complianceMetrics.haccp },
+          { name: 'PRP', value: iso.complianceMetrics.prp },
+          { name: 'Supplier', value: iso.complianceMetrics.supplier },
+          { name: 'Training', value: iso.complianceMetrics.training },
+        ];
+        setDocTypeSeries(pie as any);
+      }
+
+      // Handle overview payload
+      const ov = overviewResponse?.data || overviewResponse;
+      if (ov?.kpis) {
+        setOverview(ov);
+        // Bar: documents by status
+        const statuses = ov.documents?.byStatus || {};
+        setDocStatusSeries(Object.keys(statuses).map((k) => ({ name: k.replace(/_/g, ' '), value: Number(statuses[k] || 0) })));
+        // Pie: module compliance
+        setDocTypeSeries([
+          { name: 'Documents', value: ov.kpis.documentCompliance || 0 },
+          { name: 'PRP', value: ov.kpis.prpCompletion || 0 },
+          { name: 'HACCP', value: ov.kpis.ccpCompliance || 0 },
+          { name: 'Supplier', value: ov.kpis.supplierPerformance || 0 },
+          { name: 'Training', value: ov.kpis.trainingCompletion || 0 },
+        ]);
+        // Multi-line trend
+        const trend = (ov.ncCapaTrend || []).map((t: any) => ({ month: t.month, nc: t.nc, capa: t.capa, training: t.training }));
+        setNcCapaTrend(trend);
       }
       const opsSeries = [
         { name: 'Documents', value: Number(ops.documents_processed || 0) },
@@ -744,10 +802,10 @@ const SmartDashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
-              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Operational KPIs (30 days)</Typography>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Documents by Status</Typography>
               <Box sx={{ width: '100%', height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={operationalSeries}>
+                  <BarChart data={docStatusSeries}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis allowDecimals={false} />
@@ -755,6 +813,28 @@ const SmartDashboard: React.FC = () => {
                     <RechartTooltip />
                     <Bar dataKey="value" name="Count" fill="#3B82F6" />
                   </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>NC / CAPA / Training Trend (6 months)</Typography>
+              <Box sx={{ width: '100%', height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={ncCapaTrend}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis allowDecimals={false} />
+                    <Legend />
+                    <RechartTooltip />
+                    <Line dataKey="nc" name="NC" stroke="#ef4444" strokeWidth={2} />
+                    <Line dataKey="capa" name="CAPA" stroke="#f59e0b" strokeWidth={2} />
+                    <Line dataKey="training" name="Training" stroke="#10b981" strokeWidth={2} />
+                  </LineChart>
                 </ResponsiveContainer>
               </Box>
             </CardContent>

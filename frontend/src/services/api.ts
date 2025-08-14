@@ -785,6 +785,16 @@ export const dashboardAPI = {
     return response.data;
   },
 
+  getIsoSummary: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/iso-summary');
+    return response.data;
+  },
+
+  getOverview: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/overview');
+    return response.data;
+  },
+
   // Enhanced UX Methods (fallback to existing data if new endpoints not available)
   getUserMetrics: async (userId: string) => {
     try {
