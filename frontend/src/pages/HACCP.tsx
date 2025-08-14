@@ -911,7 +911,7 @@ const HACCP: React.FC = () => {
                 const ccpId = Number((ccpForm as any).monitor_ccp_id);
                 if (!ccpId) return;
                 try {
-                  await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, {
+                  await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
                     body: JSON.stringify({
@@ -920,7 +920,7 @@ const HACCP: React.FC = () => {
                       unit: (ccpForm as any).monitor_unit,
                     })
                   });
-                  const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent((ccpForm as any).monitor_batch || '')}`, {
+                  const res = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent((ccpForm as any).monitor_batch || '')}`, {
                     headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
                   });
                   const data = await res.json();

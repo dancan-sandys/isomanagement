@@ -50,7 +50,7 @@ const HACCPProductDetail: React.FC = () => {
     const t = setTimeout(async () => {
       try {
         // lightweight user search via usersAPI to keep Autocomplete intact
-        const resp = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/users?page=1&size=10&search=${encodeURIComponent(userSearch)}`, {
+        const resp = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/users?page=1&size=10&search=${encodeURIComponent(userSearch)}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
         });
         const data = await resp.json();
@@ -257,17 +257,17 @@ const HACCPProductDetail: React.FC = () => {
             <Button variant="contained" disabled={!monitoringForm.ccp_id} onClick={async () => {
               const ccpId = Number(monitoringForm.ccp_id);
               try {
-                await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ batch_number: monitoringForm.batch, measured_value: Number(monitoringForm.value), unit: monitoringForm.unit }) });
+                await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ batch_number: monitoringForm.batch, measured_value: Number(monitoringForm.value), unit: monitoringForm.unit }) });
                 // reload logs
                 try {
-                  const resp = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
+                  const resp = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
                   const logsJson = await resp.json();
                   const items = logsJson?.data?.items || logsJson?.items || [];
                   setMonitoringLogs(items);
                 } catch {}
                 // open NC if created for this batch
                 if (monitoringForm.batch) {
-                  const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(monitoringForm.batch)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
+                  const res = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(monitoringForm.batch)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
                   const data = await res.json();
                   if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
                 }
@@ -307,7 +307,7 @@ const HACCPProductDetail: React.FC = () => {
                         <TableCell>
                           <Button size="small" onClick={async () => {
                             const ccpId = Number(monitoringForm.ccp_id);
-                            const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || '')}`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
+                            const res = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || '')}`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
                             const data = await res.json();
                             if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
                             else alert('No NC linked for this reading');
