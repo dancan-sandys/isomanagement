@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -29,17 +29,13 @@ import {
   Tab,
   Fab,
   Tooltip,
-  Divider,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  Badge,
-  Avatar,
   LinearProgress,
-  Switch,
-  FormControlLabel,
   CircularProgress,
+  Avatar,
 } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
 import { usersAPI } from '../services/api';
@@ -51,22 +47,13 @@ import {
   CheckCircle,
   Refresh,
   Schedule,
-  Today,
   CalendarToday,
   Person,
-  Category,
-  FilterList,
   Search,
   Notifications,
   CheckBox,
-  CheckBoxOutlineBlank,
-  PhotoCamera,
-  AttachFile,
   Edit,
   Delete,
-  PlayArrow,
-  Stop,
-  Pause,
   TrendingUp,
   Assessment,
   Dashboard,
@@ -193,6 +180,26 @@ const PRP: React.FC = () => {
     transportation: <LocalShipping />,
   };
 
+  const fetchChecklists = useCallback(async () => {
+    try {
+      // Get all checklists by fetching from each program
+      const allChecklists: PRPChecklist[] = [];
+      for (const program of programs) {
+        try {
+          const response = await prpAPI.getChecklists(program.id, { page: 1, size: 50 });
+          if (response.success && response.data.items) {
+            allChecklists.push(...response.data.items);
+          }
+        } catch (err) {
+          console.error(`Failed to load checklists for program ${program.id}:`, err);
+        }
+      }
+      setChecklists(allChecklists);
+    } catch (err: any) {
+      console.error('Failed to load checklists:', err);
+    }
+  }, [programs]);
+
   const fetchPrograms = async () => {
     try {
       setLoading(true);
@@ -211,26 +218,6 @@ const PRP: React.FC = () => {
       setError(err.message || 'Failed to load programs');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchChecklists = async () => {
-    try {
-      // Get all checklists by fetching from each program
-      const allChecklists: PRPChecklist[] = [];
-      for (const program of programs) {
-        try {
-          const response = await prpAPI.getChecklists(program.id, { page: 1, size: 50 });
-          if (response.success && response.data.items) {
-            allChecklists.push(...response.data.items);
-          }
-        } catch (err) {
-          console.error(`Failed to load checklists for program ${program.id}:`, err);
-        }
-      }
-      setChecklists(allChecklists);
-    } catch (err: any) {
-      console.error('Failed to load checklists:', err);
     }
   };
 
@@ -272,7 +259,7 @@ const PRP: React.FC = () => {
     if (programs.length > 0) {
       fetchChecklists();
     }
-  }, [programs]);
+  }, [programs, fetchChecklists]);
 
   const handleCreateProgram = async () => {
     try {
@@ -644,7 +631,7 @@ const PRP: React.FC = () => {
                     <Box display="flex" alignItems="center" gap={1}>
                       <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
                         {program.responsible_person?.charAt(0) || 'U'}
-                      </Avatar>
+                      </Avatar> 
                       <Typography variant="body2">
                         {program.responsible_person || 'Unassigned'}
                       </Typography>

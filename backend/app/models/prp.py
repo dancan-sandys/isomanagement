@@ -51,8 +51,25 @@ class PRPProgram(Base):
     program_code = Column(String(50), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    category = Column(Enum(PRPCategory), nullable=False)
-    status = Column(Enum(PRPStatus), nullable=False, default=PRPStatus.ACTIVE)
+    category = Column(
+        Enum(
+            PRPCategory,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+    status = Column(
+        Enum(
+            PRPStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+        default=PRPStatus.ACTIVE,
+    )
     
     # Program details
     objective = Column(Text)
@@ -61,7 +78,15 @@ class PRPProgram(Base):
     responsible_person = Column(Integer, ForeignKey("users.id"))
     
     # Frequency and scheduling
-    frequency = Column(Enum(PRPFrequency), nullable=False)
+    frequency = Column(
+        Enum(
+            PRPFrequency,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     frequency_details = Column(Text)  # Specific details about frequency
     next_due_date = Column(DateTime(timezone=True))
     
@@ -89,7 +114,16 @@ class PRPChecklist(Base):
     checklist_code = Column(String(50), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    status = Column(Enum(ChecklistStatus), nullable=False, default=ChecklistStatus.PENDING)
+    status = Column(
+        Enum(
+            ChecklistStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+        default=ChecklistStatus.PENDING,
+    )
     
     # Scheduling
     scheduled_date = Column(DateTime(timezone=True), nullable=False)
@@ -171,11 +205,27 @@ class PRPTemplate(Base):
     template_code = Column(String(50), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    category = Column(Enum(PRPCategory), nullable=False)
+    category = Column(
+        Enum(
+            PRPCategory,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     
     # Template structure
     template_structure = Column(JSON)  # JSON object defining the template structure
-    default_frequency = Column(Enum(PRPFrequency), nullable=False)
+    default_frequency = Column(
+        Enum(
+            PRPFrequency,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     estimated_duration_minutes = Column(Integer)
     
     # Metadata
@@ -197,7 +247,15 @@ class PRPSchedule(Base):
     id = Column(Integer, primary_key=True, index=True)
     program_id = Column(Integer, ForeignKey("prp_programs.id"), nullable=False)
     schedule_type = Column(String(50), nullable=False)  # recurring, one_time
-    frequency = Column(Enum(PRPFrequency), nullable=False)
+    frequency = Column(
+        Enum(
+            PRPFrequency,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            validate_strings=True,
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     
     # Scheduling details
     start_date = Column(DateTime(timezone=True), nullable=False)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Box, Button, Card, CardContent, Divider, Grid, Stack, TextField, Typography } from '@mui/material';
 import managementReviewAPI from '../services/managementReviewAPI';
@@ -10,7 +10,7 @@ const ManagementReviewDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [actionTitle, setActionTitle] = useState('');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true); setError(null);
     try {
@@ -19,9 +19,9 @@ const ManagementReviewDetail: React.FC = () => {
       setReview(data);
     } catch (e: any) { setError(e?.message || 'Failed to load'); }
     finally { setLoading(false); }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <Box sx={{ p: 3 }}>Loading…</Box>;
   if (error) return <Box sx={{ p: 3 }}><Typography color="error">{error}</Typography></Box>;

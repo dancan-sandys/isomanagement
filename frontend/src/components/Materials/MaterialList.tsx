@@ -45,7 +45,6 @@ import {
   AddCircle,
   Inventory2,
   Cancel,
-  CheckCircle,
   Coronavirus as Allergen,
   Inventory,
   Science,

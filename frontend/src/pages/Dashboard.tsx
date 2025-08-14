@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -17,24 +17,14 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  LinearProgress,
-  Divider,
-  Skeleton,
-  Badge,
   Tooltip,
   IconButton,
-  Avatar,
-  Fade,
-  Grow,
-  Slide,
 } from '@mui/material';
 import {
   Warning,
   CheckCircle,
   Schedule,
   Assignment,
-  TrendingUp,
-  TrendingDown,
   Security,
   Description,
   Timeline,
@@ -43,33 +33,17 @@ import {
   Add,
   People,
   Assessment,
-  Business,
-  LocalShipping,
   Settings,
   Dashboard as DashboardIcon,
-  PlayArrow,
-  MoreVert,
-  Star,
-  Bookmark,
-  Speed,
-  Analytics,
-  Task,
-  CheckBox,
-  RadioButtonUnchecked,
-  Flag,
-  AccessTime,
-  CalendarToday,
-  Insights,
   AutoAwesome,
   Lightbulb,
 } from '@mui/icons-material';
-import PageHeader from '../components/UI/PageHeader';
 import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
 import SmartDashboard from '../components/Dashboard/SmartDashboard';
 import SmartOnboarding from '../components/Onboarding/SmartOnboarding';
 import { RootState } from '../store';
-import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
+import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import { dashboardAPI } from '../services/api';
 
 const Dashboard: React.FC = () => {
@@ -80,21 +54,7 @@ const Dashboard: React.FC = () => {
 
   const [dashboardData, setDashboardData] = useState<any>(null);
 
-  useEffect(() => {
-    // Load dashboard data based on user role
-    loadDashboardData();
-  }, [user]);
-
-  // Check if this is user's first time (must be before any early returns)
-  useEffect(() => {
-    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (!hasSeenOnboarding && user) {
-      setIsFirstTime(true);
-      setShowOnboarding(true);
-    }
-  }, [user]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const [statsResp, activityResp] = await Promise.all([
@@ -143,7 +103,21 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    // Load dashboard data based on user role
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Check if this is user's first time (must be before any early returns)
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding && user) {
+      setIsFirstTime(true);
+      setShowOnboarding(true);
+    }
+  }, [user]);
 
   const renderSystemAdministratorDashboard = () => (
     <Grid container spacing={3}>
@@ -591,47 +565,7 @@ const Dashboard: React.FC = () => {
     </Grid>
   );
 
-  const getDashboardTitle = () => {
-    if (isSystemAdministrator(user)) {
-      return 'System Administrator Dashboard';
-    } else if (hasRole(user, 'QA Manager')) {
-      return 'QA Manager Dashboard';
-    } else if (hasRole(user, 'Production Operator')) {
-      return 'Production Operator Dashboard';
-    } else if (hasRole(user, 'Auditor')) {
-      return 'Auditor Dashboard';
-    } else {
-      return 'Dashboard';
-    }
-  };
 
-  const getDashboardSubtitle = () => {
-    if (isSystemAdministrator(user)) {
-      return 'System administration and user management overview';
-    } else if (hasRole(user, 'QA Manager')) {
-      return 'Quality assurance and compliance management';
-    } else if (hasRole(user, 'Production Operator')) {
-      return 'Daily operations and task management';
-    } else if (hasRole(user, 'Auditor')) {
-      return 'Audit and compliance monitoring';
-    } else {
-      return 'ISO 22000 Food Safety Management System Overview';
-    }
-  };
-
-  const renderDashboard = () => {
-    if (isSystemAdministrator(user)) {
-      return renderSystemAdministratorDashboard();
-    } else if (hasRole(user, 'QA Manager')) {
-      return renderQAManagerDashboard();
-    } else if (hasRole(user, 'Production Operator')) {
-      return renderOperatorDashboard();
-    } else if (hasRole(user, 'Auditor')) {
-      return renderAuditorDashboard();
-    } else {
-      return renderDefaultDashboard();
-    }
-  };
 
   if (loading) {
     return (
