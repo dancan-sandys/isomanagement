@@ -30,7 +30,10 @@ import {
 // Supplier Management
 export const fetchSuppliers = createAsyncThunk(
   'supplier/fetchSuppliers',
-  async (params?: SupplierFilters & { page?: number; size?: number }, { rejectWithValue }) => {
+  async (
+    params: (SupplierFilters & { page?: number; size?: number }) | undefined,
+    { rejectWithValue }
+  ) => {
     try {
       const response = await supplierAPI.getSuppliers(params);
       return response.data;

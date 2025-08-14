@@ -36,14 +36,16 @@ async def login(
         # Increment failed attempts and lock if threshold exceeded
         if user:
             now = datetime.utcnow()
+            # If already locked, return locked immediately
             if user.locked_until and user.locked_until > now:
-                # Already locked
-                pass
-            else:
-                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-                if user.failed_login_attempts >= settings.ACCOUNT_LOCKOUT_THRESHOLD:
-                    user.locked_until = now + _timedelta(minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES)
-                db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail="User account is locked"
+                )
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= settings.ACCOUNT_LOCKOUT_THRESHOLD:
+                user.locked_until = now + _timedelta(minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES)
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

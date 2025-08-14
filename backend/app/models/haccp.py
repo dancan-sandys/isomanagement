@@ -113,6 +113,10 @@ class Hazard(Base):
     # CCP determination
     is_ccp = Column(Boolean, default=False)
     ccp_justification = Column(Text)
+    # Persisted decision tree outcome (serialized JSON of DecisionTreeStep list)
+    decision_tree_steps = Column(Text)
+    decision_tree_run_at = Column(DateTime(timezone=True))
+    decision_tree_by = Column(Integer, ForeignKey("users.id"))
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -240,3 +244,73 @@ class CCPVerificationLog(Base):
     
     def __repr__(self):
         return f"<CCPVerificationLog(id={self.id}, ccp_id={self.ccp_id}, date='{self.verification_date}')>" 
+
+
+# HACCP Plan models (versioned with approvals, similar to Documents)
+class HACCPPlanStatus(str, enum.Enum):
+    DRAFT = "draft"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    OBSOLETE = "obsolete"
+
+
+class HACCPPlan(Base):
+    __tablename__ = "haccp_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    status = Column(Enum(HACCPPlanStatus), nullable=False, default=HACCPPlanStatus.DRAFT)
+    version = Column(String(20), nullable=False, default="1.0")
+    # Current content pointer is stored in latest version; duplicate here for convenience
+    current_content = Column(Text)
+    effective_date = Column(DateTime(timezone=True))
+    review_date = Column(DateTime(timezone=True))
+    approved_by = Column(Integer, ForeignKey("users.id"))
+    approved_at = Column(DateTime(timezone=True))
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    versions = relationship("HACCPPlanVersion", back_populates="plan", cascade="all, delete-orphan")
+    approvals = relationship("HACCPPlanApproval", back_populates="plan", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<HACCPPlan(id={self.id}, product_id={self.product_id}, version='{self.version}', status='{self.status}')>"
+
+
+class HACCPPlanVersion(Base):
+    __tablename__ = "haccp_plan_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("haccp_plans.id"), nullable=False)
+    version_number = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)  # Serialized JSON or rich text
+    change_description = Column(Text)
+    change_reason = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_by = Column(Integer, ForeignKey("users.id"))
+    approved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    plan = relationship("HACCPPlan", back_populates="versions")
+
+    def __repr__(self):
+        return f"<HACCPPlanVersion(id={self.id}, plan_id={self.plan_id}, version='{self.version_number}')>"
+
+
+class HACCPPlanApproval(Base):
+    __tablename__ = "haccp_plan_approvals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("haccp_plans.id"), nullable=False)
+    approver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approval_order = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # pending, approved, rejected
+    comments = Column(Text)
+    approved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    plan = relationship("HACCPPlan", back_populates="approvals")

@@ -203,47 +203,67 @@ def invalidate_user_session(db: Session, session_token: str) -> bool:
 
 def require_permission(permission: Union[str, tuple]):
     """
-    Decorator to require specific permission.
-    Supports both old string format ("users:write") and new RBAC format (("USERS", "CREATE"))
+    Dependency to enforce permissions.
+
+    Supports:
+    - Tuple form: ("MODULE", "ACTION") e.g. ("USERS", "CREATE")
+    - Legacy string form: "module:action" e.g. "users:write"
     """
-    def permission_checker(current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-        # Handle new RBAC format: ("USERS", "CREATE")
+
+    def _normalize_legacy(permission_str: str) -> tuple[str, str]:
+        # Expect "module:action"; normalize whitespace and case
+        parts = [p.strip() for p in permission_str.split(":", 1)]
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Invalid permission format: {permission_str}"
+            )
+        module, action = parts[0], parts[1]
+        # Map common legacy action names to RBAC actions
+        action_mapping = {
+            "read": "VIEW",
+            "view": "VIEW",
+            "write": "CREATE",
+            "create": "CREATE",
+            "edit": "UPDATE",
+            "update": "UPDATE",
+            "remove": "DELETE",
+            "delete": "DELETE",
+        }
+        normalized_action = action_mapping.get(action.lower(), action.upper())
+        return module.upper(), normalized_action
+
+    def permission_checker(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db),
+    ):
+        # Handle tuple form
         if isinstance(permission, tuple) and len(permission) == 2:
             module, action = permission
-            if not check_user_permission(db, current_user.id, module, action):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Insufficient permissions: {module}:{action}"
-                )
-        # Handle old string format: "users:write"
-        elif isinstance(permission, str):
-            # Convert old format to new format
-            if ":" in permission:
-                module_action = permission.split(":")
-                if len(module_action) == 2:
-                    module, action = module_action
-                    # Map old actions to new ones
-                    action_mapping = {
-                        "read": "VIEW",
-                        "write": "CREATE",
-                        "update": "UPDATE", 
-                        "delete": "DELETE"
-                    }
-                    new_action = action_mapping.get(action, action.upper())
-                    if not check_user_permission(db, current_user.id, module.upper(), new_action):
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail=f"Insufficient permissions: {permission}"
-                        )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"Invalid permission format: {permission}"
-                    )
-            else:
+            module_norm = (module or "").strip().upper()
+            action_norm = (action or "").strip().upper()
+            if not module_norm or not action_norm:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Invalid permission format: {permission}"
+                )
+            if not check_user_permission(db, current_user.id, module_norm, action_norm):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Insufficient permissions: {module_norm}:{action_norm}"
+                )
+        # Handle legacy string form
+        elif isinstance(permission, str):
+            if ":" not in permission:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Invalid permission format: {permission}"
+                )
+            module_norm, action_norm = _normalize_legacy(permission)
+            if not check_user_permission(db, current_user.id, module_norm, action_norm):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Insufficient permissions: {module_norm}:{action_norm}"
                 )
         else:
             raise HTTPException(
@@ -251,4 +271,5 @@ def require_permission(permission: Union[str, tuple]):
                 detail=f"Invalid permission format: {permission}"
             )
         return current_user
+
     return permission_checker 

@@ -986,14 +986,6 @@ const HACCP: React.FC = () => {
 
       {/* Product Details moved to /haccp/products/:id */}
 
-<<<<<<< HEAD
-      {/* Dialogs */}
-      <ProductDialog
-        open={productDialogOpen}
-        onClose={() => setProductDialogOpen(false)}
-        product={selectedProductForEdit}
-      />
-=======
       {/* Dialogs for creating/editing products, process flows, hazards, and CCPs */}
       <Dialog open={productDialogOpen} onClose={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }} maxWidth="md" fullWidth>
         <DialogTitle>{selectedProductForEdit ? 'Edit Product' : 'Add Product'}</DialogTitle>
@@ -1258,9 +1250,7 @@ const HACCP: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Simple edit dialogs could be implemented similarly for process flows, hazards, and CCPs.
-          Deferring full forms to Phase 2; current UI supports delete and open edit dialog shells. */}
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
+      {/* Simple edit dialogs could be implemented similarly for process flows, hazards, and CCPs. */}
     </Box>
   );
 };

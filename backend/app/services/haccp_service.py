@@ -9,7 +9,8 @@ import uuid
 
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
-    HazardType, RiskLevel, CCPStatus
+    HazardType, RiskLevel, CCPStatus,
+    HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
@@ -135,7 +136,7 @@ class HACCPService:
         
         return hazard
     
-    def run_decision_tree(self, hazard_id: int) -> DecisionTreeResult:
+    def run_decision_tree(self, hazard_id: int, run_by_user_id: Optional[int] = None) -> DecisionTreeResult:
         """
         Run the CCP decision tree for a hazard
         Based on Codex Alimentarius decision tree
@@ -196,14 +197,174 @@ class HACCPService:
             explanation=f"Subsequent control measures: {'Yes' if q3_answer else 'No'}"
         ))
         
+        # Question 4: Is this step specifically designed to eliminate or reduce the hazard?
+        # Heuristic: mark True if current hazard is controlled at this step and effectiveness >=3
+        q4_answer = bool(hazard.is_controlled and (hazard.control_effectiveness or 0) >= 3)
+        steps.append(DecisionTreeStep(
+            question=DecisionTreeQuestion.Q4,
+            answer=q4_answer,
+            explanation=(
+                "This step is designed and effective to control the hazard"
+                if q4_answer else "This step is not specifically designed or not effective enough"
+            ),
+        ))
+
         if q3_answer:
             justification = "A subsequent step will eliminate or reduce the hazard to acceptable levels"
-            return DecisionTreeResult(is_ccp=False, justification=justification, steps=steps)
-        else:
-            justification = "No subsequent step will eliminate or reduce the hazard - this is a CCP"
+            is_ccp = False
+        elif q4_answer:
+            justification = "This step is specifically designed to reduce the hazard – CCP"
             is_ccp = True
-        
+        else:
+            justification = "No subsequent elimination/reduction and this step not designed – CCP"
+            is_ccp = True
+
+        # Persist outcome on hazard
+        try:
+            import json
+            hazard.is_ccp = is_ccp
+            hazard.ccp_justification = justification
+            hazard.decision_tree_steps = json.dumps([
+                {"question": s.question.value, "answer": s.answer, "explanation": s.explanation}
+                for s in steps
+            ])
+            hazard.decision_tree_run_at = datetime.utcnow()
+            hazard.decision_tree_by = run_by_user_id
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+
         return DecisionTreeResult(is_ccp=is_ccp, justification=justification, steps=steps)
+
+    # --- HACCP Plan methods ---
+    def create_haccp_plan(self, product_id: int, title: str, description: Optional[str], content: str, created_by: int,
+                           effective_date: Optional[datetime] = None, review_date: Optional[datetime] = None) -> HACCPPlan:
+        product = self.db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise ValueError("Product not found")
+
+        plan = HACCPPlan(
+            product_id=product_id,
+            title=title,
+            description=description,
+            status=HACCPPlanStatus.DRAFT,
+            version="1.0",
+            current_content=content,
+            effective_date=effective_date,
+            review_date=review_date,
+            created_by=created_by,
+        )
+        self.db.add(plan)
+        self.db.commit()
+        self.db.refresh(plan)
+
+        # Seed initial version
+        version = HACCPPlanVersion(
+            plan_id=plan.id,
+            version_number="1.0",
+            content=content,
+            change_description="Initial plan",
+            created_by=created_by,
+        )
+        self.db.add(version)
+        self.db.commit()
+
+        return plan
+
+    def create_haccp_plan_version(self, plan_id: int, content: str, change_description: Optional[str], change_reason: Optional[str], created_by: int) -> HACCPPlanVersion:
+        plan = self.db.query(HACCPPlan).filter(HACCPPlan.id == plan_id).first()
+        if not plan:
+            raise ValueError("Plan not found")
+
+        # Bump minor version
+        import re
+        m = re.match(r"^(\d+)\.(\d+)$", plan.version or "1.0")
+        if m:
+            next_version = f"{int(m.group(1))}.{int(m.group(2)) + 1}"
+        else:
+            next_version = "1.0"
+
+        version = HACCPPlanVersion(
+            plan_id=plan.id,
+            version_number=next_version,
+            content=content,
+            change_description=change_description,
+            change_reason=change_reason,
+            created_by=created_by,
+        )
+        self.db.add(version)
+
+        plan.version = next_version
+        plan.current_content = content
+        plan.status = HACCPPlanStatus.DRAFT
+        plan.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(version)
+        return version
+
+    def submit_haccp_plan_for_approval(self, plan_id: int, approvals: List[Dict[str, int]], submitted_by: int) -> int:
+        plan = self.db.query(HACCPPlan).filter(HACCPPlan.id == plan_id).first()
+        if not plan:
+            raise ValueError("Plan not found")
+        # Clear existing pending approvals
+        self.db.query(HACCPPlanApproval).filter(HACCPPlanApproval.plan_id == plan_id, HACCPPlanApproval.status == "pending").delete()
+        seen = set()
+        count = 0
+        for ap in approvals:
+            order = int(ap["approval_order"]) if isinstance(ap.get("approval_order"), int) else ap.get("approval_order")
+            if order in seen:
+                raise ValueError("Duplicate approval_order")
+            seen.add(order)
+            row = HACCPPlanApproval(plan_id=plan_id, approver_id=ap["approver_id"], approval_order=order, status="pending")
+            self.db.add(row)
+            count += 1
+        plan.status = HACCPPlanStatus.UNDER_REVIEW
+        plan.updated_at = datetime.utcnow()
+        self.db.commit()
+        return count
+
+    def approve_haccp_plan_step(self, plan_id: int, approval_id: int, approver_id: int) -> int:
+        step = self.db.query(HACCPPlanApproval).filter(HACCPPlanApproval.id == approval_id, HACCPPlanApproval.plan_id == plan_id).first()
+        if not step:
+            raise ValueError("Approval step not found")
+        if step.approver_id != approver_id:
+            raise PermissionError("Not assigned approver")
+        if step.status != "pending":
+            raise ValueError("Approval step is not pending")
+        # Ensure all lower orders are approved
+        pending_lower = self.db.query(HACCPPlanApproval).filter(HACCPPlanApproval.plan_id == plan_id, HACCPPlanApproval.approval_order < step.approval_order, HACCPPlanApproval.status != "approved").count()
+        if pending_lower > 0:
+            raise ValueError("Previous approval steps must be completed first")
+        step.status = "approved"
+        step.approved_at = datetime.utcnow()
+        self.db.commit()
+        # If none pending, mark plan approved
+        remaining = self.db.query(HACCPPlanApproval).filter(HACCPPlanApproval.plan_id == plan_id, HACCPPlanApproval.status == "pending").count()
+        if remaining == 0:
+            plan = self.db.query(HACCPPlan).filter(HACCPPlan.id == plan_id).first()
+            if plan:
+                plan.status = HACCPPlanStatus.APPROVED
+                plan.approved_by = approver_id
+                plan.approved_at = datetime.utcnow()
+                self.db.commit()
+        return remaining
+
+    def reject_haccp_plan_step(self, plan_id: int, approval_id: int, approver_id: int, comments: Optional[str]) -> None:
+        step = self.db.query(HACCPPlanApproval).filter(HACCPPlanApproval.id == approval_id, HACCPPlanApproval.plan_id == plan_id).first()
+        if not step:
+            raise ValueError("Approval step not found")
+        if step.approver_id != approver_id:
+            raise PermissionError("Not assigned approver")
+        if step.status != "pending":
+            raise ValueError("Approval step is not pending")
+        step.status = "rejected"
+        step.comments = comments
+        step.approved_at = datetime.utcnow()
+        plan = self.db.query(HACCPPlan).filter(HACCPPlan.id == plan_id).first()
+        if plan:
+            plan.status = HACCPPlanStatus.DRAFT
+        self.db.commit()
+        return None
     
     def create_ccp(self, product_id: int, ccp_data: CCPCreate, created_by: int) -> CCP:
         """Create a CCP"""

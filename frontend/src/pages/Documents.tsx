@@ -88,7 +88,6 @@ import StatusChip from '../components/UI/StatusChip';
 import DocumentUploadDialog from '../components/Documents/DocumentUploadDialog';
 import DocumentViewDialog from '../components/Documents/DocumentViewDialog';
 import DocumentVersionDialog from '../components/Documents/DocumentVersionDialog';
-import DocumentApprovalDialog from '../components/Documents/DocumentApprovalDialog';
 import DocumentChangeLogDialog from '../components/Documents/DocumentChangeLogDialog';
 import DocumentTemplatesDialog from '../components/Documents/DocumentTemplatesDialog';
 import DocumentWorkflowDialog from '../components/Documents/DocumentWorkflowDialog';
@@ -129,7 +128,6 @@ const Documents: React.FC = () => {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
-  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [changeLogDialogOpen, setChangeLogDialogOpen] = useState(false);
   const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
   const [workflowDialogOpen, setWorkflowDialogOpen] = useState(false);
@@ -552,11 +550,10 @@ const Documents: React.FC = () => {
       })()}
 
       {/* Document Table */}
-      {selectedDocuments.length > 0 && (
+        {selectedDocuments.length > 0 && (
         <Alert severity="info" sx={{ mb: 2 }}
           action={
             <Stack direction="row" spacing={1}>
-              <Button size="small" onClick={() => handleBulkAction('approve')} startIcon={<CheckCircle />}>Approve</Button>
               <Button size="small" onClick={() => handleBulkAction('archive')} startIcon={<Archive />}>Archive</Button>
               <Button size="small" color="warning" onClick={() => handleBulkAction('obsolete')} startIcon={<Warning />}>Mark Obsolete</Button>
               <Button size="small" variant="outlined" onClick={() => setSelectedDocuments([])}>Clear</Button>
@@ -711,18 +708,7 @@ const Documents: React.FC = () => {
           horizontal: 'right',
         }}
       >
-        {canApproveDocuments && (
-          <MenuItemComponent onClick={() => {
-            setSelectedDocument(selectedDocumentForMenu);
-            setApprovalDialogOpen(true);
-            handleMenuClose();
-          }}>
-            <ListItemIcon>
-              <Approval fontSize="small" />
-            </ListItemIcon>
-            Approve Document
-          </MenuItemComponent>
-        )}
+        {/* Removed direct Approve Document entry; use Workflow instead */}
         <MenuItemComponent onClick={() => {
           handleViewVersions(selectedDocumentForMenu);
           handleMenuClose();
@@ -751,18 +737,7 @@ const Documents: React.FC = () => {
           </ListItemIcon>
           View Workflow
         </MenuItemComponent>
-        {canApproveDocuments && selectedDocumentForMenu?.status === 'under_review' && (
-          <MenuItemComponent onClick={() => {
-            setSelectedDocument(selectedDocumentForMenu);
-            setApprovalDialogOpen(true);
-            handleMenuClose();
-          }}>
-            <ListItemIcon>
-              <Approval fontSize="small" />
-            </ListItemIcon>
-            Approve Document
-          </MenuItemComponent>
-        )}
+        {/* Removed conditional Approve entry; Workflow handles approvals */}
         <MenuItemComponent onClick={() => {
           setSelectedDocument(selectedDocumentForMenu);
           setComparisonDialogOpen(true);
@@ -1224,15 +1199,7 @@ const Documents: React.FC = () => {
         onClose={() => setVersionDialogOpen(false)}
       />
 
-      <DocumentApprovalDialog
-        open={approvalDialogOpen}
-        document={selectedDocument}
-        onClose={() => setApprovalDialogOpen(false)}
-        onSuccess={() => {
-          setApprovalDialogOpen(false);
-          loadDocuments();
-        }}
-      />
+      {/* Approval dialog removed in favor of Workflow dialog */}
 
       <DocumentChangeLogDialog
         open={changeLogDialogOpen}

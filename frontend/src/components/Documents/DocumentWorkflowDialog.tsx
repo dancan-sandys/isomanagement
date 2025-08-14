@@ -96,28 +96,10 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   const [action, setAction] = useState<'approve' | 'reject' | 'request_changes'>('approve');
   const dispatch = useDispatch<AppDispatch>();
 
-  const workflowSteps = [
-    {
-      name: 'Document Creation',
-      description: 'Document created and ready for review',
-      icon: <Edit />,
-    },
-    {
-      name: 'Initial Review',
-      description: 'QA Specialist reviews document content',
-      icon: <Assignment />,
-    },
-    {
-      name: 'Technical Review',
-      description: 'Technical expert reviews technical accuracy',
-      icon: <Person />,
-    },
-    {
-      name: 'Final Approval',
-      description: 'QA Manager gives final approval',
-      icon: <Approval />,
-    },
-  ];
+  // Icons per status for dynamic steps coming from backend
+  const stepIconByName: Record<string, JSX.Element> = {
+    creation: <Edit />, review: <Assignment />, technical: <Person />, approval: <Approval />,
+  };
 
   useEffect(() => {
     if (open && document) {
@@ -132,51 +114,10 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
     setError(null);
     
     try {
-      // Mock workflow data - in real implementation, this would come from API
-      const mockWorkflow: DocumentWorkflow = {
-        id: 1,
-        document_id: document.id,
-        current_step: 2,
-        status: 'under_review',
-        steps: [
-          {
-            id: 1,
-            name: 'Document Creation',
-            status: 'completed',
-            assigned_to: document.created_by,
-            assigned_at: document.created_at,
-            completed_at: document.created_at,
-            order: 1,
-          },
-          {
-            id: 2,
-            name: 'Initial Review',
-            status: 'in_progress',
-            assigned_to: 'QA Specialist',
-            assigned_at: document.created_at,
-            order: 2,
-          },
-          {
-            id: 3,
-            name: 'Technical Review',
-            status: 'pending',
-            assigned_to: 'Technical Expert',
-            order: 3,
-          },
-          {
-            id: 4,
-            name: 'Final Approval',
-            status: 'pending',
-            assigned_to: 'QA Manager',
-            order: 4,
-          },
-        ],
-        created_at: document.created_at,
-        updated_at: document.updated_at,
-      };
-      
-      setWorkflow(mockWorkflow);
-      setActiveStep(mockWorkflow.current_step - 1);
+      const resp = await documentsAPI.getApprovalWorkflow(document.id);
+      const data = (resp && (resp.data || resp)) as any; // ResponseModel -> data
+      setWorkflow(data);
+      setActiveStep(Math.max(0, (data?.current_step || 1) - 1));
     } catch (error: any) {
       setError(error.message || 'Failed to load workflow');
     } finally {
@@ -243,8 +184,9 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   };
 
   const canTakeAction = (stepIndex: number) => {
-    if (!workflow) return false;
+    if (!workflow || !Array.isArray(workflow.steps)) return false;
     const step = workflow.steps[stepIndex];
+    if (!step) return false;
     return step.status === 'in_progress' && stepIndex === activeStep;
   };
 
@@ -295,7 +237,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
                     variant="filled"
                   />
                   <Typography variant="body2" color="text.secondary">
-                    Current Step: {workflowSteps[workflow.current_step - 1]?.name}
+                    Current Step: {workflow.steps?.[workflow.current_step - 1]?.name || '—'}
                   </Typography>
                 </Box>
                 
@@ -318,8 +260,11 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
 
             {/* Workflow Steps */}
             <Stepper activeStep={activeStep} orientation="vertical">
-              {workflowSteps.map((step, index) => {
-                const workflowStep = workflow.steps[index];
+              {(workflow.steps || []).map((workflowStep, index) => {
+                const step = {
+                  name: workflowStep.name || `Step ${workflowStep.order}`,
+                  description: workflowStep.comments || '',
+                };
                 const isActive = index === activeStep;
                 const isCompleted = workflowStep?.status === 'completed';
                 const isRejected = workflowStep?.status === 'rejected';
@@ -341,9 +286,11 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
                     </StepLabel>
                     <StepContent>
                       <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" gutterBottom>
-                          {step.description}
-                        </Typography>
+                        {step.description && (
+                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                            {step.description}
+                          </Typography>
+                        )}
                         
                         {workflowStep && (
                           <Box sx={{ mt: 2 }}>

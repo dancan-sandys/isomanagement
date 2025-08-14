@@ -405,6 +405,12 @@ export const documentsAPI = {
     return response.data;
   },
 
+  // Approval workflow APIs
+  getApprovalWorkflow: async (documentId: number) => {
+    const response: AxiosResponse = await api.get(`/documents/${documentId}/approvals`);
+    return response.data;
+  },
+
   getVersionHistory: async (documentId: number) => {
     const response: AxiosResponse = await api.get(`/documents/${documentId}/versions`);
     return response.data;
@@ -682,6 +688,29 @@ export const haccpAPI = {
 
   generateReport: async (productId: number, reportRequest: any) => {
     const response: AxiosResponse = await api.post(`/haccp/products/${productId}/reports`, reportRequest);
+    return response.data;
+  },
+  
+  // HACCP Plan APIs
+  createPlan: async (productId: number, payload: { title: string; description?: string; content: string; effective_date?: string; review_date?: string }) => {
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/plan`, payload);
+    return response.data;
+  },
+  createPlanVersion: async (planId: number, payload: { content: string; change_description?: string; change_reason?: string }) => {
+    const response: AxiosResponse = await api.post(`/haccp/plans/${planId}/versions`, payload);
+    return response.data;
+  },
+  submitPlanApprovals: async (planId: number, approvals: Array<{ approver_id: number; approval_order: number }>) => {
+    const response: AxiosResponse = await api.post(`/haccp/plans/${planId}/approvals`, approvals);
+    return response.data;
+  },
+  approvePlanStep: async (planId: number, approvalId: number) => {
+    const response: AxiosResponse = await api.post(`/haccp/plans/${planId}/approvals/${approvalId}/approve`);
+    return response.data;
+  },
+  rejectPlanStep: async (planId: number, approvalId: number, comments?: string) => {
+    const form = new FormData(); if (comments) form.append('comments', comments);
+    const response: AxiosResponse = await api.post(`/haccp/plans/${planId}/approvals/${approvalId}/reject`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
     return response.data;
   },
 };

@@ -76,10 +76,10 @@ const Suppliers: React.FC = () => {
       // Load only endpoints backed by the backend to avoid 404s
       await Promise.all([
         dispatch(fetchSupplierDashboard()),
-        dispatch(fetchSuppliers()),
-        dispatch(fetchMaterials()),
-        dispatch(fetchEvaluations()),
-        dispatch(fetchDeliveries()),
+        dispatch(fetchSuppliers({} as any)),
+        dispatch(fetchMaterials({} as any)),
+        dispatch(fetchEvaluations({} as any)),
+        dispatch(fetchDeliveries({} as any)),
       ]);
     } catch (error) {
       console.error('Failed to load initial data:', error);

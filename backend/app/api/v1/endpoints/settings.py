@@ -69,7 +69,7 @@ async def get_setting_categories(
     return [cat[0].value for cat in categories]
 
 
-@router.get("/{setting_key}", response_model=SettingResponse)
+@router.get("/key/{setting_key}", response_model=SettingResponse)
 async def get_setting(
     setting_key: str,
     current_user: User = Depends(require_permission("settings:read")),
@@ -97,14 +97,22 @@ async def get_system_info(
     Return basic system information for diagnostics.
     """
     try:
-        # Database engine info
-        bind = db.get_bind()
-        db_url = str(bind.url).replace(bind.url.password or "", "***") if hasattr(bind, 'url') else "unknown"
-        dialect = getattr(bind.dialect, 'name', 'unknown') if bind is not None else 'unknown'
-        server_version = None
+        # Database engine info (robust against missing attributes)
         try:
-            if isinstance(bind, sqlalchemy.engine.Engine):
-                server_version = getattr(bind, 'server_version_info', None)
+            bind = db.get_bind()
+        except Exception:
+            bind = None
+        try:
+            raw_url = getattr(bind, 'url', None)
+            db_url = str(raw_url) if raw_url is not None else "unknown"
+        except Exception:
+            db_url = "unknown"
+        try:
+            dialect = getattr(getattr(bind, 'dialect', None), 'name', 'unknown')
+        except Exception:
+            dialect = 'unknown'
+        try:
+            server_version = getattr(bind, 'server_version_info', None)
         except Exception:
             server_version = None
 
@@ -139,8 +147,24 @@ async def get_backup_status(
     """
     try:
         # Minimal placeholder status sourced from settings if present, else defaults
+        # Ensure there is at least a default record
         last_backup_setting = db.query(ApplicationSetting).filter(ApplicationSetting.key == "last_backup_timestamp").first()
-        last_backup = last_backup_setting.value if last_backup_setting else None
+        if not last_backup_setting:
+            last_backup_setting = ApplicationSetting(
+                key="last_backup_timestamp",
+                value="",
+                setting_type=SettingType.STRING,
+                category=SettingCategory.GENERAL,
+                display_name="Last Backup Timestamp",
+                description="ISO backups timestamp",
+                is_editable=False,
+                is_required=False,
+                group_name="Backup",
+                created_by=current_user.id,
+            )
+            db.add(last_backup_setting)
+            db.commit()
+        last_backup = last_backup_setting.value or None
         data = {
             "last_backup": last_backup,
             "status": "UNKNOWN" if not last_backup else "OK",
@@ -525,464 +549,4 @@ async def import_settings_json(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to import settings: {str(e)}"
-        ) 
-
-    """
-
-    Reset a setting to its default value
-
-    """
-
-    setting = db.query(ApplicationSetting).filter(ApplicationSetting.key == setting_key).first()
-
-    if not setting:
-
-        raise HTTPException(
-
-            status_code=status.HTTP_404_NOT_FOUND,
-
-            detail="Setting not found"
-
         )
-
-    
-
-    if not setting.default_value:
-
-        raise HTTPException(
-
-            status_code=status.HTTP_400_BAD_REQUEST,
-
-            detail="No default value available for this setting"
-
-        )
-
-    
-
-    setting.value = setting.default_value
-
-    setting.updated_by = current_user.id
-
-    
-
-    db.commit()
-
-    db.refresh(setting)
-
-    
-
-    return SettingResponse.from_orm(setting)
-
-
-
-
-
-# User Preferences endpoints
-
-@router.get("/preferences/me", response_model=List[UserPreferenceResponse])
-
-async def get_user_preferences(
-
-    current_user: User = Depends(get_current_active_user),
-
-    db: Session = Depends(get_db)
-
-):
-
-    """
-
-    Get current user's preferences
-
-    """
-
-    preferences = db.query(UserPreference).filter(
-
-        UserPreference.user_id == current_user.id
-
-    ).all()
-
-    
-
-    return [UserPreferenceResponse.from_orm(pref) for pref in preferences]
-
-
-
-
-
-@router.post("/preferences", response_model=UserPreferenceResponse)
-
-async def create_user_preference(
-
-    preference: UserPreferenceCreate,
-
-    current_user: User = Depends(get_current_active_user),
-
-    db: Session = Depends(get_db)
-
-):
-
-    """
-
-    Create a user preference
-
-    """
-
-    # Users can only create preferences for themselves
-
-    if preference.user_id != current_user.id:
-
-        raise HTTPException(
-
-            status_code=status.HTTP_403_FORBIDDEN,
-
-            detail="Cannot create preferences for other users"
-
-        )
-
-    
-
-    # Check if preference already exists
-
-    existing = db.query(UserPreference).filter(
-
-        and_(
-
-            UserPreference.user_id == preference.user_id,
-
-            UserPreference.key == preference.key
-
-        )
-
-    ).first()
-
-    
-
-    if existing:
-
-        raise HTTPException(
-
-            status_code=status.HTTP_400_BAD_REQUEST,
-
-            detail="Preference already exists"
-
-        )
-
-    
-
-    db_preference = UserPreference(
-
-        user_id=preference.user_id,
-
-        key=preference.key,
-
-        value=preference.value,
-
-        setting_type=preference.setting_type
-
-    )
-
-    
-
-    db.add(db_preference)
-
-    db.commit()
-
-    db.refresh(db_preference)
-
-    
-
-    return UserPreferenceResponse.from_orm(db_preference)
-
-
-
-
-
-@router.put("/preferences/{preference_key}", response_model=UserPreferenceResponse)
-
-async def update_user_preference(
-
-    preference_key: str,
-
-    preference_update: UserPreferenceUpdate,
-
-    current_user: User = Depends(get_current_active_user),
-
-    db: Session = Depends(get_db)
-
-):
-
-    """
-
-    Update a user preference
-
-    """
-
-    preference = db.query(UserPreference).filter(
-
-        and_(
-
-            UserPreference.user_id == current_user.id,
-
-            UserPreference.key == preference_key
-
-        )
-
-    ).first()
-
-    
-
-    if not preference:
-
-        raise HTTPException(
-
-            status_code=status.HTTP_404_NOT_FOUND,
-
-            detail="Preference not found"
-
-        )
-
-    
-
-    preference.value = preference_update.value
-
-    
-
-    db.commit()
-
-    db.refresh(preference)
-
-    
-
-    return UserPreferenceResponse.from_orm(preference)
-
-
-
-
-
-@router.delete("/preferences/{preference_key}")
-
-async def delete_user_preference(
-
-    preference_key: str,
-
-    current_user: User = Depends(get_current_active_user),
-
-    db: Session = Depends(get_db)
-
-):
-
-    """
-
-    Delete a user preference
-
-    """
-
-    preference = db.query(UserPreference).filter(
-
-        and_(
-
-            UserPreference.user_id == current_user.id,
-
-            UserPreference.key == preference_key
-
-        )
-
-    ).first()
-
-    
-
-    if not preference:
-
-        raise HTTPException(
-
-            status_code=status.HTTP_404_NOT_FOUND,
-
-            detail="Preference not found"
-
-        )
-
-    
-
-    db.delete(preference)
-
-    db.commit()
-
-    
-
-    return ResponseModel(
-
-        success=True,
-
-        message="Preference deleted successfully"
-
-    )
-
-
-
-
-
-# Utility endpoints
-
-@router.get("/export/json", response_model=Dict[str, Any])
-
-async def export_settings_json(
-
-    current_user: User = Depends(require_permission("settings:read")),
-
-    db: Session = Depends(get_db)
-
-):
-
-    """
-
-    Export all settings as JSON
-
-    """
-
-    settings = db.query(ApplicationSetting).all()
-
-    
-
-    export_data = {
-
-        "exported_at": "2024-01-15T10:00:00Z",
-
-        "exported_by": current_user.username,
-
-        "settings": {}
-
-    }
-
-    
-
-    for setting in settings:
-
-        export_data["settings"][setting.key] = {
-
-            "value": setting.value,
-
-            "category": setting.category.value,
-
-            "setting_type": setting.setting_type.value,
-
-            "display_name": setting.display_name,
-
-            "description": setting.description,
-
-            "group_name": setting.group_name
-
-        }
-
-    
-
-    return export_data
-
-
-
-
-
-@router.post("/import/json", response_model=ResponseModel)
-
-async def import_settings_json(
-
-    settings_data: Dict[str, Any],
-
-    current_user: User = Depends(require_permission("settings:write")),
-
-    db: Session = Depends(get_db)
-
-):
-
-    """
-
-    Import settings from JSON
-
-    """
-
-    try:
-
-        imported_count = 0
-
-        errors = []
-
-        
-
-        for key, data in settings_data.get("settings", {}).items():
-
-            setting = db.query(ApplicationSetting).filter(ApplicationSetting.key == key).first()
-
-            
-
-            if not setting:
-
-                errors.append(f"Setting '{key}' not found")
-
-                continue
-
-            
-
-            if not setting.is_editable:
-
-                errors.append(f"Setting '{key}' is not editable")
-
-                continue
-
-            
-
-            # Validate the value
-
-            if not validate_setting_value(data["value"], setting.setting_type, setting.validation_rules):
-
-                errors.append(f"Invalid value for setting '{key}'")
-
-                continue
-
-            
-
-            setting.value = data["value"]
-
-            setting.updated_by = current_user.id
-
-            imported_count += 1
-
-        
-
-        if errors:
-
-            return ResponseModel(
-
-                success=False,
-
-                message=f"Import completed with {len(errors)} errors",
-
-                data={"errors": errors, "imported_count": imported_count}
-
-            )
-
-        
-
-        db.commit()
-
-        
-
-        return ResponseModel(
-
-            success=True,
-
-            message=f"Successfully imported {imported_count} settings"
-
-        )
-
-        
-
-    except Exception as e:
-
-        db.rollback()
-
-        raise HTTPException(
-
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-
-            detail=f"Failed to import settings: {str(e)}"
-
-        ) 

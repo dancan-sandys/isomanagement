@@ -40,29 +40,16 @@ import {
   LocalShipping,
   Refresh,
   Add,
-<<<<<<< HEAD
+  Inventory,
+  Science,
+  Build,
+  Support,
+  Assessment,
+  Notifications,
   Schedule,
   Error as ErrorIcon,
-  Inventory,
-  Info,
-  Assessment,
-  Analytics,
-  Science,
-  Build,
-  Support,
-  Notifications,
-=======
-  Inventory,
-  Science,
-  Build,
-  Support,
-  Assessment,
-  Notifications,
-  Schedule,
-  Error,
   Info,
   Analytics,
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -91,6 +78,7 @@ import {
   fetchMaterialStats,
   fetchEvaluationStats,
 } from '../../store/slices/supplierSlice';
+import { fetchSuppliers, fetchMaterials, fetchEvaluations, fetchDeliveries } from '../../store/slices/supplierSlice';
 import { RootState, AppDispatch } from '../../store';
 import { Supplier, SupplierDashboard as DashboardData } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
@@ -137,6 +125,10 @@ const SupplierDashboard: React.FC = () => {
     try {
       await Promise.all([
         dispatch(fetchSupplierDashboard()),
+        dispatch(fetchSuppliers({} as any)),
+        dispatch(fetchMaterials({} as any)),
+        dispatch(fetchEvaluations({} as any)),
+        dispatch(fetchDeliveries({} as any)),
         dispatch(fetchPerformanceAnalytics({ date_from: getDateFrom() })),
         dispatch(fetchRiskAssessment()),
         dispatch(fetchAlerts({ resolved: false, page: 1, size: 10 })),

@@ -28,6 +28,7 @@ class DecisionTreeQuestion(str, Enum):
     Q1 = "Is control at this step necessary for safety?"
     Q2 = "Is it likely that contamination with identified hazard(s) may occur or increase to unacceptable level(s)?"
     Q3 = "Will a subsequent step eliminate or reduce the likely occurrence of a hazard to an acceptable level?"
+    Q4 = "Is this step specifically designed to eliminate or reduce the likely occurrence of the hazard to an acceptable level?"
 
 
 # Product Schemas
@@ -301,6 +302,88 @@ class DecisionTreeResult(BaseModel):
     is_ccp: bool
     justification: str
     steps: List[DecisionTreeStep]
+
+
+# HACCP Plan Schemas
+class HACCPPlanStatus(str, Enum):
+    DRAFT = "draft"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    OBSOLETE = "obsolete"
+
+
+class HACCPPlanCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    content: str = Field(..., description="Serialized JSON or rich text content")
+    effective_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
+
+
+class HACCPPlanUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    content: Optional[str] = None
+    effective_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
+    status: Optional[HACCPPlanStatus] = None
+
+
+class HACCPPlanResponse(BaseModel):
+    id: int
+    product_id: int
+    title: str
+    description: Optional[str]
+    status: HACCPPlanStatus
+    version: str
+    effective_date: Optional[datetime]
+    review_date: Optional[datetime]
+    approved_by: Optional[int]
+    approved_at: Optional[datetime]
+    created_by: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class HACCPPlanVersionCreate(BaseModel):
+    content: str
+    change_description: Optional[str] = None
+    change_reason: Optional[str] = None
+
+
+class HACCPPlanVersionResponse(BaseModel):
+    id: int
+    plan_id: int
+    version_number: str
+    content: str
+    change_description: Optional[str]
+    created_by: int
+    approved_by: Optional[int]
+    approved_at: Optional[datetime]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class HACCPPlanApprovalCreate(BaseModel):
+    approver_id: int
+    approval_order: int
+    comments: Optional[str] = None
+
+
+class HACCPPlanApprovalResponse(BaseModel):
+    id: int
+    plan_id: int
+    approver_id: int
+    approval_order: int
+    status: str
+    comments: Optional[str]
+    approved_at: Optional[datetime]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # Flowchart Schemas

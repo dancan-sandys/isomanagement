@@ -88,7 +88,7 @@ async def create_audit(
     return audit
 
 
-@router.get("/{audit_id}", response_model=AuditResponse)
+@router.get("/{audit_id:int}", response_model=AuditResponse)
 async def get_audit(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -96,7 +96,7 @@ async def get_audit(audit_id: int, db: Session = Depends(get_db), current_user: 
     return audit
 
 
-@router.put("/{audit_id}", response_model=AuditResponse)
+@router.put("/{audit_id:int}", response_model=AuditResponse)
 async def update_audit(audit_id: int, payload: AuditUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -114,7 +114,7 @@ async def update_audit(audit_id: int, payload: AuditUpdate, db: Session = Depend
     return audit
 
 
-@router.delete("/{audit_id}")
+@router.delete("/{audit_id:int}")
 async def delete_audit(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -246,14 +246,14 @@ async def import_templates_csv(
 
 
 # Checklist items
-@router.get("/{audit_id}/checklist", response_model=List[ChecklistItemResponse])
+@router.get("/{audit_id:int}/checklist", response_model=List[ChecklistItemResponse])
 async def list_checklist_items(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
     items = db.query(AuditChecklistItem).filter(AuditChecklistItem.audit_id == audit_id).order_by(AuditChecklistItem.created_at.asc()).all()
     return items
-@router.post("/{audit_id}/checklist", response_model=ChecklistItemResponse)
+@router.post("/{audit_id:int}/checklist", response_model=ChecklistItemResponse)
 async def add_checklist_item(audit_id: int, payload: ChecklistItemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -289,14 +289,14 @@ async def update_checklist_item(item_id: int, payload: ChecklistItemUpdate, db: 
 
 
 # Findings
-@router.get("/{audit_id}/findings", response_model=List[FindingResponse])
+@router.get("/{audit_id:int}/findings", response_model=List[FindingResponse])
 async def list_findings(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
     f = db.query(AuditFinding).filter(AuditFinding.audit_id == audit_id).order_by(AuditFinding.created_at.asc()).all()
     return f
-@router.post("/{audit_id}/findings", response_model=FindingResponse)
+@router.post("/{audit_id:int}/findings", response_model=FindingResponse)
 async def add_finding(audit_id: int, payload: FindingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -335,7 +335,7 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
 
 
 # Attachments
-@router.get("/{audit_id}/attachments", response_model=List[AuditAttachmentResponse])
+@router.get("/{audit_id:int}/attachments", response_model=List[AuditAttachmentResponse])
 async def list_attachments(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -347,7 +347,7 @@ async def list_attachments(audit_id: int, db: Session = Depends(get_db), current
         .all()
     )
 
-@router.post("/{audit_id}/attachments", response_model=dict)
+@router.post("/{audit_id:int}/attachments", response_model=dict)
 async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -630,7 +630,7 @@ async def export_audits(
 
 
 # Single audit report export
-@router.get("/{audit_id}/report")
+@router.get("/{audit_id:int}/report")
 async def export_audit_report(
     audit_id: int,
     format: str = Query("pdf", pattern="^(pdf|xlsx)$"),
@@ -681,7 +681,7 @@ async def export_audit_report(
 
 
 # Auditees
-@router.get("/{audit_id}/auditees", response_model=List[AuditeeResponse])
+@router.get("/{audit_id:int}/auditees", response_model=List[AuditeeResponse])
 async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -689,7 +689,7 @@ async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_us
     return db.query(AuditAuditee).filter(AuditAuditee.audit_id == audit_id).order_by(AuditAuditee.added_at.desc()).all()
 
 
-@router.post("/{audit_id}/auditees", response_model=AuditeeResponse)
+@router.post("/{audit_id:int}/auditees", response_model=AuditeeResponse)
 async def add_auditee(audit_id: int, user_id: int = Query(...), role: Optional[str] = Query(None), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:

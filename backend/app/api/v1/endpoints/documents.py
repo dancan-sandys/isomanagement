@@ -2,10 +2,10 @@ import os
 import shutil
 import json
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, cast, String
 import uuid
 import io
 from reportlab.lib.pagesizes import A4
@@ -32,6 +32,7 @@ from app.schemas.document import (
     DocumentApprovalCreate, DocumentTemplateVersionCreate, DocumentTemplateVersionResponse, DocumentTemplateApprovalCreate
 )
 from app.services.document_service import DocumentService
+from app.services.storage_service import StorageService
 from app.core.config import settings
 from app.core.security import verify_password, require_permission
 from app.utils.audit import audit_event
@@ -797,17 +798,9 @@ async def create_document(
                     detail=f"File type {file_extension} not allowed. Allowed types: {', '.join(allowed_types)}"
                 )
             
-            # Generate unique filename
-            unique_filename = f"{uuid.uuid4()}{file_extension}"
-            file_path = os.path.join(UPLOAD_DIR, unique_filename)
-            
-            # Save file
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            
-            file_size = os.path.getsize(file_path)
-            file_type = file.content_type
-            original_filename = file.filename
+            # Save via storage service (local filesystem)
+            storage = StorageService(base_upload_dir="uploads")
+            file_path, file_size, file_type, original_filename = storage.save_upload(file, subdir="documents")
         
         # Create document
         document = Document(
@@ -985,17 +978,9 @@ async def create_new_version(
         old_version = document.version
         new_version = calculate_next_version(old_version)
         
-        # Generate unique filename for new version
-        unique_filename = f"{uuid.uuid4()}{file_extension}"
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-        
-        # Save new file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        file_size = os.path.getsize(file_path)
-        file_type = file.content_type
-        original_filename = file.filename
+        # Save new file via storage service (local filesystem)
+        storage = StorageService(base_upload_dir="uploads")
+        file_path, file_size, file_type, original_filename = storage.save_upload(file, subdir="documents")
         
         # Create new version record
         version = DocumentVersion(
@@ -1496,17 +1481,9 @@ async def upload_document_file(
         old_version = document.version
         new_version = calculate_next_version(old_version)
         
-        # Generate unique filename
-        unique_filename = f"{uuid.uuid4()}{file_extension}"
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-        
-        # Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        file_size = os.path.getsize(file_path)
-        file_type = file.content_type
-        original_filename = file.filename
+        # Save file via storage service (local filesystem)
+        storage = StorageService(base_upload_dir="uploads")
+        file_path, file_size, file_type, original_filename = storage.save_upload(file, subdir="documents")
         
         # Create new version record
         version = DocumentVersion(
@@ -2190,35 +2167,31 @@ async def get_my_pending_approvals(
 
         items_by_doc: dict[int, dict] = {}
         for row in approval_rows:
-            doc = db.query(Document).filter(Document.id == row.document_id).first()
-            if not doc:
+            # Project only needed columns; cast enum to string to avoid invalid enum coercion
+            doc_row = (
+                db.query(
+                    Document.id.label("id"),
+                    Document.document_number.label("document_number"),
+                    Document.title.label("title"),
+                    Document.version.label("version"),
+                    cast(Document.status, String).label("status"),
+                    Document.created_at.label("created_at"),
+                )
+                .filter(Document.id == row.document_id)
+                .first()
+            )
+            if not doc_row:
                 continue
-            items_by_doc[doc.id] = {
+            items_by_doc[doc_row.id] = {
+                "id": row.id,  # expose as 'id' for frontend convenience
                 "approval_id": row.id,
-                "document_id": doc.id,
-                "document_number": doc.document_number,
-                "title": doc.title,
-                "version": doc.version,
+                "document_id": doc_row.id,
+                "document_number": doc_row.document_number,
+                "title": doc_row.title,
+                "version": doc_row.version,
                 "approval_order": row.approval_order,
-                "status": row.status,
-                "submitted_at": row.created_at.isoformat() if row.created_at else None,
-            }
-
-        # 2) All documents with status != approved
-        from app.models.document import DocumentStatus
-        pending_docs = db.query(Document).filter(Document.status != DocumentStatus.APPROVED).order_by(desc(Document.updated_at)).all()
-        for doc in pending_docs:
-            if doc.id in items_by_doc:
-                continue
-            items_by_doc[doc.id] = {
-                "approval_id": None,
-                "document_id": doc.id,
-                "document_number": doc.document_number,
-                "title": doc.title,
-                "version": doc.version,
-                "approval_order": None,
-                "status": enum_value(doc.status) or "pending",
-                "submitted_at": doc.created_at.isoformat() if doc.created_at else None,
+                "status": (doc_row.status or "pending"),
+                "submitted_at": doc_row.created_at.isoformat() if getattr(doc_row.created_at, "isoformat", None) else doc_row.created_at,
             }
 
         # Pagination over combined results
@@ -2247,12 +2220,110 @@ def _is_current_approval_gate(db: Session, document_id: int, approval_order: int
     return lower == 0
 
 
+@router.get("/{document_id}/approvals")
+async def get_document_approvals(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return approval workflow for a document with current step resolved.
+
+    Shape matches frontend expectations: { steps: [...], current_step, status }
+    where steps[].status is one of: completed | in_progress | pending | rejected
+    and steps[].assigned_to is a user-friendly name.
+    """
+    try:
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Fetch approval rows ordered by approval_order
+        approvals: list[DocumentApproval] = (
+            db.query(DocumentApproval)
+            .filter(DocumentApproval.document_id == document_id)
+            .order_by(DocumentApproval.approval_order.asc())
+            .all()
+        )
+
+        steps_db = []
+        current_step_index = None
+        for ap in approvals:
+            approver = db.query(User).filter(User.id == ap.approver_id).first()
+            approver_name = approver.full_name if approver and approver.full_name else (approver.username if approver else "")
+
+            # Map DB status to workflow status
+            if ap.status == "approved":
+                mapped_status = "completed"
+            elif ap.status == "rejected":
+                mapped_status = "rejected"
+            else:
+                mapped_status = "pending"
+
+            step = {
+                "id": ap.id,
+                "name": f"Step {ap.approval_order}",
+                "status": mapped_status,
+                "assigned_to": approver_name or "",
+                "assigned_at": ap.created_at.isoformat() if ap.created_at else None,
+                "completed_at": ap.approved_at.isoformat() if ap.approved_at else None,
+                "comments": ap.comments,
+                "order": ap.approval_order,
+            }
+            steps_db.append(step)
+
+        # Determine current step = first step that is not completed and not rejected, with all prior completed
+        for idx, step in enumerate(steps_db):
+            if step["status"] in ("pending",):
+                # verify gate
+                if _is_current_approval_gate(db, document_id, step["order"]):
+                    steps_db[idx]["status"] = "in_progress"
+                    current_step_index = idx
+                    break
+
+        if current_step_index is None:
+            # All steps completed or rejected; infer from document status
+            if doc.status == DocumentStatus.APPROVED:
+                current_step_index = len(steps_db)
+            else:
+                # No approvals configured; treat as pending none
+                current_step_index = 0
+
+        # Prepend a synthetic "Document Creation" step for visualization
+        creator = db.query(User).filter(User.id == doc.created_by).first() if getattr(doc, "created_by", None) else None
+        creator_name = creator.full_name if creator and creator.full_name else (creator.username if creator else "")
+        creation_step = {
+            "id": 0,
+            "name": "Document Creation",
+            "status": "completed",
+            "assigned_to": creator_name,
+            "assigned_at": doc.created_at.isoformat() if doc.created_at else None,
+            "completed_at": doc.created_at.isoformat() if doc.created_at else None,
+            "comments": None,
+            "order": 0,
+        }
+        steps = [creation_step] + steps_db
+        # Shift current step by +1 to account for the creation step
+        current_step_display = (current_step_index + 2) if current_step_index is not None else (1 if steps else 0)
+
+        data = {
+            "document_id": document_id,
+            "current_step": current_step_display,
+            "status": (doc.status.value if hasattr(doc.status, "value") else str(doc.status) or "draft"),
+            "created_at": doc.created_at.isoformat() if getattr(doc, "created_at", None) else None,
+            "updated_at": doc.updated_at.isoformat() if getattr(doc, "updated_at", None) else None,
+            "steps": steps,
+        }
+        return ResponseModel(success=True, message="Document approvals retrieved", data=data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve approvals: {str(e)}")
+
 @router.post("/{document_id}/approvals/{approval_id}/approve")
 async def approve_document_step(
     document_id: int,
     approval_id: int,
-    comments: Optional[str] = Form(None),
-    password: Optional[str] = Form(None),
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -2270,14 +2341,32 @@ async def approve_document_step(
         if not _is_current_approval_gate(db, document_id, row.approval_order):
             raise HTTPException(status_code=400, detail="Previous approval steps must be completed first")
 
+        # Extract payload accepting either multipart form-data or JSON
+        parsed_comments: Optional[str] = None
+        parsed_password: Optional[str] = None
+        try:
+            content_type = request.headers.get("content-type", "")
+            if content_type.startswith("multipart/form-data"):
+                form = await request.form()
+                parsed_comments = form.get("comments")
+                parsed_password = form.get("password")
+            else:
+                data = await request.json()
+                if isinstance(data, dict):
+                    parsed_comments = data.get("comments")
+                    parsed_password = data.get("password")
+        except Exception:
+            # Ignore parsing errors; treat as no additional data
+            pass
+
         # Optional e-signature verification
-        if password:
-            if not verify_password(password, current_user.hashed_password):
+        if parsed_password:
+            if not verify_password(parsed_password, current_user.hashed_password):
                 raise HTTPException(status_code=400, detail="Invalid password for e-signature")
 
         # Approve step
         row.status = "approved"
-        row.comments = comments
+        row.comments = parsed_comments
         row.approved_at = datetime.utcnow()
         db.commit()
 
@@ -2316,7 +2405,7 @@ async def approve_document_step(
 async def reject_document_step(
     document_id: int,
     approval_id: int,
-    comments: Optional[str] = Form(None),
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -2332,8 +2421,22 @@ async def reject_document_step(
         if row.status != "pending":
             raise HTTPException(status_code=400, detail="Approval step is not pending")
 
+        # Extract optional comments from either multipart or JSON
+        parsed_comments: Optional[str] = None
+        try:
+            content_type = request.headers.get("content-type", "")
+            if content_type.startswith("multipart/form-data"):
+                form = await request.form()
+                parsed_comments = form.get("comments")
+            else:
+                data = await request.json()
+                if isinstance(data, dict):
+                    parsed_comments = data.get("comments")
+        except Exception:
+            parsed_comments = None
+
         row.status = "rejected"
-        row.comments = comments
+        row.comments = parsed_comments
         row.approved_at = datetime.utcnow()
         document = db.query(Document).filter(Document.id == document_id).first()
         if document:

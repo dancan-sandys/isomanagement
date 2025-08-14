@@ -14,7 +14,8 @@ from app.models.haccp import (
 from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
     ProductCreate, ProductUpdate, ProcessFlowCreate, HazardCreate, CCPCreate,
-    MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, HACCPReportRequest
+    MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, HACCPReportRequest,
+    HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanVersionCreate
 )
 from app.services.haccp_service import HACCPService
 from app.utils.audit import audit_event
@@ -220,15 +221,11 @@ async def create_product(
         db.commit()
         db.refresh(product)
         
-<<<<<<< HEAD
         # Get creator name
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
         
-        return ResponseModel(
-=======
         resp = ResponseModel(
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
             success=True,
             message="Product created successfully",
             data={
@@ -267,7 +264,6 @@ async def create_product(
 @router.put("/products/{product_id}")
 async def update_product(
     product_id: int,
-<<<<<<< HEAD
     product_data: ProductUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -301,6 +297,8 @@ async def update_product(
             product.packaging_type = product_data.packaging_type
         if product_data.haccp_plan_approved is not None:
             product.haccp_plan_approved = product_data.haccp_plan_approved
+        if product_data.haccp_plan_version is not None:
+            product.haccp_plan_version = product_data.haccp_plan_version
         
         db.commit()
         db.refresh(product)
@@ -309,44 +307,7 @@ async def update_product(
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
         
-        return ResponseModel(
-=======
-    product_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update a product"""
-    try:
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-
-        # Update allowed fields
-        for field in [
-            "product_code",
-            "name",
-            "description",
-            "category",
-            "formulation",
-            "allergens",
-            "shelf_life_days",
-            "storage_conditions",
-            "packaging_type",
-            "haccp_plan_approved",
-            "haccp_plan_version",
-        ]:
-            if field in product_data:
-                setattr(product, field, product_data[field])
-
-        db.commit()
-        db.refresh(product)
-
-        # Get role/creator name
-        creator = db.query(User).filter(User.id == product.created_by).first()
-        creator_name = creator.full_name if creator else "Unknown"
-
         resp = ResponseModel(
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
             success=True,
             message="Product updated successfully",
             data={
@@ -355,7 +316,6 @@ async def update_product(
                 "name": product.name,
                 "description": product.description,
                 "category": product.category,
-<<<<<<< HEAD
                 "formulation": product.formulation,
                 "allergens": product.allergens,
                 "shelf_life_days": product.shelf_life_days,
@@ -368,21 +328,6 @@ async def update_product(
                 "updated_at": product.updated_at.isoformat() if product.updated_at else None,
             }
         )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update product: {str(e)}"
-        )
-=======
-                "haccp_plan_approved": product.haccp_plan_approved,
-                "haccp_plan_version": product.haccp_plan_version,
-                "created_by": creator_name,
-                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-            },
-        )
         try:
             audit_event(db, current_user.id, "haccp_product_updated", "haccp", str(product.id))
         except Exception:
@@ -392,7 +337,6 @@ async def update_product(
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update product: {str(e)}")
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 
 
 @router.delete("/products/{product_id}")
@@ -403,7 +347,6 @@ async def delete_product(
 ):
     """Delete a product"""
     try:
-<<<<<<< HEAD
         # Check if product exists
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
@@ -421,38 +364,19 @@ async def delete_product(
         
         db.delete(product)
         db.commit()
-        
+        try:
+            audit_event(db, current_user.id, "haccp_product_deleted", "haccp", str(product_id))
+        except Exception:
+            pass
         return ResponseModel(
             success=True,
             message="Product deleted successfully",
             data={"id": product_id}
         )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete product: {str(e)}"
-        )
-=======
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-
-        db.delete(product)
-        db.commit()
-
-        try:
-            audit_event(db, current_user.id, "haccp_product_deleted", "haccp", str(product_id))
-        except Exception:
-            pass
-        return ResponseModel(success=True, message="Product deleted successfully", data={"id": product_id})
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete product: {str(e)}")
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 
 
 # Process Flow Management
@@ -1161,7 +1085,7 @@ async def run_decision_tree(
     """Run CCP decision tree for a hazard"""
     try:
         haccp_service = HACCPService(db)
-        result = haccp_service.run_decision_tree(hazard_id)
+        result = haccp_service.run_decision_tree(hazard_id, run_by_user_id=current_user.id)
         
         return ResponseModel(
             success=True,
@@ -1233,6 +1157,112 @@ async def get_flowchart_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve flowchart data: {str(e)}"
         )
+
+
+# --- HACCP Plan endpoints ---
+
+@router.post("/products/{product_id}/plan")
+async def create_haccp_plan(
+    product_id: int,
+    payload: HACCPPlanCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        service = HACCPService(db)
+        plan = service.create_haccp_plan(
+            product_id=product_id,
+            title=payload.title,
+            description=payload.description,
+            content=payload.content,
+            created_by=current_user.id,
+            effective_date=payload.effective_date,
+            review_date=payload.review_date,
+        )
+        return ResponseModel(success=True, message="HACCP plan created", data={"id": plan.id, "version": plan.version, "status": plan.status.value})
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create plan: {str(e)}")
+
+
+@router.post("/plans/{plan_id}/versions")
+async def create_haccp_plan_version(
+    plan_id: int,
+    payload: HACCPPlanVersionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        service = HACCPService(db)
+        version = service.create_haccp_plan_version(
+            plan_id=plan_id,
+            content=payload.content,
+            change_description=payload.change_description,
+            change_reason=payload.change_reason,
+            created_by=current_user.id,
+        )
+        return ResponseModel(success=True, message="HACCP plan version created", data={"id": version.id, "version": version.version_number})
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create plan version: {str(e)}")
+
+
+@router.post("/plans/{plan_id}/approvals")
+async def submit_haccp_plan_for_approval(
+    plan_id: int,
+    approvals: List[dict],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        service = HACCPService(db)
+        created = service.submit_haccp_plan_for_approval(plan_id, approvals, submitted_by=current_user.id)
+        return ResponseModel(success=True, message="Plan submitted for approval", data={"approvals": created})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit plan for approval: {str(e)}")
+
+
+@router.post("/plans/{plan_id}/approvals/{approval_id}/approve")
+async def approve_haccp_plan_step(
+    plan_id: int,
+    approval_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        service = HACCPService(db)
+        remaining = service.approve_haccp_plan_step(plan_id, approval_id, approver_id=current_user.id)
+        return ResponseModel(success=True, message="Approval recorded", data={"remaining": remaining})
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to approve plan: {str(e)}")
+
+
+@router.post("/plans/{plan_id}/approvals/{approval_id}/reject")
+async def reject_haccp_plan_step(
+    plan_id: int,
+    approval_id: int,
+    comments: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        service = HACCPService(db)
+        service.reject_haccp_plan_step(plan_id, approval_id, approver_id=current_user.id, comments=comments)
+        return ResponseModel(success=True, message="Rejection recorded")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reject plan: {str(e)}")
 
 
 # Enhanced Monitoring Log with Alerts

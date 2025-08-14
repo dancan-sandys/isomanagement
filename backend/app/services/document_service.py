@@ -307,6 +307,7 @@ class DocumentService:
     
     def get_document_stats(self) -> Dict[str, Any]:
         """Get document statistics"""
+        from sqlalchemy import cast, String
         
         # Helper to safely get enum values
         def to_value(val: Any) -> str:
@@ -322,39 +323,39 @@ class DocumentService:
         
         # Documents by status
         status_counts = self.db.query(
-            Document.status, func.count(Document.id)
-        ).group_by(Document.status).all()
+            cast(Document.status, String), func.count(Document.id)
+        ).group_by(cast(Document.status, String)).all()
         documents_by_status = {to_value(status): count for status, count in status_counts}
         
         # Documents by category
         category_counts = self.db.query(
-            Document.category, func.count(Document.id)
-        ).group_by(Document.category).all()
+            cast(Document.category, String), func.count(Document.id)
+        ).group_by(cast(Document.category, String)).all()
         documents_by_category = {to_value(category): count for category, count in category_counts}
         
         # Documents by type
         type_counts = self.db.query(
-            Document.document_type, func.count(Document.id)
-        ).group_by(Document.document_type).all()
+            cast(Document.document_type, String), func.count(Document.id)
+        ).group_by(cast(Document.document_type, String)).all()
         documents_by_type = {to_value(doc_type): count for doc_type, count in type_counts}
         
         # Pending reviews (documents with review_date in the past)
-        pending_reviews = self.db.query(Document).filter(
+        pending_reviews = self.db.query(func.count(Document.id)).filter(
             and_(
                 Document.review_date < datetime.utcnow(),
-                Document.status.in_([DocumentStatus.APPROVED, DocumentStatus.UNDER_REVIEW])
+                cast(Document.status, String).in_([DocumentStatus.APPROVED.value, DocumentStatus.UNDER_REVIEW.value])
             )
-        ).count()
+        ).scalar() or 0
         
         # Expired documents (obsolete or archived)
-        expired_documents = self.db.query(Document).filter(
-            Document.status.in_([DocumentStatus.OBSOLETE, DocumentStatus.ARCHIVED])
-        ).count()
+        expired_documents = self.db.query(func.count(Document.id)).filter(
+            cast(Document.status, String).in_([DocumentStatus.OBSOLETE.value, DocumentStatus.ARCHIVED.value])
+        ).scalar() or 0
         
         # Documents requiring approval (draft status)
-        documents_requiring_approval = self.db.query(Document).filter(
-            Document.status == DocumentStatus.DRAFT
-        ).count()
+        documents_requiring_approval = self.db.query(func.count(Document.id)).filter(
+            cast(Document.status, String) == DocumentStatus.DRAFT.value
+        ).scalar() or 0
         
         return {
             "total_documents": total_documents,

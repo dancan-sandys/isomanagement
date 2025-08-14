@@ -36,6 +36,7 @@ import {
 } from '@mui/icons-material';
 import { AppDispatch } from '../../store';
 import { createDocument } from '../../store/slices/documentSlice';
+import { usersAPI, documentsAPI } from '../../services/api';
 import { haccpAPI } from '../../services/api';
 
 interface Product {
@@ -74,6 +75,9 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
     keywords: '',
     file: null as File | null,
   });
+  const [reviewerId, setReviewerId] = useState<number | null>(null);
+  const [approverId, setApproverId] = useState<number | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
 
   const documentTypes = [
     { value: 'policy', label: 'Policy' },
@@ -140,6 +144,7 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
   useEffect(() => {
     if (open) {
       loadProducts();
+      loadUsers();
     }
   }, [open]);
 
@@ -152,6 +157,15 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
       console.error('Failed to load products:', error);
     } finally {
       setLoadingProducts(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const resp: any = await usersAPI.getUsers({ size: 200 });
+      setUsers(resp?.data?.items || resp.items || []);
+    } catch (e) {
+      setUsers([]);
     }
   };
 
@@ -226,7 +240,16 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
       
       submitFormData.append('file', formData.file);
 
-      await dispatch(createDocument(submitFormData));
+      const created: any = await dispatch(createDocument(submitFormData)).unwrap();
+      const newDocId = created?.data?.id || created?.id;
+
+      // If reviewer/approver provided, immediately submit approval chain
+      const approvers: Array<{ approver_id: number; approval_order: number }> = [];
+      if (reviewerId) approvers.push({ approver_id: reviewerId, approval_order: 1 });
+      if (approverId) approvers.push({ approver_id: approverId, approval_order: approverId === reviewerId ? 2 : 2 });
+      if (newDocId && approvers.length > 0) {
+        await documentsAPI.submitApprovalFlow(newDocId, approvers);
+      }
       
       setSuccess(true);
       setTimeout(() => {
@@ -547,6 +570,35 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
                 It will need to be reviewed and approved through the workflow process before becoming active.
               </Typography>
             </Alert>
+          </Grid>
+
+          {/* Initial Workflow Assignment */}
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+              Approval Workflow (Creator → Reviewer → Approver)
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Reviewer (Next Step)</InputLabel>
+              <Select value={reviewerId || ''} onChange={(e) => setReviewerId(Number(e.target.value) || null)}>
+                <MenuItem value="">Select Reviewer</MenuItem>
+                {users.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>{u.full_name || u.username} ({u.email})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Approver (Final)</InputLabel>
+              <Select value={approverId || ''} onChange={(e) => setApproverId(Number(e.target.value) || null)}>
+                <MenuItem value="">Select Approver</MenuItem>
+                {users.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>{u.full_name || u.username} ({u.email})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
         </Grid>
       </DialogContent>
