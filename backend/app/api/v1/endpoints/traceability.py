@@ -41,18 +41,34 @@ async def get_batches(
     product_name: Optional[str] = None,
     search: Optional[str] = None
 ):
-    """Get batches with filtering and pagination"""
-    query = db.query(Batch)
+    """Get batches with filtering and pagination (robust to enum mismatches)."""
+    from sqlalchemy import cast, String, func as sa_func
+    # Project columns and cast enum columns to String to avoid coercion errors on bad rows
+    query = db.query(
+        Batch.id.label("id"),
+        Batch.batch_number.label("batch_number"),
+        cast(Batch.batch_type, String).label("batch_type"),
+        cast(Batch.status, String).label("status"),
+        Batch.product_name.label("product_name"),
+        Batch.quantity.label("quantity"),
+        Batch.unit.label("unit"),
+        Batch.production_date.label("production_date"),
+        Batch.expiry_date.label("expiry_date"),
+        Batch.lot_number.label("lot_number"),
+        Batch.quality_status.label("quality_status"),
+        Batch.storage_location.label("storage_location"),
+        Batch.barcode.label("barcode"),
+        Batch.created_at.label("created_at"),
+    )
     
     if batch_type:
-        # Accept both enum and raw lowercase/uppercase strings
+        # Accept both enum and raw strings; compare case-insensitively on the stored enum value
         try:
-            normalized = batch_type.value if hasattr(batch_type, 'value') else str(batch_type).upper()
-            from sqlalchemy import cast, String
-            query = query.filter(cast(Batch.batch_type, String) == normalized.lower())
+            target = batch_type.value if hasattr(batch_type, "value") else str(batch_type)
         except Exception:
-            from sqlalchemy import cast, String
-            query = query.filter(cast(Batch.batch_type, String) == str(batch_type))
+            target = str(batch_type)
+        target_normalized = (target or "").strip().lower()
+        query = query.filter(sa_func.lower(cast(Batch.batch_type, String)) == target_normalized)
     if status:
         query = query.filter(Batch.status == status)
     if product_name:
@@ -73,22 +89,22 @@ async def get_batches(
         data={
         "items": [
             {
-                "id": batch.id,
-                "batch_number": batch.batch_number,
-                    "batch_type": batch.batch_type.value if batch.batch_type else None,
-                    "status": batch.status.value if batch.status else None,
-                "product_name": batch.product_name,
-                "quantity": batch.quantity,
-                "unit": batch.unit,
-                    "production_date": batch.production_date.isoformat() if batch.production_date else None,
-                    "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
-                "lot_number": batch.lot_number,
-                "quality_status": batch.quality_status,
-                "storage_location": batch.storage_location,
-                "barcode": batch.barcode,
-                    "created_at": batch.created_at.isoformat() if batch.created_at else None,
+                "id": row.id,
+                "batch_number": row.batch_number,
+                "batch_type": (row.batch_type or None),
+                "status": (row.status or None),
+                "product_name": row.product_name,
+                "quantity": row.quantity,
+                "unit": row.unit,
+                "production_date": row.production_date.isoformat() if row.production_date else None,
+                "expiry_date": row.expiry_date.isoformat() if row.expiry_date else None,
+                "lot_number": row.lot_number,
+                "quality_status": row.quality_status,
+                "storage_location": row.storage_location,
+                "barcode": row.barcode,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
             }
-            for batch in batches
+            for row in batches
         ],
         "total": total,
         "skip": skip,

@@ -50,6 +50,7 @@ const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const onboardingEnabled = (process.env.REACT_APP_ENABLE_ONBOARDING || 'false').toLowerCase() === 'true';
   const [isFirstTime, setIsFirstTime] = useState(false);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -112,12 +113,20 @@ const Dashboard: React.FC = () => {
 
   // Check if this is user's first time (must be before any early returns)
   useEffect(() => {
+    // Allow disabling onboarding via env or a persistent kill-switch in localStorage
+    const hardDisable = localStorage.getItem('disableOnboarding') === 'true';
+    if (!onboardingEnabled || hardDisable) {
+      setShowOnboarding(false);
+      setIsFirstTime(false);
+      return;
+    }
+
     const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
     if (!hasSeenOnboarding && user) {
       setIsFirstTime(true);
       setShowOnboarding(true);
     }
-  }, [user]);
+  }, [user, onboardingEnabled]);
 
   const renderSystemAdministratorDashboard = () => (
     <Grid container spacing={3}>
@@ -579,6 +588,10 @@ const Dashboard: React.FC = () => {
 
   const handleOnboardingComplete = () => {
     localStorage.setItem('hasSeenOnboarding', 'true');
+    // Also set kill-switch if admin chooses to permanently disable
+    if (process.env.REACT_APP_ENABLE_ONBOARDING === 'force_off') {
+      localStorage.setItem('disableOnboarding', 'true');
+    }
     setShowOnboarding(false);
     setIsFirstTime(false);
   };

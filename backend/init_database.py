@@ -28,12 +28,16 @@ def init_database():
         Base.metadata.create_all(bind=engine)
         print("✅ All database tables created successfully!")
         
-        # List created tables
-        inspector = engine.dialect.inspector(engine)
-        tables = inspector.get_table_names()
-        print(f"📋 Created {len(tables)} tables:")
-        for table in sorted(tables):
-            print(f"  - {table}")
+        # List created tables (robust across dialects)
+        try:
+            from sqlalchemy import inspect
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            print(f"📋 Created {len(tables)} tables:")
+            for table in sorted(tables):
+                print(f"  - {table}")
+        except Exception as ie:
+            print(f"(info) Skipping table list due to inspector error: {ie}")
             
     except Exception as e:
         print(f"❌ Error creating database tables: {e}")

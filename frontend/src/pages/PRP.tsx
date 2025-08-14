@@ -106,7 +106,11 @@ interface PRPChecklist {
 
 const PRP: React.FC = () => {
   const [userSearch, setUserSearch] = useState('');
-  const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  type UserOption = { id: number; username: string; full_name?: string };
+  const [userOptions, setUserOptions] = useState<Array<UserOption>>([]);
+  // Keep selected objects stable to avoid Autocomplete flicker when options refresh
+  const [selectedResponsible, setSelectedResponsible] = useState<UserOption | null>(null);
+  const [selectedAssignee, setSelectedAssignee] = useState<UserOption | null>(null);
   useEffect(() => {
     let active = true;
     const t = setTimeout(async () => {
@@ -114,12 +118,21 @@ const PRP: React.FC = () => {
         const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
         const items = (resp?.data?.items || resp?.items || []) as Array<any>;
         if (active) setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+        // re-hydrate selected objects from refreshed options to keep Autocomplete stable
+        if (active && selectedResponsible) {
+          const match = items.find((u: any) => u.id === selectedResponsible.id);
+          if (match) setSelectedResponsible({ id: match.id, username: match.username, full_name: match.full_name });
+        }
+        if (active && selectedAssignee) {
+          const match = items.find((u: any) => u.id === selectedAssignee.id);
+          if (match) setSelectedAssignee({ id: match.id, username: match.username, full_name: match.full_name });
+        }
       } catch {
         if (active) setUserOptions([]);
       }
     }, 300);
     return () => { active = false; clearTimeout(t); };
-  }, [userSearch]);
+  }, [userSearch, selectedResponsible, selectedAssignee]);
   const [activeTab, setActiveTab] = useState(0);
   const location = useLocation();
   const [programs, setPrograms] = useState<PRPProgram[]>([]);
@@ -279,6 +292,7 @@ const PRP: React.FC = () => {
           responsible_department: '',
           sop_reference: '',
         });
+        setSelectedResponsible(null);
         fetchPrograms();
         fetchDashboard();
       }
@@ -303,6 +317,7 @@ const PRP: React.FC = () => {
           due_date: '',
           assigned_to: '',
         });
+        setSelectedAssignee(null);
         fetchChecklists();
         fetchDashboard();
       }
@@ -1078,9 +1093,14 @@ const PRP: React.FC = () => {
                 <Autocomplete
                   options={userOptions}
                   getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
-                  value={userOptions.find(o => (o.full_name || o.username) === programForm.responsible_person) || null}
-                  onChange={(_, val) => setProgramForm({ ...programForm, responsible_person: val ? (val.full_name || val.username) : '' })}
-                  onInputChange={(_, val) => setUserSearch(val)}
+                  value={selectedResponsible}
+                  onChange={(_, val) => {
+                    setSelectedResponsible(val);
+                    setProgramForm({ ...programForm, responsible_person: val ? (val.full_name || val.username) : '' });
+                  }}
+                  onInputChange={(_, val, reason) => {
+                    if (reason === 'input') setUserSearch(val);
+                  }}
                   isOptionEqualToValue={(opt, val) => opt.id === val.id}
                   renderInput={(params) => <TextField {...params} label="Responsible Person" placeholder="Search user..." fullWidth />}
                 />
@@ -1188,9 +1208,14 @@ const PRP: React.FC = () => {
             <Autocomplete
               options={userOptions}
               getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
-              value={userOptions.find(o => (o.full_name || o.username) === checklistForm.assigned_to) || null}
-              onChange={(_, val) => setChecklistForm({ ...checklistForm, assigned_to: val ? (val.full_name || val.username) : '' })}
-              onInputChange={(_, val) => setUserSearch(val)}
+              value={selectedAssignee}
+              onChange={(_, val) => {
+                setSelectedAssignee(val);
+                setChecklistForm({ ...checklistForm, assigned_to: val ? (val.full_name || val.username) : '' });
+              }}
+              onInputChange={(_, val, reason) => {
+                if (reason === 'input') setUserSearch(val);
+              }}
               isOptionEqualToValue={(opt, val) => opt.id === val.id}
               renderInput={(params) => <TextField {...params} label="Assigned To" placeholder="Search user..." fullWidth helperText="Person responsible for completing this checklist" />}
             />

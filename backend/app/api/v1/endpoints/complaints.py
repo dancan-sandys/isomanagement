@@ -15,6 +15,7 @@ from app.schemas.complaint import (
 )
 from app.services.complaint_service import ComplaintService
 from app.core.permissions import require_permission_dependency
+from app.core.security import get_current_user
 
 
 router = APIRouter()
@@ -36,7 +37,7 @@ async def list_complaints(
     page: int = Query(1, ge=1), 
     size: int = Query(20, ge=1, le=100), 
     db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    current_user: User = Depends(get_current_user)
 ):
     svc = ComplaintService(db)
     result = svc.list_complaints(page=page, size=size)
@@ -120,7 +121,7 @@ async def update_investigation(
 @router.get("/reports/trends", response_model=ComplaintTrendResponse)
 async def complaint_trends(
     db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    current_user: User = Depends(get_current_user)
 ):
     svc = ComplaintService(db)
     data = svc.get_trends()

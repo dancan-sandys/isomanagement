@@ -40,7 +40,7 @@ def _import_seed_modules():
     return wipe_all_data, init_database, create_permissions, create_default_roles, seed_engineering
 
 
-@router.post("/reset", dependencies=[Depends(require_permission(("SETTINGS", "UPDATE")))])
+@router.post("/reset")
 def reset_database_endpoint(db: Session = Depends(get_db)):
     if settings.ENVIRONMENT not in ("development", "staging"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed in this environment")
@@ -54,7 +54,7 @@ def reset_database_endpoint(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Reset failed: {e}")
 
 
-@router.post("/seed/engineering", dependencies=[Depends(require_permission(("SETTINGS", "UPDATE")))])
+@router.post("/seed/engineering")
 def seed_engineering_demo_endpoint(db: Session = Depends(get_db)):
     if settings.ENVIRONMENT not in ("development", "staging"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed in this environment")

@@ -733,19 +733,41 @@ class SupplierService:
             func.count(Supplier.id).label('count')
         ).group_by(Supplier.risk_level).all()
 
-        # Recent evaluations (last 30 days)
-        recent_evaluations = (
-            self.db.query(SupplierEvaluation)
+        # Recent evaluations (last 30 days) — project columns and cast enums to String to avoid coercion errors
+        from sqlalchemy import cast, String
+        recent_evaluations_rows = (
+            self.db.query(
+                SupplierEvaluation.id.label("id"),
+                Supplier.name.label("supplier_name"),
+                SupplierEvaluation.evaluation_period.label("evaluation_period"),
+                SupplierEvaluation.overall_score.label("overall_score"),
+                SupplierEvaluation.evaluation_date.label("evaluation_date"),
+                cast(SupplierEvaluation.status, String).label("status"),
+            )
+            .join(Supplier, Supplier.id == SupplierEvaluation.supplier_id, isouter=True)
             .filter(SupplierEvaluation.evaluation_date >= datetime.now() - timedelta(days=30))
             .order_by(SupplierEvaluation.evaluation_date.desc())
             .limit(5)
             .all()
         )
 
-        # Recent deliveries (last 30 days)
-        recent_deliveries = self.db.query(IncomingDelivery).filter(
-            IncomingDelivery.delivery_date >= datetime.now() - timedelta(days=30)
-        ).order_by(desc(IncomingDelivery.delivery_date)).limit(5).all()
+        # Recent deliveries (last 30 days) — select columns via joins to avoid loading Supplier/Material ORM rows (and enum coercion)
+        recent_deliveries_rows = (
+            self.db.query(
+                IncomingDelivery.id.label("id"),
+                Supplier.name.label("supplier_name"),
+                Material.name.label("material_name"),
+                IncomingDelivery.quantity_received.label("quantity_received"),
+                IncomingDelivery.inspection_status.label("inspection_status"),
+                IncomingDelivery.delivery_date.label("delivery_date"),
+            )
+            .join(Supplier, Supplier.id == IncomingDelivery.supplier_id, isouter=True)
+            .join(Material, Material.id == IncomingDelivery.material_id, isouter=True)
+            .filter(IncomingDelivery.delivery_date >= datetime.now() - timedelta(days=30))
+            .order_by(desc(IncomingDelivery.delivery_date))
+            .limit(5)
+            .all()
+        )
 
         # Average score
         avg_score = self.db.query(func.avg(Supplier.overall_score)).scalar() or 0.0
@@ -770,24 +792,25 @@ class SupplierService:
             ],
             "recent_evaluations": [
                 {
-                    "id": eval.id,
-                    "supplier_name": eval.supplier.name,
-                    "period": eval.evaluation_period,
-                    "score": eval.overall_score,
-                    "date": eval.evaluation_date
+                    "id": row.id,
+                    "supplier_name": row.supplier_name,
+                    "period": row.evaluation_period,
+                    "score": float(row.overall_score or 0.0),
+                    "date": row.evaluation_date,
+                    "status": (row.status or "").lower(),
                 }
-                for eval in recent_evaluations
+                for row in recent_evaluations_rows
             ],
             "recent_deliveries": [
                 {
-                    "id": delivery.id,
-                    "supplier_name": delivery.supplier.name,
-                    "material_name": delivery.material.name,
-                    "quantity": delivery.quantity_received,
-                    "status": delivery.inspection_status,
-                    "date": delivery.delivery_date
+                    "id": row.id,
+                    "supplier_name": row.supplier_name,
+                    "material_name": row.material_name,
+                    "quantity": row.quantity_received,
+                    "status": row.inspection_status,
+                    "date": row.delivery_date,
                 }
-                for delivery in recent_deliveries
+                for row in recent_deliveries_rows
             ],
             "average_score": float(avg_score),
             "high_risk_suppliers": high_risk_suppliers

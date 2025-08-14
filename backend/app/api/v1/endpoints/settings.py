@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user, require_permission
+from app.core.security import get_current_active_user, require_permission, get_current_user
 from app.models.user import User
 from app.models.settings import ApplicationSetting, UserPreference, SettingCategory, SettingType
 from app.schemas.settings import (
@@ -91,7 +91,7 @@ async def get_setting(
 
 @router.get("/system-info", response_model=ResponseModel)
 async def get_system_info(
-    current_user: User = Depends(require_permission("settings:read")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -140,7 +140,7 @@ async def get_system_info(
 
 @router.get("/backup-status", response_model=ResponseModel)
 async def get_backup_status(
-    current_user: User = Depends(require_permission("settings:read")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """

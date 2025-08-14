@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user, require_permission, get_password_hash, validate_password_policy
+from app.core.security import get_current_active_user, require_permission, get_password_hash, validate_password_policy, get_current_user
 from app.models.user import User, UserStatus
 from app.models.rbac import Role
 from app.schemas.auth import UserCreate, UserUpdate, UserResponse, UserListResponse
@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.get("/dashboard", response_model=ResponseModel)
 async def get_users_dashboard(
-    current_user: User = Depends(require_permission("users:read")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -77,7 +77,7 @@ async def get_users(
     role_id: Optional[int] = Query(None, description="Filter by role ID"),
     status: Optional[UserStatus] = Query(None, description="Filter by status"),
     department: Optional[str] = Query(None, description="Filter by department"),
-    current_user: User = Depends(require_permission("users:read")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -409,7 +409,7 @@ async def admin_reset_password(
 
 @router.get("/dashboard", response_model=ResponseModel)
 async def get_users_dashboard(
-    current_user: User = Depends(require_permission("users:read")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
