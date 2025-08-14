@@ -297,14 +297,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
         if (mode === 'create') {
           const payload = {
             ...values,
-<<<<<<< HEAD
-            year_established: values.year_established === ''
-              ? undefined
-              : Number(values.year_established),
-=======
-            year_established: values.year_established ? Number(values.year_established) : undefined,
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-          } as any;
+            year_established: values.year_established ? Number(values.year_established) : undefined,          } as any;
           const response = await dispatch(createSupplier(payload)).unwrap();
           setNotification({
             open: true,
@@ -321,15 +314,10 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
           } as any;
           const response = await dispatch(updateSupplier({
             supplierId,
-<<<<<<< HEAD
-            supplierData: payload,
-=======
             supplierData: {
               ...values,
               year_established: values.year_established ? Number(values.year_established) : undefined,
-            } as any,
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-          })).unwrap();
+            } as any,          })).unwrap();
           setNotification({
             open: true,
             message: 'Supplier updated successfully',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
@@ -8,7 +8,6 @@ import {
   Tabs,
   Tab,
   Alert,
-  LinearProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -41,8 +40,6 @@ import { useLocation } from 'react-router-dom';
 const Suppliers: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const {
-    dashboard,
-    dashboardLoading,
     dashboardError,
   } = useSelector((state: RootState) => state.supplier);
 
@@ -52,12 +49,27 @@ const Suppliers: React.FC = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
 
+  const loadInitialData = useCallback(async () => {
+    try {
+      // Load only endpoints backed by the backend to avoid 404s
+      await Promise.all([
+        dispatch(fetchSupplierDashboard()),
+        dispatch(fetchSuppliers({})),
+        dispatch(fetchMaterials({})),
+        dispatch(fetchEvaluations({})),
+        dispatch(fetchDeliveries({})),
+      ]);
+    } catch (error) {
+      console.error('Failed to load initial data:', error);
+    }
+  }, [dispatch]);
+
   const initRef = React.useRef(false);
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     loadInitialData();
-  }, []);
+  }, [loadInitialData]);
 
   // Support redirects like /suppliers?tab=1
   useEffect(() => {
@@ -70,21 +82,6 @@ const Suppliers: React.FC = () => {
       }
     }
   }, [location.search]);
-
-  const loadInitialData = async () => {
-    try {
-      // Load only endpoints backed by the backend to avoid 404s
-      await Promise.all([
-        dispatch(fetchSupplierDashboard()),
-        dispatch(fetchSuppliers()),
-        dispatch(fetchMaterials()),
-        dispatch(fetchEvaluations()),
-        dispatch(fetchDeliveries()),
-      ]);
-    } catch (error) {
-      console.error('Failed to load initial data:', error);
-    }
-  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);

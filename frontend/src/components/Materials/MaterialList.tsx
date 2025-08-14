@@ -46,7 +46,6 @@ import {
   AddCircle,
   Inventory2,
   Cancel,
-  CheckCircle,
   Coronavirus as Allergen,
   Inventory,
   Science,
@@ -73,11 +72,7 @@ import { RootState, AppDispatch } from '../../store';
 import { Material, MaterialFilters } from '../../types/supplier';
 import { EnhancedCard } from '../UI';
 import { EnhancedStatusChip } from '../UI';
-<<<<<<< HEAD
 import DataTable from '../UI/DataTable';
-=======
- 
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 import { NotificationToast } from '../UI';
 
 interface MaterialListProps {
@@ -133,13 +128,8 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-<<<<<<< HEAD
-      if (searchTerm !== (filters.materials?.search || '')) {
-        dispatch(setMaterialFilters({ search: searchTerm }));
-=======
       if (searchTerm !== (filters.materials as any).search) {
         dispatch(setMaterialFilters({ ...(filters.materials || {}), search: searchTerm } as any));
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
       }
     }, 500);
 
@@ -168,11 +158,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
   };
 
   const handleFilterChange = () => {
-<<<<<<< HEAD
-    const newFilters: MaterialFilters = {} as MaterialFilters;
-=======
     const newFilters: MaterialFilters & { date_from?: string; date_to?: string } = {};
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     
     if (filterCategory) newFilters.category = filterCategory;
     if (filterSupplier) newFilters.supplier_id = parseInt(filterSupplier);

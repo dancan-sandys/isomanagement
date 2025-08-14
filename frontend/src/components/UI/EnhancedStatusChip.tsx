@@ -8,16 +8,6 @@ export type StatusType =
   | 'pending'
   | 'warning'
   | 'info'
-<<<<<<< HEAD
-  | 'active'
-  | 'inactive'
-  | 'suspended'
-  | 'pending_approval'
-  | 'blacklisted'
-  | 'passed'
-  | 'failed'
-  | 'under_review';
-=======
   | 'approved'
   | 'rejected'
   | 'under_review'
@@ -28,7 +18,6 @@ export type StatusType =
   | 'failed'
   | 'pending_approval'
   | 'blacklisted';
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
 
 interface EnhancedStatusChipProps extends Omit<ChipProps, 'color'> {
   status: StatusType;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, Stack, Typography } from '@mui/material';
 import riskAPI from '../services/riskAPI';
@@ -11,7 +11,7 @@ const RiskDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ total: number; completed: number; overdue: number } | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true); setError(null);
     try {
@@ -25,9 +25,9 @@ const RiskDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <Box sx={{ p: 3 }}>Loading…</Box>;
   if (error) return <Box sx={{ p: 3 }}><Typography color="error">{error}</Typography></Box>;

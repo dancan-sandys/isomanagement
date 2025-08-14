@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Box,
@@ -13,9 +13,6 @@ import {
   ListItemIcon,
   Button,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Table,
   TableBody,
   TableCell,
@@ -26,7 +23,6 @@ import {
   Stack,
   Alert,
   IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -39,7 +35,6 @@ import {
   Switch,
 } from '@mui/material';
 import {
-  ExpandMore,
   Security,
   Warning,
   CheckCircle,
@@ -67,16 +62,13 @@ import {
   deleteCCP,
   fetchDashboard,
   setSelectedProduct,
-  setSelectedCCP,
-  setSelectedHazard,
   clearError,
 } from '../store/slices/haccpSlice';
 import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import { Autocomplete } from '@mui/material';
 import { usersAPI } from '../services/api';
-import PageHeader from '../components/UI/PageHeader';
 import StatusChip from '../components/UI/StatusChip';
-import ProductDialog from '../components/HACCP/ProductDialog';
+import PageHeader from '../components/UI/PageHeader';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -214,10 +206,18 @@ const HACCP: React.FC = () => {
   const canCreateProducts = hasRole(currentUser, 'QA Manager') || 
                            isSystemAdministrator(currentUser);
 
+  const loadDashboard = useCallback(() => {
+    dispatch(fetchDashboard());
+  }, [dispatch]);
+
+  const loadProducts = useCallback(() => {
+    dispatch(fetchProducts());
+  }, [dispatch]);
+
   useEffect(() => {
     loadDashboard();
     loadProducts();
-  }, [dispatch]);
+  }, [loadDashboard, loadProducts]);
 
   // Read ?tab= from URL to jump to details
   useEffect(() => {
@@ -231,14 +231,6 @@ const HACCP: React.FC = () => {
       setSelectedTab(0);
     }
   }, [location.search]);
-
-  const loadDashboard = () => {
-    dispatch(fetchDashboard());
-  };
-
-  const loadProducts = () => {
-    dispatch(fetchProducts());
-  };
 
   const loadProductDetails = (productId: number) => {
     dispatch(fetchProduct(productId));
@@ -986,14 +978,6 @@ const HACCP: React.FC = () => {
 
       {/* Product Details moved to /haccp/products/:id */}
 
-<<<<<<< HEAD
-      {/* Dialogs */}
-      <ProductDialog
-        open={productDialogOpen}
-        onClose={() => setProductDialogOpen(false)}
-        product={selectedProductForEdit}
-      />
-=======
       {/* Dialogs for creating/editing products, process flows, hazards, and CCPs */}
       <Dialog open={productDialogOpen} onClose={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }} maxWidth="md" fullWidth>
         <DialogTitle>{selectedProductForEdit ? 'Edit Product' : 'Add Product'}</DialogTitle>
@@ -1259,9 +1243,7 @@ const HACCP: React.FC = () => {
       </Dialog>
 
       {/* Simple edit dialogs could be implemented similarly for process flows, hazards, and CCPs.
-          Deferring full forms to Phase 2; current UI supports delete and open edit dialog shells. */}
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-    </Box>
+          Deferring full forms to Phase 2; current UI supports delete and open edit dialog shells. */}    </Box>
   );
 };
 

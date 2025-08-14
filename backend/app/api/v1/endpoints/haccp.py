@@ -220,16 +220,7 @@ async def create_product(
         db.commit()
         db.refresh(product)
         
-<<<<<<< HEAD
-        # Get creator name
-        creator = db.query(User).filter(User.id == product.created_by).first()
-        creator_name = creator.full_name if creator else "Unknown"
-        
-        return ResponseModel(
-=======
-        resp = ResponseModel(
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-            success=True,
+        resp = ResponseModel(            success=True,
             message="Product created successfully",
             data={
                 "id": product.id,
@@ -267,50 +258,6 @@ async def create_product(
 @router.put("/products/{product_id}")
 async def update_product(
     product_id: int,
-<<<<<<< HEAD
-    product_data: ProductUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update an existing product"""
-    try:
-        # Check if product exists
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-        
-        # Update fields
-        if product_data.name is not None:
-            product.name = product_data.name
-        if product_data.description is not None:
-            product.description = product_data.description
-        if product_data.category is not None:
-            product.category = product_data.category
-        if product_data.formulation is not None:
-            product.formulation = product_data.formulation
-        if product_data.allergens is not None:
-            product.allergens = product_data.allergens
-        if product_data.shelf_life_days is not None:
-            product.shelf_life_days = product_data.shelf_life_days
-        if product_data.storage_conditions is not None:
-            product.storage_conditions = product_data.storage_conditions
-        if product_data.packaging_type is not None:
-            product.packaging_type = product_data.packaging_type
-        if product_data.haccp_plan_approved is not None:
-            product.haccp_plan_approved = product_data.haccp_plan_approved
-        
-        db.commit()
-        db.refresh(product)
-        
-        # Get creator name
-        creator = db.query(User).filter(User.id == product.created_by).first()
-        creator_name = creator.full_name if creator else "Unknown"
-        
-        return ResponseModel(
-=======
     product_data: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -345,9 +292,7 @@ async def update_product(
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
 
-        resp = ResponseModel(
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-            success=True,
+        resp = ResponseModel(            success=True,
             message="Product updated successfully",
             data={
                 "id": product.id,
@@ -355,28 +300,6 @@ async def update_product(
                 "name": product.name,
                 "description": product.description,
                 "category": product.category,
-<<<<<<< HEAD
-                "formulation": product.formulation,
-                "allergens": product.allergens,
-                "shelf_life_days": product.shelf_life_days,
-                "storage_conditions": product.storage_conditions,
-                "packaging_type": product.packaging_type,
-                "haccp_plan_approved": product.haccp_plan_approved,
-                "haccp_plan_version": product.haccp_plan_version,
-                "created_by": creator_name,
-                "created_at": product.created_at.isoformat() if product.created_at else None,
-                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update product: {str(e)}"
-        )
-=======
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
                 "created_by": creator_name,
@@ -391,11 +314,7 @@ async def update_product(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update product: {str(e)}")
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-
-
-@router.delete("/products/{product_id}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update product: {str(e)}")@router.delete("/products/{product_id}")
 async def delete_product(
     product_id: int,
     current_user: User = Depends(get_current_user),
@@ -403,39 +322,6 @@ async def delete_product(
 ):
     """Delete a product"""
     try:
-<<<<<<< HEAD
-        # Check if product exists
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-        
-        # Check permissions (only QA Manager or System Administrator can delete)
-        if current_user.role and current_user.role.name not in ["QA Manager", "System Administrator"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to delete products"
-            )
-        
-        db.delete(product)
-        db.commit()
-        
-        return ResponseModel(
-            success=True,
-            message="Product deleted successfully",
-            data={"id": product_id}
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete product: {str(e)}"
-        )
-=======
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -451,11 +337,7 @@ async def delete_product(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete product: {str(e)}")
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-
-
-# Process Flow Management
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete product: {str(e)}")# Process Flow Management
 @router.post("/products/{product_id}/process-flows")
 async def create_process_flow(
     product_id: int,

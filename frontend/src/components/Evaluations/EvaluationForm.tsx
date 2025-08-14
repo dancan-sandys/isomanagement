@@ -97,21 +97,9 @@ const validationSchema = Yup.object({
   technical_support_score: Yup.number().min(0).max(10).required('Technical support score is required'),
   hygiene_score: Yup.number().min(0).max(10).required('Hygiene score is required'),
   follow_up_required: Yup.boolean(),
-<<<<<<< HEAD
-  follow_up_date: Yup.string()
-    .nullable()
-    .when('follow_up_required', {
-      is: true,
-      then: (schema: Yup.StringSchema<string | null | undefined>) =>
-        schema.required('Follow-up date is required when follow-up is required'),
-      otherwise: (schema: Yup.StringSchema<string | null | undefined>) => schema.notRequired(),
-    }),
-=======
   follow_up_date: Yup.string().when(['follow_up_required'], ([followUpRequired], schema: Yup.StringSchema) =>
     followUpRequired ? schema.required('Follow-up date is required when follow-up is required') : schema
-  ),
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-});
+  ),});
 
 const hygieneAuditAreas = [
   {
@@ -275,7 +263,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({
       dispatch(fetchEvaluation(evaluationId));
     }
     if (!suppliers?.items?.length) {
-      dispatch(fetchSuppliers());
+      dispatch(fetchSuppliers({}));
     }
   }, [evaluationId, mode, dispatch]);
 

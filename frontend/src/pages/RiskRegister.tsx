@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Box, Button, Card, CardContent, Chip, Grid, LinearProgress, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import { Add, Assessment } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../store';
-import { clearError, fetchRiskItems, fetchRiskStats, setFilters } from '../store/slices/riskSlice';
-import riskAPI from '../services/riskAPI';
+import { fetchRiskItems, fetchRiskStats, setFilters } from '../store/slices/riskSlice';
+
 import RiskCreateDialog from '../components/Risk/RiskCreateDialog';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ const RiskRegister: React.FC = () => {
     dispatch(setFilters({ item_type: 'risk' }));
     dispatch(fetchRiskItems({ ...filters, item_type: 'risk' }));
     dispatch(fetchRiskStats());
-  }, []);
+  }, [dispatch, filters]);
 
   const onApply = () => {
     const itemTypeValue = type ? (type as 'risk' | 'opportunity') : undefined;

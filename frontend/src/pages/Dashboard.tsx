@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -17,24 +17,14 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  LinearProgress,
-  Divider,
-  Skeleton,
-  Badge,
   Tooltip,
   IconButton,
-  Avatar,
-  Fade,
-  Grow,
-  Slide,
 } from '@mui/material';
 import {
   Warning,
   CheckCircle,
   Schedule,
   Assignment,
-  TrendingUp,
-  TrendingDown,
   Security,
   Description,
   Timeline,
@@ -43,128 +33,32 @@ import {
   Add,
   People,
   Assessment,
-  Business,
-  LocalShipping,
   Settings,
   Dashboard as DashboardIcon,
-  PlayArrow,
-  MoreVert,
-  Star,
-  Bookmark,
-  Speed,
-  Analytics,
-  Task,
-  CheckBox,
-  RadioButtonUnchecked,
-  Flag,
-  AccessTime,
-  CalendarToday,
-  Insights,
   AutoAwesome,
   Lightbulb,
 } from '@mui/icons-material';
-import PageHeader from '../components/UI/PageHeader';
 import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
 import SmartDashboard from '../components/Dashboard/SmartDashboard';
 import SmartOnboarding from '../components/Onboarding/SmartOnboarding';
 import { RootState } from '../store';
-import { hasRole, isSystemAdministrator, canManageUsers } from '../store/slices/authSlice';
+import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import { dashboardAPI } from '../services/api';
 
 const Dashboard: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(false);
-<<<<<<< HEAD
   const [error, setError] = useState<string | null>(null);
-
-  // Real data from API
-=======
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
 
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
   const [dashboardData, setDashboardData] = useState<any>(null);
 
-  useEffect(() => {
-    // Load dashboard data based on user role
-    loadDashboardData();
-  }, [user]);
-
-  // Check if this is user's first time (must be before any early returns)
-  useEffect(() => {
-    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (!hasSeenOnboarding && user) {
-      setIsFirstTime(true);
-      setShowOnboarding(true);
-    }
-  }, [user]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-<<<<<<< HEAD
-      // Use real API call
-      const response = await dashboardAPI.getDashboard();
-      setDashboardData(response.data);
-    } catch (error: any) {
-      console.error('Failed to load dashboard data:', error);
-      setError(error.response?.data?.detail || 'Failed to load dashboard data');
-      // Fallback to mock data if API fails
-      const mockData = getMockDashboardData();
-      setDashboardData(mockData);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getMockDashboardData = () => {
-    if (isSystemAdministrator(user)) {
-      return {
-        totalDocuments: 25,
-        totalHaccpPlans: 5,
-        totalPrpPrograms: 8,
-        totalSuppliers: 12,
-        pendingApprovals: 3,
-        complianceScore: 98,
-        openIssues: 2,
-        totalUsers: 25,
-        activeUsers: 20,
-        systemStatus: 'online',
-        nextAuditDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        recentDocuments: [
-          { id: 1, title: 'Quality Manual v2.1', category: 'manual', created_at: new Date().toISOString(), status: 'active' },
-          { id: 2, title: 'HACCP Plan - Milk Processing', category: 'haccp', created_at: new Date().toISOString(), status: 'active' },
-        ]
-      };
-    } else if (hasRole(user, 'QA Manager')) {
-      return {
-        openNCs: 12,
-        capaCompletion: 87,
-        documentUpdates: 5,
-        auditSchedule: 2,
-        ncTrends: [
-          { id: 1, title: 'Temperature Deviation', status: 'open', priority: 'high', assignedTo: 'John Doe', dueDate: '2024-01-15' },
-          { id: 2, title: 'Document Version Mismatch', status: 'pending', priority: 'medium', assignedTo: 'Jane Smith', dueDate: '2024-01-20' },
-        ],
-        capaDeadlines: [
-          { id: 1, title: 'Equipment Calibration', dueDate: '2024-01-18', status: 'in_progress' },
-          { id: 2, title: 'Staff Training Update', dueDate: '2024-01-25', status: 'pending' },
-        ]
-      };
-    } else {
-      return {
-        dailyTasks: 8,
-        completedTasks: 6,
-        pendingReviews: 2,
-        upcomingDeadlines: 3,
-        recentActivities: [
-          { id: 1, action: 'Completed daily checklist', time: '2 hours ago', type: 'success' },
-          { id: 2, title: 'Updated process log', time: '4 hours ago', type: 'info' },
-        ]
-      };
-=======
       const [statsResp, activityResp] = await Promise.all([
         dashboardAPI.getStats(),
         dashboardAPI.getRecentActivity(),
@@ -210,9 +104,22 @@ const Dashboard: React.FC = () => {
       setDashboardData(null);
     } finally {
       setLoading(false);
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    // Load dashboard data based on user role
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Check if this is user's first time (must be before any early returns)
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding && user) {
+      setIsFirstTime(true);
+      setShowOnboarding(true);
+    }
+  }, [user]);
 
   const renderSystemAdministratorDashboard = () => (
     <Grid container spacing={3}>
@@ -660,47 +567,7 @@ const Dashboard: React.FC = () => {
     </Grid>
   );
 
-  const getDashboardTitle = () => {
-    if (isSystemAdministrator(user)) {
-      return 'System Administrator Dashboard';
-    } else if (hasRole(user, 'QA Manager')) {
-      return 'QA Manager Dashboard';
-    } else if (hasRole(user, 'Production Operator')) {
-      return 'Production Operator Dashboard';
-    } else if (hasRole(user, 'Auditor')) {
-      return 'Auditor Dashboard';
-    } else {
-      return 'Dashboard';
-    }
-  };
 
-  const getDashboardSubtitle = () => {
-    if (isSystemAdministrator(user)) {
-      return 'System administration and user management overview';
-    } else if (hasRole(user, 'QA Manager')) {
-      return 'Quality assurance and compliance management';
-    } else if (hasRole(user, 'Production Operator')) {
-      return 'Daily operations and task management';
-    } else if (hasRole(user, 'Auditor')) {
-      return 'Audit and compliance monitoring';
-    } else {
-      return 'ISO 22000 Food Safety Management System Overview';
-    }
-  };
-
-  const renderDashboard = () => {
-    if (isSystemAdministrator(user)) {
-      return renderSystemAdministratorDashboard();
-    } else if (hasRole(user, 'QA Manager')) {
-      return renderQAManagerDashboard();
-    } else if (hasRole(user, 'Production Operator')) {
-      return renderOperatorDashboard();
-    } else if (hasRole(user, 'Auditor')) {
-      return renderAuditorDashboard();
-    } else {
-      return renderDefaultDashboard();
-    }
-  };
 
   if (loading) {
     return (
@@ -728,15 +595,12 @@ const Dashboard: React.FC = () => {
         isFirstTime={isFirstTime}
       />
 
-<<<<<<< HEAD
       {error && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           {error} - Showing fallback data
         </Alert>
       )}
 
-      {renderDashboard()}
-=======
       {/* Modern Smart Dashboard */}
       <SmartDashboard />
 
@@ -758,7 +622,6 @@ const Dashboard: React.FC = () => {
           </Tooltip>
         </Box>
       )}
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
     </Box>
   );
 };

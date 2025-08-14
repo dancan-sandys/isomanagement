@@ -40,18 +40,6 @@ import {
   LocalShipping,
   Refresh,
   Add,
-<<<<<<< HEAD
-  Schedule,
-  Error as ErrorIcon,
-  Inventory,
-  Info,
-  Assessment,
-  Analytics,
-  Science,
-  Build,
-  Support,
-  Notifications,
-=======
   Inventory,
   Science,
   Build,
@@ -60,10 +48,9 @@ import {
   Notifications,
   Schedule,
   Error,
+  ErrorOutline,
   Info,
-  Analytics,
->>>>>>> 740e8e962475a924a3ab6bffb60355e98e0abbbc
-} from '@mui/icons-material';
+  Analytics,} from '@mui/icons-material';
 import {
   LineChart,
   Line,
@@ -505,7 +492,7 @@ const SupplierDashboard: React.FC = () => {
     switch (type) {
       case 'expired_certificate': return <Warning />;
       case 'overdue_evaluation': return <Schedule />;
-      case 'quality_alert': return <ErrorIcon />;
+      case 'quality_alert': return <ErrorOutline />;
       case 'expired_material': return <Inventory />;
       default: return <Info />;
     }

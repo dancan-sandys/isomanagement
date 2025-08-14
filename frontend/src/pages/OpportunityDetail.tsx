@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Card, CardContent, Chip, Divider, Grid, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import riskAPI from '../services/riskAPI';
@@ -11,7 +11,7 @@ const OpportunityDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<any[]>([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true); setError(null);
     try {
@@ -28,9 +28,9 @@ const OpportunityDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <Typography>Loading...</Typography>;
   if (error) return <Typography color="error">{error}</Typography>;

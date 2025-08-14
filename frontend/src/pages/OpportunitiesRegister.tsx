@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Box, Button, Card, CardContent, Chip, Grid, LinearProgress, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { Add } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../store';
-import { clearError, fetchRiskItems, fetchRiskStats, setFilters } from '../store/slices/riskSlice';
+import { fetchRiskItems, setFilters } from '../store/slices/riskSlice';
 import riskAPI, { RiskListParams } from '../services/riskAPI';
 import OpportunityCreateDialog from '../components/Risk/OpportunityCreateDialog';
 import { Link as RouterLink } from 'react-router-dom';
@@ -19,7 +19,7 @@ const OpportunitiesRegister: React.FC = () => {
   useEffect(() => {
     dispatch(setFilters({ item_type: 'opportunity' }));
     dispatch(fetchRiskItems({ ...filters, item_type: 'opportunity' }));
-  }, []);
+  }, [dispatch, filters]);
 
   const onApply = () => {
     dispatch(setFilters({ search, item_type: 'opportunity', category: category || undefined, classification: classification || undefined }));
