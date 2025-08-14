@@ -230,10 +230,12 @@ def insert_haccp_like_plan(conn):
     conn.execute(text(
         """
         INSERT INTO haccp_plan_versions (plan_id, version_number, content, change_description, created_by, created_at)
-        SELECT id, '1.0', :content, 'Initial plan', 1, :now FROM haccp_plans WHERE product_id=(SELECT id FROM products WHERE product_code='ASM-PRV-001')
-        WHERE NOT EXISTS (
-            SELECT 1 FROM haccp_plan_versions WHERE plan_id=(SELECT id FROM haccp_plans WHERE product_id=(SELECT id FROM products WHERE product_code='ASM-PRV-001')) AND version_number='1.0'
-        )
+        SELECT p.id, '1.0', :content, 'Initial plan', 1, :now
+        FROM haccp_plans p
+        WHERE p.product_id=(SELECT id FROM products WHERE product_code='ASM-PRV-001')
+          AND NOT EXISTS (
+            SELECT 1 FROM haccp_plan_versions v WHERE v.plan_id=p.id AND v.version_number='1.0'
+          )
         """
     ), {"content": json.dumps(content), "now": datetime.utcnow().isoformat()})
     print("✅ Control plan created with initial version")

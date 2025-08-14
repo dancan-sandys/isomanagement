@@ -16,13 +16,15 @@ from app.models.supplier import Supplier, SupplierDocument, SupplierEvaluation
 from app.models.traceability import Batch, TraceabilityLink, RecallEntry
 from app.models.notification import Notification
 from app.models.rbac import Role, Permission, UserPermission
+from app.models.equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
+from app.models.management_review import *
 
 def init_database():
     """Create all database tables"""
     print("🚀 Initializing database...")
     
     try:
-        # Create all tables
+        # Create all tables (ensure all model modules imported above)
         Base.metadata.create_all(bind=engine)
         print("✅ All database tables created successfully!")
         

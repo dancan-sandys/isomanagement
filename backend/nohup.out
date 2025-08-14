@@ -1,0 +1,379 @@
+INFO:     Will watch for changes in these directories: ['/Users/dancanoruko/Documents/agency/iso/backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [24342] using WatchFiles
+/Users/dancanoruko/Documents/agency/iso/backend/venv/lib/python3.13/site-packages/pydantic/_internal/_config.py:345: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [24344]
+INFO:     Waiting for application startup.
+Starting ISO 22000 FSMS v1.0.0
+Environment: development
+Database: sqlite
+2025-08-14 11:23:16,224 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:23:16,224 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("role_permissions")
+2025-08-14 11:23:16,224 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,226 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("roles")
+2025-08-14 11:23:16,227 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,227 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("permissions")
+2025-08-14 11:23:16,227 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,227 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("user_permissions")
+2025-08-14 11:23:16,227 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,228 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("users")
+2025-08-14 11:23:16,228 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,228 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("user_sessions")
+2025-08-14 11:23:16,228 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("password_resets")
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("documents")
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_versions")
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,229 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_approvals")
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_change_logs")
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_templates")
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_template_versions")
+2025-08-14 11:23:16,230 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_template_approvals")
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("document_distributions")
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("products")
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("process_flows")
+2025-08-14 11:23:16,231 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,232 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("hazards")
+2025-08-14 11:23:16,232 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,232 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("ccps")
+2025-08-14 11:23:16,232 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,232 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("ccp_monitoring_logs")
+2025-08-14 11:23:16,232 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("ccp_verification_logs")
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("haccp_plans")
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("haccp_plan_versions")
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,233 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("haccp_plan_approvals")
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("prp_programs")
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("prp_checklists")
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("prp_checklist_items")
+2025-08-14 11:23:16,234 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("prp_templates")
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("prp_schedules")
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("suppliers")
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,235 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("materials")
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("supplier_evaluations")
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("incoming_deliveries")
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("inspection_checklists")
+2025-08-14 11:23:16,236 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("inspection_checklist_items")
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("supplier_documents")
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("batches")
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,237 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("traceability_links")
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recalls")
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recall_entries")
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recall_actions")
+2025-08-14 11:23:16,238 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("traceability_reports")
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recall_root_cause_analysis")
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recall_preventive_measures")
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recall_verification_plans")
+2025-08-14 11:23:16,239 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("recall_effectiveness_reviews")
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_programs")
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_sessions")
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,240 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_attendance")
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_materials")
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("role_required_trainings")
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_quizzes")
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,241 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_quiz_questions")
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_quiz_options")
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_quiz_attempts")
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_quiz_answers")
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,242 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("training_certificates")
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("application_settings")
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("user_preferences")
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("risk_register")
+2025-08-14 11:23:16,243 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,244 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("risk_actions")
+2025-08-14 11:23:16,245 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,245 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("notifications")
+2025-08-14 11:23:16,245 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,245 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("management_reviews")
+2025-08-14 11:23:16,245 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,245 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("review_agenda_items")
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("review_actions")
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audits")
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_checklist_templates")
+2025-08-14 11:23:16,246 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_checklist_items")
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_findings")
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_attachments")
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_item_attachments")
+2025-08-14 11:23:16,247 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_finding_attachments")
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_auditees")
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_logs")
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("non_conformances")
+2025-08-14 11:23:16,248 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,249 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("root_cause_analyses")
+2025-08-14 11:23:16,249 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,249 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("capa_actions")
+2025-08-14 11:23:16,249 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,249 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("capa_verifications")
+2025-08-14 11:23:16,249 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("non_conformance_attachments")
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("equipment")
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("maintenance_plans")
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("maintenance_work_orders")
+2025-08-14 11:23:16,250 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("calibration_plans")
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("calibration_records")
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("product_allergen_assessments")
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("label_templates")
+2025-08-14 11:23:16,251 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("label_template_versions")
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("label_template_approvals")
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("complaints")
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,252 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("complaint_communications")
+2025-08-14 11:23:16,253 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,253 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("complaint_investigations")
+2025-08-14 11:23:16,253 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-08-14 11:23:16,256 INFO sqlalchemy.engine.Engine COMMIT
+INFO:     Application startup complete.
+Database initialized successfully (models metadata created)
+2025-08-14 11:25:20,038 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:20,047 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:25:20,047 INFO sqlalchemy.engine.Engine [generated in 0.00054s] (None, 'GET /favicon.ico', 'generic', None, '{"status": 404, "process_time_ms": 53}', None, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:25:20,049 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:25:20,056 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:20,061 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:25:20,061 INFO sqlalchemy.engine.Engine [generated in 0.00036s] (7,)
+2025-08-14 11:25:20,062 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     None:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+2025-08-14 11:25:29,363 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:29,367 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.username = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:25:29,367 INFO sqlalchemy.engine.Engine [generated in 0.00035s] ('admin', 1, 0)
+2025-08-14 11:25:29,369 INFO sqlalchemy.engine.Engine ROLLBACK
+2025-08-14 11:25:29,370 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:29,370 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:25:29,370 INFO sqlalchemy.engine.Engine [cached since 9.324s ago] (None, 'POST /api/v1/auth/login', 'auth', None, '{"status": 401, "process_time_ms": 12}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:25:29,371 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:25:29,374 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:29,374 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:25:29,374 INFO sqlalchemy.engine.Engine [cached since 9.313s ago] (8,)
+2025-08-14 11:25:29,375 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:61875 - "POST /api/v1/auth/login HTTP/1.1" 401 Unauthorized
+2025-08-14 11:25:35,429 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:35,429 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.username = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:25:35,429 INFO sqlalchemy.engine.Engine [cached since 6.062s ago] ('eng_manager', 1, 0)
+2025-08-14 11:25:35,790 INFO sqlalchemy.engine.Engine UPDATE users SET failed_login_attempts=?, updated_at=CURRENT_TIMESTAMP WHERE users.id = ?
+2025-08-14 11:25:35,790 INFO sqlalchemy.engine.Engine [generated in 0.00025s] (2, 1)
+2025-08-14 11:25:35,791 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:25:35,795 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:35,795 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:25:35,795 INFO sqlalchemy.engine.Engine [cached since 15.75s ago] (None, 'POST /api/v1/auth/login', 'auth', None, '{"status": 401, "process_time_ms": 368}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:25:35,796 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:25:35,798 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:35,798 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:25:35,798 INFO sqlalchemy.engine.Engine [cached since 15.74s ago] (9,)
+2025-08-14 11:25:35,799 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:61879 - "POST /api/v1/auth/login HTTP/1.1" 401 Unauthorized
+2025-08-14 11:25:57,490 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:57,491 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:25:57,499 INFO sqlalchemy.engine.Engine [cached since 37.45s ago] (None, 'OPTIONS /api/v1/auth/signup', 'auth', None, '{"status": 200, "process_time_ms": 0}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:25:57,500 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:25:57,503 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:57,504 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:25:57,504 INFO sqlalchemy.engine.Engine [cached since 37.44s ago] (10,)
+2025-08-14 11:25:57,505 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:61881 - "OPTIONS /api/v1/auth/signup HTTP/1.1" 200 OK
+2025-08-14 11:25:57,524 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:57,524 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.username = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:25:57,524 INFO sqlalchemy.engine.Engine [cached since 28.16s ago] ('admin', 1, 0)
+2025-08-14 11:25:57,526 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:25:57,526 INFO sqlalchemy.engine.Engine [generated in 0.00028s] ('admin@gmail.com', 1, 0)
+2025-08-14 11:25:57,530 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.employee_id = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:25:57,530 INFO sqlalchemy.engine.Engine [generated in 0.00026s] ('2334', 1, 0)
+2025-08-14 11:25:57,532 INFO sqlalchemy.engine.Engine SELECT roles.id AS roles_id, roles.name AS roles_name, roles.description AS roles_description, roles.is_default AS roles_is_default, roles.is_editable AS roles_is_editable, roles.is_active AS roles_is_active, roles.created_at AS roles_created_at, roles.updated_at AS roles_updated_at 
+FROM roles 
+WHERE roles.name = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:25:57,532 INFO sqlalchemy.engine.Engine [generated in 0.00019s] ('System Administrator', 1, 0)
+2025-08-14 11:25:57,535 INFO sqlalchemy.engine.Engine ROLLBACK
+2025-08-14 11:25:57,536 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:57,536 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:25:57,536 INFO sqlalchemy.engine.Engine [cached since 37.49s ago] (None, 'POST /api/v1/auth/signup', 'auth', None, '{"status": 400, "process_time_ms": 28}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:25:57,537 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:25:57,539 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:25:57,540 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:25:57,540 INFO sqlalchemy.engine.Engine [cached since 37.48s ago] (11,)
+2025-08-14 11:25:57,540 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:61881 - "POST /api/v1/auth/signup HTTP/1.1" 400 Bad Request
+2025-08-14 11:26:01,666 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:26:01,666 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.username = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:26:01,666 INFO sqlalchemy.engine.Engine [cached since 32.3s ago] ('admin', 1, 0)
+2025-08-14 11:26:01,667 INFO sqlalchemy.engine.Engine ROLLBACK
+2025-08-14 11:26:01,668 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:26:01,668 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:26:01,668 INFO sqlalchemy.engine.Engine [cached since 41.62s ago] (None, 'POST /api/v1/auth/login', 'auth', None, '{"status": 401, "process_time_ms": 4}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:26:01,669 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:26:01,672 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:26:01,672 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:26:01,672 INFO sqlalchemy.engine.Engine [cached since 41.61s ago] (12,)
+2025-08-14 11:26:01,672 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:61881 - "POST /api/v1/auth/login HTTP/1.1" 401 Unauthorized
+2025-08-14 11:27:27,433 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:27,435 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.username = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:27:27,435 INFO sqlalchemy.engine.Engine [cached since 118s ago] ('ada', 1, 0)
+2025-08-14 11:27:27,436 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:27:27,436 INFO sqlalchemy.engine.Engine [cached since 89.88s ago] ('ad@gmail.com', 1, 0)
+2025-08-14 11:27:27,437 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.employee_id = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:27:27,437 INFO sqlalchemy.engine.Engine [cached since 89.87s ago] ('238942', 1, 0)
+2025-08-14 11:27:27,437 INFO sqlalchemy.engine.Engine SELECT roles.id AS roles_id, roles.name AS roles_name, roles.description AS roles_description, roles.is_default AS roles_is_default, roles.is_editable AS roles_is_editable, roles.is_active AS roles_is_active, roles.created_at AS roles_created_at, roles.updated_at AS roles_updated_at 
+FROM roles 
+WHERE roles.name = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:27:27,437 INFO sqlalchemy.engine.Engine [cached since 89.87s ago] ('System Administrator', 1, 0)
+2025-08-14 11:27:27,767 INFO sqlalchemy.engine.Engine INSERT INTO users (username, email, full_name, hashed_password, role_id, status, department, position, phone, employee_id, profile_picture, bio, is_active, is_verified, last_login, failed_login_attempts, locked_until, updated_at, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:27:27,767 INFO sqlalchemy.engine.Engine [generated in 0.00045s] ('ada', 'ad@gmail.com', 'ad', '$2b$12$D16oBUgpcROTqShTceMQIeZyh5xMCMMDC/r0w8jnRMciNkFHU3OJa', 1, 'ACTIVE', 'ad', 'ad', '32894823', '238942', None, None, 1, 1, None, 0, None, None, None, None)
+2025-08-14 11:27:27,770 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:27:27,773 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:27,775 INFO sqlalchemy.engine.Engine SELECT users.id, users.username, users.email, users.full_name, users.hashed_password, users.role_id, users.status, users.department, users.position, users.phone, users.employee_id, users.profile_picture, users.bio, users.is_active, users.is_verified, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at, users.created_by, users.updated_by 
+FROM users 
+WHERE users.id = ?
+2025-08-14 11:27:27,776 INFO sqlalchemy.engine.Engine [generated in 0.00026s] (7,)
+2025-08-14 11:27:27,777 INFO sqlalchemy.engine.Engine SELECT roles.id AS roles_id, roles.name AS roles_name, roles.description AS roles_description, roles.is_default AS roles_is_default, roles.is_editable AS roles_is_editable, roles.is_active AS roles_is_active, roles.created_at AS roles_created_at, roles.updated_at AS roles_updated_at 
+FROM roles 
+WHERE roles.id = ?
+2025-08-14 11:27:27,777 INFO sqlalchemy.engine.Engine [generated in 0.00019s] (1,)
+2025-08-14 11:27:27,783 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:27,784 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:27:27,784 INFO sqlalchemy.engine.Engine [cached since 127.7s ago] (None, 'POST /api/v1/auth/signup', 'auth', None, '{"status": 200, "process_time_ms": 351}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:27:27,787 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:27:27,789 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:27,789 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:27:27,789 INFO sqlalchemy.engine.Engine [cached since 127.7s ago] (13,)
+2025-08-14 11:27:27,790 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:62083 - "POST /api/v1/auth/signup HTTP/1.1" 200 OK
+2025-08-14 11:27:27,790 INFO sqlalchemy.engine.Engine ROLLBACK
+2025-08-14 11:27:50,846 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:50,856 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.hashed_password AS users_hashed_password, users.role_id AS users_role_id, users.status AS users_status, users.department AS users_department, users.position AS users_position, users.phone AS users_phone, users.employee_id AS users_employee_id, users.profile_picture AS users_profile_picture, users.bio AS users_bio, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.last_login AS users_last_login, users.failed_login_attempts AS users_failed_login_attempts, users.locked_until AS users_locked_until, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.created_by AS users_created_by, users.updated_by AS users_updated_by 
+FROM users 
+WHERE users.username = ?
+ LIMIT ? OFFSET ?
+2025-08-14 11:27:50,856 INFO sqlalchemy.engine.Engine [cached since 141.4s ago] ('ada', 1, 0)
+2025-08-14 11:27:51,277 INFO sqlalchemy.engine.Engine UPDATE users SET failed_login_attempts=?, updated_at=CURRENT_TIMESTAMP WHERE users.id = ?
+2025-08-14 11:27:51,277 INFO sqlalchemy.engine.Engine [cached since 135.4s ago] (1, 7)
+2025-08-14 11:27:51,278 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:27:51,281 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:51,281 INFO sqlalchemy.engine.Engine INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at
+2025-08-14 11:27:51,281 INFO sqlalchemy.engine.Engine [cached since 151.2s ago] (None, 'POST /api/v1/auth/login', 'auth', None, '{"status": 401, "process_time_ms": 439}', '127.0.0.1', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
+2025-08-14 11:27:51,282 INFO sqlalchemy.engine.Engine COMMIT
+2025-08-14 11:27:51,284 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-08-14 11:27:51,285 INFO sqlalchemy.engine.Engine SELECT audit_logs.id, audit_logs.user_id, audit_logs.action, audit_logs.resource_type, audit_logs.resource_id, audit_logs.details, audit_logs.ip_address, audit_logs.user_agent, audit_logs.created_at 
+FROM audit_logs 
+WHERE audit_logs.id = ?
+2025-08-14 11:27:51,285 INFO sqlalchemy.engine.Engine [cached since 151.2s ago] (14,)
+2025-08-14 11:27:51,286 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     127.0.0.1:62181 - "POST /api/v1/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [24344]
+Shutting down ISO 22000 FSMS
+INFO:     Stopping reloader process [24342]

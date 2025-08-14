@@ -1,19 +1,27 @@
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '6f0c3e2a'
-down_revision = '0001'
+down_revision = '70b989015f6a'
 branch_labels = None
 depends_on = None
 
 
 def upgrade():
-    # Add decision tree persistence columns to hazards
-    with op.batch_alter_table('hazards') as batch_op:
-        batch_op.add_column(sa.Column('decision_tree_steps', sa.Text()))
-        batch_op.add_column(sa.Column('decision_tree_run_at', sa.DateTime(timezone=True)))
-        batch_op.add_column(sa.Column('decision_tree_by', sa.Integer()))
+    # Add decision tree persistence columns to hazards (only if table exists in current history)
+    try:
+        bind = op.get_bind()
+        inspector = inspect(bind)
+        if inspector.has_table('hazards'):
+            with op.batch_alter_table('hazards') as batch_op:
+                batch_op.add_column(sa.Column('decision_tree_steps', sa.Text()))
+                batch_op.add_column(sa.Column('decision_tree_run_at', sa.DateTime(timezone=True)))
+                batch_op.add_column(sa.Column('decision_tree_by', sa.Integer()))
+    except Exception:
+        # Be lenient for environments where hazards table is created outside alembic chain
+        pass
 
     # Create HACCP plans table
     op.create_table(

@@ -41,6 +41,7 @@ import RiskDetail from './pages/RiskDetail';
 import AllergenLabel from './pages/AllergenLabel';
 import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
+import HiddenDemoTools from './pages/HiddenDemoTools';
 
 function App() {
   return (
@@ -162,6 +163,8 @@ function App() {
                       <Route path="/settings/config" element={<Navigate to="/settings?tab=settings" replace />} />
                       <Route path="/settings/backup" element={<Navigate to="/settings?tab=system" replace />} />
                       <Route path="/settings/logs" element={<Navigate to="/settings?tab=system" replace />} />
+                       {/* Hidden demo tools (no menu link). Admin only. */}
+                       <Route path="/internal/demo-tools" element={<RoleBasedRoute allowedRoles={["System Administrator"]} component={HiddenDemoTools} />} />
                       
                       {/* Profile - All authenticated users */}
                       <Route path="/profile" element={<Profile />} />

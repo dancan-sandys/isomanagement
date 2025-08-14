@@ -53,10 +53,21 @@ const Signup: React.FC = () => {
       newErrors.email = 'Email is invalid';
     }
 
+    // Enforce backend password policy on the client for instant feedback
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else {
+      if (formData.password.length < 8) {
+        newErrors.password = 'Password must be at least 8 characters';
+      } else if (!/[A-Z]/.test(formData.password)) {
+        newErrors.password = 'Password must include at least one uppercase letter';
+      } else if (!/[a-z]/.test(formData.password)) {
+        newErrors.password = 'Password must include at least one lowercase letter';
+      } else if (!/\d/.test(formData.password)) {
+        newErrors.password = 'Password must include at least one number';
+      } else if (!/[^A-Za-z0-9]/.test(formData.password)) {
+        newErrors.password = 'Password must include at least one special character';
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -108,10 +119,21 @@ const Signup: React.FC = () => {
         employee_id: formData.employeeId || undefined,
       };
 
-      await dispatch(signup(signupData));
+      // Unwrap to throw on rejected
+      await dispatch(signup(signupData)).unwrap();
       navigate('/login');
-    } catch (error: any) {
-      setError(error.response?.data?.detail || 'Signup failed');
+    } catch (err: any) {
+      const msg: string = typeof err === 'string' ? err : (err?.response?.data?.detail || 'Signup failed');
+      setError(msg);
+      // Map common backend errors to field-level messages
+      const fieldErrors: { [key: string]: string } = {};
+      if (/Username already registered/i.test(msg)) fieldErrors.username = 'Username already registered';
+      if (/Email already registered/i.test(msg)) fieldErrors.email = 'Email already registered';
+      if (/Employee ID already registered/i.test(msg)) fieldErrors.employeeId = 'Employee ID already registered';
+      if (/Password does not meet security requirements/i.test(msg)) {
+        fieldErrors.password = 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character';
+      }
+      if (Object.keys(fieldErrors).length > 0) setErrors(prev => ({ ...prev, ...fieldErrors }));
     } finally {
       setLoading(false);
     }
@@ -287,7 +309,7 @@ const Signup: React.FC = () => {
                   value={formData.password}
                   onChange={handleInputChange}
                   error={!!errors.password}
-                  helperText={errors.password}
+                  helperText={errors.password || 'Min 8 chars, include uppercase, lowercase, number, special character'}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>

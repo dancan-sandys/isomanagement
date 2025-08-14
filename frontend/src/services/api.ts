@@ -15,7 +15,7 @@ function resolveBaseURL(): string {
 }
 
 // Create axios instance
-const api = axios.create({
+export const api = axios.create({
   // Prefer env; otherwise dynamic resolution for dev/prod
   baseURL: resolveBaseURL(),
   headers: {
