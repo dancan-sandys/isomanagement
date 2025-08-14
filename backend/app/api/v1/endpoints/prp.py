@@ -31,7 +31,7 @@ async def get_prp_programs(
     page: int = 1,
     size: int = 10,
     category: Optional[str] = None,
-    status: Optional[str] = None,
+    status_filter: Optional[str] = None,
     search: Optional[str] = None
 ):
     """Get all PRP programs with pagination and filters"""
@@ -41,8 +41,8 @@ async def get_prp_programs(
         # Apply filters
         if category:
             query = query.filter(PRPProgram.category == PRPCategory(category))
-        if status:
-            query = query.filter(PRPProgram.status == PRPStatus(status))
+        if status_filter:
+            query = query.filter(PRPProgram.status == PRPStatus(status_filter))
         if search:
             search_filter = f"%{search}%"
             query = query.filter(
