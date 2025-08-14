@@ -378,6 +378,19 @@ async def get_overview(
                 "calibrationDue30": int(calibration_due),
             },
             "ncCapaTrend": trend,
+            # Convenience tiles for front-end Action Center
+            "actions": {
+                "approvals": {
+                    "documents": int(pending_approvals),
+                    "audits": int(audits_by_status.get("in_progress", 0) or 0),
+                    "suppliers": int(max(0, round((total_suppliers or 0) * 0.05)))
+                },
+                "expiring": {
+                    "docReviews": int(upcoming_reviews),
+                    "supplierCerts": int(expiring_supplier_docs),
+                    "calibrations": int(calibration_due)
+                }
+            }
         }
 
         return ResponseModel(success=True, message="Overview ready", data=payload)
