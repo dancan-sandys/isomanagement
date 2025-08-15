@@ -77,6 +77,7 @@ import { usersAPI } from '../services/api';
 import PageHeader from '../components/UI/PageHeader';
 import StatusChip from '../components/UI/StatusChip';
 import ProductDialog from '../components/HACCP/ProductDialog';
+import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -126,6 +127,8 @@ const HACCP: React.FC = () => {
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [selectedHazardItem, setSelectedHazardItem] = useState<any>(null);
   const [selectedCcpItem, setSelectedCcpItem] = useState<any>(null);
+  const [flowchartBuilderOpen, setFlowchartBuilderOpen] = useState(false);
+  const [selectedProductForFlowchart, setSelectedProductForFlowchart] = useState<any>(null);
   const [flowForm, setFlowForm] = useState({
     step_number: '',
     step_name: '',
@@ -204,6 +207,16 @@ const HACCP: React.FC = () => {
     checked: boolean,
   ) => {
     setProductForm(prev => ({ ...prev, [key]: checked }));
+  };
+
+  const handleOpenFlowchartBuilder = (product: any) => {
+    setSelectedProductForFlowchart(product);
+    setFlowchartBuilderOpen(true);
+  };
+
+  const handleCloseFlowchartBuilder = () => {
+    setFlowchartBuilderOpen(false);
+    setSelectedProductForFlowchart(null);
   };
 
   // Role-based permissions
@@ -646,7 +659,7 @@ const HACCP: React.FC = () => {
                     size="small"
                   />
                 </Stack>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                   <Typography variant="caption" color="textSecondary">
                     Created by {product.created_by}
                   </Typography>
@@ -668,6 +681,21 @@ const HACCP: React.FC = () => {
                     </Box>
                   )}
                 </Box>
+                {canManageHACCP && (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Science />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenFlowchartBuilder(product);
+                    }}
+                    sx={{ mt: 1 }}
+                  >
+                    Build HACCP Flowchart
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -1251,6 +1279,15 @@ const HACCP: React.FC = () => {
       </Dialog>
 
       {/* Simple edit dialogs could be implemented similarly for process flows, hazards, and CCPs. */}
+      
+      {/* HACCP Flowchart Builder */}
+      <HACCPFlowchartBuilder
+        open={flowchartBuilderOpen}
+        onClose={handleCloseFlowchartBuilder}
+        productId={selectedProductForFlowchart?.id?.toString()}
+        productName={selectedProductForFlowchart?.name}
+        readOnly={!canManageHACCP}
+      />
     </Box>
   );
 };

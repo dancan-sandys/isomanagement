@@ -248,6 +248,11 @@ export const documentsAPI = {
     return response.data;
   },
 
+  getApprovalUsers: async () => {
+    const response: AxiosResponse = await api.get('/documents/approval-users');
+    return response.data;
+  },
+
   approveApprovalStep: async (
     documentId: number,
     approvalId: number,

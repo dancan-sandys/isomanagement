@@ -204,7 +204,7 @@ async def get_iso_executive_summary(
         overall = round((doc_compliance + haccp_score + prp_score + supplier_score + training_score) / 5.0, 2)
 
         # Risk distribution from NC severity
-        high_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity.in_(["high", "critical"])) .scalar() or 0
+        high_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity.in_(["high", "critical"])).scalar() or 0
         med_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity == "medium").scalar() or 0
         low_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.severity == "low").scalar() or 0
 

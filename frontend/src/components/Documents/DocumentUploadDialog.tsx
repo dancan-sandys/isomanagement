@@ -162,9 +162,10 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
 
   const loadUsers = async () => {
     try {
-      const resp: any = await usersAPI.getUsers({ size: 200 });
-      setUsers(resp?.data?.items || resp.items || []);
+      const resp: any = await documentsAPI.getApprovalUsers();
+      setUsers(resp?.data || []);
     } catch (e) {
+      console.error('Failed to load approval users:', e);
       setUsers([]);
     }
   };

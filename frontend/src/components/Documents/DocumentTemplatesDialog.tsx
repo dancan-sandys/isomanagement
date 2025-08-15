@@ -209,8 +209,8 @@ const DocumentTemplatesDialog: React.FC<DocumentTemplatesDialogProps> = ({
     const t = setTimeout(async () => {
       try {
         setLoadingUsers(true);
-        const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
-        const items = resp?.data?.items || resp?.items || [];
+        const resp: any = await documentsAPI.getApprovalUsers();
+        const items = resp?.data || [];
         if (active) setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
       } catch (e) {
         if (active) setUserOptions([]);

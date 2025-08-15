@@ -808,8 +808,8 @@ const Documents: React.FC = () => {
         <MenuItemComponent onClick={async () => {
           try {
             // Lazy load users for selection
-            const resp: any = await (await import('../services/api')).usersAPI.getUsers({ size: 100 });
-            setDistributionUsers(resp.data?.items || resp.items || []);
+            const resp: any = await (await import('../services/api')).documentsAPI.getApprovalUsers();
+            setDistributionUsers(resp.data || []);
           } catch (e) {
             console.error('Failed to load users', e);
           }

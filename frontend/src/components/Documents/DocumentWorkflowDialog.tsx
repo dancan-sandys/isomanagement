@@ -50,8 +50,9 @@ import {
   Timeline,
 } from '@mui/icons-material';
 import { documentsAPI } from '../../services/api';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '../../store';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
+import { isSystemAdministrator } from '../../store/slices/authSlice';
 // Legacy approveVersion removed; use approvals API chain instead
 
 interface WorkflowStep {
@@ -95,6 +96,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   const [comments, setComments] = useState('');
   const [action, setAction] = useState<'approve' | 'reject' | 'request_changes'>('approve');
   const dispatch = useDispatch<AppDispatch>();
+  const { user: currentUser } = useSelector((state: RootState) => state.auth);
 
   // Icons per status for dynamic steps coming from backend
   const stepIconByName: Record<string, JSX.Element> = {
@@ -125,25 +127,37 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
     }
   };
 
-  const handleStepAction = async () => {
+  const handleStepAction = async (stepIndex?: number) => {
     if (!workflow || !document) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // Find user's pending approval step for this document and act on it
-      const pending = await documentsAPI.getPendingApprovals();
-      const record = (pending?.data?.items || pending?.data || []).find((i: any) => i.document_id === document.id);
-      if (!record || !record.approval_id) {
-        throw new Error('No pending approval step found for this document');
+      let approvalId: number;
+      
+      // System Administrator can act on any step directly
+      if (isSystemAdministrator(currentUser) && stepIndex !== undefined) {
+        const step = workflow.steps[stepIndex];
+        if (!step || (step.status !== 'pending' && step.status !== 'in_progress')) {
+          throw new Error('Selected step is not available for action');
+        }
+        approvalId = step.id;
+      } else {
+        // Find user's pending approval step for this document and act on it
+        const pending = await documentsAPI.getPendingApprovals();
+        const record = (pending?.data?.items || pending?.data || []).find((i: any) => i.document_id === document.id);
+        if (!record || !record.approval_id) {
+          throw new Error('No pending approval step found for this document');
+        }
+        approvalId = record.approval_id;
       }
 
       if (action === 'approve') {
-        await documentsAPI.approveApprovalStep(document.id, record.approval_id, { comments });
+        await documentsAPI.approveApprovalStep(document.id, approvalId, { comments });
       } else {
         // For 'reject' and 'request_changes', use reject; backend treats comments as reason
-        await documentsAPI.rejectApprovalStep(document.id, record.approval_id, { comments });
+        await documentsAPI.rejectApprovalStep(document.id, approvalId, { comments });
       }
 
       // Reload the workflow to get updated status
@@ -187,6 +201,13 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
     if (!workflow || !Array.isArray(workflow.steps)) return false;
     const step = workflow.steps[stepIndex];
     if (!step) return false;
+    
+    // System Administrator can take action on any pending step
+    if (isSystemAdministrator(currentUser)) {
+      return step.status === 'pending' || step.status === 'in_progress';
+    }
+    
+    // Regular users can only act on current in-progress step assigned to them
     return step.status === 'in_progress' && stepIndex === activeStep;
   };
 
@@ -335,9 +356,19 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
                         {/* Action Buttons for Current Step */}
                         {canTakeAction(index) && (
                           <Box sx={{ mt: 3 }}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              Take Action:
-                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                              <Typography variant="subtitle2">
+                                Take Action:
+                              </Typography>
+                              {isSystemAdministrator(currentUser) && workflowStep?.status === 'pending' && (
+                                <Chip 
+                                  label="Admin Override" 
+                                  size="small" 
+                                  color="secondary" 
+                                  variant="outlined"
+                                />
+                              )}
+                            </Box>
                             <Grid container spacing={2}>
                               <Grid item xs={12}>
                                 <FormControl fullWidth size="small">
@@ -367,7 +398,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
                                 <Box sx={{ display: 'flex', gap: 1 }}>
                                   <Button
                                     variant="contained"
-                                    onClick={handleStepAction}
+                                    onClick={() => handleStepAction(index)}
                                     disabled={loading}
                                     startIcon={<Send />}
                                   >
