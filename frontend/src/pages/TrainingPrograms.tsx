@@ -11,7 +11,7 @@ import { createProgram, deleteProgram, fetchPrograms } from '../store/slices/tra
 const TrainingPrograms: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { programs, loading } = useSelector((s: RootState) => s.training as any);
+  const { programs } = useSelector((s: RootState) => s.training as any);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ code: '', title: '', description: '', department: '' });

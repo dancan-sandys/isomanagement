@@ -214,8 +214,8 @@ const BatchList: React.FC<BatchListProps> = ({
     );
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+  const getStatusColor = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
       case 'in_production': return 'primary';
       case 'completed': return 'success';
       case 'quarantined': return 'warning';
@@ -226,8 +226,8 @@ const BatchList: React.FC<BatchListProps> = ({
     }
   };
 
-  const getBatchTypeColor = (type: string) => {
-    switch (type.toLowerCase()) {
+  const getBatchTypeColor = (type?: string) => {
+    switch ((type || '').toLowerCase()) {
       case 'raw_milk': return 'primary';
       case 'additive': return 'secondary';
       case 'culture': return 'success';
@@ -238,13 +238,23 @@ const BatchList: React.FC<BatchListProps> = ({
     }
   };
 
-  const getQualityStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+  const getQualityStatusColor = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
       case 'passed': return 'success';
       case 'failed': return 'error';
       case 'pending': return 'warning';
       default: return 'default';
     }
+  };
+
+  const formatEnumUpper = (value?: string | null) => {
+    return value && typeof value === 'string'
+      ? value.replace(/_/g, ' ').toUpperCase()
+      : 'UNKNOWN';
+  };
+
+  const formatUpper = (value?: string | null) => {
+    return value && typeof value === 'string' ? value.toUpperCase() : 'UNKNOWN';
   };
 
   return (
@@ -413,7 +423,7 @@ const BatchList: React.FC<BatchListProps> = ({
                     </TableCell>
                     <TableCell>
                       <Chip 
-                        label={batch.batch_type.replace('_', ' ').toUpperCase()} 
+                        label={formatEnumUpper(batch.batch_type)} 
                         color={getBatchTypeColor(batch.batch_type)}
                         size="small"
                       />
@@ -421,7 +431,7 @@ const BatchList: React.FC<BatchListProps> = ({
                     <TableCell>{batch.product_name}</TableCell>
                     <TableCell>
                       <Chip 
-                        label={batch.status.replace('_', ' ').toUpperCase()} 
+                        label={formatEnumUpper(batch.status)} 
                         color={getStatusColor(batch.status)}
                         size="small"
                       />
@@ -434,7 +444,7 @@ const BatchList: React.FC<BatchListProps> = ({
                     </TableCell>
                     <TableCell>
                       <Chip 
-                        label={batch.quality_status.toUpperCase()} 
+                        label={formatUpper(batch.quality_status)} 
                         color={getQualityStatusColor(batch.quality_status)}
                         size="small"
                       />

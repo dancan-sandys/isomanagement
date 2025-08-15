@@ -11,10 +11,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Snackbar,
   Alert,
   Chip,
@@ -24,39 +20,39 @@ import {
 import {
   Save,
   Download,
-  Upload,
   ZoomIn,
   ZoomOut,
   FitScreen,
-  Undo,
-  Redo,
   Delete,
-  Add,
   Close,
 } from '@mui/icons-material';
 import ReactFlow, {
-  Node,
-  Edge,
   addEdge,
   Background,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
-  Connection,
-  EdgeChange,
-  NodeChange,
   ReactFlowProvider,
   useReactFlow,
   Panel,
   BackgroundVariant,
 } from 'reactflow';
+import type { Node, Edge, Connection } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import NodePalette from './NodePalette';
 import HACCPNode from './HACCPNode';
 import NodeEditDialog from './NodeEditDialog';
 import { HACCPNodeType, HACCPProcessStep, HACCPFlowConnection, HACCPFlowchart, HACCPNodeData } from './types';
+
+// React Flow node data shape used in the canvas
+type ReactFlowHACCPNodeData = HACCPNodeData & {
+  label: string;
+  nodeType: HACCPNodeType;
+  onEdit?: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => void;
+};
 
 interface FlowchartBuilderProps {
   productId?: string;
@@ -85,7 +81,7 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { project, fitView, zoomIn, zoomOut } = useReactFlow();
   
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowHACCPNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   
@@ -100,6 +96,19 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
   const [flowchartDescription, setFlowchartDescription] = useState('');
   const [flowchartVersion, setFlowchartVersion] = useState('1.0');
 
+  // Define callbacks before effects that depend on them
+  const handleNodeEdit = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setEditDialogOpen(true);
+  }, []);
+
+  const handleNodeDelete = useCallback((nodeId: string) => {
+    if (readOnly) return;
+    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+    setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setSnackbar({ open: true, message: 'Node deleted successfully', severity: 'info' });
+  }, [setNodes, setEdges, readOnly]);
+
   // Load initial flowchart
   useEffect(() => {
     if (initialFlowchart) {
@@ -108,7 +117,7 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
       setFlowchartVersion(initialFlowchart.version);
       
       // Convert HACCPProcessStep to ReactFlow Node
-      const flowNodes = initialFlowchart.nodes.map((step): Node => ({
+      const flowNodes = initialFlowchart.nodes.map((step) => ({
         id: step.id,
         type: 'haccpNode',
         position: step.position,
@@ -138,7 +147,7 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
       const maxId = Math.max(...flowNodes.map(n => parseInt(n.id.replace('node_', '')) || 0));
       nodeId = maxId + 1;
     }
-  }, [initialFlowchart, setNodes, setEdges]);
+  }, [initialFlowchart, setNodes, setEdges, handleNodeEdit, handleNodeDelete]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -172,7 +181,7 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
         y: event.clientY - reactFlowBounds.top,
       });
 
-      const newNode: Node = {
+      const newNode = {
         id: getId(),
         type: 'haccpNode',
         position,
@@ -185,9 +194,9 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
         },
       };
 
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds) => [...nds, newNode]);
     },
-    [project, setNodes, readOnly]
+    [project, setNodes, readOnly, handleNodeEdit, handleNodeDelete]
   );
 
   const onDragStart = useCallback((event: React.DragEvent, nodeType: HACCPNodeType, nodeData: any) => {
@@ -196,17 +205,7 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
     event.dataTransfer.effectAllowed = 'move';
   }, []);
 
-  const handleNodeEdit = useCallback((nodeId: string) => {
-    setSelectedNodeId(nodeId);
-    setEditDialogOpen(true);
-  }, []);
-
-  const handleNodeDelete = useCallback((nodeId: string) => {
-    if (readOnly) return;
-    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-    setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
-    showSnackbar('Node deleted successfully', 'info');
-  }, [setNodes, setEdges, readOnly]);
+  // Duplicate declarations removed; defined earlier
 
   const handleNodeUpdate = useCallback((nodeId: string, updatedData: Partial<HACCPNodeData>) => {
     setNodes((nds) =>
@@ -235,20 +234,23 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
     }
 
     // Convert ReactFlow nodes back to HACCPProcessStep
-    const haccpNodes: HACCPProcessStep[] = nodes.map((node) => ({
-      id: node.id,
-      type: node.data.nodeType,
-      label: node.data.label,
-      position: node.position,
-      data: node.data,
-    }));
+    const haccpNodes: HACCPProcessStep[] = nodes.map((node) => {
+      const { onEdit, onDelete, label, nodeType, ...dataWithoutUi } = node.data;
+      return {
+        id: node.id,
+        type: nodeType,
+        label,
+        position: node.position,
+        data: dataWithoutUi,
+      };
+    });
 
     // Convert ReactFlow edges back to HACCPFlowConnection
     const haccpEdges: HACCPFlowConnection[] = edges.map((edge) => ({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: edge.label,
+      label: typeof edge.label === 'string' ? edge.label : undefined,
     }));
 
     const flowchart: HACCPFlowchart = {

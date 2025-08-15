@@ -39,7 +39,7 @@ import {
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { dashboardAPI } from '../../services/api';
-import { PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area, RadialBarChart, RadialBar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 interface SmartMetric {
   id: string;
@@ -89,6 +89,15 @@ const SmartDashboard: React.FC = () => {
   const [overview, setOverview] = useState<any>(null);
   const [docStatusSeries, setDocStatusSeries] = useState<Array<{ name: string; value: number }>>([]);
   const [ncCapaTrend, setNcCapaTrend] = useState<Array<{ month: string; nc: number; capa: number; training: number }>>([]);
+  const showMetricTiles = (process.env.REACT_APP_SHOW_METRIC_TILES || 'false').toLowerCase() === 'true';
+  const [radarCompliance, setRadarCompliance] = useState<Array<{ domain: string; score: number }>>([]);
+  const [uptimeSeries, setUptimeSeries] = useState<Array<{ name: string; value: number }>>([]);
+  const [incidentSeries, setIncidentSeries] = useState<Array<{ month: string; injury: number; nearMiss: number; property: number }>>([]);
+  const [nearMissTrend, setNearMissTrend] = useState<Array<{ month: string; value: number }>>([]);
+  const [projectKpiSeries, setProjectKpiSeries] = useState<Array<{ name: string; onTime: number; changeOrders: number; costVariance: number }>>([]);
+  const [riskMatrix, setRiskMatrix] = useState<number[][]>([]);
+
+  const demoMode = (process.env.REACT_APP_DEMO_MODE || 'true').toLowerCase() === 'true';
 
   // Load real data from backend
   useEffect(() => {
@@ -117,8 +126,11 @@ const SmartDashboard: React.FC = () => {
       // Transform backend data to component format
       const roleData = transformBackendData(metricsResponse, tasksResponse, insightsResponse, user?.role_name || '');
       setMetrics(roleData.metrics);
-      setTasks(roleData.tasks);
-      setInsights(roleData.insights);
+
+      const seededTasks = (roleData.tasks && roleData.tasks.length > 0) ? roleData.tasks : getDemoTasks();
+      const seededInsights = (roleData.insights && roleData.insights.length > 0) ? roleData.insights : getDemoInsights();
+      setTasks(seededTasks);
+      setInsights(seededInsights);
 
       // Map stats to chart series
       const stats = statsResponse?.data || statsResponse;
@@ -203,16 +215,123 @@ const SmartDashboard: React.FC = () => {
         { name: 'Supplier Evals', value: Number(ops.supplier_evaluations || 0) },
       ];
       setOperationalSeries(opsSeries);
+
+      if (demoMode) seedDemoData();
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       // Fallback to basic data on error
       const fallbackData = getRoleBasedData(user?.role_name || '');
       setMetrics(fallbackData.metrics);
-      setTasks(fallbackData.tasks);
-      setInsights(fallbackData.insights);
+      setTasks(fallbackData.tasks && fallbackData.tasks.length ? fallbackData.tasks : getDemoTasks());
+      setInsights(fallbackData.insights && fallbackData.insights.length ? fallbackData.insights : getDemoInsights());
+      seedDemoData();
     } finally {
       setLoading(false);
     }
+  };
+
+  const getDemoTasks = (): SmartTask[] => {
+    const now = Date.now();
+    return [
+      {
+        id: 'demo_t1',
+        title: 'Internal Audit Preparation',
+        description: 'Compile evidence for Q3 internal audit (ISO 9001/14001/45001 scope).',
+        priority: 'high',
+        dueDate: new Date(now + 2 * 24 * 60 * 60 * 1000),
+        category: 'Audit',
+        progress: 60,
+        estimatedTime: '3 hours',
+      },
+      {
+        id: 'demo_t2',
+        title: 'Update Project Risk Register – Line Expansion',
+        description: 'Review hazards and residual risks; attach latest mitigations.',
+        priority: 'medium',
+        dueDate: new Date(now + 5 * 24 * 60 * 60 * 1000),
+        category: 'Risk',
+        progress: 35,
+        estimatedTime: '1.5 hours',
+      },
+      {
+        id: 'demo_t3',
+        title: 'Calibration Certificates Review',
+        description: 'Validate certificates for torque wrenches and pressure gauges.',
+        priority: 'low',
+        dueDate: new Date(now + 7 * 24 * 60 * 60 * 1000),
+        category: 'Calibration',
+        estimatedTime: '45 minutes',
+      },
+    ];
+  };
+
+  const getDemoInsights = (): SmartInsight[] => [
+    {
+      id: 'demo_i1',
+      title: 'NC trend improved',
+      description: 'Non-conformances decreased by 14% month-over-month across production lines.',
+      type: 'success',
+    },
+    {
+      id: 'demo_i2',
+      title: 'Pre‑audit checklist overdue',
+      description: '2 items pending review for next week’s surveillance audit schedule.',
+      type: 'warning',
+      action: { label: 'Open Checklist', onClick: () => (window.location.href = '/audits/schedule') },
+    },
+    {
+      id: 'demo_i3',
+      title: 'Supplier performance stable',
+      description: 'Critical supplier OTIF at 98% for the last 30 days. Consider risk downgrade.',
+      type: 'info',
+      action: { label: 'View Metrics', onClick: () => (window.location.href = '/suppliers/metrics') },
+    },
+  ];
+
+  const seedDemoData = () => {
+    setRadarCompliance([
+      { domain: 'Leadership', score: 92 },
+      { domain: 'Planning', score: 88 },
+      { domain: 'Support', score: 95 },
+      { domain: 'Operation', score: 90 },
+      { domain: 'Performance', score: 87 },
+      { domain: 'Improvement', score: 93 },
+    ]);
+
+    setUptimeSeries([{ name: 'Uptime', value: 99.3 }]);
+
+    setIncidentSeries([
+      { month: 'Apr', injury: 1, nearMiss: 6, property: 0 },
+      { month: 'May', injury: 0, nearMiss: 5, property: 1 },
+      { month: 'Jun', injury: 0, nearMiss: 7, property: 0 },
+      { month: 'Jul', injury: 1, nearMiss: 4, property: 1 },
+      { month: 'Aug', injury: 0, nearMiss: 5, property: 0 },
+      { month: 'Sep', injury: 0, nearMiss: 6, property: 1 },
+    ]);
+
+    setNearMissTrend([
+      { month: 'Apr', value: 6 },
+      { month: 'May', value: 5 },
+      { month: 'Jun', value: 7 },
+      { month: 'Jul', value: 4 },
+      { month: 'Aug', value: 5 },
+      { month: 'Sep', value: 6 },
+    ]);
+
+    setProjectKpiSeries([
+      { name: 'Plant A', onTime: 96, changeOrders: 3, costVariance: 1 },
+      { name: 'Line 3', onTime: 92, changeOrders: 5, costVariance: 2 },
+      { name: 'Lab Upgrade', onTime: 98, changeOrders: 1, costVariance: 0 },
+      { name: 'Warehouse', onTime: 94, changeOrders: 2, costVariance: 1 },
+    ]);
+
+    setRiskMatrix([
+      [0, 1, 2, 3, 4],
+      [1, 2, 3, 4, 5],
+      [2, 3, 4, 5, 6],
+      [3, 4, 5, 6, 7],
+      [4, 5, 6, 7, 8],
+    ]);
   };
 
   const transformBackendData = (metricsData: any, tasksData: any, insightsData: any, roleName: string) => {
@@ -246,7 +365,7 @@ const SmartDashboard: React.FC = () => {
           title: 'Open CAPAs',
           value: m.open_capas,
           change: trends.capa_change || 0,
-          trend: (trends.capa_change || 0) < 0 ? 'up' : (trends.capa_change || 0) > 0 ? 'down' : 'stable', // Less CAPAs is better
+          trend: (trends.capa_change || 0) < 0 ? 'up' : (trends.capa_change || 0) > 0 ? 'down' : 'stable',
           icon: <Assignment />,
           color: m.open_capas > 10 ? 'error' : m.open_capas > 5 ? 'warning' : 'success',
           insight: `${Math.abs(trends.capa_change || 0)} CAPAs ${(trends.capa_change || 0) < 0 ? 'closed' : 'opened'} recently`
@@ -554,85 +673,87 @@ const SmartDashboard: React.FC = () => {
         </Box>
       </Fade>
 
-      {/* Smart Metrics Cards */}
-      <Fade in timeout={800}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Insights color="primary" />
-            Smart Insights
-          </Typography>
-          <Grid container spacing={3}>
-            {metrics.map((metric, index) => (
-              <Grid item xs={12} sm={6} md={3} key={metric.id}>
-                <Grow in timeout={600 + index * 100}>
-                  <Card sx={{ 
-                    height: '100%',
-                    background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                      borderColor: 'primary.main',
-                    },
-                  }}>
-                    <CardContent>
-                      <Stack spacing={2}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                          <Avatar sx={{ 
-                            bgcolor: `${metric.color}.main`, 
-                            width: 48, 
-                            height: 48,
-                            boxShadow: `0 4px 12px rgba(30, 64, 175, 0.3)`,
-                          }}>
-                            {metric.icon}
-                          </Avatar>
-                          <Stack direction="row" alignItems="center" spacing={0.5}>
-                            {getTrendIcon(metric.trend, metric.change)}
-                            <Typography 
-                              variant="caption" 
-                              color={metric.trend === 'up' ? 'success.main' : metric.trend === 'down' ? 'error.main' : 'text.secondary'}
-                              fontWeight={600}
-                            >
-                              {metric.change > 0 ? '+' : ''}{metric.change}%
-                            </Typography>
+      {/* Smart Metrics Cards (toggleable) */}
+      {showMetricTiles && (
+        <Fade in timeout={800}>
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h6" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Insights color="primary" />
+              Smart Insights
+            </Typography>
+            <Grid container spacing={3}>
+              {metrics.map((metric, index) => (
+                <Grid item xs={12} sm={6} md={3} key={metric.id}>
+                  <Grow in timeout={600 + index * 100}>
+                    <Card sx={{ 
+                      height: '100%',
+                      background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        borderColor: 'primary.main',
+                      },
+                    }}>
+                      <CardContent>
+                        <Stack spacing={2}>
+                          <Stack direction="row" alignItems="center" justifyContent="space-between">
+                            <Avatar sx={{ 
+                              bgcolor: `${metric.color}.main`, 
+                              width: 48, 
+                              height: 48,
+                              boxShadow: `0 4px 12px rgba(30, 64, 175, 0.3)`,
+                            }}>
+                              {metric.icon}
+                            </Avatar>
+                            <Stack direction="row" alignItems="center" spacing={0.5}>
+                              {getTrendIcon(metric.trend, metric.change)}
+                              <Typography 
+                                variant="caption" 
+                                color={metric.trend === 'up' ? 'success.main' : metric.trend === 'down' ? 'error.main' : 'text.secondary'}
+                                fontWeight={600}
+                              >
+                                {metric.change > 0 ? '+' : ''}{metric.change}%
+                              </Typography>
+                            </Stack>
                           </Stack>
-                        </Stack>
-                        
-                        <Box>
-                          <Typography variant="h4" fontWeight={700} color="text.primary">
-                            {metric.value}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                            {metric.title}
-                          </Typography>
-                          {metric.insight && (
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                              {metric.insight}
+                          
+                          <Box>
+                            <Typography variant="h4" fontWeight={700} color="text.primary">
+                              {metric.value}
                             </Typography>
-                          )}
-                        </Box>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                              {metric.title}
+                            </Typography>
+                            {metric.insight && (
+                              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                {metric.insight}
+                              </Typography>
+                            )}
+                          </Box>
 
-                        {metric.quickAction && (
-                          <Button 
-                            size="small" 
-                            variant="outlined" 
-                            onClick={metric.quickAction.action}
-                            sx={{ alignSelf: 'flex-start' }}
-                          >
-                            {metric.quickAction.label}
-                          </Button>
-                        )}
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grow>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-      </Fade>
+                          {metric.quickAction && (
+                            <Button 
+                              size="small" 
+                              variant="outlined" 
+                              onClick={metric.quickAction.action}
+                              sx={{ alignSelf: 'flex-start' }}
+                            >
+                              {metric.quickAction.label}
+                            </Button>
+                          )}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  </Grow>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Fade>
+      )}
 
       {/* Smart Tasks, Insights and Quick Charts */}
       <Grid container spacing={3}>
@@ -802,19 +923,20 @@ const SmartDashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
-              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Documents by Status</Typography>
-              <Box sx={{ width: '100%', height: 260 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={docStatusSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis allowDecimals={false} />
-                    <Legend />
-                    <RechartTooltip />
-                    <Bar dataKey="value" name="Count" fill="#3B82F6" />
-                  </BarChart>
-                </ResponsiveContainer>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Risk Heatmap</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 1 }}>
+                {riskMatrix.flatMap((row, i) => row.map((val, j) => (
+                  <Box key={`${i}-${j}`} sx={{
+                    height: 44,
+                    borderRadius: 1,
+                    bgcolor: val < 3 ? '#10B981' : val < 5 ? '#F59E0B' : '#EF4444',
+                    opacity: 0.9,
+                  }} />
+                )))}
               </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                Likelihood →, Severity ↑
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -835,6 +957,128 @@ const SmartDashboard: React.FC = () => {
                     <Line dataKey="capa" name="CAPA" stroke="#f59e0b" strokeWidth={2} />
                     <Line dataKey="training" name="Training" stroke="#10b981" strokeWidth={2} />
                   </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Advanced ISO/Engineering KPIs */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>ISO Clause Compliance</Typography>
+              <Box sx={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarCompliance} outerRadius={90}>
+                    <PolarGrid />
+                    <PolarAngleAxis dataKey="domain" />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                    <Radar name="Compliance" dataKey="score" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.4} />
+                    <Legend />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>System Uptime</Typography>
+              <Box sx={{ width: '100%', height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart innerRadius="70%" outerRadius="100%" data={uptimeSeries} startAngle={180} endAngle={-180}>
+                    <RadialBar background dataKey="value" cornerRadius={10} fill="#10B981" />
+                    <RechartTooltip formatter={(v:any)=>`${v}%`} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </Box>
+              <Typography variant="h4" align="center" fontWeight={800}>{uptimeSeries[0]?.value || 0}%</Typography>
+              <Typography variant="body2" color="text.secondary" align="center">Last 30 days • target ≥ 99.0%</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={7}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Safety Incidents by Type</Typography>
+              <Box sx={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={incidentSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis allowDecimals={false} />
+                    <Legend />
+                    <RechartTooltip />
+                    <Bar stackId="a" dataKey="nearMiss" name="Near Miss" fill="#60A5FA" />
+                    <Bar stackId="a" dataKey="property" name="Property Damage" fill="#F59E0B" />
+                    <Bar stackId="a" dataKey="injury" name="Recordable Injury" fill="#EF4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={5}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Near Miss Trend</Typography>
+              <Box sx={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={nearMissTrend}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis allowDecimals={false} />
+                    <Legend />
+                    <RechartTooltip />
+                    <Area type="monotone" dataKey="value" name="Near Misses" stroke="#06B6D4" fill="#06B6D4" fillOpacity={0.25} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={7}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Project Portfolio KPIs</Typography>
+              <Box sx={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={projectKpiSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" orientation="left" domain={[0,100]} />
+                    <YAxis yAxisId="right" orientation="right" domain={[0,10]} />
+                    <Legend />
+                    <RechartTooltip />
+                    <Bar yAxisId="left" dataKey="onTime" name="On-Time %" fill="#10B981" />
+                    <Bar yAxisId="right" dataKey="changeOrders" name="Change Orders" fill="#F59E0B" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={5}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Documents by Status</Typography>
+              <Box sx={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={docStatusSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <Legend />
+                    <RechartTooltip />
+                    <Bar dataKey="value" name="Count" fill="#3B82F6" />
+                  </BarChart>
                 </ResponsiveContainer>
               </Box>
             </CardContent>

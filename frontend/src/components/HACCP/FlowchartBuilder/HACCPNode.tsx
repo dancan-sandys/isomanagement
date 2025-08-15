@@ -287,13 +287,12 @@ const HACCPNode: React.FC<HACCPNodeProps> = memo(({ id, data, selected }) => {
               variant="caption"
               color="text.secondary"
               sx={{
-                display: 'block',
+                display: '-webkit-box',
                 mb: 0.5,
                 fontSize: '0.7rem',
                 lineHeight: 1.1,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
               }}
