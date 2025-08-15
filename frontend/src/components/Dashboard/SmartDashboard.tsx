@@ -983,23 +983,7 @@ const SmartDashboard: React.FC = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>System Uptime</Typography>
-              <Box sx={{ width: '100%', height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadialBarChart innerRadius="70%" outerRadius="100%" data={uptimeSeries} startAngle={180} endAngle={-180}>
-                    <RadialBar background dataKey="value" cornerRadius={10} fill="#10B981" />
-                    <RechartTooltip formatter={(v:any)=>`${v}%`} />
-                  </RadialBarChart>
-                </ResponsiveContainer>
-              </Box>
-              <Typography variant="h4" align="center" fontWeight={800}>{uptimeSeries[0]?.value || 0}%</Typography>
-              <Typography variant="body2" color="text.secondary" align="center">Last 30 days • target ≥ 99.0%</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+        {/* System Uptime graph intentionally removed */}
 
         <Grid item xs={12} md={7}>
           <Card sx={{ height: '100%' }}>
