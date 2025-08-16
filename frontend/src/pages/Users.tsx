@@ -33,6 +33,7 @@ import {
   Avatar,
   Divider,
   Pagination,
+  Stack,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -54,7 +55,7 @@ import {
   Work as WorkIcon,
   CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
-import { usersAPI } from '../services/api';
+import { usersAPI, trainingAPI } from '../services/api';
 import { RootState } from '../store';
 import { canManageUsers } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
@@ -110,6 +111,19 @@ const Users: React.FC = () => {
   const [resetPassword, setResetPassword] = useState('');
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [permDialogOpen, setPermDialogOpen] = useState(false);
+  const [userPermissions, setUserPermissions] = useState<any[]>([]);
+  const [allPermissions, setAllPermissions] = useState<any[]>([]);
+  const [competencyDialogOpen, setCompetencyDialogOpen] = useState(false);
+  const [matrixRows, setMatrixRows] = useState<any[]>([]);
+  const [eligibility, setEligibility] = useState<{ monitor?: any; verify?: any }>({});
+  const [requiredTrainings, setRequiredTrainings] = useState<any[]>([]);
+  const [assignProgramId, setAssignProgramId] = useState<string>('');
+  const [assignAction, setAssignAction] = useState<'monitor' | 'verify'>('monitor');
+  const [assignCCPId, setAssignCCPId] = useState<string>('');
+  const [assignEquipmentId, setAssignEquipmentId] = useState<string>('');
+  const [programs, setPrograms] = useState<any[]>([]);
+  const [scopedRequired, setScopedRequired] = useState<any[]>([]);
 
   // Form states
   const [userForm, setUserForm] = useState({
@@ -202,6 +216,71 @@ const Users: React.FC = () => {
         total: response.total || 0,
         pages: response.pages || 0,
       });
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openPermissionsDialog = async (user: User) => {
+    setSelectedUser(user);
+    setPermDialogOpen(true);
+    try {
+      setLoading(true);
+      const [userPermRes, allPermRes] = await Promise.all([
+        usersAPI.getUserPermissions(user.id),
+        // Reuse RBAC permissions endpoint through generic axios client
+        (await import('../services/api')).api.get('/rbac/permissions'),
+      ]);
+      const userPerms = userPermRes?.data || userPermRes?.permissions || userPermRes || [];
+      const permsList = allPermRes.data?.data || allPermRes.data || [];
+      setUserPermissions(userPerms);
+      setAllPermissions(permsList);
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleUserPermission = async (permissionId: number, granted: boolean) => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      if (granted) {
+        await usersAPI.assignUserPermission(selectedUser.id, permissionId, true);
+      } else {
+        await usersAPI.removeUserPermission(selectedUser.id, permissionId);
+      }
+      // Refresh user permissions
+      const refreshed = await usersAPI.getUserPermissions(selectedUser.id);
+      setUserPermissions(refreshed?.data || refreshed);
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openCompetencyDialog = async (user: User) => {
+    setSelectedUser(user);
+    setCompetencyDialogOpen(true);
+    try {
+      setLoading(true);
+      const [matrixRes, eligMonitor, eligVerify, reqList, programList, scopedList] = await Promise.all([
+        trainingAPI.getUserTrainingMatrix(user.id),
+        trainingAPI.getEligibility({ user_id: user.id, action: 'monitor' }),
+        trainingAPI.getEligibility({ user_id: user.id, action: 'verify' }),
+        trainingAPI.listRequiredTrainings({ role_id: user.role_id }),
+        trainingAPI.getPrograms(),
+        trainingAPI.listScopedRequired({ role_id: user.role_id }),
+      ]);
+      setMatrixRows(matrixRes || []);
+      setEligibility({ monitor: eligMonitor, verify: eligVerify });
+      setRequiredTrainings((reqList as any) || []);
+      setPrograms((programList as any) || []);
+      setScopedRequired((scopedList as any) || []);
     } catch (err: any) {
       setError(formatErrorMessage(err));
     } finally {
@@ -540,6 +619,8 @@ const Users: React.FC = () => {
                     <TableCell>{user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</TableCell>
                     <TableCell>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setViewUserDialogOpen(true); }}><VisibilityIcon /></IconButton>
+                      <IconButton size="small" title="Training & Competency" onClick={() => openCompetencyDialog(user)}><SchoolIcon /></IconButton>
+                      <IconButton size="small" title="Permissions" onClick={() => openPermissionsDialog(user)}><LockIcon /></IconButton>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setUserForm({ username: user.username, email: user.email, full_name: user.full_name, password: '', role_id: user.role_id.toString(), department: user.department || '', position: user.position || '', phone: user.phone || '', employee_id: user.employee_id || '', bio: user.bio || '' }); setUserDialogOpen(true); }}><EditIcon /></IconButton>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setResetPassword(''); setResetDialogOpen(true); }} title="Reset Password"><PasswordIcon /></IconButton>
                       {user.is_active ? (
@@ -715,6 +796,286 @@ const Users: React.FC = () => {
           >
             Reset Password
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Permissions Dialog */}
+      <Dialog open={permDialogOpen} onClose={() => setPermDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Manage Permissions {selectedUser ? `— ${selectedUser.username}` : ''}</DialogTitle>
+        <DialogContent>
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>Assigned Permissions</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                {userPermissions && userPermissions.length > 0 ? (
+                  userPermissions.map((up: any) => (
+                    <Chip key={up.id || `${up.module}-${up.action}`} label={`${up.module || up.permission?.module}:${up.action || up.permission?.action}`} onDelete={() => toggleUserPermission(up.permission_id || up.id, false)} />
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No custom permissions assigned. User inherits role permissions.</Typography>
+                )}
+              </Box>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>All Permissions</Typography>
+              <Box sx={{ maxHeight: 320, overflowY: 'auto', pr: 1 }}>
+                <Grid container spacing={1}>
+                  {allPermissions.map((perm: any) => {
+                    const key = `${perm.module}:${perm.action}`;
+                    const already = userPermissions.some((up: any) => (up.module === perm.module && up.action === perm.action) || up.permission?.id === perm.id);
+                    return (
+                      <Grid item xs={12} sm={6} md={4} key={perm.id}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1 }}>
+                          <Box>
+                            <Typography variant="body2" fontWeight="bold">{key}</Typography>
+                            {perm.description && <Typography variant="caption" color="text.secondary">{perm.description}</Typography>}
+                          </Box>
+                          <Button size="small" variant={already ? 'outlined' : 'contained'} onClick={() => toggleUserPermission(perm.id, !already)}>{already ? 'Remove' : 'Add'}</Button>
+                        </Box>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              </Box>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPermDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Training & Competency Dialog */}
+      <Dialog open={competencyDialogOpen} onClose={() => setCompetencyDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Training & Competency {selectedUser ? `— ${selectedUser.username}` : ''}</DialogTitle>
+        <DialogContent>
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle1">Eligibility</Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+              <Chip label={`Monitor: ${eligibility.monitor?.eligible ? 'Eligible' : 'Not Eligible'}`} color={eligibility.monitor?.eligible ? 'success' : 'error'} />
+              <Chip label={`Verify: ${eligibility.verify?.eligible ? 'Eligible' : 'Not Eligible'}`} color={eligibility.verify?.eligible ? 'success' : 'error'} />
+            </Stack>
+            <Box sx={{ mt: 1 }}>
+              {!eligibility.monitor?.eligible && eligibility.monitor?.missing_program_ids?.length > 0 && (
+                <Typography variant="caption" color="text.secondary">Missing for monitor: {eligibility.monitor.missing_program_ids.join(', ')}</Typography>
+              )}
+              <br />
+              {!eligibility.verify?.eligible && eligibility.verify?.missing_program_ids?.length > 0 && (
+                <Typography variant="caption" color="text.secondary">Missing for verify: {eligibility.verify.missing_program_ids.join(', ')}</Typography>
+              )}
+            </Box>
+          </Box>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Training Matrix</Typography>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Program Code</TableCell>
+                  <TableCell>Program Title</TableCell>
+                  <TableCell>Completed</TableCell>
+                  <TableCell>In Progress</TableCell>
+                  <TableCell>Last Attended</TableCell>
+                  <TableCell>Last Certificate</TableCell>
+                  <TableCell>Last Quiz %</TableCell>
+                  <TableCell>Passed</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {matrixRows.map((r: any) => (
+                  <TableRow key={r.program_id}>
+                    <TableCell>{r.program_code}</TableCell>
+                    <TableCell>{r.program_title}</TableCell>
+                    <TableCell>{String(r.completed)}</TableCell>
+                    <TableCell>{String(r.in_progress)}</TableCell>
+                    <TableCell>{r.last_attended_at || '-'}</TableCell>
+                    <TableCell>{r.last_certificate_issued_at || '-'}</TableCell>
+                    <TableCell>{typeof r.last_quiz_score === 'number' ? r.last_quiz_score.toFixed(1) : '-'}</TableCell>
+                    <TableCell>{r.last_quiz_passed === null || r.last_quiz_passed === undefined ? '-' : String(r.last_quiz_passed)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>Role-required Trainings</Typography>
+            <Grid container spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <Grid item xs={12} sm={8} md={9}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="assign-program-label">Program</InputLabel>
+                  <Select
+                    labelId="assign-program-label"
+                    value={assignProgramId}
+                    label="Program"
+                    onChange={(e) => setAssignProgramId(e.target.value as string)}
+                  >
+                    {programs.map((p: any) => (
+                      <MenuItem key={p.id} value={String(p.id)}>{p.code} — {p.title}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4} md={3}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disabled={!selectedUser || !assignProgramId}
+                  onClick={async () => {
+                    if (!selectedUser || !assignProgramId) return;
+                    try {
+                      setLoading(true);
+                      await trainingAPI.assignRequiredTraining({ role_id: selectedUser.role_id, program_id: parseInt(assignProgramId) });
+                      const refreshed = await trainingAPI.listRequiredTrainings({ role_id: selectedUser.role_id });
+                      setRequiredTrainings(refreshed as any);
+                      setAssignProgramId('');
+                    } catch (err: any) {
+                      setError(formatErrorMessage(err));
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                >Assign to Role</Button>
+              </Grid>
+            </Grid>
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Program</TableCell>
+                    <TableCell>Mandatory</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {requiredTrainings.map((rt: any) => {
+                    const program = programs.find((p: any) => p.id === rt.program_id);
+                    const progLabel = program ? `${program.code} — ${program.title}` : `#${rt.program_id}`;
+                    return (
+                    <TableRow key={rt.id}>
+                      <TableCell>{progLabel}</TableCell>
+                      <TableCell>{String(rt.is_mandatory)}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" color="error" onClick={async () => {
+                          try {
+                            setLoading(true);
+                            await trainingAPI.deleteRequiredTraining(rt.id);
+                            const refreshed = await trainingAPI.listRequiredTrainings({ role_id: selectedUser?.role_id });
+                            setRequiredTrainings(refreshed as any);
+                          } catch (err: any) {
+                            setError(formatErrorMessage(err));
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}>Remove</Button>
+                      </TableCell>
+                    </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>Scoped HACCP Requirements (optional CCP/Equipment)</Typography>
+            <Grid container spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <Grid item xs={12} sm={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="assign-action-label">Action</InputLabel>
+                  <Select labelId="assign-action-label" value={assignAction} label="Action" onChange={(e) => setAssignAction(e.target.value as 'monitor'|'verify')}>
+                    <MenuItem value="monitor">Monitor</MenuItem>
+                    <MenuItem value="verify">Verify</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="assign-program2-label">Program</InputLabel>
+                  <Select labelId="assign-program2-label" value={assignProgramId} label="Program" onChange={(e) => setAssignProgramId(e.target.value as string)}>
+                    {programs.map((p: any) => (
+                      <MenuItem key={p.id} value={String(p.id)}>{p.code} — {p.title}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <TextField fullWidth size="small" label="CCP ID (optional)" value={assignCCPId} onChange={(e) => setAssignCCPId(e.target.value)} />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <TextField fullWidth size="small" label="Equipment ID (optional)" value={assignEquipmentId} onChange={(e) => setAssignEquipmentId(e.target.value)} />
+              </Grid>
+              <Grid item xs={12} sm={1}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disabled={!selectedUser || !assignProgramId}
+                  onClick={async () => {
+                    if (!selectedUser || !assignProgramId) return;
+                    try {
+                      setLoading(true);
+                      await trainingAPI.assignScopedRequired({
+                        role_id: selectedUser.role_id,
+                        action: assignAction,
+                        program_id: parseInt(assignProgramId),
+                        ccp_id: assignCCPId ? parseInt(assignCCPId) : undefined,
+                        equipment_id: assignEquipmentId ? parseInt(assignEquipmentId) : undefined,
+                      });
+                      const refreshed = await trainingAPI.listScopedRequired({ role_id: selectedUser.role_id });
+                      setScopedRequired(refreshed as any);
+                      setAssignProgramId(''); setAssignCCPId(''); setAssignEquipmentId('');
+                    } catch (err: any) {
+                      setError(formatErrorMessage(err));
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                >Add</Button>
+              </Grid>
+            </Grid>
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Action</TableCell>
+                    <TableCell>Scope</TableCell>
+                    <TableCell>Program</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {scopedRequired.map((rt: any) => {
+                    const program = programs.find((p: any) => p.id === rt.program_id);
+                    const progLabel = program ? `${program.code} — ${program.title}` : `#${rt.program_id}`;
+                    const scope = [rt.ccp_id ? `CCP ${rt.ccp_id}` : null, rt.equipment_id ? `EQ ${rt.equipment_id}` : null].filter(Boolean).join(' / ') || 'Role-wide';
+                    return (
+                      <TableRow key={rt.id}>
+                        <TableCell>{rt.action}</TableCell>
+                        <TableCell>{scope}</TableCell>
+                        <TableCell>{progLabel}</TableCell>
+                        <TableCell align="right">
+                          <Button size="small" color="error" onClick={async () => {
+                            try {
+                              setLoading(true);
+                              await trainingAPI.deleteScopedRequired(rt.id);
+                              const refreshed = await trainingAPI.listScopedRequired({ role_id: selectedUser?.role_id });
+                              setScopedRequired(refreshed as any);
+                            } catch (err: any) {
+                              setError(formatErrorMessage(err));
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}>Remove</Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompetencyDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -30,6 +30,8 @@ class Audit(Base):
     criteria = Column(Text)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
+    # Actual completion timestamp to support KPI calculations
+    actual_end_at = Column(DateTime)
     status = Column(Enum(AuditStatus), nullable=False, default=AuditStatus.PLANNED)
     auditor_id = Column(Integer, nullable=True)
     lead_auditor_id = Column(Integer, nullable=True)
@@ -104,11 +106,19 @@ class AuditFinding(Base):
     audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False)
     clause_ref = Column(String(100))
     description = Column(Text, nullable=False)
+    # Finding type to distinguish NCs, observations, and opportunities for improvement
+    class FindingType(str, enum.Enum):
+        NONCONFORMITY = "nonconformity"
+        OBSERVATION = "observation"
+        OFI = "ofi"
+    finding_type = Column(Enum(FindingType), nullable=False, default=FindingType.NONCONFORMITY)
     severity = Column(Enum(FindingSeverity), nullable=False, default=FindingSeverity.MINOR)
     corrective_action = Column(Text)
     responsible_person_id = Column(Integer, nullable=True)
     target_completion_date = Column(DateTime, nullable=True)
     status = Column(Enum(FindingStatus), nullable=False, default=FindingStatus.OPEN)
+    # Closure timestamp to support KPI calculations and lifecycle auditing
+    closed_at = Column(DateTime, nullable=True)
     related_nc_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -161,4 +171,18 @@ class AuditAuditee(Base):
     role = Column(String(100))
     added_at = Column(DateTime, default=datetime.utcnow)
 
+
+class AuditPlan(Base):
+    __tablename__ = "audit_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False, unique=True)
+    agenda = Column(Text)
+    criteria_refs = Column(Text)
+    sampling_plan = Column(Text)
+    documents_to_review = Column(Text)
+    logistics = Column(Text)
+    approved_by = Column(Integer, nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 

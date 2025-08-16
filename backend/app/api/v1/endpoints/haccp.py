@@ -1,11 +1,12 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, and_
+from sqlalchemy import desc, func, and_, text
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
@@ -26,7 +27,7 @@ router = APIRouter()
 # Product Management Endpoints
 @router.get("/products")
 async def get_products(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Get all products with HACCP plans"""
@@ -72,13 +73,13 @@ async def get_products(
 @router.get("/products/{product_id}")
 async def get_product(
     product_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
-    """Get a specific product with its HACCP details"""
+    """Get a product with its process flows, hazards, and CCPs"""
     try:
+        # Get product
         product = db.query(Product).filter(Product.id == product_id).first()
-        
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -94,15 +95,102 @@ async def get_product(
             ProcessFlow.product_id == product_id
         ).order_by(ProcessFlow.step_number).all()
         
-        # Get hazards
-        hazards = db.query(Hazard).filter(
-            Hazard.product_id == product_id
-        ).all()
+        # Get hazards (raw SQL to tolerate legacy enum/string values)
+        try:
+            hazard_rows = db.execute(
+                text(
+                    """
+                    SELECT id, process_step_id, hazard_type, hazard_name, description,
+                           rationale, prp_reference_ids, references,
+                           likelihood, severity, risk_score, risk_level, control_measures,
+                           is_controlled, control_effectiveness, is_ccp, ccp_justification
+                    FROM hazards
+                    WHERE product_id = :pid
+                    """
+                ),
+                {"pid": product_id}
+            ).fetchall()
+        except Exception as e:
+            print(f"DEBUG: Error in hazards query: {e}")
+            hazard_rows = []
         
-        # Get CCPs
-        ccps = db.query(CCP).filter(
-            CCP.product_id == product_id
-        ).all()
+        # Get CCPs (raw SQL to avoid enum coercion issues)
+        try:
+            ccp_rows = db.execute(
+                text(
+                    """
+                    SELECT id, ccp_number, ccp_name, description, status,
+                           critical_limit_min, critical_limit_max, critical_limit_unit,
+                           critical_limit_description, monitoring_frequency, monitoring_method,
+                           monitoring_responsible, monitoring_equipment, corrective_actions,
+                           verification_frequency, verification_method, verification_responsible
+                    FROM ccps
+                    WHERE product_id = :pid
+                    """
+                ),
+                {"pid": product_id}
+            ).fetchall()
+        except Exception as e:
+            print(f"DEBUG: Error in CCPs query: {e}")
+            ccp_rows = []
+        
+        # Process hazards with safe mapping
+        try:
+            hazards_data = []
+            for row in hazard_rows:
+                mapping = getattr(row, "_mapping", {})
+                hazard_data = {
+                    "id": mapping.get("id"),
+                    "process_step_id": mapping.get("process_step_id"),
+                    "hazard_type": mapping.get("hazard_type"),
+                    "hazard_name": mapping.get("hazard_name"),
+                    "description": mapping.get("description"),
+                    "rationale": mapping.get("rationale"),
+                    "prp_reference_ids": mapping.get("prp_reference_ids") if mapping.get("prp_reference_ids") is not None else [],
+                    "references": mapping.get("references") if mapping.get("references") is not None else [],
+                    "likelihood": mapping.get("likelihood"),
+                    "severity": mapping.get("severity"),
+                    "risk_score": mapping.get("risk_score"),
+                    "risk_level": mapping.get("risk_level"),
+                    "control_measures": mapping.get("control_measures"),
+                    "is_controlled": mapping.get("is_controlled"),
+                    "control_effectiveness": mapping.get("control_effectiveness"),
+                    "is_ccp": mapping.get("is_ccp"),
+                    "ccp_justification": mapping.get("ccp_justification"),
+                }
+                hazards_data.append(hazard_data)
+        except Exception as e:
+            print(f"DEBUG: Error processing hazards data: {e}")
+            hazards_data = []
+        
+        # Process CCPs with safe mapping
+        try:
+            ccps_data = []
+            for row in ccp_rows:
+                mapping = getattr(row, "_mapping", {})
+                ccp_data = {
+                    "id": mapping.get("id"),
+                    "ccp_number": mapping.get("ccp_number"),
+                    "ccp_name": mapping.get("ccp_name"),
+                    "description": mapping.get("description"),
+                    "status": mapping.get("status"),
+                    "critical_limit_min": mapping.get("critical_limit_min"),
+                    "critical_limit_max": mapping.get("critical_limit_max"),
+                    "critical_limit_unit": mapping.get("critical_limit_unit"),
+                    "critical_limit_description": mapping.get("critical_limit_description"),
+                    "monitoring_frequency": mapping.get("monitoring_frequency"),
+                    "monitoring_method": mapping.get("monitoring_method"),
+                    "monitoring_responsible": mapping.get("monitoring_responsible"),
+                    "monitoring_equipment": mapping.get("monitoring_equipment"),
+                    "corrective_actions": mapping.get("corrective_actions"),
+                    "verification_frequency": mapping.get("verification_frequency"),
+                    "verification_method": mapping.get("verification_method"),
+                    "verification_responsible": mapping.get("verification_responsible"),
+                }
+                ccps_data.append(ccp_data)
+        except Exception as e:
+            print(f"DEBUG: Error processing CCPs data: {e}")
+            ccps_data = []
         
         return ResponseModel(
             success=True,
@@ -137,48 +225,17 @@ async def get_product(
                         "parameters": flow.parameters,
                     } for flow in process_flows
                 ],
-                "hazards": [
-                    {
-                        "id": hazard.id,
-                        "process_step_id": hazard.process_step_id,
-                        "hazard_type": hazard.hazard_type.value if hazard.hazard_type else None,
-                        "hazard_name": hazard.hazard_name,
-                        "description": hazard.description,
-                        "likelihood": hazard.likelihood,
-                        "severity": hazard.severity,
-                        "risk_score": hazard.risk_score,
-                        "risk_level": hazard.risk_level.value if hazard.risk_level else None,
-                        "control_measures": hazard.control_measures,
-                        "is_controlled": hazard.is_controlled,
-                        "control_effectiveness": hazard.control_effectiveness,
-                        "is_ccp": hazard.is_ccp,
-                        "ccp_justification": hazard.ccp_justification,
-                    } for hazard in hazards
-                ],
-                "ccps": [
-                    {
-                        "id": ccp.id,
-                        "ccp_number": ccp.ccp_number,
-                        "ccp_name": ccp.ccp_name,
-                        "description": ccp.description,
-                        "status": ccp.status.value if ccp.status else None,
-                        "critical_limit_min": ccp.critical_limit_min,
-                        "critical_limit_max": ccp.critical_limit_max,
-                        "critical_limit_unit": ccp.critical_limit_unit,
-                        "critical_limit_description": ccp.critical_limit_description,
-                        "monitoring_frequency": ccp.monitoring_frequency,
-                        "monitoring_method": ccp.monitoring_method,
-                        "corrective_actions": ccp.corrective_actions,
-                        "verification_frequency": ccp.verification_frequency,
-                        "verification_method": ccp.verification_method,
-                    } for ccp in ccps
-                ]
+                "hazards": hazards_data,
+                "ccps": ccps_data
             }
         )
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"DEBUG: Unexpected error in get_product: {e}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve product: {str(e)}"
@@ -188,7 +245,7 @@ async def get_product(
 @router.post("/products")
 async def create_product(
     product_data: ProductCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a new product"""
@@ -265,7 +322,7 @@ async def create_product(
 async def update_product(
     product_id: int,
     product_data: ProductUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Update an existing product"""
@@ -342,7 +399,7 @@ async def update_product(
 @router.delete("/products/{product_id}")
 async def delete_product(
     product_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
     """Delete a product"""
@@ -384,7 +441,7 @@ async def delete_product(
 async def create_process_flow(
     product_id: int,
     flow_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a process flow step for a product"""
@@ -439,7 +496,7 @@ async def create_process_flow(
 async def update_process_flow(
     flow_id: int,
     flow_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Update a process flow step"""
@@ -479,7 +536,7 @@ async def update_process_flow(
 @router.delete("/process-flows/{flow_id}")
 async def delete_process_flow(
     flow_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
     """Delete a process flow step"""
@@ -504,8 +561,8 @@ async def delete_process_flow(
 @router.post("/products/{product_id}/hazards")
 async def create_hazard(
     product_id: int,
-    hazard_data: dict,
-    current_user: User = Depends(get_current_user),
+    hazard_data: HazardCreate,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a hazard for a product"""
@@ -518,70 +575,20 @@ async def create_hazard(
                 detail="Product not found"
             )
         
-        # Validate required fields
-        required_fields = ["process_step_id", "hazard_type", "hazard_name"]
-        missing = [f for f in required_fields if hazard_data.get(f) in (None, "")]
-        if missing:
+        # Ensure process step exists and belongs to product
+        step = db.query(ProcessFlow).filter(
+            ProcessFlow.id == hazard_data.process_step_id, 
+            ProcessFlow.product_id == product_id
+        ).first()
+        if not step:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing required fields: {', '.join(missing)}"
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Invalid process_step_id for this product"
             )
 
-        # Ensure process step exists and belongs to product
-        step_id = int(hazard_data.get("process_step_id"))
-        step = db.query(ProcessFlow).filter(ProcessFlow.id == step_id, ProcessFlow.product_id == product_id).first()
-        if not step:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid process_step_id for this product")
-
-        # Parse hazard type
-        try:
-            hz_type = HazardType(hazard_data.get("hazard_type"))
-        except Exception:
-            allowed = ", ".join([t.value for t in HazardType])
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid hazard_type. Allowed: {allowed}")
-
-        # Calculate risk score (coerce to int)
-        try:
-            likelihood = int(hazard_data.get("likelihood", 1) or 1)
-        except Exception:
-            likelihood = 1
-        try:
-            severity = int(hazard_data.get("severity", 1) or 1)
-        except Exception:
-            severity = 1
-        risk_score = likelihood * severity
-        
-        # Determine risk level
-        if risk_score <= 4:
-            risk_level = RiskLevel.LOW
-        elif risk_score <= 8:
-            risk_level = RiskLevel.MEDIUM
-        elif risk_score <= 15:
-            risk_level = RiskLevel.HIGH
-        else:
-            risk_level = RiskLevel.CRITICAL
-        
-        hazard = Hazard(
-            product_id=product_id,
-            process_step_id=step_id,
-            hazard_type=hz_type,
-            hazard_name=hazard_data["hazard_name"],
-            description=hazard_data.get("description"),
-            likelihood=likelihood,
-            severity=severity,
-            risk_score=risk_score,
-            risk_level=risk_level,
-            control_measures=hazard_data.get("control_measures"),
-            is_controlled=hazard_data.get("is_controlled", False),
-            control_effectiveness=hazard_data.get("control_effectiveness"),
-            is_ccp=hazard_data.get("is_ccp", False),
-            ccp_justification=hazard_data.get("ccp_justification"),
-            created_by=current_user.id
-        )
-        
-        db.add(hazard)
-        db.commit()
-        db.refresh(hazard)
+        # Use the service layer for business logic
+        haccp_service = HACCPService(db)
+        hazard = haccp_service.create_hazard(product_id, hazard_data, current_user.id)
         
         resp = ResponseModel(
             success=True,
@@ -594,6 +601,11 @@ async def create_hazard(
             pass
         return resp
         
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -607,7 +619,7 @@ async def create_hazard(
 async def update_hazard(
     hazard_id: int,
     hazard_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Update a hazard"""
@@ -616,10 +628,16 @@ async def update_hazard(
         if not hazard:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hazard not found")
 
-        # Recalculate risk if likelihood or severity provided
+        # Recalculate risk if likelihood or severity provided (coerce to int safely)
         if "likelihood" in hazard_data or "severity" in hazard_data:
-            likelihood = hazard_data.get("likelihood", hazard.likelihood)
-            severity = hazard_data.get("severity", hazard.severity)
+            try:
+                likelihood = int(hazard_data.get("likelihood", hazard.likelihood))
+            except Exception:
+                likelihood = int(hazard.likelihood or 1)
+            try:
+                severity = int(hazard_data.get("severity", hazard.severity))
+            except Exception:
+                severity = int(hazard.severity or 1)
             risk_score = likelihood * severity
             if risk_score <= 4:
                 risk_level = RiskLevel.LOW
@@ -650,7 +668,13 @@ async def update_hazard(
                 if field == "hazard_type":
                     setattr(hazard, field, HazardType(hazard_data[field]))
                 else:
-                    setattr(hazard, field, hazard_data[field])
+                    val = hazard_data[field]
+                    if field in ("control_effectiveness", "process_step_id") and val is not None:
+                        try:
+                            val = int(val)
+                        except Exception:
+                            pass
+                    setattr(hazard, field, val)
 
         db.commit()
         db.refresh(hazard)
@@ -668,7 +692,7 @@ async def update_hazard(
 @router.delete("/hazards/{hazard_id}")
 async def delete_hazard(
     hazard_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
     """Delete a hazard"""
@@ -694,7 +718,7 @@ async def delete_hazard(
 async def create_ccp(
     product_id: int,
     ccp_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a CCP for a product"""
@@ -759,7 +783,7 @@ async def create_ccp(
 async def update_ccp(
     ccp_id: int,
     ccp_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Update a CCP"""
@@ -790,10 +814,14 @@ async def update_ccp(
             "verification_records",
         ]:
             if field in ccp_data:
-                if field == "status":
-                    setattr(ccp, field, CCPStatus(ccp_data[field]))
+                value = ccp_data[field]
+                # Never null out non-nullable FK
+                if field == "hazard_id" and value is None:
+                    continue
+                if field == "status" and value is not None:
+                    setattr(ccp, field, CCPStatus(value))
                 else:
-                    setattr(ccp, field, ccp_data[field])
+                    setattr(ccp, field, value)
 
         db.commit()
         db.refresh(ccp)
@@ -811,7 +839,7 @@ async def update_ccp(
 @router.delete("/ccps/{ccp_id}")
 async def delete_ccp(
     ccp_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
     """Delete a CCP"""
@@ -834,8 +862,8 @@ async def delete_ccp(
 @router.post("/ccps/{ccp_id}/monitoring-logs")
 async def create_monitoring_log(
     ccp_id: int,
-    log_data: dict,
-    current_user: User = Depends(get_current_user),
+    log_data: MonitoringLogCreate,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a monitoring log for a CCP"""
@@ -849,7 +877,7 @@ async def create_monitoring_log(
             )
         
         # Check if within limits
-        measured_value = log_data["measured_value"]
+        measured_value = log_data.measured_value
         is_within_limits = True
         
         if ccp.critical_limit_min is not None and measured_value < ccp.critical_limit_min:
@@ -857,19 +885,40 @@ async def create_monitoring_log(
         if ccp.critical_limit_max is not None and measured_value > ccp.critical_limit_max:
             is_within_limits = False
         
+        # Competency check: user must have required training to monitor
+        try:
+            service = HACCPService(db)
+            if not service.user_has_required_training(current_user.id, action="monitor"):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient competency to log monitoring for HACCP")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+        # Resolve batch info
+        resolved_batch_number = log_data.batch_number
+        resolved_batch_id = getattr(log_data, "batch_id", None)
+        if resolved_batch_id is not None:
+            from app.models.traceability import Batch
+            batch = db.query(Batch).filter(Batch.id == resolved_batch_id).first()
+            if not batch:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid batch_id")
+            resolved_batch_number = batch.batch_number
+
         monitoring_log = CCPMonitoringLog(
             ccp_id=ccp_id,
-            batch_number=log_data["batch_number"],
+            batch_id=resolved_batch_id,
+            batch_number=resolved_batch_number or "",
             monitoring_time=datetime.utcnow(),
             measured_value=measured_value,
-            unit=log_data.get("unit"),
+            unit=log_data.unit,
             is_within_limits=is_within_limits,
-            additional_parameters=log_data.get("additional_parameters"),
-            observations=log_data.get("observations"),
-            evidence_files=log_data.get("evidence_files"),
-            corrective_action_taken=log_data.get("corrective_action_taken", False),
-            corrective_action_description=log_data.get("corrective_action_description"),
-            corrective_action_by=log_data.get("corrective_action_by"),
+            additional_parameters=log_data.additional_parameters,
+            observations=log_data.observations,
+            evidence_files=log_data.evidence_files,
+            corrective_action_taken=bool(getattr(log_data, "corrective_action_taken", False)),
+            corrective_action_description=log_data.corrective_action_description,
+            corrective_action_by=getattr(log_data, "corrective_action_by", None),
             created_by=current_user.id
         )
         
@@ -880,7 +929,7 @@ async def create_monitoring_log(
         resp = ResponseModel(
             success=True,
             message="Monitoring log created successfully",
-            data={"id": monitoring_log.id, "is_within_limits": is_within_limits}
+            data={"id": monitoring_log.id, "is_within_limits": is_within_limits, "batch_id": monitoring_log.batch_id, "batch_number": monitoring_log.batch_number}
         )
         try:
             audit_event(db, current_user.id, "haccp_monitoring_log_created", "haccp", str(monitoring_log.id), {
@@ -903,7 +952,7 @@ async def create_monitoring_log(
 @router.get("/ccps/{ccp_id}/monitoring-logs")
 async def get_monitoring_logs(
     ccp_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Get monitoring logs for a CCP"""
@@ -962,7 +1011,7 @@ async def get_monitoring_logs(
 async def create_verification_log(
     ccp_id: int,
     log_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Create a verification log for a CCP"""
@@ -975,6 +1024,16 @@ async def create_verification_log(
                 detail="CCP not found"
             )
         
+        # Role segregation and competency check: user must be competent and not the monitor of the same log
+        try:
+            service = HACCPService(db)
+            if not service.user_has_required_training(current_user.id, action="verify"):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient competency to create verification log")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
         verification_log = CCPVerificationLog(
             ccp_id=ccp_id,
             verification_date=datetime.utcnow(),
@@ -1018,7 +1077,7 @@ async def create_verification_log(
 # HACCP Dashboard Statistics
 @router.get("/dashboard")
 async def get_haccp_dashboard(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Get HACCP dashboard statistics"""
@@ -1079,7 +1138,7 @@ async def get_haccp_dashboard(
 @router.post("/hazards/{hazard_id}/decision-tree")
 async def run_decision_tree(
     hazard_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Run CCP decision tree for a hazard"""
@@ -1119,7 +1178,7 @@ async def run_decision_tree(
 @router.get("/products/{product_id}/flowchart")
 async def get_flowchart_data(
     product_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Get flowchart data for a product"""
@@ -1165,7 +1224,7 @@ async def get_flowchart_data(
 async def create_haccp_plan(
     product_id: int,
     payload: HACCPPlanCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     try:
@@ -1190,7 +1249,7 @@ async def create_haccp_plan(
 async def create_haccp_plan_version(
     plan_id: int,
     payload: HACCPPlanVersionCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     try:
@@ -1213,7 +1272,7 @@ async def create_haccp_plan_version(
 async def submit_haccp_plan_for_approval(
     plan_id: int,
     approvals: List[dict],
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     try:
@@ -1230,7 +1289,7 @@ async def submit_haccp_plan_for_approval(
 async def approve_haccp_plan_step(
     plan_id: int,
     approval_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:approve")),
     db: Session = Depends(get_db)
 ):
     try:
@@ -1250,7 +1309,7 @@ async def reject_haccp_plan_step(
     plan_id: int,
     approval_id: int,
     comments: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     try:
@@ -1270,12 +1329,24 @@ async def reject_haccp_plan_step(
 async def create_enhanced_monitoring_log(
     ccp_id: int,
     log_data: MonitoringLogCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a monitoring log with automatic alert generation"""
     try:
+        # Debug logging
+        print(f"DEBUG: Received log_data: {log_data}")
+        print(f"DEBUG: ccp_id: {ccp_id}, current_user.id: {current_user.id}")
+        
+        # Competency/permissions are checked in the service callers above; here we just persist safely
         haccp_service = HACCPService(db)
+        # Coerce measured_value to float defensively to avoid 500s from type issues
+        try:
+            if hasattr(log_data, "measured_value"):
+                setattr(log_data, "measured_value", float(getattr(log_data, "measured_value")))
+        except Exception as e:
+            print(f"DEBUG: Error coercing measured_value: {e}")
+            pass
         monitoring_log, alert_created = haccp_service.create_monitoring_log(ccp_id, log_data, current_user.id)
         
         response_data = {
@@ -1310,7 +1381,7 @@ async def create_enhanced_monitoring_log(
 async def generate_haccp_report(
     product_id: int,
     report_request: HACCPReportRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Generate HACCP report"""
@@ -1353,7 +1424,7 @@ async def generate_haccp_report(
 # Enhanced Dashboard with Alerts
 @router.get("/dashboard/enhanced")
 async def get_enhanced_haccp_dashboard(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Get enhanced HACCP dashboard with alerts"""
@@ -1378,7 +1449,7 @@ async def get_enhanced_haccp_dashboard(
 @router.get("/alerts/summary")
 async def get_ccp_alerts_summary(
     days: int = 7,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
     """Get summary of CCP alerts"""
@@ -1498,7 +1569,7 @@ async def delete_process_flow(
 @router.post("/products/{product_id}/hazards")
 async def create_hazard(
     product_id: int,
-    hazard_data: dict,
+    hazard_data: HazardCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1512,70 +1583,20 @@ async def create_hazard(
                 detail="Product not found"
             )
         
-        # Validate required fields
-        required_fields = ["process_step_id", "hazard_type", "hazard_name"]
-        missing = [f for f in required_fields if hazard_data.get(f) in (None, "")]
-        if missing:
+        # Ensure process step exists and belongs to product
+        step = db.query(ProcessFlow).filter(
+            ProcessFlow.id == hazard_data.process_step_id, 
+            ProcessFlow.product_id == product_id
+        ).first()
+        if not step:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing required fields: {', '.join(missing)}"
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Invalid process_step_id for this product"
             )
 
-        # Ensure process step exists and belongs to product
-        step_id = int(hazard_data.get("process_step_id"))
-        step = db.query(ProcessFlow).filter(ProcessFlow.id == step_id, ProcessFlow.product_id == product_id).first()
-        if not step:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid process_step_id for this product")
-
-        # Parse hazard type
-        try:
-            hz_type = HazardType(hazard_data.get("hazard_type"))
-        except Exception:
-            allowed = ", ".join([t.value for t in HazardType])
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid hazard_type. Allowed: {allowed}")
-
-        # Calculate risk score (coerce to int)
-        try:
-            likelihood = int(hazard_data.get("likelihood", 1) or 1)
-        except Exception:
-            likelihood = 1
-        try:
-            severity = int(hazard_data.get("severity", 1) or 1)
-        except Exception:
-            severity = 1
-        risk_score = likelihood * severity
-        
-        # Determine risk level
-        if risk_score <= 4:
-            risk_level = RiskLevel.LOW
-        elif risk_score <= 8:
-            risk_level = RiskLevel.MEDIUM
-        elif risk_score <= 15:
-            risk_level = RiskLevel.HIGH
-        else:
-            risk_level = RiskLevel.CRITICAL
-        
-        hazard = Hazard(
-            product_id=product_id,
-            process_step_id=step_id,
-            hazard_type=hz_type,
-            hazard_name=hazard_data["hazard_name"],
-            description=hazard_data.get("description"),
-            likelihood=likelihood,
-            severity=severity,
-            risk_score=risk_score,
-            risk_level=risk_level,
-            control_measures=hazard_data.get("control_measures"),
-            is_controlled=hazard_data.get("is_controlled", False),
-            control_effectiveness=hazard_data.get("control_effectiveness"),
-            is_ccp=hazard_data.get("is_ccp", False),
-            ccp_justification=hazard_data.get("ccp_justification"),
-            created_by=current_user.id
-        )
-        
-        db.add(hazard)
-        db.commit()
-        db.refresh(hazard)
+        # Use the service layer for business logic
+        haccp_service = HACCPService(db)
+        hazard = haccp_service.create_hazard(product_id, hazard_data, current_user.id)
         
         resp = ResponseModel(
             success=True,
@@ -1588,6 +1609,11 @@ async def create_hazard(
             pass
         return resp
         
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1784,10 +1810,13 @@ async def update_ccp(
             "verification_records",
         ]:
             if field in ccp_data:
-                if field == "status":
-                    setattr(ccp, field, CCPStatus(ccp_data[field]))
+                value = ccp_data[field]
+                if field == "hazard_id" and value is None:
+                    continue
+                if field == "status" and value is not None:
+                    setattr(ccp, field, CCPStatus(value))
                 else:
-                    setattr(ccp, field, ccp_data[field])
+                    setattr(ccp, field, value)
 
         db.commit()
         db.refresh(ccp)
@@ -1874,7 +1903,7 @@ async def create_monitoring_log(
         resp = ResponseModel(
             success=True,
             message="Monitoring log created successfully",
-            data={"id": monitoring_log.id, "is_within_limits": is_within_limits}
+            data={"id": monitoring_log.id, "is_within_limits": is_within_limits, "batch_id": monitoring_log.batch_id, "batch_number": monitoring_log.batch_number}
         )
         try:
             audit_event(db, current_user.id, "haccp_monitoring_log_created", "haccp", str(monitoring_log.id), {

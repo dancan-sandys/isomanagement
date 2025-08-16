@@ -205,6 +205,39 @@ def create_default_roles():
                 "permissions": [(module, action) for module in Module for action in PermissionType]
             },
             {
+                "name": "HACCP Team Leader",
+                "description": "Lead hazard analysis and maintain HACCP plan (non-approving)",
+                "is_default": True,
+                "is_editable": True,
+                "permissions": [
+                    (Module.DASHBOARD, PermissionType.VIEW),
+                    (Module.HACCP, PermissionType.VIEW),
+                    (Module.HACCP, PermissionType.CREATE),
+                    (Module.HACCP, PermissionType.UPDATE),
+                    (Module.HACCP, PermissionType.EXPORT),
+                    (Module.DOCUMENTS, PermissionType.VIEW),
+                    (Module.DOCUMENTS, PermissionType.EXPORT),
+                    (Module.PRP, PermissionType.VIEW),
+                    (Module.TRACEABILITY, PermissionType.VIEW),
+                    (Module.NC_CAPA, PermissionType.VIEW),
+                ]
+            },
+            {
+                "name": "QA Verifier",
+                "description": "Perform HACCP verification activities and record verification logs",
+                "is_default": True,
+                "is_editable": True,
+                "permissions": [
+                    (Module.DASHBOARD, PermissionType.VIEW),
+                    (Module.HACCP, PermissionType.VIEW),
+                    (Module.HACCP, PermissionType.UPDATE),
+                    (Module.HACCP, PermissionType.EXPORT),
+                    (Module.DOCUMENTS, PermissionType.VIEW),
+                    (Module.DOCUMENTS, PermissionType.EXPORT),
+                    (Module.MAINTENANCE, PermissionType.VIEW),
+                ]
+            },
+            {
                 "name": "QA Manager",
                 "description": "Manage documents, audits, HACCP, PRPs, CAPAs",
                 "is_default": True,

@@ -1,20 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
-import os
-import shutil
 import csv
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.permissions import require_permission_dependency
 from app.models.user import User
+from app.services.storage_service import StorageService
 from app.models.audit_mgmt import (
     Audit as AuditModel, AuditStatus, AuditType,
     AuditChecklistTemplate, AuditChecklistItem, ChecklistResponse,
     AuditFinding, FindingSeverity, FindingStatus,
     AuditAttachment, AuditItemAttachment, AuditFindingAttachment, AuditAuditee,
+	AuditPlan,
 )
 from app.schemas.audit import (
     AuditCreate, AuditUpdate, AuditResponse, AuditListResponse,
@@ -23,6 +24,7 @@ from app.schemas.audit import (
     FindingCreate, FindingUpdate, FindingResponse,
     AuditItemAttachmentResponse, AuditFindingAttachmentResponse,
     AuditAttachmentResponse, AuditStatsResponse, AuditeeResponse,
+	AuditKpisResponse, AuditPlanCreate, AuditPlanResponse,
 )
 from app.utils.audit import audit_event
 from app.schemas.nonconformance import NonConformanceCreate, NonConformanceResponse
@@ -35,7 +37,7 @@ from reportlab.pdfgen import canvas
 router = APIRouter()
 
 
-@router.get("/", response_model=AuditListResponse)
+@router.get("/", response_model=AuditListResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_audits(
     search: Optional[str] = Query(None),
     audit_type: Optional[str] = Query(None),
@@ -58,7 +60,7 @@ async def list_audits(
     return AuditListResponse(items=items, total=total, page=page, size=size, pages=(total + size - 1) // size)
 
 
-@router.post("/", response_model=AuditResponse)
+@router.post("/", response_model=AuditResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
 async def create_audit(
     payload: AuditCreate,
     db: Session = Depends(get_db),
@@ -88,7 +90,7 @@ async def create_audit(
     return audit
 
 
-@router.get("/{audit_id:int}", response_model=AuditResponse)
+@router.get("/{audit_id:int}", response_model=AuditResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def get_audit(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -96,7 +98,7 @@ async def get_audit(audit_id: int, db: Session = Depends(get_db), current_user: 
     return audit
 
 
-@router.put("/{audit_id:int}", response_model=AuditResponse)
+@router.put("/{audit_id:int}", response_model=AuditResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
 async def update_audit(audit_id: int, payload: AuditUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -114,7 +116,7 @@ async def update_audit(audit_id: int, payload: AuditUpdate, db: Session = Depend
     return audit
 
 
-@router.delete("/{audit_id:int}")
+@router.delete("/{audit_id:int}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
 async def delete_audit(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -246,14 +248,14 @@ async def import_templates_csv(
 
 
 # Checklist items
-@router.get("/{audit_id:int}/checklist", response_model=List[ChecklistItemResponse])
+@router.get("/{audit_id:int}/checklist", response_model=List[ChecklistItemResponse], dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_checklist_items(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
     items = db.query(AuditChecklistItem).filter(AuditChecklistItem.audit_id == audit_id).order_by(AuditChecklistItem.created_at.asc()).all()
     return items
-@router.post("/{audit_id:int}/checklist", response_model=ChecklistItemResponse)
+@router.post("/{audit_id:int}/checklist", response_model=ChecklistItemResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
 async def add_checklist_item(audit_id: int, payload: ChecklistItemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -274,7 +276,7 @@ async def add_checklist_item(audit_id: int, payload: ChecklistItemCreate, db: Se
     return item
 
 
-@router.put("/checklist/{item_id}", response_model=ChecklistItemResponse)
+@router.put("/checklist/{item_id}", response_model=ChecklistItemResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
 async def update_checklist_item(item_id: int, payload: ChecklistItemUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     item = db.query(AuditChecklistItem).get(item_id)
     if not item:
@@ -289,14 +291,14 @@ async def update_checklist_item(item_id: int, payload: ChecklistItemUpdate, db: 
 
 
 # Findings
-@router.get("/{audit_id:int}/findings", response_model=List[FindingResponse])
+@router.get("/{audit_id:int}/findings", response_model=List[FindingResponse], dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_findings(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
     f = db.query(AuditFinding).filter(AuditFinding.audit_id == audit_id).order_by(AuditFinding.created_at.asc()).all()
     return f
-@router.post("/{audit_id:int}/findings", response_model=FindingResponse)
+@router.post("/{audit_id:int}/findings", response_model=FindingResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
 async def add_finding(audit_id: int, payload: FindingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -318,7 +320,7 @@ async def add_finding(audit_id: int, payload: FindingCreate, db: Session = Depen
     return finding
 
 
-@router.put("/findings/{finding_id}", response_model=FindingResponse)
+@router.put("/findings/{finding_id}", response_model=FindingResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
 async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     finding = db.query(AuditFinding).get(finding_id)
     if not finding:
@@ -335,7 +337,7 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
 
 
 # Attachments
-@router.get("/{audit_id:int}/attachments", response_model=List[AuditAttachmentResponse])
+@router.get("/{audit_id:int}/attachments", response_model=List[AuditAttachmentResponse], dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_attachments(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -347,21 +349,27 @@ async def list_attachments(audit_id: int, db: Session = Depends(get_db), current
         .all()
     )
 
-@router.post("/{audit_id:int}/attachments", response_model=dict)
+@router.post("/{audit_id:int}/attachments", response_model=dict, dependencies=[Depends(require_permission_dependency("audits:create"))])
 async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
-    upload_dir = "uploads/audits"
-    os.makedirs(upload_dir, exist_ok=True)
-    safe_name = f"audit_{audit_id}_{int(datetime.utcnow().timestamp())}_{file.filename}"
-    file_path = os.path.join(upload_dir, safe_name)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    
+    # Use storage service for secure file handling
+    storage_service = StorageService()
+    try:
+        file_path, file_size, content_type, original_filename, checksum = storage_service.save_upload(
+            file, subdir="audits"
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="File upload failed")
+    
     attachment = AuditAttachment(
         audit_id=audit_id,
         file_path=file_path,
-        filename=file.filename,
+        filename=original_filename,
         uploaded_by=current_user.id,
     )
     db.add(attachment)
@@ -370,7 +378,7 @@ async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Ses
         audit_event(db, current_user.id, "audit_attachment_uploaded", "audits", str(audit_id))
     except Exception:
         pass
-    return {"file_path": file_path}
+    return {"file_path": file_path, "filename": original_filename, "size": file_size, "checksum": checksum}
 
 
 @router.get("/attachments/{attachment_id}/download")
@@ -378,21 +386,29 @@ async def download_attachment(attachment_id: int, db: Session = Depends(get_db),
     att = db.query(AuditAttachment).get(attachment_id)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    return FileResponse(att.file_path, filename=att.filename)
+    
+    # Use storage service for secure file download
+    storage_service = StorageService()
+    return storage_service.create_file_response(att.file_path, att.filename)
 
 
-@router.delete("/attachments/{attachment_id}")
+@router.delete("/attachments/{attachment_id}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
 async def delete_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     att = db.query(AuditAttachment).get(attachment_id)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    # Use storage service to delete the file
+    storage_service = StorageService()
+    storage_service.delete_file(att.file_path)
+    
     db.delete(att)
     db.commit()
     return {"message": "Attachment deleted"}
 
 
 # Upload attachment for a checklist item
-@router.post("/checklist/{item_id}/attachments", response_model=AuditItemAttachmentResponse)
+@router.post("/checklist/{item_id}/attachments", response_model=AuditItemAttachmentResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
 async def upload_item_attachment(
     item_id: int,
     file: UploadFile = File(...),
@@ -402,16 +418,22 @@ async def upload_item_attachment(
     item = db.query(AuditChecklistItem).get(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Checklist item not found")
-    upload_dir = "uploads/audits/items"
-    os.makedirs(upload_dir, exist_ok=True)
-    safe_name = f"item_{item_id}_{int(datetime.utcnow().timestamp())}_{file.filename}"
-    file_path = os.path.join(upload_dir, safe_name)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    
+    # Use storage service for secure file handling
+    storage_service = StorageService()
+    try:
+        file_path, file_size, content_type, original_filename, checksum = storage_service.save_upload(
+            file, subdir="audits/items"
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="File upload failed")
+    
     attachment = AuditItemAttachment(
         item_id=item_id,
         file_path=file_path,
-        filename=file.filename,
+        filename=original_filename,
         uploaded_by=current_user.id,
     )
     db.add(attachment)
@@ -425,7 +447,7 @@ async def upload_item_attachment(
 
 
 # Upload attachment for a finding
-@router.post("/findings/{finding_id}/attachments", response_model=AuditFindingAttachmentResponse)
+@router.post("/findings/{finding_id}/attachments", response_model=AuditFindingAttachmentResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
 async def upload_finding_attachment(
     finding_id: int,
     file: UploadFile = File(...),
@@ -435,16 +457,22 @@ async def upload_finding_attachment(
     finding = db.query(AuditFinding).get(finding_id)
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
-    upload_dir = "uploads/audits/findings"
-    os.makedirs(upload_dir, exist_ok=True)
-    safe_name = f"finding_{finding_id}_{int(datetime.utcnow().timestamp())}_{file.filename}"
-    file_path = os.path.join(upload_dir, safe_name)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    
+    # Use storage service for secure file handling
+    storage_service = StorageService()
+    try:
+        file_path, file_size, content_type, original_filename, checksum = storage_service.save_upload(
+            file, subdir="audits/findings"
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="File upload failed")
+    
     attachment = AuditFindingAttachment(
         finding_id=finding_id,
         file_path=file_path,
-        filename=file.filename,
+        filename=original_filename,
         uploaded_by=current_user.id,
     )
     db.add(attachment)
@@ -471,14 +499,22 @@ async def download_item_attachment(attachment_id: int, db: Session = Depends(get
     att = db.query(AuditItemAttachment).get(attachment_id)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    return FileResponse(att.file_path, filename=att.filename)
+    
+    # Use storage service for secure file download
+    storage_service = StorageService()
+    return storage_service.create_file_response(att.file_path, att.filename)
 
 
-@router.delete("/checklist/attachments/{attachment_id}")
+@router.delete("/checklist/attachments/{attachment_id}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
 async def delete_item_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     att = db.query(AuditItemAttachment).get(attachment_id)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    # Use storage service to delete the file
+    storage_service = StorageService()
+    storage_service.delete_file(att.file_path)
+    
     db.delete(att)
     db.commit()
     return {"message": "Attachment deleted"}
@@ -498,14 +534,22 @@ async def download_finding_attachment(attachment_id: int, db: Session = Depends(
     att = db.query(AuditFindingAttachment).get(attachment_id)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    return FileResponse(att.file_path, filename=att.filename)
+    
+    # Use storage service for secure file download
+    storage_service = StorageService()
+    return storage_service.create_file_response(att.file_path, att.filename)
 
 
-@router.delete("/findings/attachments/{attachment_id}")
+@router.delete("/findings/attachments/{attachment_id}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
 async def delete_finding_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     att = db.query(AuditFindingAttachment).get(attachment_id)
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    # Use storage service to delete the file
+    storage_service = StorageService()
+    storage_service.delete_file(att.file_path)
+    
     db.delete(att)
     db.commit()
     return {"message": "Attachment deleted"}
@@ -568,7 +612,7 @@ async def create_nc_from_finding(
 
 
 # Stats endpoint
-@router.get("/stats", response_model=AuditStatsResponse)
+@router.get("/stats", response_model=AuditStatsResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def get_audit_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(AuditModel)
     total = q.count()
@@ -587,8 +631,131 @@ async def get_audit_stats(db: Session = Depends(get_db), current_user: User = De
     return AuditStatsResponse(total=total, by_status=by_status, by_type=by_type, recent_created=recent_created)
 
 
+@router.get("/kpis/overview", response_model=AuditKpisResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_audit_kpis_overview(
+	period: str = Query("month", pattern="^(week|month|quarter|year)$"),
+	department: Optional[str] = Query(None),
+	auditor_id: Optional[int] = Query(None),
+	db: Session = Depends(get_db),
+	current_user: User = Depends(get_current_user)
+):
+	"""
+	Get audit KPIs with filtering by period, department, and auditor.
+	
+	Args:
+		period: Time period for KPI calculations (week|month|quarter|year)
+		department: Filter by auditee department
+		auditor_id: Filter by auditor ID (lead or team auditor)
+	"""
+	from datetime import datetime, timedelta
+	
+	# Calculate date range based on period
+	now = datetime.utcnow()
+	if period == "week":
+		start_date = now - timedelta(days=7)
+	elif period == "month":
+		start_date = now - timedelta(days=30)
+	elif period == "quarter":
+		start_date = now - timedelta(days=90)
+	elif period == "year":
+		start_date = now - timedelta(days=365)
+	else:
+		start_date = now - timedelta(days=30)  # Default to month
+	
+	# Build base query with period filter
+	q_audits = db.query(AuditModel).filter(AuditModel.created_at >= start_date)
+	
+	# Apply additional filters
+	if department:
+		q_audits = q_audits.filter(AuditModel.auditee_department == department)
+	if auditor_id:
+		q_audits = q_audits.filter((AuditModel.auditor_id == auditor_id) | (AuditModel.lead_auditor_id == auditor_id))
+
+	# Get audits for the period
+	audits = q_audits.all()
+	
+	# Lead time average: prefer plan.approved_at when available, fallback to audit.start_date
+	lead_deltas = []
+	for a in audits:
+		plan = db.query(AuditPlan).filter(AuditPlan.audit_id == a.id).first()
+		start_ref = plan.approved_at if plan and plan.approved_at else getattr(a, 'start_date', None)
+		created_ref = getattr(a, 'created_at', None)
+		if start_ref and created_ref:
+			try:
+				lead_deltas.append((start_ref - created_ref).days)
+			except Exception:
+				pass
+	lead_time_days_avg = (sum(lead_deltas) / len(lead_deltas)) if lead_deltas else None
+
+	# On-time rate: actual_end_at vs planned end_date
+	completed = [a for a in audits if getattr(a, 'status', None) in {AuditStatus.COMPLETED, AuditStatus.CLOSED}]
+	on_time_count = 0
+	total_completed = 0
+	for a in completed:
+		planned_end = getattr(a, 'end_date', None)
+		actual_end = getattr(a, 'actual_end_at', None) or getattr(a, 'updated_at', None)
+		if planned_end and actual_end:
+			total_completed += 1
+			if actual_end <= planned_end:
+				on_time_count += 1
+	on_time_audit_rate = (on_time_count / total_completed) if total_completed else None
+
+	# Finding closure days average - filter by period and auditor
+	q_findings = db.query(AuditFinding).filter(AuditFinding.created_at >= start_date)
+	if auditor_id:
+		q_findings = q_findings.filter(AuditFinding.responsible_person_id == auditor_id)
+	findings = q_findings.all()
+	closure_deltas = []
+	for f in findings:
+		if f.closed_at and f.created_at:
+			try:
+				closure_deltas.append((f.closed_at - f.created_at).days)
+			except Exception:
+				pass
+	finding_closure_days_avg = (sum(closure_deltas) / len(closure_deltas)) if closure_deltas else None
+
+	# Additional KPI metrics
+	total_audits = len(audits)
+	completed_audits = len([a for a in audits if a.status in {AuditStatus.COMPLETED, AuditStatus.CLOSED}])
+	
+	# Overdue audits (past end_date but not completed)
+	overdue_audits = 0
+	for a in audits:
+		if a.status not in {AuditStatus.COMPLETED, AuditStatus.CLOSED} and a.end_date and a.end_date < now:
+			overdue_audits += 1
+	
+	# Finding metrics
+	total_findings = len(findings)
+	open_findings = len([f for f in findings if f.status in {FindingStatus.OPEN, FindingStatus.IN_PROGRESS}])
+	
+	# Overdue findings (past target_completion_date but not closed)
+	overdue_findings = 0
+	for f in findings:
+		if f.status not in {FindingStatus.VERIFIED, FindingStatus.CLOSED} and f.target_completion_date and f.target_completion_date < now:
+			overdue_findings += 1
+	
+	# Critical findings
+	critical_findings = len([f for f in findings if f.severity == FindingSeverity.CRITICAL])
+
+	return AuditKpisResponse(
+		lead_time_days_avg=lead_time_days_avg,
+		on_time_audit_rate=on_time_audit_rate,
+		finding_closure_days_avg=finding_closure_days_avg,
+		total_audits=total_audits,
+		completed_audits=completed_audits,
+		overdue_audits=overdue_audits,
+		total_findings=total_findings,
+		open_findings=open_findings,
+		overdue_findings=overdue_findings,
+		critical_findings=critical_findings,
+		period=period,
+		department=department,
+		auditor_id=auditor_id,
+	)
+
+
 # Export list to PDF or XLSX
-@router.post("/export")
+@router.post("/export", dependencies=[Depends(require_permission_dependency("audits:export"))])
 async def export_audits(
     format: str = Query("pdf", pattern="^(pdf|xlsx)$"),
     search: Optional[str] = Query(None),
@@ -630,7 +797,7 @@ async def export_audits(
 
 
 # Single audit report export
-@router.get("/{audit_id:int}/report")
+@router.get("/{audit_id:int}/report", dependencies=[Depends(require_permission_dependency("audits:export"))])
 async def export_audit_report(
     audit_id: int,
     format: str = Query("pdf", pattern="^(pdf|xlsx)$"),
@@ -681,7 +848,7 @@ async def export_audit_report(
 
 
 # Auditees
-@router.get("/{audit_id:int}/auditees", response_model=List[AuditeeResponse])
+@router.get("/{audit_id:int}/auditees", response_model=List[AuditeeResponse], dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -689,7 +856,7 @@ async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_us
     return db.query(AuditAuditee).filter(AuditAuditee.audit_id == audit_id).order_by(AuditAuditee.added_at.desc()).all()
 
 
-@router.post("/{audit_id:int}/auditees", response_model=AuditeeResponse)
+@router.post("/{audit_id:int}/auditees", response_model=AuditeeResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
 async def add_auditee(audit_id: int, user_id: int = Query(...), role: Optional[str] = Query(None), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
@@ -705,7 +872,7 @@ async def add_auditee(audit_id: int, user_id: int = Query(...), role: Optional[s
     return aa
 
 
-@router.delete("/auditees/{id}")
+@router.delete("/auditees/{id}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
 async def remove_auditee(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     aa = db.query(AuditAuditee).get(id)
     if not aa:
@@ -718,5 +885,55 @@ async def remove_auditee(id: int, db: Session = Depends(get_db), current_user: U
     except Exception:
         pass
     return {"message": "Auditee removed"}
+
+
+# Audit Plan endpoints
+@router.post("/{audit_id:int}/plan", response_model=AuditPlanResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def create_or_update_plan(
+	audit_id: int,
+	payload: AuditPlanCreate,
+	db: Session = Depends(get_db),
+	current_user: User = Depends(get_current_user)
+):
+	audit = db.query(AuditModel).get(audit_id)
+	if not audit:
+		raise HTTPException(status_code=404, detail="Audit not found")
+	plan = db.query(AuditPlan).filter(AuditPlan.audit_id == audit_id).first()
+	if plan is None:
+		plan = AuditPlan(audit_id=audit_id)
+		db.add(plan)
+	for field, value in payload.model_dump(exclude_unset=True).items():
+		setattr(plan, field, value)
+	db.commit()
+	db.refresh(plan)
+	return plan
+
+
+@router.post("/{audit_id:int}/plan/approve", response_model=AuditPlanResponse, dependencies=[Depends(require_permission_dependency("audits:approve"))])
+async def approve_plan(
+	audit_id: int,
+	db: Session = Depends(get_db),
+	current_user: User = Depends(get_current_user)
+):
+	plan = db.query(AuditPlan).filter(AuditPlan.audit_id == audit_id).first()
+	if not plan:
+		raise HTTPException(status_code=404, detail="Audit plan not found")
+	plan.approved_by = current_user.id
+	plan.approved_at = datetime.utcnow()
+	db.commit()
+	db.refresh(plan)
+	return plan
+
+
+@router.get("/{audit_id:int}/plan", response_model=AuditPlanResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_plan(
+	audit_id: int,
+	db: Session = Depends(get_db),
+	current_user: User = Depends(get_current_user)
+):
+	plan = db.query(AuditPlan).filter(AuditPlan.audit_id == audit_id).first()
+	if not plan:
+		raise HTTPException(status_code=404, detail="Audit plan not found")
+	return plan
 
 

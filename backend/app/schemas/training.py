@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from app.models.training import TrainingAction
 
 
 class TrainingProgramBase(BaseModel):
@@ -215,3 +216,26 @@ class TrainingMatrixItem(BaseModel):
     last_quiz_score: Optional[float] = None
     last_quiz_passed: Optional[bool] = None
 
+
+# HACCP Required Training (scoped) schemas
+class HACCPRequiredTrainingCreate(BaseModel):
+    role_id: int
+    action: TrainingAction
+    program_id: int
+    ccp_id: Optional[int] = None
+    equipment_id: Optional[int] = None
+    is_mandatory: Optional[bool] = True
+
+
+class HACCPRequiredTrainingResponse(BaseModel):
+    id: int
+    role_id: int
+    action: TrainingAction
+    program_id: int
+    ccp_id: Optional[int] = None
+    equipment_id: Optional[int] = None
+    is_mandatory: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

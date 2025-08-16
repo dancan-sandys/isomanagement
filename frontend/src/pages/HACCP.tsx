@@ -171,8 +171,15 @@ const HACCP: React.FC = () => {
   });
   const [userSearch, setUserSearch] = useState('');
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  const [userOpen, setUserOpen] = useState(false);
+  const [monitoringUserValue, setMonitoringUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  const [verificationUserValue, setVerificationUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
   useEffect(() => {
     let active = true;
+    // Only search when dropdown is open and the user typed at least 2 characters
+    if (!userOpen || (userSearch || '').trim().length < 2) {
+      return () => { active = false; };
+    }
     const t = setTimeout(async () => {
       try {
         const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
@@ -183,7 +190,38 @@ const HACCP: React.FC = () => {
       }
     }, 300);
     return () => { active = false; clearTimeout(t); };
-  }, [userSearch]);
+  }, [userSearch, userOpen]);
+
+  // Ensure selected user value remains stable even when options refresh
+  useEffect(() => {
+    const setupSelectedUsers = async () => {
+      try {
+        if (ccpForm.monitoring_responsible) {
+          const idNum = Number(ccpForm.monitoring_responsible);
+          if (!monitoringUserValue || monitoringUserValue.id !== idNum) {
+            const res: any = await usersAPI.getUser(idNum);
+            const u = res?.data || res;
+            if (u?.id) setMonitoringUserValue({ id: u.id, username: u.username, full_name: u.full_name });
+          }
+        } else {
+          setMonitoringUserValue(null);
+        }
+        if (ccpForm.verification_responsible) {
+          const idNum = Number(ccpForm.verification_responsible);
+          if (!verificationUserValue || verificationUserValue.id !== idNum) {
+            const res: any = await usersAPI.getUser(idNum);
+            const u = res?.data || res;
+            if (u?.id) setVerificationUserValue({ id: u.id, username: u.username, full_name: u.full_name });
+          }
+        } else {
+          setVerificationUserValue(null);
+        }
+      } catch {}
+    };
+    setupSelectedUsers();
+    // We intentionally depend on the stored ids only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ccpForm.monitoring_responsible, ccpForm.verification_responsible]);
   const [productForm, setProductForm] = useState({
     product_code: '',
     name: '',
@@ -1001,15 +1039,13 @@ const HACCP: React.FC = () => {
 
       <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Dashboard" />
-        <Tab label="Products" />
       </Tabs>
 
       <TabPanel value={selectedTab} index={0}>
         {renderDashboard()}
-      </TabPanel>
-
-      <TabPanel value={selectedTab} index={1}>
-        {renderProducts()}
+        <Box sx={{ mt: 4 }}>
+          {renderProducts()}
+        </Box>
       </TabPanel>
 
       {/* Product Details moved to /haccp/products/:id */}
@@ -1240,9 +1276,14 @@ const HACCP: React.FC = () => {
               <Autocomplete
                 options={userOptions}
                 getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
-                value={userOptions.find(o => String(o.id) === ccpForm.monitoring_responsible) || null}
-                onChange={(_, val) => setCcpForm({ ...ccpForm, monitoring_responsible: val ? String(val.id) : '' })}
+                value={monitoringUserValue}
+                onChange={(_, val) => {
+                  setMonitoringUserValue(val);
+                  setCcpForm({ ...ccpForm, monitoring_responsible: val ? String(val.id) : '' });
+                }}
                 onInputChange={(_, val) => setUserSearch(val)}
+                onOpen={() => setUserOpen(true)}
+                onClose={() => setUserOpen(false)}
                 isOptionEqualToValue={(opt, val) => opt.id === val.id}
                 renderInput={(params) => <TextField {...params} label="Monitoring Responsible" placeholder="Search user..." fullWidth />}
               />
@@ -1263,9 +1304,14 @@ const HACCP: React.FC = () => {
               <Autocomplete
                 options={userOptions}
                 getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
-                value={userOptions.find(o => String(o.id) === ccpForm.verification_responsible) || null}
-                onChange={(_, val) => setCcpForm({ ...ccpForm, verification_responsible: val ? String(val.id) : '' })}
+                value={verificationUserValue}
+                onChange={(_, val) => {
+                  setVerificationUserValue(val);
+                  setCcpForm({ ...ccpForm, verification_responsible: val ? String(val.id) : '' });
+                }}
                 onInputChange={(_, val) => setUserSearch(val)}
+                onOpen={() => setUserOpen(true)}
+                onClose={() => setUserOpen(false)}
                 isOptionEqualToValue={(opt, val) => opt.id === val.id}
                 renderInput={(params) => <TextField {...params} label="Verification Responsible" placeholder="Search user..." fullWidth />}
               />

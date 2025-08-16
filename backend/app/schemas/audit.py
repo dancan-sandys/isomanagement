@@ -30,6 +30,7 @@ class AuditResponse(AuditBase):
   created_by: int
   created_at: datetime
   updated_at: datetime
+  actual_end_at: datetime | None = None
 
   class Config:
     from_attributes = True
@@ -132,6 +133,8 @@ class FindingBase(BaseModel):
   target_completion_date: Optional[datetime] = None
   status: Optional[str] = Field(default="open", pattern="^(open|in_progress|verified|closed)$")
   related_nc_id: Optional[int] = None
+  finding_type: Optional[str] = Field(default="nonconformity", pattern="^(nonconformity|observation|ofi)$")
+  closed_at: Optional[datetime] = None
 
 
 class FindingCreate(FindingBase):
@@ -164,6 +167,45 @@ class AuditStatsResponse(BaseModel):
   by_status: Dict[str, int]
   by_type: Dict[str, int]
   recent_created: List[Dict[str, str]]
+
+
+class AuditKpisResponse(BaseModel):
+  lead_time_days_avg: Optional[float] = None
+  on_time_audit_rate: Optional[float] = None
+  finding_closure_days_avg: Optional[float] = None
+  total_audits: int = 0
+  completed_audits: int = 0
+  overdue_audits: int = 0
+  total_findings: int = 0
+  open_findings: int = 0
+  overdue_findings: int = 0
+  critical_findings: int = 0
+  period: str = "month"
+  department: Optional[str] = None
+  auditor_id: Optional[int] = None
+
+
+class AuditPlanBase(BaseModel):
+  agenda: Optional[str] = None
+  criteria_refs: Optional[str] = None
+  sampling_plan: Optional[str] = None
+  documents_to_review: Optional[str] = None
+  logistics: Optional[str] = None
+
+
+class AuditPlanCreate(AuditPlanBase):
+  pass
+
+
+class AuditPlanResponse(AuditPlanBase):
+  id: int
+  audit_id: int
+  approved_by: Optional[int] = None
+  approved_at: Optional[datetime] = None
+  created_at: datetime
+
+  class Config:
+    from_attributes = True
 
 
 class AuditeeResponse(BaseModel):

@@ -2,7 +2,8 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from app.models.training import TrainingProgram, TrainingSession, TrainingAttendance, TrainingMaterial, RoleRequiredTraining, TrainingQuiz, TrainingQuizQuestion, TrainingQuizOption, TrainingQuizAttempt, TrainingQuizAnswer, TrainingCertificate
+from app.models.training import TrainingProgram, TrainingSession, TrainingAttendance, TrainingMaterial, RoleRequiredTraining, TrainingQuiz, TrainingQuizQuestion, TrainingQuizOption, TrainingQuizAttempt, TrainingQuizAnswer, TrainingCertificate, HACCPRequiredTraining, TrainingAction
+from app.models.user import User
 from app.schemas.training import (
     TrainingProgramCreate, TrainingProgramUpdate,
     TrainingSessionCreate, TrainingSessionUpdate,
@@ -197,6 +198,34 @@ class TrainingService:
         self.db.commit()
         return True
 
+    # HACCP required training (scoped)
+    def assign_haccp_required_training(self, *, role_id: int, action: TrainingAction, program_id: int, ccp_id: int | None = None, equipment_id: int | None = None, is_mandatory: bool = True) -> HACCPRequiredTraining:
+        rec = HACCPRequiredTraining(role_id=role_id, action=action, program_id=program_id, ccp_id=ccp_id, equipment_id=equipment_id, is_mandatory=is_mandatory)
+        self.db.add(rec)
+        self.db.commit()
+        self.db.refresh(rec)
+        return rec
+
+    def list_haccp_required_trainings(self, *, role_id: int | None = None, action: TrainingAction | None = None, ccp_id: int | None = None, equipment_id: int | None = None) -> list[HACCPRequiredTraining]:
+        q = self.db.query(HACCPRequiredTraining)
+        if role_id is not None:
+            q = q.filter(HACCPRequiredTraining.role_id == role_id)
+        if action is not None:
+            q = q.filter(HACCPRequiredTraining.action == action)
+        if ccp_id is not None:
+            q = q.filter(HACCPRequiredTraining.ccp_id == ccp_id)
+        if equipment_id is not None:
+            q = q.filter(HACCPRequiredTraining.equipment_id == equipment_id)
+        return q.order_by(HACCPRequiredTraining.created_at.desc()).all()
+
+    def delete_haccp_required_training(self, record_id: int) -> bool:
+        rec = self.db.query(HACCPRequiredTraining).filter(HACCPRequiredTraining.id == record_id).first()
+        if not rec:
+            return False
+        self.db.delete(rec)
+        self.db.commit()
+        return True
+
     # Quizzes
     def create_quiz_for_program(self, program_id: int, data, created_by: int) -> TrainingQuiz:
         quiz = TrainingQuiz(
@@ -354,5 +383,62 @@ class TrainingService:
                 "last_quiz_passed": bool(last_attempt.passed) if last_attempt else None,
             })
         return result
+
+    def check_eligibility(self, user_id: int, action: str | None = None, ccp_id: int | None = None, equipment_id: int | None = None) -> dict:
+        """
+        Determine if a user meets role-required trainings.
+        - action, ccp_id, equipment_id are placeholders for future scoping; currently role-wide.
+        Returns { eligible: bool, required_program_ids: list[int], completed_program_ids: list[int], missing_program_ids: list[int] }
+        """
+        user: User | None = self.db.query(User).filter(User.id == user_id).first()
+        if not user or not user.role_id:
+            return {
+                "eligible": False,
+                "required_program_ids": [],
+                "completed_program_ids": [],
+                "missing_program_ids": [],
+            }
+
+        required_records = (
+            self.db.query(RoleRequiredTraining)
+            .filter(RoleRequiredTraining.role_id == user.role_id, RoleRequiredTraining.is_mandatory == True)
+            .all()
+        )
+        required_program_ids = [r.program_id for r in required_records]
+        if not required_program_ids:
+            return {
+                "eligible": True,
+                "required_program_ids": [],
+                "completed_program_ids": [],
+                "missing_program_ids": [],
+            }
+
+        # Determine program_ids with attendance or certificates
+        session_programs = (
+            self.db.query(TrainingSession.program_id)
+            .join(TrainingAttendance, TrainingAttendance.session_id == TrainingSession.id)
+            .filter(TrainingAttendance.user_id == user_id, TrainingAttendance.attended == True)
+            .distinct()
+            .all()
+        )
+        attended_program_ids = {pid for (pid,) in session_programs}
+
+        cert_programs = (
+            self.db.query(TrainingSession.program_id)
+            .join(TrainingCertificate, TrainingCertificate.session_id == TrainingSession.id)
+            .filter(TrainingCertificate.user_id == user_id)
+            .distinct()
+            .all()
+        )
+        certified_program_ids = {pid for (pid,) in cert_programs}
+
+        completed_program_ids = sorted(attended_program_ids.union(certified_program_ids))
+        missing = sorted(set(required_program_ids).difference(completed_program_ids))
+        return {
+            "eligible": len(missing) == 0,
+            "required_program_ids": required_program_ids,
+            "completed_program_ids": completed_program_ids,
+            "missing_program_ids": missing,
+        }
 
 

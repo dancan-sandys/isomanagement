@@ -17,9 +17,10 @@ from app.schemas.training import (
     TrainingMaterialUploadResponse,
     RoleRequiredTrainingCreate, RoleRequiredTrainingResponse,
     TrainingQuizCreate, TrainingQuizResponse, TrainingQuizAttemptSubmit, TrainingQuizAttemptResponse,
-    TrainingCertificateResponse, TrainingMatrixItem,
+    TrainingCertificateResponse, TrainingMatrixItem, HACCPRequiredTrainingCreate, HACCPRequiredTrainingResponse,
 )
 from app.services.training_service import TrainingService
+from app.models.training import TrainingAction
 
 router = APIRouter()
 
@@ -474,4 +475,75 @@ async def get_my_training_matrix(
 ):
     svc = TrainingService(db)
     return svc.get_training_matrix_for_user(current_user.id)
+
+
+# Admin: View any user's matrix
+@router.get("/matrix/{user_id}", response_model=list[TrainingMatrixItem])
+async def get_user_training_matrix(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    svc = TrainingService(db)
+    return svc.get_training_matrix_for_user(user_id)
+
+
+# Admin: Eligibility check (role-wide for now)
+@router.get("/eligibility", response_model=dict)
+async def get_training_eligibility(
+    user_id: int,
+    action: str | None = Query(default=None),
+    ccp_id: int | None = Query(default=None),
+    equipment_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    svc = TrainingService(db)
+    return svc.check_eligibility(user_id=user_id, action=action, ccp_id=ccp_id, equipment_id=equipment_id)
+
+
+# HACCP required training (scoped) endpoints
+@router.post("/required/haccp", response_model=HACCPRequiredTrainingResponse)
+async def assign_haccp_required_training(
+    payload: HACCPRequiredTrainingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    svc = TrainingService(db)
+    rec = svc.assign_haccp_required_training(
+        role_id=payload.role_id,
+        action=payload.action,
+        program_id=payload.program_id,
+        ccp_id=payload.ccp_id,
+        equipment_id=payload.equipment_id,
+        is_mandatory=bool(payload.is_mandatory) if payload.is_mandatory is not None else True,
+    )
+    return rec
+
+
+@router.get("/required/haccp", response_model=list[HACCPRequiredTrainingResponse])
+async def list_haccp_required_trainings(
+    role_id: int | None = Query(default=None),
+    action: TrainingAction | None = Query(default=None),
+    ccp_id: int | None = Query(default=None),
+    equipment_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    svc = TrainingService(db)
+    return svc.list_haccp_required_trainings(role_id=role_id, action=action, ccp_id=ccp_id, equipment_id=equipment_id)
+
+
+@router.delete("/required/haccp/{record_id}")
+async def delete_haccp_required_training(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    svc = TrainingService(db)
+    ok = svc.delete_haccp_required_training(record_id)
+    if not ok:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"message": "Record deleted"}
 

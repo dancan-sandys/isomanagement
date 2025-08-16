@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel } from '@mui/material';
 import { Add, Edit, Delete } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
-import { traceabilityAPI } from '../services/api';
+import { traceabilityAPI, usersAPI } from '../services/api';
 import { AppDispatch, RootState } from '../store';
 import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, deleteCCP } from '../store/slices/haccpSlice';
 
@@ -36,6 +36,11 @@ const HACCPProductDetail: React.FC = () => {
 
   const [userSearch, setUserSearch] = useState('');
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const userReqIdRef = useRef(0);
+  const [monitoringUserValue, setMonitoringUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  const [verificationUserValue, setVerificationUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
 
   useEffect(() => {
     dispatch(fetchProduct(productId));
@@ -46,22 +51,55 @@ const HACCPProductDetail: React.FC = () => {
   }, [dispatch, productId]);
 
   useEffect(() => {
-    let active = true;
+    // Only trigger search when dropdown is open and at least 2 chars typed
+    if (!userOpen || (userSearch || '').trim().length < 2) return;
+    const reqId = ++userReqIdRef.current;
+    setUserLoading(true);
     const t = setTimeout(async () => {
       try {
-        // lightweight user search via usersAPI to keep Autocomplete intact
-        const resp = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/users?page=1&size=10&search=${encodeURIComponent(userSearch)}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-        });
-        const data = await resp.json();
-        const items = (data?.data?.items || data?.items || []) as Array<any>;
-        if (active) setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+        const res: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch || undefined });
+        if (userReqIdRef.current !== reqId) return;
+        const items = (res?.data?.items || res?.items || res?.data || []) as Array<any>;
+        setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
       } catch {
-        if (active) setUserOptions([]);
+        if (userReqIdRef.current !== reqId) return;
+        setUserOptions([]);
+      } finally {
+        if (userReqIdRef.current === reqId) setUserLoading(false);
       }
-    }, 300);
-    return () => { active = false; clearTimeout(t); };
-  }, [userSearch]);
+    }, 250);
+    return () => { clearTimeout(t); };
+  }, [userSearch, userOpen]);
+
+  // Stabilize selected values when editing an existing CCP
+  useEffect(() => {
+    const populateSelectedUsers = async () => {
+      try {
+        if (ccpForm.monitoring_responsible) {
+          const idNum = Number(ccpForm.monitoring_responsible);
+          if (!monitoringUserValue || monitoringUserValue.id !== idNum) {
+            const res: any = await usersAPI.getUser(idNum);
+            const u = res?.data || res;
+            if (u?.id) setMonitoringUserValue({ id: u.id, username: u.username, full_name: u.full_name });
+          }
+        } else {
+          setMonitoringUserValue(null);
+        }
+        if (ccpForm.verification_responsible) {
+          const idNum = Number(ccpForm.verification_responsible);
+          if (!verificationUserValue || verificationUserValue.id !== idNum) {
+            const res: any = await usersAPI.getUser(idNum);
+            const u = res?.data || res;
+            if (u?.id) setVerificationUserValue({ id: u.id, username: u.username, full_name: u.full_name });
+          }
+        } else {
+          setVerificationUserValue(null);
+        }
+      } catch {}
+    };
+    populateSelectedUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ccpForm.monitoring_responsible, ccpForm.verification_responsible]);
 
   useEffect(() => {
     if (selectedFlow) {
@@ -116,11 +154,27 @@ const HACCPProductDetail: React.FC = () => {
     } catch {}
   };
 
-  const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; value?: string; unit?: string }>({});
+  const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string }>({});
   const [monitoringLogs, setMonitoringLogs] = useState<any[]>([]);
   const [batchOptions, setBatchOptions] = useState<any[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
+
+  // Fetch batches when autocomplete opens or search text changes
+  useEffect(() => {
+    let active = true;
+    if (!batchOpen) return () => { active = false; };
+    const t = setTimeout(async () => {
+      try {
+        const resp: any = await traceabilityAPI.getBatches({ search: batchSearch, size: 10 });
+        const items = resp?.data?.items || resp?.items || [];
+        if (active) setBatchOptions(items);
+      } catch (e) {
+        if (active) setBatchOptions([]);
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(t); };
+  }, [batchOpen, batchSearch]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -237,19 +291,19 @@ const HACCPProductDetail: React.FC = () => {
       <TabPanel value={selectedTab} index={3}>
         <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
         <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
-          <Autocomplete options={ccps} getOptionLabel={(ccp: any) => `${ccp.ccp_number} - ${ccp.ccp_name}`} value={ccps.find((c: any) => String(c.id) === (monitoringForm.ccp_id || '')) || null} onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, ccp_id: val ? String(val.id) : '' })} isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id} renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP for monitoring" />} />
+          <Autocomplete options={ccps} getOptionLabel={(ccp: any) => `${ccp.ccp_number || ''} - ${ccp.ccp_name || ''}`.trim()} value={ccps.find((c: any) => String(c.id) === (monitoringForm.ccp_id || '')) || null} onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, ccp_id: val ? String(val.id) : '' })} isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id} renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP for monitoring" />} />
           <Autocomplete
             options={batchOptions}
             open={batchOpen}
             onOpen={() => setBatchOpen(true)}
             onClose={() => setBatchOpen(false)}
             getOptionLabel={(b: any) => b?.batch_number || ''}
-            value={batchOptions.find((b: any) => String(b?.batch_number || '') === (monitoringForm.batch || '')) || null}
-            onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, batch: val ? String(val.batch_number) : '' })}
+            value={batchOptions.find((b: any) => String(b?.id || '') === (monitoringForm.batch_id || '')) || null}
+            onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, batch_id: val ? String(val.id) : '', batch: val ? String(val.batch_number) : '' })}
             inputValue={batchSearch}
             onInputChange={(_, val) => setBatchSearch(val)}
-            isOptionEqualToValue={(opt: any, val: any) => opt?.batch_number === val?.batch_number}
-            renderInput={(params) => <TextField {...params} label="Batch Number" placeholder="Search batches..." />}
+            isOptionEqualToValue={(opt: any, val: any) => opt?.id === val?.id}
+            renderInput={(params) => <TextField {...params} label="Batch" placeholder="Search batches..." />}
           />
           <TextField type="number" label="Measured Value" value={monitoringForm.value || ''} onChange={e => setMonitoringForm({ ...monitoringForm, value: e.target.value })} />
           <TextField label="Unit" value={monitoringForm.unit || ''} onChange={e => setMonitoringForm({ ...monitoringForm, unit: e.target.value })} />
@@ -257,7 +311,7 @@ const HACCPProductDetail: React.FC = () => {
             <Button variant="contained" disabled={!monitoringForm.ccp_id} onClick={async () => {
               const ccpId = Number(monitoringForm.ccp_id);
               try {
-                await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ batch_number: monitoringForm.batch, measured_value: Number(monitoringForm.value), unit: monitoringForm.unit }) });
+                await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ batch_id: monitoringForm.batch_id ? Number(monitoringForm.batch_id) : undefined, batch_number: monitoringForm.batch, measured_value: Number(monitoringForm.value), unit: monitoringForm.unit }) });
                 // reload logs
                 try {
                   const resp = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
@@ -381,14 +435,34 @@ const HACCPProductDetail: React.FC = () => {
             <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Frequency" value={ccpForm.monitoring_frequency} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_frequency: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Method" value={ccpForm.monitoring_method} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_method: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}>
-              <Autocomplete options={userOptions} getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)} value={userOptions.find(o => String(o.id) === ccpForm.monitoring_responsible) || null} onChange={(_, val) => setCcpForm({ ...ccpForm, monitoring_responsible: val ? String(val.id) : '' })} onInputChange={(_, val) => setUserSearch(val)} isOptionEqualToValue={(opt, val) => opt.id === val.id} renderInput={(params) => <TextField {...params} label="Monitoring Responsible" placeholder="Search user..." fullWidth />} />
+              <Autocomplete 
+                options={userOptions}
+                getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                value={monitoringUserValue}
+                onChange={(_, val) => { setMonitoringUserValue(val); setCcpForm({ ...ccpForm, monitoring_responsible: val ? String(val.id) : '' }); }}
+                onInputChange={(_, val) => setUserSearch(val)}
+                onOpen={() => setUserOpen(true)}
+                onClose={() => setUserOpen(false)}
+                loading={userLoading}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => <TextField {...params} label="Monitoring Responsible" placeholder="Search user..." fullWidth />} />
             </Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Equipment" value={ccpForm.monitoring_equipment} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_equipment: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth label="Corrective Actions" value={ccpForm.corrective_actions} onChange={(e) => setCcpForm({ ...ccpForm, corrective_actions: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Verification Frequency" value={ccpForm.verification_frequency} onChange={(e) => setCcpForm({ ...ccpForm, verification_frequency: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Verification Method" value={ccpForm.verification_method} onChange={(e) => setCcpForm({ ...ccpForm, verification_method: e.target.value })} /></Grid>
             <Grid item xs={12}>
-              <Autocomplete options={userOptions} getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)} value={userOptions.find(o => String(o.id) === ccpForm.verification_responsible) || null} onChange={(_, val) => setCcpForm({ ...ccpForm, verification_responsible: val ? String(val.id) : '' })} onInputChange={(_, val) => setUserSearch(val)} isOptionEqualToValue={(opt, val) => opt.id === val.id} renderInput={(params) => <TextField {...params} label="Verification Responsible" placeholder="Search user..." fullWidth />} />
+              <Autocomplete 
+                options={userOptions}
+                getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                value={verificationUserValue}
+                onChange={(_, val) => { setVerificationUserValue(val); setCcpForm({ ...ccpForm, verification_responsible: val ? String(val.id) : '' }); }}
+                onInputChange={(_, val) => setUserSearch(val)}
+                onOpen={() => setUserOpen(true)}
+                onClose={() => setUserOpen(false)}
+                loading={userLoading}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => <TextField {...params} label="Verification Responsible" placeholder="Search user..." fullWidth />} />
             </Grid>
           </Grid>
         </DialogContent>

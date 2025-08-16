@@ -329,10 +329,21 @@ async def get_user_permissions(
     rbac_service = RBACService(db)
     
     permissions = rbac_service.get_user_permissions(user_id)
+    # Convert SQLAlchemy Permission models to Pydantic responses to avoid serialization errors
+    from app.schemas.rbac import Permission as PermissionResponse
+    permission_responses = []
+    for perm in permissions:
+        permission_responses.append(PermissionResponse(
+            id=perm.id,
+            module=perm.module,
+            action=perm.action,
+            description=perm.description,
+            created_at=perm.created_at,
+        ))
     
     return ResponseModel(
         success=True,
-        data=permissions
+        data=permission_responses
     )
 
 

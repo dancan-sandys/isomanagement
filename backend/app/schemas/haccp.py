@@ -124,6 +124,9 @@ class HazardCreate(BaseModel):
     hazard_type: HazardType
     hazard_name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
+    rationale: Optional[str] = None  # Reasoning for hazard identification and assessment
+    prp_reference_ids: Optional[List[int]] = None  # Array of PRP/SOP document IDs
+    references: Optional[List[Dict[str, Any]]] = None  # Array of reference documents
     likelihood: int = Field(..., ge=1, le=5)
     severity: int = Field(..., ge=1, le=5)
     control_measures: Optional[str] = None
@@ -137,6 +140,9 @@ class HazardUpdate(BaseModel):
     hazard_type: Optional[HazardType] = None
     hazard_name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    rationale: Optional[str] = None  # Reasoning for hazard identification and assessment
+    prp_reference_ids: Optional[List[int]] = None  # Array of PRP/SOP document IDs
+    references: Optional[List[Dict[str, Any]]] = None  # Array of reference documents
     likelihood: Optional[int] = Field(None, ge=1, le=5)
     severity: Optional[int] = Field(None, ge=1, le=5)
     control_measures: Optional[str] = None
@@ -152,6 +158,9 @@ class HazardResponse(BaseModel):
     hazard_type: HazardType
     hazard_name: str
     description: Optional[str] = None
+    rationale: Optional[str] = None  # Reasoning for hazard identification and assessment
+    prp_reference_ids: Optional[List[int]] = None  # Array of PRP/SOP document IDs
+    references: Optional[List[Dict[str, Any]]] = None  # Array of reference documents
     likelihood: int
     severity: int
     risk_score: int
@@ -235,7 +244,8 @@ class CCPResponse(BaseModel):
 
 # Monitoring Log Schemas
 class MonitoringLogCreate(BaseModel):
-    batch_number: str = Field(..., min_length=1, max_length=50)
+    batch_number: Optional[str] = Field(None, min_length=1, max_length=50)
+    batch_id: Optional[int] = None
     measured_value: float
     unit: Optional[str] = Field(None, max_length=20)
     additional_parameters: Optional[Dict[str, Any]] = None
@@ -247,7 +257,8 @@ class MonitoringLogCreate(BaseModel):
 
 class MonitoringLogResponse(BaseModel):
     id: int
-    batch_number: str
+    batch_number: Optional[str] = None
+    batch_id: Optional[int] = None
     monitoring_time: datetime
     measured_value: float
     unit: Optional[str] = None

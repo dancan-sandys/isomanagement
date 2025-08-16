@@ -31,6 +31,7 @@ import {
   Divider,
   Avatar,
   AvatarGroup,
+  Grow,
 } from '@mui/material';
 import {
   Close,
@@ -221,7 +222,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth scroll="paper">
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -236,7 +237,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent dividers sx={{ maxHeight: '72vh', overflowY: 'auto' }}>
         {loading && <LinearProgress sx={{ mb: 2 }} />}
         
         {error && (
@@ -247,37 +248,82 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
 
         {workflow && (
           <Box>
-            {/* Workflow Status */}
+            {/* Three-stage primary flow: Created → Reviewed → Approved */}
+            {(() => {
+              const createdBy = (document?.created_by_name || document?.owner_name || document?.created_by || '').toString();
+              const createdAt = document?.created_at ? new Date(document.created_at).toLocaleString() : '';
+              // Exclude the synthetic Creation step (order 0) from approval computations
+              const approvalSteps = (workflow.steps || []).filter((s) => (s.order ?? 0) > 0);
+              const firstApproval = approvalSteps.length > 0 ? approvalSteps[0] : undefined;
+              const lastApproval = approvalSteps.length > 0 ? approvalSteps[approvalSteps.length - 1] : undefined;
+
+              // Stage statuses
+              const reviewCompleted = !!firstApproval && (firstApproval.status === 'completed' || !!firstApproval.completed_at);
+              const approvedCompleted = (workflow.status === 'approved') || (!!lastApproval && (lastApproval.status === 'completed' || !!lastApproval.completed_at));
+              const primaryActive = approvedCompleted ? 2 : reviewCompleted ? 1 : 0;
+
+              const stages = [
+                {
+                  key: 'created',
+                  name: 'Created',
+                  status: 'completed' as const,
+                  by: createdBy,
+                  at: createdAt,
+                  icon: <CheckCircle color="success" />,
+                },
+                {
+                  key: 'reviewed',
+                  name: 'Reviewed',
+                  status: reviewCompleted ? ('completed' as const) : (workflow.current_step === 1 ? ('in_progress' as const) : ('pending' as const)),
+                  by: firstApproval?.assigned_to || '-',
+                  at: firstApproval?.completed_at ? new Date(firstApproval.completed_at).toLocaleString() : firstApproval?.assigned_at ? new Date(firstApproval.assigned_at).toLocaleString() : '',
+                },
+                {
+                  key: 'approved',
+                  name: 'Approved',
+                  status: approvedCompleted ? ('completed' as const) : (approvalSteps.some((s) => s.status === 'in_progress' || s.status === 'pending') ? ('in_progress' as const) : ('pending' as const)),
+                  by: lastApproval?.assigned_to || '-',
+                  at: lastApproval?.completed_at ? new Date(lastApproval.completed_at).toLocaleString() : '',
+                },
+              ];
+
+              const renderPrimaryIcon = (status: string) => {
+                if (status === 'completed') return (
+                  <Grow in timeout={400}>
+                    <span><CheckCircle color="success" /></span>
+                  </Grow>
+                );
+                if (status === 'in_progress') return <Pending color="warning" />;
+                return <Timeline color="disabled" />;
+              };
+
+              return (
             <Card sx={{ mb: 3 }}>
               <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                  <Chip
-                    label={workflow.status.replace('_', ' ').toUpperCase()}
-                    color={workflow.status === 'approved' ? 'success' : 
-                           workflow.status === 'rejected' ? 'error' : 'warning'}
-                    variant="filled"
-                  />
-                  <Typography variant="body2" color="text.secondary">
-                    Current Step: {workflow.steps?.[workflow.current_step - 1]?.name || '—'}
+                    <Stepper alternativeLabel activeStep={primaryActive}>
+                      {stages.map((s) => (
+                        <Step key={s.key} completed={s.status === 'completed'}>
+                          <StepLabel icon={renderPrimaryIcon(s.status)}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <Typography variant="subtitle2" fontWeight={600}>{s.name}</Typography>
+                              {(s.by || s.at) && (
+                                <Typography variant="caption" color="text.secondary" align="center">
+                                  {s.by ? `${s.by}` : ''}
+                                  {s.by && s.at ? ' • ' : ''}
+                                  {s.at || ''}
                   </Typography>
+                              )}
                 </Box>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <AvatarGroup max={3}>
-                    {workflow.steps.map((step, index) => (
-                      <Tooltip key={step.id} title={`${step.name}: ${step.assigned_to}`}>
-                        <Avatar sx={{ width: 32, height: 32 }}>
-                          {step.assigned_to.charAt(0)}
-                        </Avatar>
-                      </Tooltip>
-                    ))}
-                  </AvatarGroup>
-                  <Typography variant="body2" color="text.secondary">
-                    {workflow.steps.length} steps • Created {new Date(workflow.created_at).toLocaleDateString()}
-                  </Typography>
-                </Box>
+                          </StepLabel>
+                        </Step>
+                      ))}
+                    </Stepper>
               </CardContent>
             </Card>
+              );
+            })()}
+
+            {/* Status card removed per request; three-stage flow above serves as summary */}
 
             {/* Workflow Steps */}
             <Stepper activeStep={activeStep} orientation="vertical">

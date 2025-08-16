@@ -19,6 +19,9 @@ from app.schemas.haccp import (
     MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, DecisionTreeStep,
     DecisionTreeQuestion, FlowchartData, FlowchartNode, FlowchartEdge
 )
+from app.models.training import RoleRequiredTraining, TrainingAttendance, TrainingSession, TrainingCertificate, HACCPRequiredTraining, TrainingAction
+from app.models.traceability import Batch
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,85 @@ class HACCPService:
     
     def __init__(self, db: Session):
         self.db = db
+
+    def user_has_required_training(self, user_id: int, action: str, *, ccp_id: int | None = None, equipment_id: int | None = None) -> bool:
+        """
+        Check if a user meets competency (training) requirements for a given HACCP action.
+        Action can be "monitor" or "verify". Uses RoleRequiredTraining as configuration:
+        - If the user's role has mandatory trainings defined, require completion (attendance or certificate)
+          for all those programs.
+        - If no role requirements exist, return True (no configured requirements).
+        """
+        user: Optional[User] = self.db.query(User).filter(User.id == user_id).first()
+        if not user or not user.role_id:
+            return False
+
+        required_program_ids: set[int] = set()
+        # Prefer action/CCP/equipment-scoped HACCP requirements if available
+        try:
+            scoped_q = self.db.query(HACCPRequiredTraining).filter(
+                HACCPRequiredTraining.role_id == user.role_id,
+                HACCPRequiredTraining.action == TrainingAction(action) if action else TrainingAction.MONITOR,
+                HACCPRequiredTraining.is_mandatory == True,
+            )
+            if ccp_id is not None:
+                scoped_q = scoped_q.filter(
+                    (HACCPRequiredTraining.ccp_id == ccp_id) | (HACCPRequiredTraining.ccp_id.is_(None))
+                )
+            if equipment_id is not None:
+                scoped_q = scoped_q.filter(
+                    (HACCPRequiredTraining.equipment_id == equipment_id) | (HACCPRequiredTraining.equipment_id.is_(None))
+                )
+            scoped_records = scoped_q.all()
+            # If any record exists with specific scoping, keep only the most specific ones
+            specific = [r for r in scoped_records if (r.ccp_id is not None) or (r.equipment_id is not None)]
+            chosen = specific if specific else scoped_records
+            required_program_ids = {r.program_id for r in chosen}
+        except (SQLAlchemyError, OperationalError):
+            # Table may not exist yet; ignore and fall back to role-level
+            required_program_ids = set()
+
+        if not required_program_ids:
+            # Fallback to role-wide requirements
+            try:
+                required_records = self.db.query(RoleRequiredTraining).filter(
+                    RoleRequiredTraining.role_id == user.role_id,
+                    RoleRequiredTraining.is_mandatory == True,
+                ).all()
+                required_program_ids = {rec.program_id for rec in required_records}
+            except (SQLAlchemyError, OperationalError):
+                required_program_ids = set()
+
+        if not required_program_ids:
+            return True  # No requirements configured => allow
+
+        # Compute set of program_ids the user has completed via attendance or certificates
+        # Attendance-based completion
+        attended_program_ids = {
+            pid for (pid,) in self.db.query(TrainingSession.program_id)
+                .join(TrainingAttendance, TrainingAttendance.session_id == TrainingSession.id)
+                .filter(
+                    TrainingAttendance.user_id == user_id,
+                    TrainingAttendance.attended == True,
+                )
+                .distinct()
+                .all()
+        }
+
+        # Certificate-based completion
+        certified_program_ids = {
+            pid for (pid,) in self.db.query(TrainingSession.program_id)
+                .join(TrainingCertificate, TrainingCertificate.session_id == TrainingSession.id)
+                .filter(TrainingCertificate.user_id == user_id)
+                .distinct()
+                .all()
+        }
+
+        completed_program_ids = attended_program_ids.union(certified_program_ids)
+
+        # Require all mandatory programs to be completed
+        missing = required_program_ids.difference(completed_program_ids)
+        return len(missing) == 0
     
     def create_product(self, product_data: ProductCreate, created_by: int) -> Product:
         """Create a new product"""
@@ -118,6 +200,9 @@ class HACCPService:
             hazard_type=hazard_data.hazard_type,
             hazard_name=hazard_data.hazard_name,
             description=hazard_data.description,
+            rationale=hazard_data.rationale,  # New field for hazard analysis
+            prp_reference_ids=hazard_data.prp_reference_ids,  # New field for PRP references
+            references=hazard_data.references,  # New field for reference documents
             likelihood=likelihood,
             severity=severity,
             risk_score=risk_score,
@@ -343,6 +428,17 @@ class HACCPService:
         if remaining == 0:
             plan = self.db.query(HACCPPlan).filter(HACCPPlan.id == plan_id).first()
             if plan:
+                # Enforce: product must have at least one process flow step before approval
+                try:
+                    flows_count = self.db.query(ProcessFlow).filter(ProcessFlow.product_id == plan.product_id).count()
+                except Exception:
+                    flows_count = 0
+                if flows_count <= 0:
+                    # Revert this step back to approved and keep plan under review
+                    plan.status = HACCPPlanStatus.UNDER_REVIEW
+                    self.db.commit()
+                    raise ValueError("Cannot approve HACCP plan: no process flow steps defined for the product")
+
                 plan.status = HACCPPlanStatus.APPROVED
                 plan.approved_by = approver_id
                 plan.approved_at = datetime.utcnow()
@@ -421,9 +517,19 @@ class HACCPService:
         if ccp.critical_limit_max is not None and measured_value > ccp.critical_limit_max:
             is_within_limits = False
         
+        # Resolve batch info
+        resolved_batch_number = log_data.batch_number
+        resolved_batch_id = getattr(log_data, "batch_id", None)
+        if resolved_batch_id is not None:
+            batch = self.db.query(Batch).filter(Batch.id == resolved_batch_id).first()
+            if not batch:
+                raise ValueError("Batch not found")
+            resolved_batch_number = batch.batch_number
+
         monitoring_log = CCPMonitoringLog(
             ccp_id=ccp_id,
-            batch_number=log_data.batch_number,
+            batch_id=resolved_batch_id,
+            batch_number=resolved_batch_number or "",
             monitoring_time=datetime.utcnow(),
             measured_value=measured_value,
             unit=log_data.unit,

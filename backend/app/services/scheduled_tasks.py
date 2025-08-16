@@ -11,6 +11,7 @@ from app.models.settings import ApplicationSetting
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
 from app.models.equipment import MaintenancePlan, CalibrationPlan
+from app.models.audit_mgmt import Audit, AuditPlan, AuditFinding, AuditStatus, FindingStatus
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +274,214 @@ class ScheduledTasksService:
             self.db.rollback()
             return 0
     
+    def check_audit_plan_reminders(self) -> List[dict]:
+        """
+        Check for audits without approved plans and create reminders
+        """
+        try:
+            now = datetime.utcnow()
+            seven_days_from_now = now + timedelta(days=7)
+            
+            # Find audits starting within 7 days that don't have an approved plan
+            audits_needing_plans = self.db.query(Audit).filter(
+                and_(
+                    Audit.start_date <= seven_days_from_now,
+                    Audit.start_date > now,
+                    Audit.status.in_([AuditStatus.PLANNED, AuditStatus.IN_PROGRESS])
+                )
+            ).all()
+            
+            reminders_created = []
+            
+            for audit in audits_needing_plans:
+                # Check if audit has an approved plan
+                approved_plan = self.db.query(AuditPlan).filter(
+                    and_(
+                        AuditPlan.audit_id == audit.id,
+                        AuditPlan.approved_at.isnot(None)
+                    )
+                ).first()
+                
+                if not approved_plan:
+                    days_until_start = (audit.start_date - now).days
+                    
+                    # Create notification for audit lead
+                    notification = Notification(
+                        user_id=audit.lead_auditor_id,
+                        title="Audit Plan Required",
+                        message=f"Audit '{audit.title}' (ID: {audit.id}) starts in {days_until_start} days "
+                               f"but doesn't have an approved plan. Please create and submit for approval.",
+                        notification_type=NotificationType.WARNING,
+                        priority=NotificationPriority.HIGH if days_until_start <= 3 else NotificationPriority.MEDIUM,
+                        category=NotificationCategory.AUDIT,
+                        notification_data={
+                            "audit_id": audit.id,
+                            "start_date": audit.start_date.isoformat(),
+                            "days_until_start": days_until_start
+                        }
+                    )
+                    self.db.add(notification)
+                    
+                    reminders_created.append({
+                        "audit_id": audit.id,
+                        "title": audit.title,
+                        "start_date": audit.start_date.isoformat(),
+                        "days_until_start": days_until_start,
+                        "notification_created": True
+                    })
+            
+            self.db.commit()
+            logger.info(f"Created {len(reminders_created)} audit plan reminders")
+            return reminders_created
+            
+        except Exception as e:
+            logger.error(f"Error checking audit plan reminders: {str(e)}")
+            self.db.rollback()
+            return []
+
+    def check_findings_due_reminders(self) -> List[dict]:
+        """
+        Check for findings due within 7 days and overdue findings
+        """
+        try:
+            now = datetime.utcnow()
+            seven_days_from_now = now + timedelta(days=7)
+            
+            # Find findings due within 7 days or overdue
+            findings_needing_attention = self.db.query(AuditFinding).filter(
+                and_(
+                    AuditFinding.target_completion_date <= seven_days_from_now,
+                    AuditFinding.status.in_([FindingStatus.OPEN, FindingStatus.IN_PROGRESS])
+                )
+            ).all()
+            
+            reminders_created = []
+            
+            for finding in findings_needing_attention:
+                days_until_due = (finding.target_completion_date - now).days
+                is_overdue = days_until_due < 0
+                
+                # Determine priority based on severity and due date
+                if is_overdue:
+                    priority = NotificationPriority.HIGH
+                    notification_type = NotificationType.ERROR
+                    message_suffix = f"OVERDUE by {abs(days_until_due)} days"
+                elif days_until_due <= 1:
+                    priority = NotificationPriority.HIGH
+                    notification_type = NotificationType.WARNING
+                    message_suffix = f"Due tomorrow"
+                elif days_until_due <= 3:
+                    priority = NotificationPriority.MEDIUM
+                    notification_type = NotificationType.WARNING
+                    message_suffix = f"Due in {days_until_due} days"
+                else:
+                    priority = NotificationPriority.LOW
+                    notification_type = NotificationType.INFO
+                    message_suffix = f"Due in {days_until_due} days"
+                
+                # Create notification for finding assignee
+                notification = Notification(
+                    user_id=finding.responsible_person_id,
+                    title=f"Finding Due: {finding.description}",
+                    message=f"Finding '{finding.description}' (ID: {finding.id}) is {message_suffix}. "
+                           f"Severity: {finding.severity.value}",
+                    notification_type=notification_type,
+                    priority=priority,
+                    category=NotificationCategory.AUDIT,
+                    notification_data={
+                        "finding_id": finding.id,
+                        "audit_id": finding.audit_id,
+                        "target_completion_date": finding.target_completion_date.isoformat(),
+                        "days_until_due": days_until_due,
+                        "severity": finding.severity.value,
+                        "is_overdue": is_overdue
+                    }
+                )
+                self.db.add(notification)
+                
+                reminders_created.append({
+                    "finding_id": finding.id,
+                    "description": finding.description,
+                    "target_completion_date": finding.target_completion_date.isoformat(),
+                    "days_until_due": days_until_due,
+                    "severity": finding.severity.value,
+                    "is_overdue": is_overdue,
+                    "notification_created": True
+                })
+            
+            self.db.commit()
+            logger.info(f"Created {len(reminders_created)} findings due reminders")
+            return reminders_created
+            
+        except Exception as e:
+            logger.error(f"Error checking findings due reminders: {str(e)}")
+            self.db.rollback()
+            return []
+
+    def escalate_overdue_findings(self) -> List[dict]:
+        """
+        Escalate findings that are significantly overdue (more than 30 days)
+        """
+        try:
+            now = datetime.utcnow()
+            thirty_days_ago = now - timedelta(days=30)
+            
+            # Find findings overdue by more than 30 days
+            overdue_findings = self.db.query(AuditFinding).filter(
+                and_(
+                    AuditFinding.target_completion_date < thirty_days_ago,
+                    AuditFinding.status.in_([FindingStatus.OPEN, FindingStatus.IN_PROGRESS])
+                )
+            ).all()
+            
+            escalations_created = []
+            
+            for finding in overdue_findings:
+                days_overdue = (now - finding.target_completion_date).days
+                
+                # Get audit lead for escalation
+                audit = self.db.query(Audit).filter(Audit.id == finding.audit_id).first()
+                if not audit or not audit.lead_auditor_id:
+                    continue
+                
+                # Create escalation notification for audit lead
+                notification = Notification(
+                    user_id=audit.lead_auditor_id,
+                    title="CRITICAL: Overdue Finding Escalation",
+                    message=f"Finding '{finding.description}' (ID: {finding.id}) is {days_overdue} days overdue. "
+                           f"Assigned to: User ID {finding.responsible_person_id}. Immediate action required.",
+                    notification_type=NotificationType.ERROR,
+                    priority=NotificationPriority.HIGH,
+                    category=NotificationCategory.AUDIT,
+                    notification_data={
+                        "finding_id": finding.id,
+                        "audit_id": finding.audit_id,
+                        "responsible_person_id": finding.responsible_person_id,
+                        "target_completion_date": finding.target_completion_date.isoformat(),
+                        "days_overdue": days_overdue,
+                        "severity": finding.severity.value,
+                        "escalation": True
+                    }
+                )
+                self.db.add(notification)
+                
+                escalations_created.append({
+                    "finding_id": finding.id,
+                    "description": finding.description,
+                    "days_overdue": days_overdue,
+                    "responsible_person_id": finding.responsible_person_id,
+                    "escalation_created": True
+                })
+            
+            self.db.commit()
+            logger.info(f"Created {len(escalations_created)} overdue finding escalations")
+            return escalations_created
+            
+        except Exception as e:
+            logger.error(f"Error escalating overdue findings: {str(e)}")
+            self.db.rollback()
+            return []
+    
     def run_all_maintenance_tasks(self) -> dict:
         """
         Run all scheduled maintenance tasks
@@ -285,6 +494,9 @@ class ScheduledTasksService:
             "retention_enforced": 0,
             "due_maintenance_alerts": 0,
             "due_calibration_alerts": 0,
+            "audit_plan_reminders": 0,
+            "findings_due_reminders": 0,
+            "overdue_escalations": 0,
             "errors": []
         }
         
@@ -305,6 +517,16 @@ class ScheduledTasksService:
             # Enforce retention policy
             retention_result = self.enforce_document_retention_policy()
             results["retention_enforced"] = retention_result.get("updated", 0)
+
+            # Audit-related tasks
+            audit_plan_results = self.check_audit_plan_reminders()
+            results["audit_plan_reminders"] = len(audit_plan_results)
+            
+            findings_reminder_results = self.check_findings_due_reminders()
+            results["findings_due_reminders"] = len(findings_reminder_results)
+            
+            escalation_results = self.escalate_overdue_findings()
+            results["overdue_escalations"] = len(escalation_results)
 
             # Alerts for equipment due dates within 7 days
             try:
@@ -359,6 +581,49 @@ def run_scheduled_maintenance():
         
     except Exception as e:
         logger.error(f"Failed to run scheduled maintenance: {str(e)}")
+        return {"error": str(e)}
+    finally:
+        db.close() 
+
+
+def run_audit_reminders():
+    """
+    Function to be called by external scheduler for audit-specific reminders
+    """
+    try:
+        db = next(get_db())
+        service = ScheduledTasksService(db)
+        
+        results = {
+            "audit_plan_reminders": 0,
+            "findings_due_reminders": 0,
+            "overdue_escalations": 0,
+            "errors": []
+        }
+        
+        try:
+            # Check audit plan reminders
+            audit_plan_results = service.check_audit_plan_reminders()
+            results["audit_plan_reminders"] = len(audit_plan_results)
+            
+            # Check findings due reminders
+            findings_reminder_results = service.check_findings_due_reminders()
+            results["findings_due_reminders"] = len(findings_reminder_results)
+            
+            # Escalate overdue findings
+            escalation_results = service.escalate_overdue_findings()
+            results["overdue_escalations"] = len(escalation_results)
+            
+        except Exception as e:
+            error_msg = f"Error in audit reminders: {str(e)}"
+            logger.error(error_msg)
+            results["errors"].append(error_msg)
+        
+        logger.info(f"Audit reminders completed: {results}")
+        return results
+        
+    except Exception as e:
+        logger.error(f"Failed to run audit reminders: {str(e)}")
         return {"error": str(e)}
     finally:
         db.close() 

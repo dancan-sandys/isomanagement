@@ -99,6 +99,11 @@ class Hazard(Base):
     hazard_name = Column(String(200), nullable=False)
     description = Column(Text)
     
+    # Hazard analysis data capture (Principle 1)
+    rationale = Column(Text)  # Reasoning for hazard identification and assessment
+    prp_reference_ids = Column(JSON)  # Array of PRP/SOP document IDs that control this hazard
+    references = Column(JSON)  # Array of reference documents (studies, regulations, etc.)
+    
     # Risk assessment
     likelihood = Column(Integer)  # 1-5 scale
     severity = Column(Integer)  # 1-5 scale
@@ -187,6 +192,7 @@ class CCPMonitoringLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     ccp_id = Column(Integer, ForeignKey("ccps.id"), nullable=False)
+    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=True)
     batch_number = Column(String(50), nullable=False)
     monitoring_time = Column(DateTime(timezone=True), nullable=False)
     measured_value = Column(Float, nullable=False)

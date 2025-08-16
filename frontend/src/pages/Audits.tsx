@@ -13,6 +13,8 @@ const Audits: React.FC = () => {
   const [form, setForm] = useState<any>({ title: '', audit_type: 'internal', status: 'planned', auditee_department: '' });
   const [search, setSearch] = useState('');
   const [stats, setStats] = useState<any | null>(null);
+  const [kpis, setKpis] = useState<any | null>(null);
+  const [kpiFilters, setKpiFilters] = useState({ period: 'month' as 'month' | 'week' | 'quarter' | 'year', department: '', auditor_id: undefined as number | undefined });
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsAuditId, setAttachmentsAuditId] = useState<number | null>(null);
@@ -34,6 +36,12 @@ const Audits: React.FC = () => {
         setStats(s?.data || s || null);
       } catch (e) {
         setStats(null);
+      }
+      try {
+        const k = await auditsAPI.getKpisOverview(kpiFilters);
+        setKpis(k?.data || k || null);
+      } catch (e) {
+        setKpis(null);
       }
     } catch (e) {
       setAudits([]);
@@ -147,6 +155,73 @@ const Audits: React.FC = () => {
           <Tooltip title="Export list PDF"><Button size="small" startIcon={<Download />} onClick={() => exportList('pdf')}>Export PDF</Button></Tooltip>
           <Tooltip title="Export list XLSX"><Button size="small" variant="outlined" startIcon={<Download />} onClick={() => exportList('xlsx')}>Export XLSX</Button></Tooltip>
         </Stack>
+      )}
+
+      {kpis && (
+        <Box sx={{ mb: 2 }}>
+          {/* KPI Filters */}
+          <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Period</InputLabel>
+              <Select 
+                value={kpiFilters.period} 
+                label="Period"
+                onChange={(e) => {
+                  setKpiFilters({ ...kpiFilters, period: e.target.value as 'week' | 'month' | 'quarter' | 'year' });
+                }}
+              >
+                <MenuItem value="week">Week</MenuItem>
+                <MenuItem value="month">Month</MenuItem>
+                <MenuItem value="quarter">Quarter</MenuItem>
+                <MenuItem value="year">Year</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField 
+              size="small" 
+              label="Department" 
+              value={kpiFilters.department}
+              onChange={(e) => setKpiFilters({ ...kpiFilters, department: e.target.value })}
+              onKeyPress={(e) => e.key === 'Enter' && load()}
+              sx={{ minWidth: 150 }}
+            />
+            <Button 
+              variant="contained" 
+              size="small"
+              onClick={() => load()}
+            >
+              Apply Filters
+            </Button>
+            <Button 
+              variant="outlined" 
+              size="small"
+              onClick={() => {
+                setKpiFilters({ period: 'month', department: '', auditor_id: undefined });
+                load();
+              }}
+            >
+              Clear Filters
+            </Button>
+          </Stack>
+          
+          {/* KPI Metrics */}
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+            {/* Core KPIs */}
+            {typeof kpis.lead_time_days_avg === 'number' && <Chip color="primary" label={`Lead time avg: ${kpis.lead_time_days_avg.toFixed(1)} d`} />}
+            {typeof kpis.on_time_audit_rate === 'number' && <Chip color="primary" label={`On-time rate: ${(kpis.on_time_audit_rate * 100).toFixed(0)}%`} />}
+            {typeof kpis.finding_closure_days_avg === 'number' && <Chip color="primary" label={`Closure avg: ${kpis.finding_closure_days_avg.toFixed(1)} d`} />}
+            
+            {/* Audit Counts */}
+            <Chip color="info" label={`Total: ${kpis.total_audits || 0}`} />
+            <Chip color="success" label={`Completed: ${kpis.completed_audits || 0}`} />
+            {kpis.overdue_audits > 0 && <Chip color="error" label={`Overdue: ${kpis.overdue_audits}`} />}
+            
+            {/* Finding Counts */}
+            <Chip color="warning" label={`Findings: ${kpis.total_findings || 0}`} />
+            {kpis.open_findings > 0 && <Chip color="warning" label={`Open: ${kpis.open_findings}`} />}
+            {kpis.overdue_findings > 0 && <Chip color="error" label={`Overdue: ${kpis.overdue_findings}`} />}
+            {kpis.critical_findings > 0 && <Chip color="error" label={`Critical: ${kpis.critical_findings}`} />}
+          </Stack>
+        </Box>
       )}
 
       <Card variant="outlined">

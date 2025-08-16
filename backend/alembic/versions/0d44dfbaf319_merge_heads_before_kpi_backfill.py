@@ -1,8 +1,8 @@
-"""merge heads for engineering demo
+"""merge heads before KPI backfill
 
-Revision ID: 30cf25339a72
-Revises: 6f0c3e2a, 70b989015f6a
-Create Date: 2025-08-14 10:31:24.075623
+Revision ID: 0d44dfbaf319
+Revises: 30cf25339a72, e1f2a3b4c5d6
+Create Date: 2025-08-15 17:51:00.397155
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '30cf25339a72'
-down_revision: Union[str, Sequence[str], None] = ('6f0c3e2a', '70b989015f6a', '81a2b3c4d5e6')
+revision: str = '0d44dfbaf319'
+down_revision: Union[str, Sequence[str], None] = ('30cf25339a72', 'e1f2a3b4c5d6', '82b3c4d5e6f7')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

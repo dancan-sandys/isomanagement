@@ -398,11 +398,9 @@ const Documents: React.FC = () => {
                     onChange={(e) => handleFilterChange('status', e.target.value)}
                   >
                     <MenuItem value="">All Statuses</MenuItem>
-                    <MenuItem value="draft">Draft</MenuItem>
-                    <MenuItem value="under_review">Under Review</MenuItem>
+                    <MenuItem value="draft">Created</MenuItem>
+                    <MenuItem value="under_review">Reviewed</MenuItem>
                     <MenuItem value="approved">Approved</MenuItem>
-                    <MenuItem value="obsolete">Obsolete</MenuItem>
-                    <MenuItem value="archived">Archived</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -630,7 +628,7 @@ const Documents: React.FC = () => {
                            document.status === 'under_review' ? 'pending' : 
                            document.status === 'draft' ? 'warning' : 
                            document.status === 'obsolete' ? 'nonConformance' : 'info'}
-                    label={(document.status || 'unknown').replace('_', ' ')}
+                    label={document.status === 'draft' ? 'Created' : document.status === 'under_review' ? 'Reviewed' : document.status === 'approved' ? 'Approved' : (document.status || 'unknown').replace('_', ' ')}
                   />
                 </TableCell>
                 <TableCell>{document.department || '-'}</TableCell>
@@ -937,7 +935,7 @@ const Documents: React.FC = () => {
                           status={doc.status === 'approved' ? 'compliant' : 
                                  doc.status === 'under_review' ? 'pending' : 
                                  doc.status === 'draft' ? 'warning' : 'info'}
-                          label={doc.status.replace('_', ' ')}
+                          label={doc.status === 'draft' ? 'Created' : doc.status === 'under_review' ? 'Reviewed' : doc.status === 'approved' ? 'Approved' : doc.status.replace('_', ' ')}
                         />
                       </Box>
                     }

@@ -46,6 +46,47 @@ def enum_value(v):
     except Exception:
         return None
 
+# Approval users endpoint MUST be registered before dynamic /{document_id} routes
+@router.get("/approval-users", response_model=ResponseModel[List[dict]])
+@router.get("/approval-users/", response_model=ResponseModel[List[dict]])
+async def get_approval_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of users for approval workflows (simplified version without permissions)
+    """
+    try:
+        # Get all active users with their basic information
+        users = db.query(User).filter(User.is_active == True).all()
+        
+        user_list = []
+        for user in users:
+            # Get role name
+            role = db.query(Role).filter(Role.id == user.role_id).first()
+            role_name = role.name if role else None
+            
+            user_list.append({
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name or user.username,
+                "role_name": role_name,
+                "department": user.department,
+                "position": user.position
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Approval users retrieved successfully",
+            data=user_list
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve approval users: {str(e)}"
+        )
+
 # Create upload directory if it doesn't exist
 UPLOAD_DIR = "uploads/documents"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -2535,42 +2576,4 @@ async def reject_document_step(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reject: {str(e)}")
 
-@router.get("/approval-users", response_model=ResponseModel[List[dict]])
-async def get_approval_users(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get list of users for approval workflows (simplified version without permissions)
-    """
-    try:
-        # Get all active users with their basic information
-        users = db.query(User).filter(User.is_active == True).all()
-        
-        user_list = []
-        for user in users:
-            # Get role name
-            role = db.query(Role).filter(Role.id == user.role_id).first()
-            role_name = role.name if role else None
-            
-            user_list.append({
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "full_name": user.full_name or user.username,
-                "role_name": role_name,
-                "department": user.department,
-                "position": user.position
-            })
-        
-        return ResponseModel(
-            success=True,
-            message="Approval users retrieved successfully",
-            data=user_list
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve approval users: {str(e)}"
-        )
 

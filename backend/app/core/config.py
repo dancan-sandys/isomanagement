@@ -45,10 +45,16 @@ class Settings(BaseSettings):
     AWS_ENDPOINT_URL: Optional[str] = None
     
     # Email Configuration
+    EMAIL_ENABLED: bool = False  # Set to True to enable email notifications
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: Optional[str] = None
+    SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
+    FROM_EMAIL: str = "noreply@iso-system.com"
+    FROM_NAME: str = "ISO Management System"
+    
+    # Legacy email settings (for backward compatibility)
+    SMTP_USER: Optional[str] = None
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
     

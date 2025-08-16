@@ -1,10 +1,11 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from uuid import uuid4
 from sqlalchemy.sql import func
 from app.core.database import Base
 from app.models.user import User
+import enum
 
 
 class TrainingProgram(Base):
@@ -96,6 +97,30 @@ class RoleRequiredTraining(Base):
     def __repr__(self) -> str:
         return f"<RoleRequiredTraining(role_id={self.role_id}, program_id={self.program_id}, mandatory={self.is_mandatory})>"
 
+
+# Action-specific HACCP required training (optional CCP/equipment scoping)
+class TrainingAction(str, enum.Enum):
+    MONITOR = "monitor"
+    VERIFY = "verify"
+
+
+class HACCPRequiredTraining(Base):
+    __tablename__ = "haccp_required_trainings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
+    action = Column(Enum(TrainingAction), nullable=False)
+    ccp_id = Column(Integer, ForeignKey("ccps.id", ondelete="CASCADE"), nullable=True)
+    equipment_id = Column(Integer, ForeignKey("equipment.id", ondelete="SET NULL"), nullable=True)
+    program_id = Column(Integer, ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False)
+    is_mandatory = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<HACCPRequiredTraining(role_id={self.role_id}, action={self.action}, "
+            f"ccp_id={self.ccp_id}, equipment_id={self.equipment_id}, program_id={self.program_id})>"
+        )
 
 class TrainingQuiz(Base):
     __tablename__ = "training_quizzes"

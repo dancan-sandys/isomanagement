@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Box, Tabs, Tab, Stack, Typography, Button, TextField, Table, TableHead, TableRow, TableCell, TableBody, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete, Select, MenuItem, InputLabel, FormControl, IconButton } from '@mui/material';
+import { Box, Tabs, Tab, Stack, Typography, Button, TextField, Table, TableHead, TableRow, TableCell, TableBody, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete, Select, MenuItem, InputLabel, FormControl, IconButton, Alert } from '@mui/material';
 import { Edit, AttachFile, Delete, UploadFile, Construction } from '@mui/icons-material';
 import { auditsAPI, usersAPI } from '../services/api';
 
@@ -33,6 +33,8 @@ const AuditDetail: React.FC = () => {
   const [userInput, setUserInput] = useState('');
   const [userSelected, setUserSelected] = useState<any | null>(null);
   const [role, setRole] = useState('');
+  const [plan, setPlan] = useState<any | null>(null);
+  const [planForm, setPlanForm] = useState<any>({ agenda: '', criteria_refs: '', sampling_plan: '', documents_to_review: '', logistics: '' });
 
   const load = async () => {
     const a = await auditsAPI.getAudit(auditId); setAudit(a);
@@ -40,6 +42,7 @@ const AuditDetail: React.FC = () => {
     const au = await auditsAPI.listAuditees?.(auditId).catch(() => []); if (au) setAuditees(au);
     const it = await auditsAPI.listChecklistItems(auditId); setItems(it);
     const fs = await auditsAPI.listFindings(auditId); setFindings(fs);
+    try { const p = await auditsAPI.getPlan(auditId); setPlan(p); setPlanForm({ agenda: p.agenda || '', criteria_refs: p.criteria_refs || '', sampling_plan: p.sampling_plan || '', documents_to_review: p.documents_to_review || '', logistics: p.logistics || '' }); } catch {}
   };
 
   useEffect(() => { if (!Number.isNaN(auditId)) load(); }, [auditId]);
@@ -79,6 +82,7 @@ const AuditDetail: React.FC = () => {
         <Tab label="Findings" />
         <Tab label="Attachments" />
         <Tab label="Auditees" />
+        <Tab label="Plan" />
       </Tabs>
 
       {tab === 0 && (
@@ -220,6 +224,25 @@ const AuditDetail: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+        </Box>
+      )}
+
+      {tab === 5 && (
+        <Box>
+          {plan?.approved_at && (
+            <Alert severity="success" sx={{ mb: 2 }}>Plan approved at {new Date(plan.approved_at).toLocaleString()}</Alert>
+          )}
+          <Stack spacing={2} sx={{ mb: 2 }}>
+            <TextField label="Agenda" multiline minRows={2} value={planForm.agenda} onChange={(e) => setPlanForm({ ...planForm, agenda: e.target.value })} />
+            <TextField label="Criteria Refs" multiline minRows={2} value={planForm.criteria_refs} onChange={(e) => setPlanForm({ ...planForm, criteria_refs: e.target.value })} />
+            <TextField label="Sampling Plan" multiline minRows={2} value={planForm.sampling_plan} onChange={(e) => setPlanForm({ ...planForm, sampling_plan: e.target.value })} />
+            <TextField label="Documents to Review" multiline minRows={2} value={planForm.documents_to_review} onChange={(e) => setPlanForm({ ...planForm, documents_to_review: e.target.value })} />
+            <TextField label="Logistics" multiline minRows={2} value={planForm.logistics} onChange={(e) => setPlanForm({ ...planForm, logistics: e.target.value })} />
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" onClick={async () => { const p = await auditsAPI.savePlan(auditId, planForm); setPlan(p); }}>Save Plan</Button>
+            <Button variant="outlined" onClick={async () => { const p = await auditsAPI.approvePlan(auditId); setPlan(p); }}>Approve Plan</Button>
+          </Stack>
         </Box>
       )}
 

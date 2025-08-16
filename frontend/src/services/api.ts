@@ -186,6 +186,19 @@ export const usersAPI = {
     // Backend returns ResponseModel
     return response.data?.data || response.data;
   },
+  // RBAC-related
+  getUserPermissions: async (userId: number) => {
+    const response: AxiosResponse = await api.get(`/rbac/users/${userId}/permissions`);
+    return response.data;
+  },
+  assignUserPermission: async (userId: number, permissionId: number, granted: boolean = true) => {
+    const response: AxiosResponse = await api.post(`/rbac/users/${userId}/permissions`, { permission_id: permissionId, granted });
+    return response.data;
+  },
+  removeUserPermission: async (userId: number, permissionId: number) => {
+    const response: AxiosResponse = await api.delete(`/rbac/users/${userId}/permissions/${permissionId}`);
+    return response.data;
+  },
 };
 
 // Documents API
@@ -249,8 +262,28 @@ export const documentsAPI = {
   },
 
   getApprovalUsers: async () => {
-    const response: AxiosResponse = await api.get('/documents/approval-users');
-    return response.data;
+    try {
+      const response: AxiosResponse = await api.get('/documents/approval-users');
+      return response.data;
+    } catch (err) {
+      // Fallback: fetch active users list directly if the convenience endpoint is unavailable
+      try {
+        const usersResp: AxiosResponse = await api.get('/users/', { params: { page: 1, size: 200 } });
+        const items = (usersResp.data?.items || usersResp.data?.data?.items || usersResp.data?.data || usersResp.data || []) as any[];
+        const mapped = items.map((u: any) => ({
+          id: u.id,
+          username: u.username,
+          full_name: u.full_name || u.username,
+          email: u.email,
+          role_name: (u.role && (u.role.name || u.role)) || u.role_name,
+          department: u.department,
+          position: u.position,
+        }));
+        return { success: true, message: 'Users fetched via fallback', data: mapped } as any;
+      } catch (fallbackErr) {
+        throw err;
+      }
+    }
   },
 
   approveApprovalStep: async (
@@ -364,7 +397,7 @@ export const documentsAPI = {
   },
 
   createDocument: async (formData: FormData) => {
-    const response: AxiosResponse = await api.post('/documents', formData, {
+    const response: AxiosResponse = await api.post('/documents/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -1310,11 +1343,11 @@ export const traceabilityAPI = {
 export const auditsAPI = {
   // Audits
   listAudits: async (params?: { search?: string; audit_type?: 'internal'|'external'|'supplier'; status?: string; page?: number; size?: number }) => {
-    const response: AxiosResponse = await api.get('/audits', { params });
+    const response: AxiosResponse = await api.get('/audits/', { params });
     return response.data;
   },
   createAudit: async (payload: any) => {
-    const response: AxiosResponse = await api.post('/audits', payload);
+    const response: AxiosResponse = await api.post('/audits/', payload);
     return response.data;
   },
   getAudit: async (auditId: number) => {
@@ -1333,6 +1366,26 @@ export const auditsAPI = {
   // Stats
   getStats: async () => {
     const response: AxiosResponse = await api.get('/audits/stats');
+    return response.data;
+  },
+
+  // KPI Overview
+  getKpisOverview: async (params?: { period?: 'week'|'month'|'quarter'|'year'; department?: string; auditor_id?: number }) => {
+    const response: AxiosResponse = await api.get('/audits/kpis/overview', { params });
+    return response.data;
+  },
+
+  // Audit Plan endpoints
+  getPlan: async (auditId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/${auditId}/plan`);
+    return response.data;
+  },
+  savePlan: async (auditId: number, payload: { agenda?: string; criteria_refs?: string; sampling_plan?: string; documents_to_review?: string; logistics?: string }) => {
+    const response: AxiosResponse = await api.post(`/audits/${auditId}/plan`, payload);
+    return response.data;
+  },
+  approvePlan: async (auditId: number) => {
+    const response: AxiosResponse = await api.post(`/audits/${auditId}/plan/approve`);
     return response.data;
   },
 
@@ -1462,6 +1515,14 @@ export const trainingAPI = {
     const response: AxiosResponse = await api.get('/training/programs', { params });
     return response.data;
   },
+  getUserTrainingMatrix: async (userId: number) => {
+    const response: AxiosResponse = await api.get(`/training/matrix/${userId}`);
+    return response.data;
+  },
+  getEligibility: async (params: { user_id: number; action?: 'monitor'|'verify'; ccp_id?: number; equipment_id?: number }) => {
+    const response: AxiosResponse = await api.get('/training/eligibility', { params });
+    return response.data;
+  },
   createProgram: async (payload: { code: string; title: string; description?: string; department?: string }) => {
     const response: AxiosResponse = await api.post('/training/programs', payload);
     return response.data;
@@ -1563,6 +1624,19 @@ export const trainingAPI = {
   },
   deleteRequiredTraining: async (recordId: number) => {
     const response: AxiosResponse = await api.delete(`/training/required/${recordId}`);
+    return response.data;
+  },
+  // Scoped HACCP required trainings
+  assignScopedRequired: async (payload: { role_id: number; action: 'monitor'|'verify'; program_id: number; ccp_id?: number; equipment_id?: number; is_mandatory?: boolean }) => {
+    const response: AxiosResponse = await api.post('/training/required/haccp', payload);
+    return response.data;
+  },
+  listScopedRequired: async (params?: { role_id?: number; action?: 'monitor'|'verify'; ccp_id?: number; equipment_id?: number }) => {
+    const response: AxiosResponse = await api.get('/training/required/haccp', { params });
+    return response.data;
+  },
+  deleteScopedRequired: async (recordId: number) => {
+    const response: AxiosResponse = await api.delete(`/training/required/haccp/${recordId}`);
     return response.data;
   },
 
