@@ -2,14 +2,12 @@
 from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
-from .haccp import Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog
+from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, RiskLevel
 from .prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
     RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
-    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus, RiskLevel, CorrectiveActionStatus
+    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus, CorrectiveActionStatus
 )
-from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig
-from .prp import PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule
 from .supplier import Supplier, Material, SupplierEvaluation, IncomingDelivery, SupplierDocument
 from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport
 from .training import TrainingProgram, TrainingSession, TrainingAttendance, RoleRequiredTraining, TrainingCertificate, HACCPRequiredTraining
@@ -33,7 +31,7 @@ __all__ = [
     "Document", "DocumentVersion", "DocumentApproval", "DocumentChangeLog", "DocumentTemplate",
     
     # HACCP models
-    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig",
+    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig", "DecisionTree",
     
     # PRP models
     "PRPProgram", "PRPChecklist", "PRPChecklistItem", "PRPTemplate", "PRPSchedule",

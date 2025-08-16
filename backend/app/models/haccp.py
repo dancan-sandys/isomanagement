@@ -190,6 +190,7 @@ class Hazard(Base):
     process_step = relationship("ProcessFlow", back_populates="hazards")
     ccp = relationship("CCP", back_populates="hazard", uselist=False)
     reviews = relationship("HazardReview", back_populates="hazard", cascade="all, delete-orphan")
+    decision_tree = relationship("DecisionTree", back_populates="hazard", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Hazard(id={self.id}, hazard_name='{self.hazard_name}', type='{self.hazard_type}')>"
@@ -236,11 +237,65 @@ class CCP(Base):
     description = Column(Text)
     status = Column(Enum(CCPStatus), nullable=False, default=CCPStatus.ACTIVE)
     
-    # Critical limits
+    # Enhanced Critical Limits - Multi-parameter support
+    critical_limits = Column(JSON)  # JSON array of limit objects with parameters, values, units, and conditions
+    # Example structure:
+    # [
+    #   {
+    #     "parameter": "temperature",
+    #     "min_value": 65.0,
+    #     "max_value": 85.0,
+    #     "unit": "Cel",  # UCUM unit
+    #     "condition": "during_cooking",
+    #     "limit_type": "numeric"
+    #   },
+    #   {
+    #     "parameter": "time",
+    #     "min_value": 15.0,
+    #     "max_value": null,
+    #     "unit": "min",  # UCUM unit
+    #     "condition": "at_temperature_above_65C",
+    #     "limit_type": "numeric"
+    #   },
+    #   {
+    #     "parameter": "visual_inspection",
+    #     "value": "no_foreign_material",
+    #     "unit": null,
+    #     "condition": "before_packaging",
+    #     "limit_type": "qualitative"
+    #   }
+    # ]
+    
+    # Legacy fields for backward compatibility
     critical_limit_min = Column(Float)
     critical_limit_max = Column(Float)
     critical_limit_unit = Column(String(50))
     critical_limit_description = Column(Text)
+    
+    # Validation Evidence
+    validation_evidence = Column(JSON)  # JSON array of evidence references
+    # Example structure:
+    # [
+    #   {
+    #     "type": "sop_reference",
+    #     "document_id": 123,
+    #     "section": "Cooking Procedures",
+    #     "description": "Validated cooking time-temperature relationship"
+    #   },
+    #   {
+    #     "type": "scientific_study",
+    #     "reference": "Food Microbiology Journal, 2023",
+    #     "study_id": "FMJ-2023-001",
+    #     "description": "Pathogen reduction studies at various temperatures"
+    #   },
+    #   {
+    #     "type": "process_authority_letter",
+    #     "document_id": 456,
+    #     "authority": "Dr. Smith, Food Safety Consultant",
+    #     "date": "2023-01-15",
+    #     "description": "Process validation for thermal treatment"
+    #   }
+    # ]
     
     # Monitoring
     monitoring_frequency = Column(String(100))  # e.g., "Every 30 minutes"
@@ -270,6 +325,73 @@ class CCP(Base):
     hazard = relationship("Hazard", back_populates="ccp")
     monitoring_logs = relationship("CCPMonitoringLog", back_populates="ccp")
     verification_logs = relationship("CCPVerificationLog", back_populates="ccp")
+    
+    def validate_limits(self, measured_values: dict) -> dict:
+        """
+        Validate measured values against critical limits
+        Returns: dict with validation results for each parameter
+        """
+        if not self.critical_limits:
+            return {"error": "No critical limits defined"}
+        
+        results = {}
+        for limit in self.critical_limits:
+            parameter = limit.get("parameter")
+            limit_type = limit.get("limit_type", "numeric")
+            
+            if parameter not in measured_values:
+                results[parameter] = {"valid": False, "error": "Parameter not measured"}
+                continue
+            
+            measured_value = measured_values[parameter]
+            
+            if limit_type == "numeric":
+                min_val = limit.get("min_value")
+                max_val = limit.get("max_value")
+                
+                if min_val is not None and measured_value < min_val:
+                    results[parameter] = {"valid": False, "error": f"Below minimum ({min_val})"}
+                elif max_val is not None and measured_value > max_val:
+                    results[parameter] = {"valid": False, "error": f"Above maximum ({max_val})"}
+                else:
+                    results[parameter] = {"valid": True}
+                    
+            elif limit_type == "qualitative":
+                expected_value = limit.get("value")
+                if measured_value != expected_value:
+                    results[parameter] = {"valid": False, "error": f"Expected {expected_value}, got {measured_value}"}
+                else:
+                    results[parameter] = {"valid": True}
+        
+        return results
+    
+    def get_limits_summary(self) -> str:
+        """Get a human-readable summary of critical limits"""
+        if not self.critical_limits:
+            return "No critical limits defined"
+        
+        summaries = []
+        for limit in self.critical_limits:
+            parameter = limit.get("parameter")
+            limit_type = limit.get("limit_type", "numeric")
+            
+            if limit_type == "numeric":
+                min_val = limit.get("min_value")
+                max_val = limit.get("max_value")
+                unit = limit.get("unit", "")
+                
+                if min_val is not None and max_val is not None:
+                    summaries.append(f"{parameter}: {min_val}-{max_val} {unit}")
+                elif min_val is not None:
+                    summaries.append(f"{parameter}: ≥{min_val} {unit}")
+                elif max_val is not None:
+                    summaries.append(f"{parameter}: ≤{max_val} {unit}")
+                    
+            elif limit_type == "qualitative":
+                value = limit.get("value")
+                summaries.append(f"{parameter}: {value}")
+        
+        return "; ".join(summaries)
     
     def __repr__(self):
         return f"<CCP(id={self.id}, ccp_number='{self.ccp_number}', name='{self.ccp_name}')>"
@@ -467,3 +589,99 @@ class ProductRiskConfig(Base):
             return likelihood * severity  # Default matrix calculation
         else:
             return likelihood * severity
+
+
+class DecisionTree(Base):
+    """Codex Alimentarius Decision Tree for CCP determination"""
+    __tablename__ = "decision_trees"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hazard_id = Column(Integer, ForeignKey("hazards.id", ondelete="CASCADE"), nullable=False, unique=True)
+    
+    # Question 1: Is control at this step necessary for safety?
+    q1_answer = Column(Boolean, nullable=False)  # True = Yes, False = No
+    q1_justification = Column(Text)
+    q1_answered_by = Column(Integer, ForeignKey("users.id"))
+    q1_answered_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Question 2: Is control at this step necessary to eliminate or reduce the likelihood of occurrence of a hazard to an acceptable level?
+    q2_answer = Column(Boolean)  # True = Yes, False = No
+    q2_justification = Column(Text)
+    q2_answered_by = Column(Integer, ForeignKey("users.id"))
+    q2_answered_at = Column(DateTime)
+    
+    # Question 3: Could contamination with identified hazard(s) occur or could this increase to unacceptable level(s)?
+    q3_answer = Column(Boolean)  # True = Yes, False = No
+    q3_justification = Column(Text)
+    q3_answered_by = Column(Integer, ForeignKey("users.id"))
+    q3_answered_at = Column(DateTime)
+    
+    # Question 4: Will a subsequent step eliminate or reduce the likelihood of occurrence of a hazard to an acceptable level?
+    q4_answer = Column(Boolean)  # True = Yes, False = No
+    q4_justification = Column(Text)
+    q4_answered_by = Column(Integer, ForeignKey("users.id"))
+    q4_answered_at = Column(DateTime)
+    
+    # Decision result
+    is_ccp = Column(Boolean)  # Final CCP determination
+    decision_reasoning = Column(Text)  # Explanation of the decision
+    decision_date = Column(DateTime)
+    decision_by = Column(Integer, ForeignKey("users.id"))
+    
+    # Status
+    status = Column(Enum("in_progress", "completed", "reviewed", name="decision_tree_status"), default="in_progress")
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    hazard = relationship("Hazard", back_populates="decision_tree")
+    q1_user = relationship("User", foreign_keys=[q1_answered_by])
+    q2_user = relationship("User", foreign_keys=[q2_answered_by])
+    q3_user = relationship("User", foreign_keys=[q3_answered_by])
+    q4_user = relationship("User", foreign_keys=[q4_answered_by])
+    decision_user = relationship("User", foreign_keys=[decision_by])
+    
+    def get_current_question(self) -> int:
+        """Get the next question that needs to be answered"""
+        if self.q1_answer is None:
+            return 1
+        elif self.q2_answer is None:
+            return 2
+        elif self.q3_answer is None:
+            return 3
+        elif self.q4_answer is None:
+            return 4
+        else:
+            return 0  # All questions answered
+    
+    def can_proceed_to_next_question(self) -> bool:
+        """Check if we can proceed to the next question based on current answers"""
+        if self.q1_answer is False:  # If Q1 is No, stop here
+            return False
+        if self.q2_answer is False:  # If Q2 is No, stop here
+            return False
+        if self.q3_answer is False:  # If Q3 is No, stop here
+            return False
+        return True
+    
+    def determine_ccp_decision(self) -> tuple[bool, str]:
+        """
+        Determine CCP decision based on Codex Alimentarius decision tree
+        Returns: (is_ccp, reasoning)
+        """
+        if self.q1_answer is False:
+            return False, "Q1: Control at this step is not necessary for safety"
+        
+        if self.q2_answer is False:
+            return False, "Q2: Control at this step is not necessary to eliminate or reduce hazard likelihood"
+        
+        if self.q3_answer is False:
+            return False, "Q3: Contamination with identified hazard(s) could not occur or increase to unacceptable levels"
+        
+        if self.q4_answer is True:
+            return False, "Q4: A subsequent step will eliminate or reduce the hazard likelihood to acceptable levels"
+        
+        # If we reach here, it's a CCP
+        return True, "All questions answered affirmatively - this is a Critical Control Point"

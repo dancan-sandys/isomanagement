@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Edit, Delete, Help } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
-import { traceabilityAPI, usersAPI } from '../services/api';
+import { traceabilityAPI, usersAPI, decisionTreeAPI } from '../services/api';
+import DecisionTreeDialog from '../components/DecisionTreeDialog';
 import { AppDispatch, RootState } from '../store';
 import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, deleteCCP, updateProduct } from '../store/slices/haccpSlice';
 
@@ -56,6 +57,10 @@ const HACCPProductDetail: React.FC = () => {
   const userReqIdRef = useRef(0);
   const [monitoringUserValue, setMonitoringUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
   const [verificationUserValue, setVerificationUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  
+  // Decision Tree state
+  const [decisionTreeDialogOpen, setDecisionTreeDialogOpen] = useState(false);
+  const [selectedHazardForDecisionTree, setSelectedHazardForDecisionTree] = useState<any>(null);
 
   useEffect(() => {
     dispatch(fetchProduct(productId));
@@ -344,6 +349,16 @@ const HACCPProductDetail: React.FC = () => {
                   {hazard.is_ccp && <Chip label="CCP" color="error" size="small" />}
                 </Stack>
                 <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'flex-end' }}>
+                  <IconButton 
+                    size="small" 
+                    onClick={() => { 
+                      setSelectedHazardForDecisionTree(hazard); 
+                      setDecisionTreeDialogOpen(true); 
+                    }}
+                    title="Run Decision Tree"
+                  >
+                    <Help />
+                  </IconButton>
                   <IconButton size="small" onClick={() => { setSelectedHazardItem(hazard); setHazardDialogOpen(true); }}><Edit /></IconButton>
                   <IconButton size="small" onClick={() => { if (window.confirm('Delete this hazard?')) dispatch(deleteHazard(hazard.id)).then(() => dispatch(fetchProduct(productId))); }}><Delete /></IconButton>
                 </Stack>
@@ -721,6 +736,19 @@ const HACCPProductDetail: React.FC = () => {
           <Button variant="contained" onClick={handleSaveRiskConfig}>Save</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Decision Tree Dialog */}
+      <DecisionTreeDialog
+        open={decisionTreeDialogOpen}
+        onClose={() => setDecisionTreeDialogOpen(false)}
+        hazardId={selectedHazardForDecisionTree?.id || 0}
+        hazardName={selectedHazardForDecisionTree?.hazard_name || ''}
+        onDecisionComplete={(isCCP, reasoning) => {
+          console.log('Decision completed:', { isCCP, reasoning });
+          // Optionally refresh the product data to show updated CCP status
+          dispatch(fetchProduct(productId));
+        }}
+      />
     </Box>
   );
 };

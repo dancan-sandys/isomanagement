@@ -17,7 +17,11 @@ from app.models.traceability import Batch, TraceabilityLink, RecallEntry
 from app.models.notification import Notification
 from app.models.rbac import Role, Permission, UserPermission
 from app.models.equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
-from app.models.management_review import *
+from app.models.management_review import ManagementReview, ReviewAgendaItem, ReviewAction
+from app.models.risk import RiskRegisterItem, RiskAction
+from app.models.complaint import Complaint, ComplaintCommunication, ComplaintInvestigation
+from app.models.allergen_label import ProductAllergenAssessment, LabelTemplate, LabelTemplateVersion, LabelTemplateApproval
+from app.models.nonconformance import NonConformance, RootCauseAnalysis, CAPAAction, CAPAVerification, NonConformanceAttachment
 
 def init_database():
     """Create all database tables"""
@@ -33,14 +37,14 @@ def init_database():
             from sqlalchemy import inspect
             inspector = inspect(engine)
             tables = inspector.get_table_names()
-            print(f"📋 Created {len(tables)} tables:")
+            print("📋 Created {} tables:".format(len(tables)))
             for table in sorted(tables):
-                print(f"  - {table}")
+                print("  - {}".format(table))
         except Exception as ie:
-            print(f"(info) Skipping table list due to inspector error: {ie}")
+            print("(info) Skipping table list due to inspector error: {}".format(ie))
             
     except Exception as e:
-        print(f"❌ Error creating database tables: {e}")
+        print("❌ Error creating database tables: {}".format(e))
         sys.exit(1)
 
 if __name__ == "__main__":

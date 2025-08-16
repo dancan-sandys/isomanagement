@@ -4,6 +4,7 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
 from datetime import datetime
+from .haccp import RiskLevel
 
 
 class PRPCategory(str, enum.Enum):
