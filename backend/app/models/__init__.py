@@ -2,11 +2,12 @@
 from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
-from .haccp import Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog
+from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig
 from .prp import PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule
 from .supplier import Supplier, Material, SupplierEvaluation, IncomingDelivery, SupplierDocument
 from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport
-from .training import TrainingProgram, TrainingSession, TrainingAttendance
+from .training import TrainingProgram, TrainingSession, TrainingAttendance, RoleRequiredTraining, TrainingCertificate, HACCPRequiredTraining
+from .equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
 from .settings import ApplicationSetting, UserPreference
 from .risk import RiskRegisterItem, RiskAction
 from .notification import Notification, NotificationType, NotificationCategory, NotificationPriority
@@ -26,7 +27,7 @@ __all__ = [
     "Document", "DocumentVersion", "DocumentApproval", "DocumentChangeLog", "DocumentTemplate",
     
     # HACCP models
-    "Product", "ProcessFlow", "Hazard", "CCP", "CCPMonitoringLog", "CCPVerificationLog",
+    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig",
     
     # PRP models
     "PRPProgram", "PRPChecklist", "PRPChecklistItem", "PRPTemplate", "PRPSchedule",
@@ -37,7 +38,9 @@ __all__ = [
     # Traceability models
     "Batch", "TraceabilityLink", "Recall", "RecallEntry", "RecallAction", "TraceabilityReport",
     # Training models
-    "TrainingProgram", "TrainingSession", "TrainingAttendance",
+    "TrainingProgram", "TrainingSession", "TrainingAttendance", "RoleRequiredTraining", "TrainingCertificate", "HACCPRequiredTraining",
+    # Equipment models
+    "Equipment", "MaintenancePlan", "MaintenanceWorkOrder", "CalibrationPlan", "CalibrationRecord",
     
     # Settings models
     "ApplicationSetting", "UserPreference",

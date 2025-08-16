@@ -7,8 +7,8 @@ from app.core.database import Base
 
 
 class MaintenanceType(str, enum.Enum):
-    PREVENTIVE = "preventive"
-    CORRECTIVE = "corrective"
+    PREVENTIVE = "PREVENTIVE"
+    CORRECTIVE = "CORRECTIVE"
 
 
 class Equipment(Base):

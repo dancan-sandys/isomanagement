@@ -20,6 +20,7 @@ import TrainingPrograms from './pages/TrainingPrograms';
 import TrainingProgramDetail from './pages/TrainingProgramDetail';
 import TrainingMatrix from './pages/TrainingMatrix';
 import TrainingPolicies from './pages/TrainingPolicies';
+import RiskThresholds from './pages/RiskThresholds';
 import Audits from './pages/Audits';
 import AuditDetail from './pages/AuditDetail';
 import Users from './pages/Users';
@@ -102,6 +103,7 @@ function App() {
         <Route path="/training/programs/:id" element={<TrainingProgramDetail />} />
         <Route path="/training/matrix" element={<TrainingMatrix />} />
                       <Route path="/training/policies" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager"]} component={TrainingPolicies} />} />
+          <Route path="/haccp/risk-thresholds" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager", "HACCP Team Leader"]} component={RiskThresholds} />} />
                       <Route path="/traceability/chain" element={<Navigate to="/traceability?tab=1" replace />} />
                       <Route path="/traceability/recall" element={<Navigate to="/traceability?tab=2" replace />} />
                       <Route path="/traceability/lots" element={<Navigate to="/traceability?tab=1" replace />} />

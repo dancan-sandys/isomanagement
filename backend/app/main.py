@@ -7,6 +7,7 @@ import time
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
 from app.api.v1.api_minimal import api_router
+from app.core.exceptions import setup_exception_handlers
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import user, document, haccp, prp, supplier, traceability, notification, rbac, settings as settings_model, audit, nonconformance, training, equipment as equipment_model
@@ -21,6 +22,9 @@ app = FastAPI(
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
 )
+
+# Setup custom exception handlers
+setup_exception_handlers(app)
 
 # Add CORS middleware (explicit origins when credentials are allowed)
 app.add_middleware(

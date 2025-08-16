@@ -10,7 +10,8 @@ import uuid
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
     HazardType, RiskLevel, CCPStatus,
-    HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus
+    HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus,
+    ProductRiskConfig
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
@@ -172,27 +173,45 @@ class HACCPService:
         return process_flow
     
     def create_hazard(self, product_id: int, hazard_data: HazardCreate, created_by: int) -> Hazard:
-        """Create a hazard with risk assessment"""
+        """Create a hazard with product-specific risk assessment (ISO 22000 compliant)"""
         
         # Verify product exists
         product = self.db.query(Product).filter(Product.id == product_id).first()
         if not product:
             raise ValueError("Product not found")
         
-        # Calculate risk score
+        # Get product-specific risk configuration
+        risk_config = self.db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
+        
+        # Calculate risk score using product-specific configuration
         likelihood = hazard_data.likelihood
         severity = hazard_data.severity
-        risk_score = likelihood * severity
         
-        # Determine risk level
-        if risk_score <= 4:
-            risk_level = RiskLevel.LOW
-        elif risk_score <= 8:
-            risk_level = RiskLevel.MEDIUM
-        elif risk_score <= 15:
-            risk_level = RiskLevel.HIGH
+        if risk_config:
+            # Use product-specific risk calculation
+            risk_score = risk_config.get_risk_score(likelihood, severity)
+            risk_level_str = risk_config.calculate_risk_level(likelihood, severity)
+            
+            # Convert string risk level to enum
+            if risk_level_str == "low":
+                risk_level = RiskLevel.LOW
+            elif risk_level_str == "medium":
+                risk_level = RiskLevel.MEDIUM
+            elif risk_level_str == "high":
+                risk_level = RiskLevel.HIGH
+            else:
+                risk_level = RiskLevel.CRITICAL
         else:
-            risk_level = RiskLevel.CRITICAL
+            # Default risk calculation if no product-specific config exists
+            risk_score = likelihood * severity
+            if risk_score <= 4:
+                risk_level = RiskLevel.LOW
+            elif risk_score <= 8:
+                risk_level = RiskLevel.MEDIUM
+            elif risk_score <= 15:
+                risk_level = RiskLevel.HIGH
+            else:
+                risk_level = RiskLevel.CRITICAL
         
         hazard = Hazard(
             product_id=product_id,
@@ -236,11 +255,21 @@ class HACCPService:
         justification = ""
         
         # Question 1: Is control at this step necessary for safety?
-        q1_answer = hazard.risk_score >= 8  # High or critical risk
+        # Use product-specific risk configuration to determine if risk is high enough to require control
+        risk_config = self.db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == hazard.product_id).first()
+        
+        # Use product-specific medium threshold if available, otherwise use default
+        medium_threshold = 8  # Default
+        if risk_config:
+            medium_threshold = risk_config.medium_threshold
+        
+        # Use medium threshold as the cutoff for requiring control
+        control_threshold = threshold.medium_threshold if threshold else 8
+        q1_answer = hazard.risk_score >= control_threshold
         steps.append(DecisionTreeStep(
             question=DecisionTreeQuestion.Q1,
             answer=q1_answer,
-            explanation=f"Risk score: {hazard.risk_score} (High/Critical risk requires control)"
+            explanation=f"Risk score: {hazard.risk_score} (Control required if >= {control_threshold})"
         ))
         
         if not q1_answer:

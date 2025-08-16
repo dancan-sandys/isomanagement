@@ -10,13 +10,15 @@ from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
-    HazardType, RiskLevel, CCPStatus
+    HazardType, RiskLevel, CCPStatus, RiskThreshold
 )
 from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
     ProductCreate, ProductUpdate, ProcessFlowCreate, HazardCreate, CCPCreate,
     MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, HACCPReportRequest,
-    HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanVersionCreate
+    HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanVersionCreate,
+    RiskThresholdCreate, RiskThresholdUpdate, RiskThresholdResponse,
+    HazardReviewCreate, HazardReviewUpdate, HazardReviewResponse
 )
 from app.services.haccp_service import HACCPService
 from app.utils.audit import audit_event
@@ -582,7 +584,7 @@ async def create_hazard(
         ).first()
         if not step:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid process_step_id for this product"
             )
 
@@ -904,7 +906,7 @@ async def create_monitoring_log(
             if not batch:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid batch_id")
             resolved_batch_number = batch.batch_number
-
+        
         monitoring_log = CCPMonitoringLog(
             ccp_id=ccp_id,
             batch_id=resolved_batch_id,
@@ -1033,7 +1035,7 @@ async def create_verification_log(
             raise
         except Exception:
             pass
-
+        
         verification_log = CCPVerificationLog(
             ccp_id=ccp_id,
             verification_date=datetime.utcnow(),
@@ -1328,26 +1330,63 @@ async def reject_haccp_plan_step(
 @router.post("/ccps/{ccp_id}/monitoring-logs/enhanced")
 async def create_enhanced_monitoring_log(
     ccp_id: int,
-    log_data: MonitoringLogCreate,
+    log_data: dict,  # Change to dict to handle raw data first
     current_user: User = Depends(require_permission_dependency("haccp:create")),
     db: Session = Depends(get_db)
 ):
     """Create a monitoring log with automatic alert generation"""
     try:
-        # Debug logging
-        print(f"DEBUG: Received log_data: {log_data}")
-        print(f"DEBUG: ccp_id: {ccp_id}, current_user.id: {current_user.id}")
+        print(f"DEBUG: Starting create_enhanced_monitoring_log")
+        print(f"DEBUG: ccp_id: {ccp_id}")
+        print(f"DEBUG: current_user.id: {current_user.id}")
+        print(f"DEBUG: log_data type: {type(log_data)}")
+        print(f"DEBUG: log_data: {log_data}")
+        
+        # Validate and clean the incoming data
+        if not isinstance(log_data, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid request body: expected JSON object"
+            )
+        
+        # Extract and validate measured_value
+        measured_value_raw = log_data.get("measured_value")
+        if measured_value_raw is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="measured_value is required"
+            )
+        
+        try:
+            measured_value = float(measured_value_raw)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid measured_value: {measured_value_raw}. Must be a valid number."
+            )
+        
+        # Create a clean MonitoringLogCreate object
+        clean_log_data = MonitoringLogCreate(
+            batch_number=log_data.get("batch_number"),
+            batch_id=log_data.get("batch_id"),
+            measured_value=measured_value,
+            unit=log_data.get("unit"),
+            additional_parameters=log_data.get("additional_parameters"),
+            observations=log_data.get("observations"),
+            evidence_files=log_data.get("evidence_files"),
+            corrective_action_taken=log_data.get("corrective_action_taken", False),
+            corrective_action_description=log_data.get("corrective_action_description")
+        )
+        
+        print(f"DEBUG: Clean log_data created: {clean_log_data}")
         
         # Competency/permissions are checked in the service callers above; here we just persist safely
         haccp_service = HACCPService(db)
-        # Coerce measured_value to float defensively to avoid 500s from type issues
-        try:
-            if hasattr(log_data, "measured_value"):
-                setattr(log_data, "measured_value", float(getattr(log_data, "measured_value")))
-        except Exception as e:
-            print(f"DEBUG: Error coercing measured_value: {e}")
-            pass
-        monitoring_log, alert_created = haccp_service.create_monitoring_log(ccp_id, log_data, current_user.id)
+        print(f"DEBUG: HACCPService created")
+        
+        print(f"DEBUG: About to call haccp_service.create_monitoring_log")
+        monitoring_log, alert_created = haccp_service.create_monitoring_log(ccp_id, clean_log_data, current_user.id)
+        print(f"DEBUG: haccp_service.create_monitoring_log completed successfully")
         
         response_data = {
             "id": monitoring_log.id,
@@ -1358,18 +1397,25 @@ async def create_enhanced_monitoring_log(
         if alert_created:
             response_data["alert_message"] = "Out-of-spec alert has been generated and sent to responsible personnel"
         
+        print(f"DEBUG: Returning successful response")
         return ResponseModel(
             success=True,
             message="Monitoring log created successfully",
             data=response_data
         )
         
+    except HTTPException:
+        raise
     except ValueError as e:
+        print(f"DEBUG: ValueError caught: {e}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
     except Exception as e:
+        print(f"DEBUG: Unexpected error: {e}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create monitoring log: {str(e)}"
@@ -1590,7 +1636,7 @@ async def create_hazard(
         ).first()
         if not step:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid process_step_id for this product"
             )
 
@@ -1853,131 +1899,6 @@ async def delete_ccp(
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete CCP: {str(e)}")
-# CCP Monitoring Logs
-@router.post("/ccps/{ccp_id}/monitoring-logs")
-async def create_monitoring_log(
-    ccp_id: int,
-    log_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a monitoring log for a CCP"""
-    try:
-        # Verify CCP exists
-        ccp = db.query(CCP).filter(CCP.id == ccp_id).first()
-        if not ccp:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="CCP not found"
-            )
-        
-        # Check if within limits
-        measured_value = log_data["measured_value"]
-        is_within_limits = True
-        
-        if ccp.critical_limit_min is not None and measured_value < ccp.critical_limit_min:
-            is_within_limits = False
-        if ccp.critical_limit_max is not None and measured_value > ccp.critical_limit_max:
-            is_within_limits = False
-        
-        monitoring_log = CCPMonitoringLog(
-            ccp_id=ccp_id,
-            batch_number=log_data["batch_number"],
-            monitoring_time=datetime.utcnow(),
-            measured_value=measured_value,
-            unit=log_data.get("unit"),
-            is_within_limits=is_within_limits,
-            additional_parameters=log_data.get("additional_parameters"),
-            observations=log_data.get("observations"),
-            evidence_files=log_data.get("evidence_files"),
-            corrective_action_taken=log_data.get("corrective_action_taken", False),
-            corrective_action_description=log_data.get("corrective_action_description"),
-            corrective_action_by=log_data.get("corrective_action_by"),
-            created_by=current_user.id
-        )
-        
-        db.add(monitoring_log)
-        db.commit()
-        db.refresh(monitoring_log)
-        
-        resp = ResponseModel(
-            success=True,
-            message="Monitoring log created successfully",
-            data={"id": monitoring_log.id, "is_within_limits": is_within_limits, "batch_id": monitoring_log.batch_id, "batch_number": monitoring_log.batch_number}
-        )
-        try:
-            audit_event(db, current_user.id, "haccp_monitoring_log_created", "haccp", str(monitoring_log.id), {
-                "ccp_id": ccp_id,
-                "is_within_limits": is_within_limits
-            })
-        except Exception:
-            pass
-        return resp
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create monitoring log: {str(e)}"
-        )
-
-
-@router.get("/ccps/{ccp_id}/monitoring-logs")
-async def get_monitoring_logs(
-    ccp_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get monitoring logs for a CCP"""
-    try:
-        # Verify CCP exists
-        ccp = db.query(CCP).filter(CCP.id == ccp_id).first()
-        if not ccp:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="CCP not found"
-            )
-        
-        logs = db.query(CCPMonitoringLog).filter(
-            CCPMonitoringLog.ccp_id == ccp_id
-        ).order_by(desc(CCPMonitoringLog.monitoring_time)).all()
-        
-        items = []
-        for log in logs:
-            # Get creator name
-            creator = db.query(User).filter(User.id == log.created_by).first()
-            creator_name = creator.full_name if creator else "Unknown"
-            
-            items.append({
-                "id": log.id,
-                "batch_number": log.batch_number,
-                "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
-                "measured_value": log.measured_value,
-                "unit": log.unit,
-                "is_within_limits": log.is_within_limits,
-                "additional_parameters": log.additional_parameters,
-                "observations": log.observations,
-                "evidence_files": log.evidence_files,
-                "corrective_action_taken": log.corrective_action_taken,
-                "corrective_action_description": log.corrective_action_description,
-                "created_by": creator_name,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
-            })
-        
-        return ResponseModel(
-            success=True,
-            message="Monitoring logs retrieved successfully",
-            data={"items": items}
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve monitoring logs: {str(e)}"
-        )
 
 
 # CCP Verification Logs
@@ -2182,115 +2103,6 @@ async def get_flowchart_data(
         )
 
 
-# Enhanced Monitoring Log with Alerts
-@router.post("/ccps/{ccp_id}/monitoring-logs/enhanced")
-async def create_enhanced_monitoring_log(
-    ccp_id: int,
-    log_data: MonitoringLogCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a monitoring log with automatic alert generation"""
-    try:
-        haccp_service = HACCPService(db)
-        monitoring_log, alert_created = haccp_service.create_monitoring_log(ccp_id, log_data, current_user.id)
-        
-        response_data = {
-            "id": monitoring_log.id,
-            "is_within_limits": monitoring_log.is_within_limits,
-            "alert_created": alert_created
-        }
-        
-        if alert_created:
-            response_data["alert_message"] = "Out-of-spec alert has been generated and sent to responsible personnel"
-        
-        return ResponseModel(
-            success=True,
-            message="Monitoring log created successfully",
-            data=response_data
-        )
-        
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create monitoring log: {str(e)}"
-        )
-
-
-# HACCP Report Generation
-@router.post("/products/{product_id}/reports")
-async def generate_haccp_report(
-    product_id: int,
-    report_request: HACCPReportRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate HACCP report"""
-    try:
-        haccp_service = HACCPService(db)
-        report_data = haccp_service.generate_haccp_report(
-            product_id=product_id,
-            report_type=report_request.report_type,
-            date_from=report_request.date_from,
-            date_to=report_request.date_to
-        )
-        
-        # Generate unique report ID
-        report_id = f"haccp_report_{product_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-        
-        return ResponseModel(
-            success=True,
-            message="HACCP report generated successfully",
-            data={
-                "report_id": report_id,
-                "report_data": report_data,
-                "report_type": report_request.report_type,
-                "format": report_request.format,
-                "generated_at": datetime.utcnow().isoformat()
-            }
-        )
-        
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate report: {str(e)}"
-        )
-
-
-# Enhanced Dashboard with Alerts
-@router.get("/dashboard/enhanced")
-async def get_enhanced_haccp_dashboard(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get enhanced HACCP dashboard with alerts"""
-    try:
-        haccp_service = HACCPService(db)
-        stats = haccp_service.get_haccp_dashboard_stats()
-        
-        return ResponseModel(
-            success=True,
-            message="Enhanced HACCP dashboard data retrieved successfully",
-            data=stats
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve enhanced dashboard data: {str(e)}"
-        )
-
-
 # CCP Alerts Summary
 @router.get("/alerts/summary")
 async def get_ccp_alerts_summary(
@@ -2343,4 +2155,453 @@ async def get_ccp_alerts_summary(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve alerts summary: {str(e)}"
+        )
+
+
+# Risk Threshold Management
+@router.post("/risk-thresholds")
+async def create_risk_threshold(
+    threshold_data: RiskThresholdCreate,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a new risk threshold configuration"""
+    try:
+        # Validate scope_id if provided
+        if threshold_data.scope_id is not None:
+            if threshold_data.scope_type == "product":
+                product = db.query(Product).filter(Product.id == threshold_data.scope_id).first()
+                if not product:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Product not found"
+                    )
+            # Add other scope validations as needed
+        
+        threshold = RiskThreshold(
+            name=threshold_data.name,
+            description=threshold_data.description,
+            scope_type=threshold_data.scope_type,
+            scope_id=threshold_data.scope_id,
+            low_threshold=threshold_data.low_threshold,
+            medium_threshold=threshold_data.medium_threshold,
+            high_threshold=threshold_data.high_threshold,
+            likelihood_scale=threshold_data.likelihood_scale,
+            severity_scale=threshold_data.severity_scale,
+            calculation_method=threshold_data.calculation_method,
+            created_by=current_user.id
+        )
+        
+        db.add(threshold)
+        db.commit()
+        db.refresh(threshold)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk threshold created successfully",
+            data={"id": threshold.id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create risk threshold: {str(e)}"
+        )
+
+
+@router.get("/risk-thresholds")
+async def get_risk_thresholds(
+    scope_type: Optional[str] = None,
+    scope_id: Optional[int] = None,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get risk threshold configurations"""
+    try:
+        query = db.query(RiskThreshold)
+        
+        if scope_type:
+            query = query.filter(RiskThreshold.scope_type == scope_type)
+        if scope_id:
+            query = query.filter(RiskThreshold.scope_id == scope_id)
+        
+        thresholds = query.order_by(RiskThreshold.created_at.desc()).all()
+        
+        items = []
+        for threshold in thresholds:
+            items.append(RiskThresholdResponse.from_orm(threshold))
+        
+        return ResponseModel(
+            success=True,
+            message="Risk thresholds retrieved successfully",
+            data={"items": items}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk thresholds: {str(e)}"
+        )
+
+
+@router.get("/risk-thresholds/{threshold_id}")
+async def get_risk_threshold(
+    threshold_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get a specific risk threshold configuration"""
+    try:
+        threshold = db.query(RiskThreshold).filter(RiskThreshold.id == threshold_id).first()
+        if not threshold:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk threshold not found"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="Risk threshold retrieved successfully",
+            data=RiskThresholdResponse.from_orm(threshold)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk threshold: {str(e)}"
+        )
+
+
+@router.put("/risk-thresholds/{threshold_id}")
+async def update_risk_threshold(
+    threshold_id: int,
+    threshold_data: RiskThresholdUpdate,
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
+    db: Session = Depends(get_db)
+):
+    """Update a risk threshold configuration"""
+    try:
+        threshold = db.query(RiskThreshold).filter(RiskThreshold.id == threshold_id).first()
+        if not threshold:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk threshold not found"
+            )
+        
+        # Update fields
+        update_data = threshold_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(threshold, field, value)
+        
+        threshold.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(threshold)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk threshold updated successfully",
+            data={"id": threshold.id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update risk threshold: {str(e)}"
+        )
+
+
+@router.delete("/risk-thresholds/{threshold_id}")
+async def delete_risk_threshold(
+    threshold_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
+    db: Session = Depends(get_db)
+):
+    """Delete a risk threshold configuration"""
+    try:
+        threshold = db.query(RiskThreshold).filter(RiskThreshold.id == threshold_id).first()
+        if not threshold:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk threshold not found"
+            )
+        
+        db.delete(threshold)
+        db.commit()
+        
+        return ResponseModel(
+            success=True,
+            message="Risk threshold deleted successfully",
+            data={"id": threshold_id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete risk threshold: {str(e)}"
+        )
+
+
+@router.post("/risk-thresholds/calculate")
+async def calculate_risk_level(
+    likelihood: int,
+    severity: int,
+    scope_type: str = "site",
+    scope_id: Optional[int] = None,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Calculate risk level using configured thresholds"""
+    try:
+        # Find the appropriate threshold configuration
+        query = db.query(RiskThreshold).filter(RiskThreshold.scope_type == scope_type)
+        if scope_id:
+            query = query.filter(RiskThreshold.scope_id == scope_id)
+        else:
+            query = query.filter(RiskThreshold.scope_id.is_(None))
+        
+        threshold = query.first()
+        
+        if not threshold:
+            # Use default thresholds if none configured
+            threshold = RiskThreshold(
+                low_threshold=4,
+                medium_threshold=8,
+                high_threshold=15,
+                calculation_method="multiplication"
+            )
+        
+        risk_level = threshold.calculate_risk_level(likelihood, severity)
+        risk_score = likelihood * severity  # Default calculation
+        
+        return ResponseModel(
+            success=True,
+            message="Risk level calculated successfully",
+            data={
+                "likelihood": likelihood,
+                "severity": severity,
+                "risk_score": risk_score,
+                "risk_level": risk_level.value,
+                "threshold_config": {
+                    "low_threshold": threshold.low_threshold,
+                    "medium_threshold": threshold.medium_threshold,
+                    "high_threshold": threshold.high_threshold,
+                    "calculation_method": threshold.calculation_method
+                }
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate risk level: {str(e)}"
+        )
+
+
+# Hazard Review Management
+@router.post("/hazards/{hazard_id}/reviews")
+async def create_hazard_review(
+    hazard_id: int,
+    review_data: HazardReviewCreate,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a hazard review"""
+    try:
+        # Verify hazard exists
+        hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Hazard not found"
+            )
+        
+        # Create review
+        review = HazardReview(
+            hazard_id=hazard_id,
+            reviewer_id=current_user.id,
+            review_status=review_data.review_status,
+            review_comments=review_data.review_comments,
+            hazard_identification_adequate=review_data.hazard_identification_adequate,
+            risk_assessment_appropriate=review_data.risk_assessment_appropriate,
+            control_measures_suitable=review_data.control_measures_suitable,
+            ccp_determination_correct=review_data.ccp_determination_correct
+        )
+        
+        if review_data.review_status in ["approved", "rejected"]:
+            review.review_date = datetime.utcnow()
+        
+        db.add(review)
+        db.commit()
+        db.refresh(review)
+        
+        return ResponseModel(
+            success=True,
+            message="Hazard review created successfully",
+            data={"id": review.id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create hazard review: {str(e)}"
+        )
+
+
+@router.get("/hazards/{hazard_id}/reviews")
+async def get_hazard_reviews(
+    hazard_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all reviews for a hazard"""
+    try:
+        # Verify hazard exists
+        hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Hazard not found"
+            )
+        
+        reviews = db.query(HazardReview).filter(HazardReview.hazard_id == hazard_id).all()
+        
+        items = []
+        for review in reviews:
+            reviewer = db.query(User).filter(User.id == review.reviewer_id).first()
+            review_data = HazardReviewResponse.from_orm(review)
+            review_data.reviewer_name = reviewer.full_name if reviewer else "Unknown"
+            items.append(review_data)
+        
+        return ResponseModel(
+            success=True,
+            message="Hazard reviews retrieved successfully",
+            data={"items": items}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve hazard reviews: {str(e)}"
+        )
+
+
+@router.put("/hazards/{hazard_id}/reviews/{review_id}")
+async def update_hazard_review(
+    hazard_id: int,
+    review_id: int,
+    review_data: HazardReviewUpdate,
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
+    db: Session = Depends(get_db)
+):
+    """Update a hazard review"""
+    try:
+        review = db.query(HazardReview).filter(
+            and_(HazardReview.id == review_id, HazardReview.hazard_id == hazard_id)
+        ).first()
+        
+        if not review:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Hazard review not found"
+            )
+        
+        # Update fields
+        update_data = review_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(review, field, value)
+        
+        if review_data.review_status in ["approved", "rejected"]:
+            review.review_date = datetime.utcnow()
+        
+        review.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(review)
+        
+        return ResponseModel(
+            success=True,
+            message="Hazard review updated successfully",
+            data={"id": review.id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update hazard review: {str(e)}"
+        )
+
+
+@router.get("/products/{product_id}/hazard-review-status")
+async def get_hazard_review_status(
+    product_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get hazard review status for a product"""
+    try:
+        # Get all hazards for the product
+        hazards = db.query(Hazard).filter(Hazard.product_id == product_id).all()
+        
+        review_status = {
+            "total_hazards": len(hazards),
+            "reviewed_hazards": 0,
+            "approved_hazards": 0,
+            "rejected_hazards": 0,
+            "pending_reviews": 0,
+            "hazards": []
+        }
+        
+        for hazard in hazards:
+            # Get the latest review for each hazard
+            latest_review = db.query(HazardReview).filter(
+                HazardReview.hazard_id == hazard.id
+            ).order_by(HazardReview.created_at.desc()).first()
+            
+            hazard_status = {
+                "hazard_id": hazard.id,
+                "hazard_name": hazard.hazard_name,
+                "has_review": latest_review is not None,
+                "review_status": latest_review.review_status if latest_review else "pending",
+                "reviewer_name": None,
+                "review_date": latest_review.review_date if latest_review else None
+            }
+            
+            if latest_review:
+                reviewer = db.query(User).filter(User.id == latest_review.reviewer_id).first()
+                hazard_status["reviewer_name"] = reviewer.full_name if reviewer else "Unknown"
+                
+                if latest_review.review_status == "approved":
+                    review_status["approved_hazards"] += 1
+                    review_status["reviewed_hazards"] += 1
+                elif latest_review.review_status == "rejected":
+                    review_status["rejected_hazards"] += 1
+                    review_status["reviewed_hazards"] += 1
+            else:
+                review_status["pending_reviews"] += 1
+            
+            review_status["hazards"].append(hazard_status)
+        
+        return ResponseModel(
+            success=True,
+            message="Hazard review status retrieved successfully",
+            data=review_status
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve hazard review status: {str(e)}"
         )

@@ -65,6 +65,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'Production Operator', 'System Administrator'],
     items: [
       { text: 'HACCP Plans', path: '/haccp' },
+      { text: 'Risk Thresholds', path: '/haccp/risk-thresholds' },
     ],
   },
   

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel } from '@mui/material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { Add, Edit, Delete } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI } from '../services/api';
@@ -31,7 +31,22 @@ const HACCPProductDetail: React.FC = () => {
   const [selectedCcpItem, setSelectedCcpItem] = useState<any>(null);
 
   const [flowForm, setFlowForm] = useState({ step_number: '', step_name: '', description: '', equipment: '', temperature: '', time_minutes: '', ph: '', aw: '' });
-  const [hazardForm, setHazardForm] = useState({ process_step_id: '', hazard_type: 'biological', hazard_name: '', description: '', likelihood: '1', severity: '1', control_measures: '', is_controlled: false as boolean, control_effectiveness: '', is_ccp: false as boolean, ccp_justification: '' });
+  const [hazardForm, setHazardForm] = useState({ 
+    process_step_id: '', 
+    hazard_type: 'biological', 
+    hazard_name: '', 
+    description: '', 
+    rationale: '',  // New field for hazard analysis
+    prp_reference_ids: [] as number[],  // New field for PRP references
+    references: [] as any[],  // New field for references
+    likelihood: '1', 
+    severity: '1', 
+    control_measures: '', 
+    is_controlled: false as boolean, 
+    control_effectiveness: '', 
+    is_ccp: false as boolean, 
+    ccp_justification: '' 
+  });
   const [ccpForm, setCcpForm] = useState({ hazard_id: '', ccp_number: '', ccp_name: '', description: '', critical_limit_min: '', critical_limit_max: '', critical_limit_unit: '', monitoring_frequency: '', monitoring_method: '', monitoring_responsible: '', monitoring_equipment: '', corrective_actions: '', verification_frequency: '', verification_method: '', verification_responsible: '' });
 
   const [userSearch, setUserSearch] = useState('');
@@ -111,9 +126,39 @@ const HACCPProductDetail: React.FC = () => {
 
   useEffect(() => {
     if (selectedHazardItem) {
-      setHazardForm({ process_step_id: String(selectedHazardItem.process_step_id ?? ''), hazard_type: selectedHazardItem.hazard_type || 'biological', hazard_name: selectedHazardItem.hazard_name || '', description: selectedHazardItem.description || '', likelihood: String(selectedHazardItem.likelihood ?? '1'), severity: String(selectedHazardItem.severity ?? '1'), control_measures: selectedHazardItem.control_measures || '', is_controlled: !!selectedHazardItem.is_controlled, control_effectiveness: String(selectedHazardItem.control_effectiveness ?? ''), is_ccp: !!selectedHazardItem.is_ccp, ccp_justification: selectedHazardItem.ccp_justification || '' });
+      setHazardForm({ 
+        process_step_id: String(selectedHazardItem.process_step_id ?? ''), 
+        hazard_type: selectedHazardItem.hazard_type || 'biological', 
+        hazard_name: selectedHazardItem.hazard_name || '', 
+        description: selectedHazardItem.description || '', 
+        rationale: selectedHazardItem.rationale || '',  // New field
+        prp_reference_ids: selectedHazardItem.prp_reference_ids || [],  // New field
+        references: selectedHazardItem.references || [],  // New field
+        likelihood: String(selectedHazardItem.likelihood ?? '1'), 
+        severity: String(selectedHazardItem.severity ?? '1'), 
+        control_measures: selectedHazardItem.control_measures || '', 
+        is_controlled: !!selectedHazardItem.is_controlled, 
+        control_effectiveness: String(selectedHazardItem.control_effectiveness ?? ''), 
+        is_ccp: !!selectedHazardItem.is_ccp, 
+        ccp_justification: selectedHazardItem.ccp_justification || '' 
+      });
     } else {
-      setHazardForm({ process_step_id: '', hazard_type: 'biological', hazard_name: '', description: '', likelihood: '1', severity: '1', control_measures: '', is_controlled: false, control_effectiveness: '', is_ccp: false, ccp_justification: '' });
+      setHazardForm({ 
+        process_step_id: '', 
+        hazard_type: 'biological', 
+        hazard_name: '', 
+        description: '', 
+        rationale: '',  // New field
+        prp_reference_ids: [],  // New field
+        references: [],  // New field
+        likelihood: '1', 
+        severity: '1', 
+        control_measures: '', 
+        is_controlled: false, 
+        control_effectiveness: '', 
+        is_ccp: false, 
+        ccp_justification: '' 
+      });
     }
   }, [selectedHazardItem]);
 
@@ -137,7 +182,22 @@ const HACCPProductDetail: React.FC = () => {
   };
 
   const handleSaveHazard = async () => {
-    const payload: any = { process_step_id: hazardForm.process_step_id === '' ? null : Number(hazardForm.process_step_id), hazard_type: hazardForm.hazard_type, hazard_name: hazardForm.hazard_name, description: hazardForm.description, likelihood: Number(hazardForm.likelihood), severity: Number(hazardForm.severity), control_measures: hazardForm.control_measures, is_controlled: hazardForm.is_controlled, control_effectiveness: hazardForm.control_effectiveness === '' ? null : Number(hazardForm.control_effectiveness), is_ccp: hazardForm.is_ccp, ccp_justification: hazardForm.ccp_justification };
+    const payload: any = { 
+      process_step_id: hazardForm.process_step_id === '' ? null : Number(hazardForm.process_step_id), 
+      hazard_type: hazardForm.hazard_type, 
+      hazard_name: hazardForm.hazard_name, 
+      description: hazardForm.description, 
+      rationale: hazardForm.rationale,  // New field
+      prp_reference_ids: hazardForm.prp_reference_ids,  // New field
+      references: hazardForm.references,  // New field
+      likelihood: Number(hazardForm.likelihood), 
+      severity: Number(hazardForm.severity), 
+      control_measures: hazardForm.control_measures, 
+      is_controlled: hazardForm.is_controlled, 
+      control_effectiveness: hazardForm.control_effectiveness === '' ? null : Number(hazardForm.control_effectiveness), 
+      is_ccp: hazardForm.is_ccp, 
+      ccp_justification: hazardForm.ccp_justification 
+    };
     try {
       if (selectedHazardItem) await dispatch(updateHazard({ hazardId: selectedHazardItem.id, hazardData: payload })).unwrap();
       else await dispatch(createHazard({ productId, hazardData: payload })).unwrap();
@@ -176,6 +236,35 @@ const HACCPProductDetail: React.FC = () => {
     return () => { active = false; clearTimeout(t); };
   }, [batchOpen, batchSearch]);
 
+  const [riskConfigDialogOpen, setRiskConfigDialogOpen] = useState(false);
+  const [riskConfigForm, setRiskConfigForm] = useState({
+    calculation_method: 'multiplication',
+    likelihood_scale: 10,
+    severity_scale: 10,
+    risk_thresholds: {
+      low_threshold: 10,
+      medium_threshold: 20,
+      high_threshold: 30,
+    },
+  });
+
+  const handleSaveRiskConfig = async () => {
+    try {
+      await dispatch(updateProduct({ productId, productData: { risk_config: riskConfigForm } })).unwrap();
+      setRiskConfigDialogOpen(false);
+      dispatch(fetchProduct(productId));
+    } catch (error) {
+      console.error('Failed to save risk config:', error);
+      alert('Failed to save risk config');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProduct?.risk_config) {
+      setRiskConfigForm(selectedProduct.risk_config);
+    }
+  }, [selectedProduct?.risk_config]);
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Product Details</Typography>
@@ -196,6 +285,7 @@ const HACCPProductDetail: React.FC = () => {
         <Tab label="Hazards" />
         <Tab label="CCPs" />
         <Tab label="Monitoring" />
+        <Tab label="Risk Configuration" />
       </Tabs>
 
       <TabPanel value={selectedTab} index={0}>
@@ -311,7 +401,36 @@ const HACCPProductDetail: React.FC = () => {
             <Button variant="contained" disabled={!monitoringForm.ccp_id} onClick={async () => {
               const ccpId = Number(monitoringForm.ccp_id);
               try {
-                await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ batch_id: monitoringForm.batch_id ? Number(monitoringForm.batch_id) : undefined, batch_number: monitoringForm.batch, measured_value: Number(monitoringForm.value), unit: monitoringForm.unit }) });
+                // Prepare the request body, filtering out undefined values
+                const requestBody: any = {};
+                
+                if (monitoringForm.batch_id) {
+                  requestBody.batch_id = Number(monitoringForm.batch_id);
+                }
+                if (monitoringForm.batch) {
+                  requestBody.batch_number = monitoringForm.batch;
+                }
+                if (monitoringForm.value && !isNaN(Number(monitoringForm.value))) {
+                  requestBody.measured_value = Number(monitoringForm.value);
+                } else {
+                  alert('Please enter a valid measured value');
+                  return;
+                }
+                if (monitoringForm.unit) {
+                  requestBody.unit = monitoringForm.unit;
+                }
+                
+                console.log('Sending monitoring log request:', requestBody);
+                
+                await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { 
+                  method: 'POST', 
+                  headers: { 
+                    'Content-Type': 'application/json', 
+                    Authorization: `Bearer ${localStorage.getItem('access_token')}` 
+                  }, 
+                  body: JSON.stringify(requestBody) 
+                });
+                
                 // reload logs
                 try {
                   const resp = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
@@ -325,7 +444,8 @@ const HACCPProductDetail: React.FC = () => {
                   const data = await res.json();
                   if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
                 }
-              } catch {
+              } catch (error) {
+                console.error('Failed to create monitoring log:', error);
                 alert('Failed to create monitoring log');
               }
             }}>Record Monitoring Log</Button>
@@ -377,6 +497,48 @@ const HACCPProductDetail: React.FC = () => {
         </Stack>
       </TabPanel>
 
+      <TabPanel value={selectedTab} index={4}>
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Risk Configuration</Typography>
+          <Button variant="contained" onClick={() => setRiskConfigDialogOpen(true)}>
+            {selectedProduct?.risk_config ? 'Edit Risk Config' : 'Configure Risk Settings'}
+          </Button>
+        </Box>
+        
+        {selectedProduct?.risk_config ? (
+          <Paper sx={{ p: 3 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" gutterBottom>Calculation Method</Typography>
+                <Chip label={selectedProduct.risk_config.calculation_method} color="primary" />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" gutterBottom>Scales</Typography>
+                <Typography>Likelihood: 1-{selectedProduct.risk_config.likelihood_scale}</Typography>
+                <Typography>Severity: 1-{selectedProduct.risk_config.severity_scale}</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>Risk Thresholds</Typography>
+                <Stack direction="row" spacing={2}>
+                  <Chip label={`Low: ≤${selectedProduct.risk_config.risk_thresholds.low_threshold}`} color="success" />
+                  <Chip label={`Medium: ${selectedProduct.risk_config.risk_thresholds.low_threshold + 1}-${selectedProduct.risk_config.risk_thresholds.medium_threshold}`} color="warning" />
+                  <Chip label={`High: ≥${selectedProduct.risk_config.risk_thresholds.medium_threshold + 1}`} color="error" />
+                </Stack>
+              </Grid>
+            </Grid>
+          </Paper>
+        ) : (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="textSecondary" gutterBottom>
+              No risk configuration set for this product
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Configure risk calculation parameters to enable proper hazard risk assessment and CCP determination.
+            </Typography>
+          </Paper>
+        )}
+      </TabPanel>
+
       {/* Dialogs */}
       <Dialog open={processFlowDialogOpen} onClose={() => { setProcessFlowDialogOpen(false); setSelectedFlow(null); }} maxWidth="md" fullWidth>
         <DialogTitle>{selectedFlow ? 'Edit Process Step' : 'Add Process Step'}</DialogTitle>
@@ -406,6 +568,9 @@ const HACCPProductDetail: React.FC = () => {
             <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Type" value={hazardForm.hazard_type} onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} /></Grid>
+            <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Rationale (Hazard Analysis)" value={hazardForm.rationale} onChange={(e) => setHazardForm({ ...hazardForm, rationale: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="PRP Reference IDs (comma-separated)" value={hazardForm.prp_reference_ids.join(', ')} onChange={(e) => setHazardForm({ ...hazardForm, prp_reference_ids: e.target.value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id)) })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="References (JSON format)" value={JSON.stringify(hazardForm.references)} onChange={(e) => { try { setHazardForm({ ...hazardForm, references: JSON.parse(e.target.value) }); } catch {} }} /></Grid>
             <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Likelihood" value={hazardForm.likelihood} onChange={(e) => setHazardForm({ ...hazardForm, likelihood: e.target.value })} /></Grid>
             <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Severity" value={hazardForm.severity} onChange={(e) => setHazardForm({ ...hazardForm, severity: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth label="Control Measures" value={hazardForm.control_measures} onChange={(e) => setHazardForm({ ...hazardForm, control_measures: e.target.value })} /></Grid>
@@ -469,6 +634,91 @@ const HACCPProductDetail: React.FC = () => {
         <DialogActions>
           <Button onClick={() => { setCcpDialogOpen(false); setSelectedCcpItem(null); }}>Cancel</Button>
           <Button variant="contained" onClick={handleSaveCCP}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Risk Configuration Dialog */}
+      <Dialog open={riskConfigDialogOpen} onClose={() => setRiskConfigDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Product Risk Configuration</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Calculation Method</InputLabel>
+                <Select
+                  value={riskConfigForm.calculation_method}
+                  onChange={(e) => setRiskConfigForm({ ...riskConfigForm, calculation_method: e.target.value })}
+                >
+                  <MenuItem value="multiplication">Multiplication (Likelihood × Severity)</MenuItem>
+                  <MenuItem value="addition">Addition (Likelihood + Severity)</MenuItem>
+                  <MenuItem value="matrix">Matrix (Custom Risk Matrix)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Likelihood Scale"
+                value={riskConfigForm.likelihood_scale}
+                onChange={(e) => setRiskConfigForm({ ...riskConfigForm, likelihood_scale: Number(e.target.value) })}
+                inputProps={{ min: 1, max: 10 }}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Severity Scale"
+                value={riskConfigForm.severity_scale}
+                onChange={(e) => setRiskConfigForm({ ...riskConfigForm, severity_scale: Number(e.target.value) })}
+                inputProps={{ min: 1, max: 10 }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>Risk Thresholds</Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Low Threshold"
+                value={riskConfigForm.risk_thresholds.low_threshold}
+                onChange={(e) => setRiskConfigForm({
+                  ...riskConfigForm,
+                  risk_thresholds: { ...riskConfigForm.risk_thresholds, low_threshold: Number(e.target.value) }
+                })}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Medium Threshold"
+                value={riskConfigForm.risk_thresholds.medium_threshold}
+                onChange={(e) => setRiskConfigForm({
+                  ...riskConfigForm,
+                  risk_thresholds: { ...riskConfigForm.risk_thresholds, medium_threshold: Number(e.target.value) }
+                })}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                type="number"
+                label="High Threshold"
+                value={riskConfigForm.risk_thresholds.high_threshold}
+                onChange={(e) => setRiskConfigForm({
+                  ...riskConfigForm,
+                  risk_thresholds: { ...riskConfigForm.risk_thresholds, high_threshold: Number(e.target.value) }
+                })}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRiskConfigDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveRiskConfig}>Save</Button>
         </DialogActions>
       </Dialog>
     </Box>

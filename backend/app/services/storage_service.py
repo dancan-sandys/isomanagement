@@ -122,19 +122,39 @@ class StorageService:
         Raises:
             HTTPException: If file validation fails
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Validate file size
         file_size_limit = max_size or self.max_file_size
         if file.size and file.size > file_size_limit:
+            logger.warning(f"File upload rejected: {file.filename} ({file.size} bytes) exceeds limit ({file_size_limit} bytes)")
             raise HTTPException(
                 status_code=413, 
-                detail=f"File too large. Maximum size is {file_size_limit // (1024*1024)}MB"
+                detail={
+                    "error": "File too large",
+                    "filename": file.filename,
+                    "file_size": file.size,
+                    "max_size": file_size_limit,
+                    "max_size_mb": file_size_limit // (1024*1024),
+                    "allowed_extensions": list(self.allowed_extensions),
+                    "allowed_mime_types": list(self.allowed_mime_types)
+                }
             )
 
         # Validate file type
         if not self._validate_file_type(file.filename or "", file.content_type):
+            logger.warning(f"File upload rejected: {file.filename} (type: {file.content_type}) - invalid file type")
             raise HTTPException(
                 status_code=400,
-                detail="File type not allowed. Please check the allowed file types."
+                detail={
+                    "error": "File type not allowed",
+                    "filename": file.filename,
+                    "content_type": file.content_type,
+                    "allowed_extensions": list(self.allowed_extensions),
+                    "allowed_mime_types": list(self.allowed_mime_types),
+                    "message": "Please check the allowed file types and ensure your file matches the requirements."
+                }
             )
 
         # Sanitize filename
@@ -145,15 +165,35 @@ class StorageService:
         unique_filename = f"{uuid.uuid4()}{extension}"
         file_path = os.path.join(target_dir, unique_filename)
 
-        # Save file
-        with open(file_path, "wb") as buffer:
-            buffer.write(file.file.read())
+        try:
+            # Save file
+            with open(file_path, "wb") as buffer:
+                buffer.write(file.file.read())
 
-        # Calculate actual file size and checksum
-        file_size = os.path.getsize(file_path)
-        checksum = self._calculate_checksum(file_path)
-        
-        return file_path, file_size, file.content_type, original_filename, checksum
+            # Calculate actual file size and checksum
+            file_size = os.path.getsize(file_path)
+            checksum = self._calculate_checksum(file_path)
+            
+            logger.info(f"File uploaded successfully: {original_filename} -> {file_path} ({file_size} bytes)")
+            
+            return file_path, file_size, file.content_type, original_filename, checksum
+            
+        except Exception as e:
+            logger.error(f"File upload failed: {original_filename} - {str(e)}")
+            # Clean up partial file if it exists
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "File upload failed",
+                    "filename": original_filename,
+                    "message": "An error occurred while saving the file. Please try again."
+                }
+            )
 
     def delete_file(self, file_path: Optional[str]) -> bool:
         """

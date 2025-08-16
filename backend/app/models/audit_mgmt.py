@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, Text, ForeignKey, Boolean, Float
+from sqlalchemy import Column, Integer, String, DateTime, Enum, Text, ForeignKey, Boolean, Float, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -19,6 +19,44 @@ class AuditStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
+class ProgramStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class RiskMethod(str, enum.Enum):
+    QUALITATIVE = "qualitative"
+    QUANTITATIVE = "quantitative"
+    HYBRID = "hybrid"
+
+
+class AuditProgram(Base):
+    __tablename__ = "audit_programs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    objectives = Column(Text, nullable=False)
+    scope = Column(Text, nullable=False)
+    year = Column(Integer, nullable=False)  # e.g., 2024
+    period = Column(String(50))  # e.g., "Q1", "Q2", "Annual"
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    risk_method = Column(Enum(RiskMethod), nullable=False, default=RiskMethod.QUALITATIVE)
+    resources = Column(Text)  # Budget, personnel, equipment
+    schedule = Column(JSON)  # JSON structure for detailed scheduling
+    kpis = Column(JSON)  # JSON structure for KPI targets and metrics
+    status = Column(Enum(ProgramStatus), nullable=False, default=ProgramStatus.DRAFT)
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    audits = relationship("Audit", back_populates="program", cascade="all, delete-orphan")
+    manager = relationship("User", foreign_keys=[manager_id])
+
+
 class Audit(Base):
     __tablename__ = "audits"
 
@@ -36,10 +74,14 @@ class Audit(Base):
     auditor_id = Column(Integer, nullable=True)
     lead_auditor_id = Column(Integer, nullable=True)
     auditee_department = Column(String(255))
+    # Link to audit program
+    program_id = Column(Integer, ForeignKey("audit_programs.id"), nullable=True)
     created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationships
+    program = relationship("AuditProgram", back_populates="audits")
     checklist_items = relationship("AuditChecklistItem", back_populates="audit", cascade="all, delete-orphan")
     findings = relationship("AuditFinding", back_populates="audit", cascade="all, delete-orphan")
     attachments = relationship("AuditAttachment", back_populates="audit", cascade="all, delete-orphan")

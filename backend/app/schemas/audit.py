@@ -1,8 +1,77 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
+# Audit Program Schemas
+class AuditProgramBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    objectives: str
+    scope: str
+    year: int = Field(..., ge=2020, le=2030)
+    period: Optional[str] = Field(None, pattern="^(Q1|Q2|Q3|Q4|Annual|H1|H2)$")
+    manager_id: int
+    risk_method: str = Field(default="qualitative", pattern="^(qualitative|quantitative|hybrid)$")
+    resources: Optional[str] = None
+    schedule: Optional[Dict[str, Any]] = None
+    kpis: Optional[Dict[str, Any]] = None
+    status: str = Field(default="draft", pattern="^(draft|active|completed|archived)$")
+
+
+class AuditProgramCreate(AuditProgramBase):
+    pass
+
+
+class AuditProgramUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    objectives: Optional[str] = None
+    scope: Optional[str] = None
+    year: Optional[int] = Field(None, ge=2020, le=2030)
+    period: Optional[str] = Field(None, pattern="^(Q1|Q2|Q3|Q4|Annual|H1|H2)$")
+    manager_id: Optional[int] = None
+    risk_method: Optional[str] = Field(None, pattern="^(qualitative|quantitative|hybrid)$")
+    resources: Optional[str] = None
+    schedule: Optional[Dict[str, Any]] = None
+    kpis: Optional[Dict[str, Any]] = None
+    status: Optional[str] = Field(None, pattern="^(draft|active|completed|archived)$")
+
+
+class AuditProgramResponse(AuditProgramBase):
+    id: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditProgramListResponse(BaseModel):
+    items: List[AuditProgramResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+class AuditProgramKpisResponse(BaseModel):
+    program_id: int
+    program_name: str
+    total_audits: int = 0
+    completed_audits: int = 0
+    overdue_audits: int = 0
+    on_time_rate: Optional[float] = None
+    total_findings: int = 0
+    open_findings: int = 0
+    critical_findings: int = 0
+    average_closure_days: Optional[float] = None
+    risk_coverage_percentage: Optional[float] = None
+    resource_utilization: Optional[float] = None
+
+
+# Audit Schemas
 class AuditBase(BaseModel):
   title: str
   audit_type: str = Field(pattern="^(internal|external|supplier)$")
@@ -15,6 +84,7 @@ class AuditBase(BaseModel):
   auditor_id: Optional[int] = None
   lead_auditor_id: Optional[int] = None
   auditee_department: Optional[str] = None
+  program_id: Optional[int] = None
 
 
 class AuditCreate(AuditBase):

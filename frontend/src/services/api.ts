@@ -1748,3 +1748,15 @@ export const allergenLabelAPI = {
     return response.data;
   },
 };
+
+// Risk Threshold API
+export const riskThresholdAPI = {
+  create: (data: any) => api.post('/haccp/risk-thresholds', data),
+  getAll: (params?: { scope_type?: string; scope_id?: number }) => 
+    api.get('/haccp/risk-thresholds', { params }),
+  getById: (id: number) => api.get(`/haccp/risk-thresholds/${id}`),
+  update: (id: number, data: any) => api.put(`/haccp/risk-thresholds/${id}`, data),
+  delete: (id: number) => api.delete(`/haccp/risk-thresholds/${id}`),
+  calculate: (likelihood: number, severity: number, scope_type?: string, scope_id?: number) =>
+    api.post('/haccp/risk-thresholds/calculate', { likelihood, severity, scope_type, scope_id })
+};
