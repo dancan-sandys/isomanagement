@@ -10,14 +10,16 @@ import base64
 
 from app.models.prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
-    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus
+    RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
+    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus, RiskLevel, CorrectiveActionStatus
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
 from app.schemas.prp import (
     PRPProgramCreate, PRPProgramUpdate, ChecklistCreate, ChecklistUpdate,
     ChecklistItemCreate, ChecklistCompletion, NonConformanceCreate,
-    ReminderCreate, ScheduleCreate, ResponseType
+    ReminderCreate, ScheduleCreate, ResponseType, RiskMatrixCreate,
+    RiskAssessmentCreate, RiskControlCreate, CorrectiveActionCreate, PreventiveActionCreate
 )
 
 logger = logging.getLogger(__name__)
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class PRPService:
     """
-    Service for handling PRP business logic
+    Enhanced service for handling PRP business logic with ISO 22002-1:2025 compliance
     """
     
     def __init__(self, db: Session):
@@ -34,7 +36,7 @@ class PRPService:
         os.makedirs(self.upload_dir, exist_ok=True)
     
     def create_prp_program(self, program_data: PRPProgramCreate, created_by: int) -> PRPProgram:
-        """Create a new PRP program"""
+        """Create a new PRP program with ISO 22002-1:2025 compliance"""
         
         # Check if program code already exists
         existing_program = self.db.query(PRPProgram).filter(
@@ -72,11 +74,21 @@ class PRPService:
             scope=program_data.scope,
             responsible_department=program_data.responsible_department,
             responsible_person=program_data.responsible_person,
+            risk_assessment_required=program_data.risk_assessment_required if hasattr(program_data, 'risk_assessment_required') else True,
             frequency=program_data.frequency,
             frequency_details=program_data.frequency_details,
             next_due_date=next_due_date,
             sop_reference=program_data.sop_reference,
             forms_required=program_data.forms_required,
+            records_required=program_data.records_required,
+            training_requirements=program_data.training_requirements,
+            monitoring_frequency=program_data.monitoring_frequency,
+            verification_frequency=program_data.verification_frequency,
+            acceptance_criteria=program_data.acceptance_criteria,
+            trend_analysis_required=program_data.trend_analysis_required,
+            corrective_action_procedure=program_data.corrective_action_procedure,
+            escalation_procedure=program_data.escalation_procedure,
+            preventive_action_procedure=program_data.preventive_action_procedure,
             created_by=created_by
         )
         
@@ -85,6 +97,353 @@ class PRPService:
         self.db.refresh(program)
         
         return program
+    
+    def create_risk_matrix(self, matrix_data: RiskMatrixCreate, created_by: int) -> RiskMatrix:
+        """Create a new risk matrix for PRP risk assessment"""
+        
+        matrix = RiskMatrix(
+            name=matrix_data.name,
+            description=matrix_data.description,
+            likelihood_levels=matrix_data.likelihood_levels,
+            severity_levels=matrix_data.severity_levels,
+            risk_levels=matrix_data.risk_levels,
+            created_by=created_by
+        )
+        
+        self.db.add(matrix)
+        self.db.commit()
+        self.db.refresh(matrix)
+        
+        return matrix
+    
+    def create_risk_assessment(self, program_id: int, assessment_data: RiskAssessmentCreate, created_by: int) -> RiskAssessment:
+        """Create a new risk assessment for a PRP program"""
+        
+        # Verify program exists
+        program = self.db.query(PRPProgram).filter(PRPProgram.id == program_id).first()
+        if not program:
+            raise ValueError("PRP program not found")
+        
+        # Calculate risk score and level
+        risk_score, risk_level = self._calculate_risk_score(
+            assessment_data.likelihood_level,
+            assessment_data.severity_level
+        )
+        
+        assessment = RiskAssessment(
+            program_id=program_id,
+            assessment_code=assessment_data.assessment_code,
+            hazard_identified=assessment_data.hazard_identified,
+            hazard_description=assessment_data.hazard_description,
+            likelihood_level=assessment_data.likelihood_level,
+            severity_level=assessment_data.severity_level,
+            risk_level=risk_level,
+            risk_score=risk_score,
+            acceptability=risk_level in [RiskLevel.VERY_LOW, RiskLevel.LOW],
+            existing_controls=assessment_data.existing_controls,
+            additional_controls_required=assessment_data.additional_controls_required,
+            control_effectiveness=assessment_data.control_effectiveness,
+            created_by=created_by
+        )
+        
+        self.db.add(assessment)
+        self.db.commit()
+        self.db.refresh(assessment)
+        
+        return assessment
+    
+    def _calculate_risk_score(self, likelihood: str, severity: str) -> Tuple[int, RiskLevel]:
+        """Calculate risk score and level based on likelihood and severity"""
+        
+        # Define scoring matrix (can be made configurable)
+        likelihood_scores = {
+            "Rare": 1,
+            "Unlikely": 2,
+            "Possible": 3,
+            "Likely": 4,
+            "Certain": 5
+        }
+        
+        severity_scores = {
+            "Negligible": 1,
+            "Minor": 2,
+            "Moderate": 3,
+            "Major": 4,
+            "Catastrophic": 5
+        }
+        
+        likelihood_score = likelihood_scores.get(likelihood, 3)
+        severity_score = severity_scores.get(severity, 3)
+        risk_score = likelihood_score * severity_score
+        
+        # Determine risk level
+        if risk_score <= 4:
+            risk_level = RiskLevel.VERY_LOW
+        elif risk_score <= 8:
+            risk_level = RiskLevel.LOW
+        elif risk_score <= 12:
+            risk_level = RiskLevel.MEDIUM
+        elif risk_score <= 16:
+            risk_level = RiskLevel.HIGH
+        elif risk_score <= 20:
+            risk_level = RiskLevel.VERY_HIGH
+        else:
+            risk_level = RiskLevel.CRITICAL
+        
+        return risk_score, risk_level
+    
+    def create_corrective_action(self, action_data: CorrectiveActionCreate, created_by: int) -> CorrectiveAction:
+        """Create a new corrective action"""
+        
+        action = CorrectiveAction(
+            action_code=action_data.action_code,
+            source_type=action_data.source_type,
+            source_id=action_data.source_id,
+            checklist_id=action_data.checklist_id,
+            program_id=action_data.program_id,
+            non_conformance_description=action_data.non_conformance_description,
+            non_conformance_date=action_data.non_conformance_date,
+            severity=action_data.severity,
+            immediate_cause=action_data.immediate_cause,
+            root_cause_analysis=action_data.root_cause_analysis,
+            root_cause_category=action_data.root_cause_category,
+            action_description=action_data.action_description,
+            action_type=action_data.action_type,
+            responsible_person=action_data.responsible_person,
+            assigned_to=action_data.assigned_to,
+            target_completion_date=action_data.target_completion_date,
+            effectiveness_criteria=action_data.effectiveness_criteria,
+            created_by=created_by
+        )
+        
+        self.db.add(action)
+        self.db.commit()
+        self.db.refresh(action)
+        
+        # Create notification for assigned person
+        self._create_action_notification(action, "corrective_action_assigned")
+        
+        return action
+    
+    def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PreventiveAction:
+        """Create a new preventive action"""
+        
+        action = PreventiveAction(
+            action_code=action_data.action_code,
+            trigger_type=action_data.trigger_type,
+            trigger_description=action_data.trigger_description,
+            program_id=action_data.program_id,
+            action_description=action_data.action_description,
+            objective=action_data.objective,
+            responsible_person=action_data.responsible_person,
+            assigned_to=action_data.assigned_to,
+            implementation_plan=action_data.implementation_plan,
+            resources_required=action_data.resources_required,
+            budget_estimate=action_data.budget_estimate,
+            planned_start_date=action_data.planned_start_date,
+            planned_completion_date=action_data.planned_completion_date,
+            success_criteria=action_data.success_criteria,
+            created_by=created_by
+        )
+        
+        self.db.add(action)
+        self.db.commit()
+        self.db.refresh(action)
+        
+        # Create notification for assigned person
+        self._create_action_notification(action, "preventive_action_assigned")
+        
+        return action
+    
+    def _create_action_notification(self, action, notification_type: str):
+        """Create notification for action assignment"""
+        
+        try:
+            if notification_type == "corrective_action_assigned":
+                title = f"Corrective Action Assigned: {action.action_code}"
+                message = f"You have been assigned a corrective action: {action.action_description}"
+            else:
+                title = f"Preventive Action Assigned: {action.action_code}"
+                message = f"You have been assigned a preventive action: {action.action_description}"
+            
+            notification = Notification(
+                user_id=action.assigned_to,
+                title=title,
+                message=message,
+                notification_type=NotificationType.INFO,
+                priority=NotificationPriority.MEDIUM,
+                category=NotificationCategory.PRP,
+                notification_data={
+                    "action_id": action.id,
+                    "action_code": action.action_code,
+                    "action_type": notification_type,
+                    "target_date": action.target_completion_date.isoformat() if hasattr(action, 'target_completion_date') else None
+                }
+            )
+            
+            self.db.add(notification)
+            self.db.commit()
+            
+        except Exception as e:
+            logger.error(f"Failed to create action notification: {str(e)}")
+    
+    def get_prp_compliance_report(self, program_id: Optional[int] = None, 
+                                date_from: Optional[datetime] = None,
+                                date_to: Optional[datetime] = None) -> Dict[str, Any]:
+        """Generate comprehensive PRP compliance report"""
+        
+        query = self.db.query(PRPProgram)
+        if program_id:
+            query = query.filter(PRPProgram.id == program_id)
+        
+        programs = query.all()
+        
+        report_data = {
+            "generated_at": datetime.utcnow().isoformat(),
+            "period": {
+                "from": date_from.isoformat() if date_from else None,
+                "to": date_to.isoformat() if date_to else None
+            },
+            "programs": [],
+            "summary": {
+                "total_programs": len(programs),
+                "active_programs": 0,
+                "programs_with_risk_assessments": 0,
+                "programs_with_corrective_actions": 0,
+                "overall_compliance_rate": 0.0
+            }
+        }
+        
+        total_compliance = 0.0
+        program_count = 0
+        
+        for program in programs:
+            # Get program statistics
+            checklist_count = self.db.query(PRPChecklist).filter(
+                PRPChecklist.program_id == program.id
+            ).count()
+            
+            completed_checklists = self.db.query(PRPChecklist).filter(
+                and_(
+                    PRPChecklist.program_id == program.id,
+                    PRPChecklist.status == ChecklistStatus.COMPLETED
+                )
+            ).all()
+            
+            risk_assessment_count = self.db.query(RiskAssessment).filter(
+                RiskAssessment.program_id == program.id
+            ).count()
+            
+            corrective_action_count = self.db.query(CorrectiveAction).filter(
+                CorrectiveAction.program_id == program.id
+            ).count()
+            
+            # Calculate compliance rate
+            compliance_rate = 0.0
+            if completed_checklists:
+                total_items = sum(c.total_items for c in completed_checklists)
+                passed_items = sum(c.passed_items for c in completed_checklists)
+                if total_items > 0:
+                    compliance_rate = (passed_items / total_items) * 100
+            
+            total_compliance += compliance_rate
+            program_count += 1
+            
+            # Update summary
+            if program.status == PRPStatus.ACTIVE:
+                report_data["summary"]["active_programs"] += 1
+            if risk_assessment_count > 0:
+                report_data["summary"]["programs_with_risk_assessments"] += 1
+            if corrective_action_count > 0:
+                report_data["summary"]["programs_with_corrective_actions"] += 1
+            
+            program_data = {
+                "id": program.id,
+                "program_code": program.program_code,
+                "name": program.name,
+                "category": program.category.value,
+                "status": program.status.value,
+                "risk_level": program.risk_level.value if program.risk_level else None,
+                "checklist_count": checklist_count,
+                "completed_checklists": len(completed_checklists),
+                "compliance_rate": compliance_rate,
+                "risk_assessment_count": risk_assessment_count,
+                "corrective_action_count": corrective_action_count,
+                "last_review_date": program.last_review_date.isoformat() if program.last_review_date else None,
+                "next_review_date": program.next_review_date.isoformat() if program.next_review_date else None
+            }
+            
+            report_data["programs"].append(program_data)
+        
+        # Calculate overall compliance
+        if program_count > 0:
+            report_data["summary"]["overall_compliance_rate"] = total_compliance / program_count
+        
+        return report_data
+    
+    def get_risk_assessment_summary(self, program_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get risk assessment summary for PRP programs"""
+        
+        query = self.db.query(RiskAssessment)
+        if program_id:
+            query = query.filter(RiskAssessment.program_id == program_id)
+        
+        assessments = query.all()
+        
+        risk_level_counts = {
+            RiskLevel.VERY_LOW.value: 0,
+            RiskLevel.LOW.value: 0,
+            RiskLevel.MEDIUM.value: 0,
+            RiskLevel.HIGH.value: 0,
+            RiskLevel.VERY_HIGH.value: 0,
+            RiskLevel.CRITICAL.value: 0
+        }
+        
+        for assessment in assessments:
+            if assessment.risk_level:
+                risk_level_counts[assessment.risk_level.value] += 1
+        
+        return {
+            "total_assessments": len(assessments),
+            "risk_level_distribution": risk_level_counts,
+            "high_risk_count": risk_level_counts[RiskLevel.HIGH.value] + 
+                              risk_level_counts[RiskLevel.VERY_HIGH.value] + 
+                              risk_level_counts[RiskLevel.CRITICAL.value],
+            "assessments_requiring_controls": len([a for a in assessments if not a.acceptability])
+        }
+    
+    def get_corrective_action_summary(self, program_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get corrective action summary for PRP programs"""
+        
+        query = self.db.query(CorrectiveAction)
+        if program_id:
+            query = query.filter(CorrectiveAction.program_id == program_id)
+        
+        actions = query.all()
+        
+        status_counts = {
+            CorrectiveActionStatus.OPEN.value: 0,
+            CorrectiveActionStatus.IN_PROGRESS.value: 0,
+            CorrectiveActionStatus.PENDING_VERIFICATION.value: 0,
+            CorrectiveActionStatus.VERIFIED.value: 0,
+            CorrectiveActionStatus.CLOSED.value: 0,
+            CorrectiveActionStatus.ESCALATED.value: 0
+        }
+        
+        for action in actions:
+            status_counts[action.status.value] += 1
+        
+        overdue_actions = [a for a in actions if a.target_completion_date and 
+                          a.target_completion_date < datetime.utcnow() and 
+                          a.status not in [CorrectiveActionStatus.CLOSED, CorrectiveActionStatus.VERIFIED]]
+        
+        return {
+            "total_actions": len(actions),
+            "status_distribution": status_counts,
+            "overdue_actions": len(overdue_actions),
+            "open_actions": status_counts[CorrectiveActionStatus.OPEN.value] + 
+                           status_counts[CorrectiveActionStatus.IN_PROGRESS.value]
+        }
     
     def create_checklist(self, program_id: int, checklist_data: ChecklistCreate, created_by: int) -> PRPChecklist:
         """Create a new checklist"""
@@ -168,23 +527,23 @@ class PRPService:
         not_applicable_items = 0
         
         for item_completion in completion_data.items:
-            item = self.db.query(PRPChecklistItem).filter(PRPChecklistItem.id == item_completion.item_id).first()
+            item = self.db.query(PRPChecklistItem).filter(PRPChecklistItem.id == item_completion["item_id"]).first()
             if item:
-                item.response = item_completion.response
-                item.response_value = item_completion.response_value
-                item.is_compliant = item_completion.is_compliant
-                item.comments = item_completion.comments
-                item.evidence_files = item_completion.evidence_files
+                item.response = item_completion["response"]
+                item.response_value = item_completion.get("response_value")
+                item.is_compliant = item_completion["is_compliant"]
+                item.comments = item_completion.get("comments")
+                item.evidence_files = item_completion.get("evidence_files")
                 item.updated_at = datetime.utcnow()
                 
                 total_items += 1
-                if item_completion.is_compliant:
+                if item_completion["is_compliant"]:
                     passed_items += 1
                 else:
                     failed_items += 1
                 
                 # Check if item is not applicable
-                if item_completion.response.lower() in ['n/a', 'not applicable', 'na']:
+                if item_completion["response"].lower() in ['n/a', 'not applicable', 'na']:
                     not_applicable_items += 1
                     passed_items -= 1  # Adjust counts
         
@@ -235,8 +594,7 @@ class PRPService:
             with open(file_path, 'wb') as f:
                 f.write(signature_bytes)
             
-            # Store signature metadata in database (you might want to create a Signature model)
-            # For now, we'll store it in the checklist evidence_files field
+            # Store signature metadata in database
             checklist = self.db.query(PRPChecklist).filter(PRPChecklist.id == checklist_id).first()
             if checklist:
                 evidence_files = []
@@ -278,36 +636,6 @@ class PRPService:
                 severity = "medium"
             else:
                 severity = "low"
-            
-            # Persist a Non-Conformance via NonConformanceService
-            try:
-                from app.schemas.nonconformance import NonConformanceCreate as NCCreate, NonConformanceSource
-                from app.services.nonconformance_service import NonConformanceService
-            except Exception:
-                NonConformanceService = None  # type: ignore
-            if NonConformanceService:
-                nc_title = f"PRP Checklist Failure: {checklist.name}"
-                nc_description = (
-                    f"Checklist '{checklist.name}' failed with {checklist.failed_items} of {checklist.total_items} items. "
-                    f"Compliance: {checklist.compliance_percentage:.1f}%"
-                )
-                nc_data = NCCreate(
-                    title=nc_title,
-                    description=nc_description,
-                    source=NonConformanceSource.PRP,
-                    batch_reference=None,
-                    product_reference=None,
-                    process_reference=f"PRPProgram:{checklist.program_id}/Checklist:{checklist.id}",
-                    location=None,
-                    severity=severity,
-                    impact_area="quality",
-                    category="PRP_Checklist",
-                    target_resolution_date=datetime.utcnow() + timedelta(days=7),
-                )
-                nc_service = NonConformanceService(self.db)
-                # Use checklist.creator as reporter if available; fallback to assigned_to
-                reported_by = checklist.created_by or (checklist.assigned_to or 1)
-                _nc = nc_service.create_non_conformance(nc_data, reported_by)
             
             # Create notification for non-conformance
             notification = Notification(
@@ -495,6 +823,12 @@ class PRPService:
             )
         ).order_by(PRPChecklist.scheduled_date).limit(5).all()
         
+        # Get risk assessment summary
+        risk_summary = self.get_risk_assessment_summary()
+        
+        # Get corrective action summary
+        action_summary = self.get_corrective_action_summary()
+        
         return {
             "total_programs": total_programs,
             "active_programs": active_programs,
@@ -503,6 +837,8 @@ class PRPService:
             "overdue_checklists": overdue_checklists,
             "completed_this_month": completed_this_month,
             "compliance_rate": compliance_rate,
+            "risk_assessment_summary": risk_summary,
+            "corrective_action_summary": action_summary,
             "recent_checklists": [
                 {
                     "id": checklist.id,

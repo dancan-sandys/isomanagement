@@ -3,7 +3,11 @@ from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
 from .haccp import Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog
-from .prp import PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule
+from .prp import (
+    PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
+    RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
+    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus, RiskLevel, CorrectiveActionStatus
+)
 from .supplier import Supplier, Material, SupplierEvaluation, IncomingDelivery, SupplierDocument
 from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport
 from .training import TrainingProgram, TrainingSession, TrainingAttendance
@@ -30,6 +34,8 @@ __all__ = [
     
     # PRP models
     "PRPProgram", "PRPChecklist", "PRPChecklistItem", "PRPTemplate", "PRPSchedule",
+    "RiskMatrix", "RiskAssessment", "RiskControl", "CorrectiveAction", "PreventiveAction",
+    "PRPCategory", "PRPFrequency", "PRPStatus", "ChecklistStatus", "RiskLevel", "CorrectiveActionStatus",
     
     # Supplier models
     "Supplier", "Material", "SupplierEvaluation", "IncomingDelivery", "SupplierDocument",
