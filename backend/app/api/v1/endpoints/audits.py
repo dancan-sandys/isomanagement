@@ -42,6 +42,8 @@ async def list_audits(
     search: Optional[str] = Query(None),
     audit_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    auditor_id: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -55,6 +57,10 @@ async def list_audits(
     if search:
         like = f"%{search}%"
         q = q.filter(AuditModel.title.ilike(like))
+    if department:
+        q = q.filter(AuditModel.auditee_department == department)
+    if auditor_id:
+        q = q.filter((AuditModel.auditor_id == auditor_id) | (AuditModel.lead_auditor_id == auditor_id))
     total = q.count()
     items = q.order_by(AuditModel.created_at.desc()).offset((page - 1) * size).limit(size).all()
     return AuditListResponse(items=items, total=total, page=page, size=size, pages=(total + size - 1) // size)

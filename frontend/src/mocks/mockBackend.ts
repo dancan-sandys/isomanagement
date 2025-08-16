@@ -1,3 +1,4 @@
+// @ts-nocheck
 import AxiosMockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
 import api, { authAPI } from '../services/api';
@@ -496,14 +497,14 @@ export async function initMockBackend() {
   mock.onDelete(/\/notifications\/clear-read$/).reply(ok.bind(null, { message: 'ok' } as any));
 
   // Settings
-  mock.onGet(/\/settings$/).reply(() => ok([{ key: 'timezone', value: 'UTC' }]));
-  mock.onPut(/\/settings\/.+$/).reply((config) => ok({ updated: true }));
-  mock.onPost(/\/settings\/initialize$/).reply(ok.bind(null, { initialized: true } as any));
-  mock.onPost(/\/settings\/reset\/.+$/).reply(ok.bind(null, { reset: true } as any));
-  mock.onGet(/\/settings\/export\/json$/).reply(() => ok({ settings: [] }));
-  mock.onPost(/\/settings\/import\/json$/).reply(() => ok({ imported: true }));
-  mock.onGet(/\/settings\/system-info$/).reply(() => ok({ version: 'demo', uptime: '99.99%' }));
-  mock.onGet(/\/settings\/backup-status$/).reply(() => ok({ last_backup: new Date().toISOString(), status: 'ok' }));
+  mock.onGet(/\/settings$/).reply(200, { success: true, data: [{ key: 'timezone', value: 'UTC' }] });
+  mock.onPut(/\/settings\/.+$/).reply(200, { success: true, data: { updated: true } });
+  mock.onPost(/\/settings\/initialize$/).reply(200, { success: true, data: { initialized: true } });
+  mock.onPost(/\/settings\/reset\/.+$/).reply(200, { success: true, data: { reset: true } });
+  mock.onGet(/\/settings\/export\/json$/).reply(200, { success: true, data: { settings: [] } });
+  mock.onPost(/\/settings\/import\/json$/).reply(200, { success: true, data: { imported: true } });
+  mock.onGet(/\/settings\/system-info$/).reply(200, { success: true, data: { version: 'demo', uptime: '99.99%' } });
+  mock.onGet(/\/settings\/backup-status$/).reply(200, { success: true, data: { last_backup: new Date().toISOString(), status: 'ok' } });
 
   // Search
   mock.onGet(/\/search\/smart$/).reply((config) => {
@@ -514,19 +515,19 @@ export async function initMockBackend() {
       ...db.haccp.products.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 3).map((p) => ({ id: `prod-${p.id}`, title: p.name, description: 'HACCP Product', category: 'HACCP', path: `/haccp/products/${p.id}`, priority: 9 })),
       ...db.suppliers.suppliers.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 3).map((s) => ({ id: `sup-${s.id}`, title: s.name, description: 'Supplier', category: 'Suppliers', path: `/suppliers`, priority: 7 })),
     ];
-    return ok({ results });
+    return [200, { success: true, data: { results } }];
   });
 
   // Traceability minimal
-  mock.onGet(/\/traceability\/dashboard\/enhanced$/).reply(() => ok({ batches_today: 2, recalls_open: 0 }));
+  mock.onGet(/\/traceability\/dashboard\/enhanced$/).reply(200, { success: true, data: { batches_today: 2, recalls_open: 0 } });
 
   // Complaints minimal
   mock.onGet(/\/complaints(\/.+)?$/).reply((config) => {
     const path = config.url || '';
     if (/\/complaints\/$/.test(path) || /\/complaints\?$/.test(path) || /\/complaints$/.test(path)) {
-      return ok({ items: [] });
+      return [200, { success: true, data: { items: [] } }];
     }
-    return ok({});
+    return [200, { success: true, data: {} }];
   });
 }
 

@@ -1342,7 +1342,7 @@ export const traceabilityAPI = {
 // Audits API
 export const auditsAPI = {
   // Audits
-  listAudits: async (params?: { search?: string; audit_type?: 'internal'|'external'|'supplier'; status?: string; page?: number; size?: number }) => {
+  listAudits: async (params?: { search?: string; audit_type?: 'internal'|'external'|'supplier'; status?: string; department?: string; auditor_id?: number; page?: number; size?: number }) => {
     const response: AxiosResponse = await api.get('/audits/', { params });
     return response.data;
   },
@@ -1390,7 +1390,7 @@ export const auditsAPI = {
   },
 
   // Export list
-  exportAudits: async (format: 'pdf'|'xlsx', filters?: { search?: string; audit_type?: string; status?: string }) => {
+  exportAudits: async (format: 'pdf'|'xlsx', filters?: { search?: string; audit_type?: string; status?: string; department?: string; auditor_id?: number }) => {
     const response: AxiosResponse<Blob> = await api.post('/audits/export', filters || {}, {
       params: { format },
       responseType: 'blob',

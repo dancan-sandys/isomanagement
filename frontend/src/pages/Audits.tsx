@@ -29,7 +29,13 @@ const Audits: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const resp = await auditsAPI.listAudits({ search });
+      // Combine search with KPI filters for audit list
+      const auditParams = { 
+        search,
+        department: kpiFilters.department || undefined,
+        auditor_id: kpiFilters.auditor_id || undefined
+      };
+      const resp = await auditsAPI.listAudits(auditParams);
       setAudits(resp?.data?.items || resp?.items || resp || []);
       try {
         const s = await auditsAPI.getStats();
@@ -124,7 +130,12 @@ const Audits: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
   const exportList = async (format: 'pdf'|'xlsx') => {
-    const blob = await auditsAPI.exportAudits(format, { search });
+    const exportFilters = { 
+      search,
+      department: kpiFilters.department || undefined,
+      auditor_id: kpiFilters.auditor_id || undefined
+    };
+    const blob = await auditsAPI.exportAudits(format, exportFilters);
     downloadBlob(blob, `audits.${format}`);
   };
   const exportRow = async (row: any, format: 'pdf'|'xlsx') => {

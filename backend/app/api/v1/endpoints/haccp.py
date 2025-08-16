@@ -101,7 +101,7 @@ async def get_product(
                 text(
                     """
                     SELECT id, process_step_id, hazard_type, hazard_name, description,
-                           rationale, prp_reference_ids, references,
+                           rationale, prp_reference_ids, "references",
                            likelihood, severity, risk_score, risk_level, control_measures,
                            is_controlled, control_effectiveness, is_ccp, ccp_justification
                     FROM hazards
