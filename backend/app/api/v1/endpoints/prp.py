@@ -9,13 +9,17 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem,
-    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus
+    PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus,
+    RiskMatrix, RiskAssessment, RiskControl, RiskLevel,
+    CorrectiveAction, PreventiveAction, CorrectiveActionStatus
 )
 from app.schemas.common import ResponseModel
 from app.schemas.prp import (
     PRPProgramCreate, PRPProgramUpdate, ChecklistCreate, ChecklistUpdate,
     ChecklistItemCreate, ChecklistCompletion, NonConformanceCreate,
-    ReminderCreate, ScheduleCreate, PRPReportRequest
+    ReminderCreate, ScheduleCreate, PRPReportRequest,
+    RiskMatrixCreate, RiskAssessmentCreate, RiskControlCreate,
+    CorrectiveActionCreate, PreventiveActionCreate
 )
 from app.services.prp_service import PRPService
 from app.utils.audit import audit_event
@@ -942,3 +946,1746 @@ async def bulk_update_schedules(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to bulk update schedules: {str(e)}"
         ) 
+
+# Risk Assessment Endpoints (Phase 2.1)
+@router.get("/risk-matrices")
+async def get_risk_matrices(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    is_default: Optional[bool] = None
+):
+    """Get all risk matrices with pagination and filters"""
+    try:
+        query = db.query(RiskMatrix)
+        
+        # Apply filters
+        if is_default is not None:
+            query = query.filter(RiskMatrix.is_default == is_default)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        matrices = query.order_by(desc(RiskMatrix.created_at)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for matrix in matrices:
+            # Get creator name
+            creator = db.query(User).filter(User.id == matrix.created_by).first()
+            
+            items.append({
+                "id": matrix.id,
+                "name": matrix.name,
+                "description": matrix.description,
+                "likelihood_levels": matrix.likelihood_levels,
+                "severity_levels": matrix.severity_levels,
+                "risk_levels": matrix.risk_levels,
+                "is_default": matrix.is_default,
+                "created_by": creator.name if creator else "Unknown",
+                "created_at": matrix.created_at.isoformat() if matrix.created_at else None,
+                "updated_at": matrix.updated_at.isoformat() if matrix.updated_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Risk matrices retrieved successfully",
+            data={
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk matrices: {str(e)}"
+        )
+
+
+@router.post("/risk-matrices")
+async def create_risk_matrix(
+    matrix_data: RiskMatrixCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new risk matrix"""
+    try:
+        prp_service = PRPService(db)
+        matrix = prp_service.create_risk_matrix(matrix_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk matrix created successfully",
+            data={
+                "id": matrix.id,
+                "name": matrix.name,
+                "description": matrix.description,
+                "likelihood_levels": matrix.likelihood_levels,
+                "severity_levels": matrix.severity_levels,
+                "risk_levels": matrix.risk_levels,
+                "is_default": matrix.is_default,
+                "created_at": matrix.created_at.isoformat() if matrix.created_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create risk matrix: {str(e)}"
+        )
+
+
+@router.get("/programs/{program_id}/risk-assessments")
+async def get_program_risk_assessments(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    risk_level: Optional[str] = None,
+    escalated: Optional[bool] = None
+):
+    """Get risk assessments for a specific PRP program"""
+    try:
+        # Verify program exists
+        program = db.query(PRPProgram).filter(PRPProgram.id == program_id).first()
+        if not program:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="PRP program not found"
+            )
+        
+        query = db.query(RiskAssessment).filter(RiskAssessment.program_id == program_id)
+        
+        # Apply filters
+        if risk_level:
+            query = query.filter(RiskAssessment.risk_level == RiskLevel(risk_level))
+        if escalated is not None:
+            query = query.filter(RiskAssessment.escalated_to_risk_register == escalated)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        assessments = query.order_by(desc(RiskAssessment.assessment_date)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for assessment in assessments:
+            # Get creator name
+            creator = db.query(User).filter(User.id == assessment.created_by).first()
+            
+            items.append({
+                "id": assessment.id,
+                "assessment_code": assessment.assessment_code,
+                "hazard_identified": assessment.hazard_identified,
+                "hazard_description": assessment.hazard_description,
+                "likelihood_level": assessment.likelihood_level,
+                "severity_level": assessment.severity_level,
+                "risk_level": assessment.risk_level.value if assessment.risk_level else None,
+                "risk_score": assessment.risk_score,
+                "acceptability": assessment.acceptability,
+                "existing_controls": assessment.existing_controls,
+                "additional_controls_required": assessment.additional_controls_required,
+                "control_effectiveness": assessment.control_effectiveness,
+                "residual_risk_level": assessment.residual_risk_level.value if assessment.residual_risk_level else None,
+                "residual_risk_score": assessment.residual_risk_score,
+                "assessment_date": assessment.assessment_date.isoformat() if assessment.assessment_date else None,
+                "next_review_date": assessment.next_review_date.isoformat() if assessment.next_review_date else None,
+                "escalated_to_risk_register": assessment.escalated_to_risk_register,
+                "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
+                "risk_register_entry_id": assessment.risk_register_entry_id,
+                "created_by": creator.name if creator else "Unknown",
+                "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
+                "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Risk assessments retrieved successfully",
+            data={
+                "program_id": program_id,
+                "program_name": program.name,
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk assessments: {str(e)}"
+        )
+
+
+@router.post("/programs/{program_id}/risk-assessments")
+async def create_risk_assessment(
+    program_id: int,
+    assessment_data: RiskAssessmentCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new risk assessment for a PRP program"""
+    try:
+        # Verify program exists
+        program = db.query(PRPProgram).filter(PRPProgram.id == program_id).first()
+        if not program:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="PRP program not found"
+            )
+        
+        prp_service = PRPService(db)
+        assessment = prp_service.create_risk_assessment(program_id, assessment_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk assessment created successfully",
+            data={
+                "id": assessment.id,
+                "assessment_code": assessment.assessment_code,
+                "hazard_identified": assessment.hazard_identified,
+                "hazard_description": assessment.hazard_description,
+                "likelihood_level": assessment.likelihood_level,
+                "severity_level": assessment.severity_level,
+                "risk_level": assessment.risk_level.value if assessment.risk_level else None,
+                "risk_score": assessment.risk_score,
+                "acceptability": assessment.acceptability,
+                "existing_controls": assessment.existing_controls,
+                "additional_controls_required": assessment.additional_controls_required,
+                "control_effectiveness": assessment.control_effectiveness,
+                "residual_risk_level": assessment.residual_risk_level.value if assessment.residual_risk_level else None,
+                "residual_risk_score": assessment.residual_risk_score,
+                "assessment_date": assessment.assessment_date.isoformat() if assessment.assessment_date else None,
+                "next_review_date": assessment.next_review_date.isoformat() if assessment.next_review_date else None,
+                "created_at": assessment.created_at.isoformat() if assessment.created_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create risk assessment: {str(e)}"
+        )
+
+
+@router.put("/risk-assessments/{assessment_id}")
+async def update_risk_assessment(
+    assessment_id: int,
+    assessment_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a risk assessment"""
+    try:
+        prp_service = PRPService(db)
+        assessment = prp_service.update_risk_assessment(assessment_id, assessment_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk assessment updated successfully",
+            data={
+                "id": assessment.id,
+                "assessment_code": assessment.assessment_code,
+                "hazard_identified": assessment.hazard_identified,
+                "hazard_description": assessment.hazard_description,
+                "likelihood_level": assessment.likelihood_level,
+                "severity_level": assessment.severity_level,
+                "risk_level": assessment.risk_level.value if assessment.risk_level else None,
+                "risk_score": assessment.risk_score,
+                "acceptability": assessment.acceptability,
+                "existing_controls": assessment.existing_controls,
+                "additional_controls_required": assessment.additional_controls_required,
+                "control_effectiveness": assessment.control_effectiveness,
+                "residual_risk_level": assessment.residual_risk_level.value if assessment.residual_risk_level else None,
+                "residual_risk_score": assessment.residual_risk_score,
+                "assessment_date": assessment.assessment_date.isoformat() if assessment.assessment_date else None,
+                "next_review_date": assessment.next_review_date.isoformat() if assessment.next_review_date else None,
+                "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update risk assessment: {str(e)}"
+        )
+
+
+@router.get("/risk-assessments/{assessment_id}/controls")
+async def get_risk_controls(
+    assessment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    status: Optional[str] = None
+):
+    """Get risk controls for a specific risk assessment"""
+    try:
+        # Verify assessment exists
+        assessment = db.query(RiskAssessment).filter(RiskAssessment.id == assessment_id).first()
+        if not assessment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk assessment not found"
+            )
+        
+        query = db.query(RiskControl).filter(RiskControl.risk_assessment_id == assessment_id)
+        
+        # Apply status filter
+        if status:
+            query = query.filter(RiskControl.implementation_status == status)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        controls = query.order_by(desc(RiskControl.created_at)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for control in controls:
+            # Get responsible person name
+            responsible_person = db.query(User).filter(User.id == control.responsible_person).first()
+            
+            items.append({
+                "id": control.id,
+                "control_code": control.control_code,
+                "control_type": control.control_type,
+                "control_description": control.control_description,
+                "control_procedure": control.control_procedure,
+                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person_id": control.responsible_person,
+                "implementation_date": control.implementation_date.isoformat() if control.implementation_date else None,
+                "frequency": control.frequency.value if control.frequency else None,
+                "effectiveness_measure": control.effectiveness_measure,
+                "effectiveness_threshold": control.effectiveness_threshold,
+                "effectiveness_score": control.effectiveness_score,
+                "is_implemented": control.is_implemented,
+                "implementation_status": control.implementation_status,
+                "created_at": control.created_at.isoformat() if control.created_at else None,
+                "updated_at": control.updated_at.isoformat() if control.updated_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Risk controls retrieved successfully",
+            data={
+                "assessment_id": assessment_id,
+                "assessment_code": assessment.assessment_code,
+                "hazard_identified": assessment.hazard_identified,
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk controls: {str(e)}"
+        )
+
+
+@router.post("/risk-assessments/{assessment_id}/controls")
+async def add_risk_control(
+    assessment_id: int,
+    control_data: RiskControlCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Add a risk control to a risk assessment"""
+    try:
+        # Verify assessment exists
+        assessment = db.query(RiskAssessment).filter(RiskAssessment.id == assessment_id).first()
+        if not assessment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk assessment not found"
+            )
+        
+        prp_service = PRPService(db)
+        control = prp_service.add_risk_control(assessment_id, control_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk control added successfully",
+            data={
+                "id": control.id,
+                "control_code": control.control_code,
+                "control_type": control.control_type,
+                "control_description": control.control_description,
+                "control_procedure": control.control_procedure,
+                "responsible_person": control.responsible_person,
+                "implementation_date": control.implementation_date.isoformat() if control.implementation_date else None,
+                "frequency": control.frequency.value if control.frequency else None,
+                "effectiveness_measure": control.effectiveness_measure,
+                "effectiveness_threshold": control.effectiveness_threshold,
+                "effectiveness_score": control.effectiveness_score,
+                "is_implemented": control.is_implemented,
+                "implementation_status": control.implementation_status,
+                "created_at": control.created_at.isoformat() if control.created_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add risk control: {str(e)}"
+        )
+
+
+@router.post("/risk-assessments/{assessment_id}/escalate")
+async def escalate_risk_assessment(
+    assessment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Escalate a risk assessment to the main risk register"""
+    try:
+        prp_service = PRPService(db)
+        result = prp_service.escalate_risk_to_register(assessment_id, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk assessment escalated successfully",
+            data=result
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to escalate risk assessment: {str(e)}"
+        )
+
+
+@router.get("/risk-assessments/{assessment_id}")
+async def get_risk_assessment(
+    assessment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific risk assessment with full details"""
+    try:
+        assessment = db.query(RiskAssessment).filter(RiskAssessment.id == assessment_id).first()
+        if not assessment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk assessment not found"
+            )
+        
+        # Get program details
+        program = db.query(PRPProgram).filter(PRPProgram.id == assessment.program_id).first()
+        
+        # Get creator name
+        creator = db.query(User).filter(User.id == assessment.created_by).first()
+        
+        # Get escalated by name if escalated
+        escalated_by = None
+        if assessment.escalated_by:
+            escalated_by_user = db.query(User).filter(User.id == assessment.escalated_by).first()
+            escalated_by = escalated_by_user.name if escalated_by_user else "Unknown"
+        
+        # Get risk controls
+        controls = db.query(RiskControl).filter(RiskControl.risk_assessment_id == assessment_id).all()
+        control_items = []
+        for control in controls:
+            responsible_person = db.query(User).filter(User.id == control.responsible_person).first()
+            control_items.append({
+                "id": control.id,
+                "control_code": control.control_code,
+                "control_type": control.control_type,
+                "control_description": control.control_description,
+                "control_procedure": control.control_procedure,
+                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person_id": control.responsible_person,
+                "implementation_date": control.implementation_date.isoformat() if control.implementation_date else None,
+                "frequency": control.frequency.value if control.frequency else None,
+                "effectiveness_measure": control.effectiveness_measure,
+                "effectiveness_threshold": control.effectiveness_threshold,
+                "effectiveness_score": control.effectiveness_score,
+                "is_implemented": control.is_implemented,
+                "implementation_status": control.implementation_status,
+                "created_at": control.created_at.isoformat() if control.created_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Risk assessment retrieved successfully",
+            data={
+                "id": assessment.id,
+                "assessment_code": assessment.assessment_code,
+                "program": {
+                    "id": program.id if program else None,
+                    "name": program.name if program else None,
+                    "program_code": program.program_code if program else None,
+                    "category": program.category.value if program else None
+                },
+                "hazard_identified": assessment.hazard_identified,
+                "hazard_description": assessment.hazard_description,
+                "likelihood_level": assessment.likelihood_level,
+                "severity_level": assessment.severity_level,
+                "risk_level": assessment.risk_level.value if assessment.risk_level else None,
+                "risk_score": assessment.risk_score,
+                "acceptability": assessment.acceptability,
+                "existing_controls": assessment.existing_controls,
+                "additional_controls_required": assessment.additional_controls_required,
+                "control_effectiveness": assessment.control_effectiveness,
+                "residual_risk_level": assessment.residual_risk_level.value if assessment.residual_risk_level else None,
+                "residual_risk_score": assessment.residual_risk_score,
+                "assessment_date": assessment.assessment_date.isoformat() if assessment.assessment_date else None,
+                "next_review_date": assessment.next_review_date.isoformat() if assessment.next_review_date else None,
+                "escalated_to_risk_register": assessment.escalated_to_risk_register,
+                "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
+                "escalated_by": escalated_by,
+                "risk_register_entry_id": assessment.risk_register_entry_id,
+                "created_by": creator.name if creator else "Unknown",
+                "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
+                "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None,
+                "controls": control_items
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk assessment: {str(e)}"
+        ) 
+
+# Corrective Action Endpoints (Phase 2.2)
+@router.get("/corrective-actions")
+async def get_corrective_actions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    source_type: Optional[str] = None
+):
+    """Get all corrective actions with pagination and filters"""
+    try:
+        query = db.query(CorrectiveAction)
+        
+        # Apply filters
+        if status:
+            query = query.filter(CorrectiveAction.status == CorrectiveActionStatus(status))
+        if severity:
+            query = query.filter(CorrectiveAction.severity == severity)
+        if source_type:
+            query = query.filter(CorrectiveAction.source_type == source_type)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        actions = query.order_by(desc(CorrectiveAction.created_at)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for action in actions:
+            # Get responsible person name
+            responsible_person = db.query(User).filter(User.id == action.responsible_person).first()
+            assigned_person = db.query(User).filter(User.id == action.assigned_to).first()
+            
+            items.append({
+                "id": action.id,
+                "action_code": action.action_code,
+                "source_type": action.source_type,
+                "source_id": action.source_id,
+                "checklist_id": action.checklist_id,
+                "non_conformance_description": action.non_conformance_description,
+                "non_conformance_date": action.non_conformance_date.isoformat() if action.non_conformance_date else None,
+                "severity": action.severity,
+                "immediate_cause": action.immediate_cause,
+                "root_cause_analysis": action.root_cause_analysis,
+                "root_cause_category": action.root_cause_category,
+                "action_description": action.action_description,
+                "action_type": action.action_type,
+                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person_id": action.responsible_person,
+                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to_id": action.assigned_to,
+                "target_completion_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "effectiveness_criteria": action.effectiveness_criteria,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "status": action.status.value if action.status else None,
+                "created_at": action.created_at.isoformat() if action.created_at else None,
+                "updated_at": action.updated_at.isoformat() if action.updated_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Corrective actions retrieved successfully",
+            data={
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve corrective actions: {str(e)}"
+        )
+
+
+@router.post("/corrective-actions")
+async def create_corrective_action(
+    action_data: CorrectiveActionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new corrective action"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.create_corrective_action(action_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Corrective action created successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "source_type": action.source_type,
+                "source_id": action.source_id,
+                "checklist_id": action.checklist_id,
+                "non_conformance_description": action.non_conformance_description,
+                "non_conformance_date": action.non_conformance_date.isoformat() if action.non_conformance_date else None,
+                "severity": action.severity,
+                "action_description": action.action_description,
+                "action_type": action.action_type,
+                "responsible_person": action.responsible_person,
+                "assigned_to": action.assigned_to,
+                "target_completion_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
+                "status": action.status.value if action.status else None,
+                "created_at": action.created_at.isoformat() if action.created_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create corrective action: {str(e)}"
+        )
+
+
+@router.get("/corrective-actions/{action_id}")
+async def get_corrective_action(
+    action_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific corrective action with full details"""
+    try:
+        action = db.query(CorrectiveAction).filter(CorrectiveAction.id == action_id).first()
+        if not action:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Corrective action not found"
+            )
+        
+        # Get user names
+        responsible_person = db.query(User).filter(User.id == action.responsible_person).first()
+        assigned_person = db.query(User).filter(User.id == action.assigned_to).first()
+        creator = db.query(User).filter(User.id == action.created_by).first()
+        
+        # Get source details if available
+        source_details = None
+        if action.source_type == "checklist" and action.checklist_id:
+            checklist = db.query(PRPChecklist).filter(PRPChecklist.id == action.checklist_id).first()
+            if checklist:
+                source_details = {
+                    "id": checklist.id,
+                    "name": checklist.name,
+                    "checklist_code": checklist.checklist_code,
+                    "program_id": checklist.program_id
+                }
+        
+        return ResponseModel(
+            success=True,
+            message="Corrective action retrieved successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "source_type": action.source_type,
+                "source_id": action.source_id,
+                "source_details": source_details,
+                "checklist_id": action.checklist_id,
+                "non_conformance_description": action.non_conformance_description,
+                "non_conformance_date": action.non_conformance_date.isoformat() if action.non_conformance_date else None,
+                "severity": action.severity,
+                "immediate_cause": action.immediate_cause,
+                "root_cause_analysis": action.root_cause_analysis,
+                "root_cause_category": action.root_cause_category,
+                "action_description": action.action_description,
+                "action_type": action.action_type,
+                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person_id": action.responsible_person,
+                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to_id": action.assigned_to,
+                "target_completion_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "effectiveness_criteria": action.effectiveness_criteria,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "status": action.status.value if action.status else None,
+                "created_by": creator.name if creator else "Unknown",
+                "created_at": action.created_at.isoformat() if action.created_at else None,
+                "updated_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve corrective action: {str(e)}"
+        )
+
+
+@router.put("/corrective-actions/{action_id}")
+async def update_corrective_action(
+    action_id: int,
+    action_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a corrective action"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.update_corrective_action(action_id, action_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Corrective action updated successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "status": action.status.value if action.status else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "updated_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update corrective action: {str(e)}"
+        )
+
+
+@router.post("/corrective-actions/{action_id}/complete")
+async def complete_corrective_action(
+    action_id: int,
+    completion_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Complete a corrective action with effectiveness evaluation"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.complete_corrective_action(
+            action_id, 
+            completion_data.get("effectiveness_evaluation"),
+            completion_data.get("actual_completion_date"),
+            current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Corrective action completed successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "status": action.status.value if action.status else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "completed_by": current_user.id,
+                "completed_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete corrective action: {str(e)}"
+        )
+
+
+# Preventive Action Endpoints
+@router.get("/preventive-actions")
+async def get_preventive_actions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    status: Optional[str] = None,
+    trigger_type: Optional[str] = None
+):
+    """Get all preventive actions with pagination and filters"""
+    try:
+        query = db.query(PreventiveAction)
+        
+        # Apply filters
+        if status:
+            query = query.filter(PreventiveAction.status == CorrectiveActionStatus(status))
+        if trigger_type:
+            query = query.filter(PreventiveAction.trigger_type == trigger_type)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        actions = query.order_by(desc(PreventiveAction.created_at)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for action in actions:
+            # Get user names
+            responsible_person = db.query(User).filter(User.id == action.responsible_person).first()
+            assigned_person = db.query(User).filter(User.id == action.assigned_to).first()
+            
+            items.append({
+                "id": action.id,
+                "action_code": action.action_code,
+                "trigger_type": action.trigger_type,
+                "trigger_description": action.trigger_description,
+                "action_description": action.action_description,
+                "objective": action.objective,
+                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person_id": action.responsible_person,
+                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to_id": action.assigned_to,
+                "implementation_plan": action.implementation_plan,
+                "resources_required": action.resources_required,
+                "budget_estimate": action.budget_estimate,
+                "planned_start_date": action.planned_start_date.isoformat() if action.planned_start_date else None,
+                "planned_completion_date": action.planned_completion_date.isoformat() if action.planned_completion_date else None,
+                "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "success_criteria": action.success_criteria,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "status": action.status.value if action.status else None,
+                "created_at": action.created_at.isoformat() if action.created_at else None,
+                "updated_at": action.updated_at.isoformat() if action.updated_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive actions retrieved successfully",
+            data={
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve preventive actions: {str(e)}"
+        )
+
+
+@router.post("/preventive-actions")
+async def create_preventive_action(
+    action_data: PreventiveActionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new preventive action"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.create_preventive_action(action_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive action created successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "trigger_type": action.trigger_type,
+                "trigger_description": action.trigger_description,
+                "action_description": action.action_description,
+                "objective": action.objective,
+                "responsible_person": action.responsible_person,
+                "assigned_to": action.assigned_to,
+                "implementation_plan": action.implementation_plan,
+                "resources_required": action.resources_required,
+                "budget_estimate": action.budget_estimate,
+                "planned_start_date": action.planned_start_date.isoformat() if action.planned_start_date else None,
+                "planned_completion_date": action.planned_completion_date.isoformat() if action.planned_completion_date else None,
+                "success_criteria": action.success_criteria,
+                "status": action.status.value if action.status else None,
+                "created_at": action.created_at.isoformat() if action.created_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create preventive action: {str(e)}"
+        )
+
+
+@router.get("/preventive-actions/{action_id}")
+async def get_preventive_action(
+    action_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific preventive action with full details"""
+    try:
+        action = db.query(PreventiveAction).filter(PreventiveAction.id == action_id).first()
+        if not action:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Preventive action not found"
+            )
+        
+        # Get user names
+        responsible_person = db.query(User).filter(User.id == action.responsible_person).first()
+        assigned_person = db.query(User).filter(User.id == action.assigned_to).first()
+        creator = db.query(User).filter(User.id == action.created_by).first()
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive action retrieved successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "trigger_type": action.trigger_type,
+                "trigger_description": action.trigger_description,
+                "action_description": action.action_description,
+                "objective": action.objective,
+                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person_id": action.responsible_person,
+                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to_id": action.assigned_to,
+                "implementation_plan": action.implementation_plan,
+                "resources_required": action.resources_required,
+                "budget_estimate": action.budget_estimate,
+                "planned_start_date": action.planned_start_date.isoformat() if action.planned_start_date else None,
+                "planned_completion_date": action.planned_completion_date.isoformat() if action.planned_completion_date else None,
+                "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "success_criteria": action.success_criteria,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "status": action.status.value if action.status else None,
+                "created_by": creator.name if creator else "Unknown",
+                "created_at": action.created_at.isoformat() if action.created_at else None,
+                "updated_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve preventive action: {str(e)}"
+        )
+
+
+@router.put("/preventive-actions/{action_id}")
+async def update_preventive_action(
+    action_id: int,
+    action_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a preventive action"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.update_preventive_action(action_id, action_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive action updated successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "status": action.status.value if action.status else None,
+                "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "updated_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update preventive action: {str(e)}"
+        )
+
+
+@router.post("/preventive-actions/{action_id}/start")
+async def start_preventive_action(
+    action_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Start implementation of a preventive action"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.start_preventive_action(action_id, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive action started successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "status": action.status.value if action.status else None,
+                "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
+                "started_by": current_user.id,
+                "started_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start preventive action: {str(e)}"
+        )
+
+
+@router.post("/preventive-actions/{action_id}/complete")
+async def complete_preventive_action(
+    action_id: int,
+    completion_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Complete a preventive action with effectiveness evaluation"""
+    try:
+        prp_service = PRPService(db)
+        action = prp_service.complete_preventive_action(
+            action_id,
+            completion_data.get("effectiveness_evaluation"),
+            completion_data.get("actual_completion_date"),
+            current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive action completed successfully",
+            data={
+                "id": action.id,
+                "action_code": action.action_code,
+                "status": action.status.value if action.status else None,
+                "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
+                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "completed_by": current_user.id,
+                "completed_at": action.updated_at.isoformat() if action.updated_at else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete preventive action: {str(e)}"
+        )
+
+
+# CAPA Dashboard and Analytics
+@router.get("/capa/dashboard")
+async def get_capa_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get CAPA dashboard statistics and analytics"""
+    try:
+        prp_service = PRPService(db)
+        stats = prp_service.get_capa_dashboard_stats()
+        
+        return ResponseModel(
+            success=True,
+            message="CAPA dashboard data retrieved successfully",
+            data=stats
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve CAPA dashboard data: {str(e)}"
+        )
+
+
+@router.get("/capa/overdue")
+async def get_overdue_capa_actions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    action_type: Optional[str] = None  # "corrective" or "preventive"
+):
+    """Get overdue CAPA actions"""
+    try:
+        prp_service = PRPService(db)
+        overdue_actions = prp_service.get_overdue_capa_actions(action_type)
+        
+        return ResponseModel(
+            success=True,
+            message="Overdue CAPA actions retrieved successfully",
+            data={
+                "total_overdue": len(overdue_actions),
+                "actions": overdue_actions
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve overdue CAPA actions: {str(e)}"
+        )
+
+
+@router.post("/capa/reports")
+async def generate_capa_report(
+    report_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate CAPA report"""
+    try:
+        prp_service = PRPService(db)
+        report_data = prp_service.generate_capa_report(
+            action_type=report_request.get("action_type"),
+            date_from=report_request.get("date_from"),
+            date_to=report_request.get("date_to"),
+            status=report_request.get("status"),
+            severity=report_request.get("severity")
+        )
+        
+        # Generate unique report ID
+        report_id = f"capa_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        
+        return ResponseModel(
+            success=True,
+            message="CAPA report generated successfully",
+            data={
+                "report_id": report_id,
+                "report_data": report_data,
+                "report_type": "capa_summary",
+                "format": report_request.get("format", "json"),
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate CAPA report: {str(e)}"
+        ) 
+
+# Phase 2.3: Enhanced Program Management Endpoints
+
+# Advanced Program Management
+@router.get("/programs/{program_id}/analytics")
+async def get_program_analytics(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    period: Optional[str] = Query("30d", description="Analysis period: 7d, 30d, 90d, 1y")
+):
+    """Get comprehensive analytics for a specific PRP program"""
+    try:
+        prp_service = PRPService(db)
+        analytics = prp_service.get_program_analytics(program_id, period)
+        
+        return ResponseModel(
+            success=True,
+            message="Program analytics retrieved successfully",
+            data=analytics
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve program analytics: {str(e)}"
+        )
+
+
+@router.get("/programs/{program_id}/performance-trends")
+async def get_program_performance_trends(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    trend_period: Optional[str] = Query("6m", description="Trend period: 3m, 6m, 1y")
+):
+    """Get performance trends for a PRP program"""
+    try:
+        prp_service = PRPService(db)
+        trends = prp_service.get_program_performance_trends(program_id, trend_period)
+        
+        return ResponseModel(
+            success=True,
+            message="Performance trends retrieved successfully",
+            data=trends
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve performance trends: {str(e)}"
+        )
+
+
+@router.post("/programs/{program_id}/optimize-schedule")
+async def optimize_program_schedule(
+    program_id: int,
+    optimization_params: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Optimize program schedule based on historical data and resource availability"""
+    try:
+        prp_service = PRPService(db)
+        optimization_result = prp_service.optimize_program_schedule(
+            program_id, optimization_params, current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Program schedule optimized successfully",
+            data=optimization_result
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to optimize program schedule: {str(e)}"
+        )
+
+
+@router.get("/programs/{program_id}/resource-utilization")
+async def get_program_resource_utilization(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None
+):
+    """Get resource utilization analysis for a PRP program"""
+    try:
+        prp_service = PRPService(db)
+        utilization = prp_service.get_program_resource_utilization(
+            program_id, date_from, date_to
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Resource utilization data retrieved successfully",
+            data=utilization
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve resource utilization: {str(e)}"
+        )
+
+
+# Enhanced Reporting Capabilities
+@router.post("/reports/comprehensive")
+async def generate_comprehensive_report(
+    report_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate comprehensive PRP report with multiple dimensions"""
+    try:
+        prp_service = PRPService(db)
+        report_data = prp_service.generate_comprehensive_report(
+            program_ids=report_request.get("program_ids"),
+            categories=report_request.get("categories"),
+            date_from=report_request.get("date_from"),
+            date_to=report_request.get("date_to"),
+            include_risks=report_request.get("include_risks", True),
+            include_capa=report_request.get("include_capa", True),
+            include_trends=report_request.get("include_trends", True),
+            format_type=report_request.get("format", "json")
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Comprehensive report generated successfully",
+            data=report_data
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate comprehensive report: {str(e)}"
+        )
+
+
+@router.get("/reports/compliance-summary")
+async def get_compliance_summary_report(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    category: Optional[str] = None,
+    department: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None
+):
+    """Get compliance summary report across all PRP programs"""
+    try:
+        prp_service = PRPService(db)
+        summary = prp_service.get_compliance_summary_report(
+            category, department, date_from, date_to
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Compliance summary retrieved successfully",
+            data=summary
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve compliance summary: {str(e)}"
+        )
+
+
+@router.get("/reports/risk-exposure")
+async def get_risk_exposure_report(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    risk_level: Optional[str] = None,
+    category: Optional[str] = None
+):
+    """Get risk exposure report for PRP programs"""
+    try:
+        prp_service = PRPService(db)
+        exposure = prp_service.get_risk_exposure_report(risk_level, category)
+        
+        return ResponseModel(
+            success=True,
+            message="Risk exposure report retrieved successfully",
+            data=exposure
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk exposure report: {str(e)}"
+        )
+
+
+@router.post("/reports/export")
+async def export_prp_data(
+    export_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Export PRP data in various formats (Excel, PDF, CSV)"""
+    try:
+        prp_service = PRPService(db)
+        export_result = prp_service.export_prp_data(
+            data_type=export_request.get("data_type"),  # programs, checklists, risks, capa
+            format_type=export_request.get("format"),   # excel, pdf, csv
+            filters=export_request.get("filters", {}),
+            include_attachments=export_request.get("include_attachments", False)
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="PRP data exported successfully",
+            data=export_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export PRP data: {str(e)}"
+        )
+
+
+# Performance Monitoring and Optimization
+@router.get("/performance/metrics")
+async def get_performance_metrics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    metric_type: Optional[str] = Query("all", description="Metric type: compliance, efficiency, quality, all")
+):
+    """Get performance metrics for PRP module"""
+    try:
+        prp_service = PRPService(db)
+        metrics = prp_service.get_performance_metrics(metric_type)
+        
+        return ResponseModel(
+            success=True,
+            message="Performance metrics retrieved successfully",
+            data=metrics
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve performance metrics: {str(e)}"
+        )
+
+
+@router.get("/performance/benchmarks")
+async def get_performance_benchmarks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    benchmark_type: Optional[str] = Query("industry", description="Benchmark type: industry, internal, custom")
+):
+    """Get performance benchmarks for comparison"""
+    try:
+        prp_service = PRPService(db)
+        benchmarks = prp_service.get_performance_benchmarks(benchmark_type)
+        
+        return ResponseModel(
+            success=True,
+            message="Performance benchmarks retrieved successfully",
+            data=benchmarks
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve performance benchmarks: {str(e)}"
+        )
+
+
+@router.post("/performance/optimize")
+async def optimize_performance(
+    optimization_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Optimize PRP module performance based on analysis"""
+    try:
+        prp_service = PRPService(db)
+        optimization_result = prp_service.optimize_performance(
+            optimization_request.get("optimization_type"),
+            optimization_request.get("parameters", {}),
+            current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Performance optimization completed successfully",
+            data=optimization_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to optimize performance: {str(e)}"
+        )
+
+
+# Advanced Analytics and Insights
+@router.get("/analytics/predictive")
+async def get_predictive_analytics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    prediction_type: Optional[str] = Query("compliance", description="Prediction type: compliance, risks, failures")
+):
+    """Get predictive analytics for PRP programs"""
+    try:
+        prp_service = PRPService(db)
+        predictions = prp_service.get_predictive_analytics(prediction_type)
+        
+        return ResponseModel(
+            success=True,
+            message="Predictive analytics retrieved successfully",
+            data=predictions
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve predictive analytics: {str(e)}"
+        )
+
+
+@router.get("/analytics/trends")
+async def get_analytical_trends(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    trend_type: Optional[str] = Query("compliance", description="Trend type: compliance, risks, efficiency, quality"),
+    period: Optional[str] = Query("12m", description="Analysis period")
+):
+    """Get analytical trends for PRP module"""
+    try:
+        prp_service = PRPService(db)
+        trends = prp_service.get_analytical_trends(trend_type, period)
+        
+        return ResponseModel(
+            success=True,
+            message="Analytical trends retrieved successfully",
+            data=trends
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve analytical trends: {str(e)}"
+        )
+
+
+@router.post("/analytics/insights")
+async def generate_insights(
+    insight_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate actionable insights from PRP data"""
+    try:
+        prp_service = PRPService(db)
+        insights = prp_service.generate_insights(
+            insight_type=insight_request.get("insight_type"),
+            parameters=insight_request.get("parameters", {}),
+            priority_level=insight_request.get("priority_level", "medium")
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Insights generated successfully",
+            data=insights
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate insights: {str(e)}"
+        )
+
+
+# Integration and Automation
+@router.post("/automation/trigger")
+async def trigger_automation(
+    automation_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trigger automated PRP processes"""
+    try:
+        prp_service = PRPService(db)
+        automation_result = prp_service.trigger_automation(
+            automation_type=automation_request.get("automation_type"),
+            parameters=automation_request.get("parameters", {}),
+            triggered_by=current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Automation triggered successfully",
+            data=automation_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger automation: {str(e)}"
+        )
+
+
+@router.get("/automation/status")
+async def get_automation_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    automation_id: Optional[str] = None
+):
+    """Get status of automated PRP processes"""
+    try:
+        prp_service = PRPService(db)
+        status = prp_service.get_automation_status(automation_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Automation status retrieved successfully",
+            data=status
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve automation status: {str(e)}"
+        )
+
+
+# Advanced Search and Filtering
+@router.post("/search/advanced")
+async def advanced_search(
+    search_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Advanced search across PRP data with multiple criteria"""
+    try:
+        prp_service = PRPService(db)
+        search_results = prp_service.advanced_search(
+            search_criteria=search_request.get("criteria", {}),
+            search_type=search_request.get("search_type", "all"),
+            sort_by=search_request.get("sort_by", "relevance"),
+            page=search_request.get("page", 1),
+            size=search_request.get("size", 20)
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Advanced search completed successfully",
+            data=search_results
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to perform advanced search: {str(e)}"
+        )
+
+
+# Bulk Operations
+@router.post("/bulk/update")
+async def bulk_update_programs(
+    bulk_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk update PRP programs"""
+    try:
+        prp_service = PRPService(db)
+        update_result = prp_service.bulk_update_programs(
+            program_ids=bulk_request.get("program_ids", []),
+            update_data=bulk_request.get("update_data", {}),
+            updated_by=current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Bulk update completed successfully",
+            data=update_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to perform bulk update: {str(e)}"
+        )
+
+
+@router.post("/bulk/export")
+async def bulk_export_data(
+    export_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk export PRP data"""
+    try:
+        prp_service = PRPService(db)
+        export_result = prp_service.bulk_export_data(
+            data_types=export_request.get("data_types", []),
+            format_type=export_request.get("format", "excel"),
+            filters=export_request.get("filters", {}),
+            requested_by=current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Bulk export completed successfully",
+            data=export_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to perform bulk export: {str(e)}"
+        )

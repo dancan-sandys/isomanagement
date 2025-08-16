@@ -784,6 +784,278 @@ export const prpAPI = {
     const response: AxiosResponse = await api.get('/prp/dashboard');
     return response.data;
   },
+
+  // Risk Assessment Endpoints (Phase 2.1)
+  getRiskMatrices: async (params?: { page?: number; size?: number; is_default?: boolean }) => {
+    const response: AxiosResponse = await api.get('/prp/risk-matrices', { params });
+    return response.data;
+  },
+
+  createRiskMatrix: async (matrixData: any) => {
+    const response: AxiosResponse = await api.post('/prp/risk-matrices', matrixData);
+    return response.data;
+  },
+
+  getProgramRiskAssessments: async (programId: number, params?: { 
+    page?: number; 
+    size?: number; 
+    risk_level?: string; 
+    escalated?: boolean 
+  }) => {
+    const response: AxiosResponse = await api.get(`/prp/programs/${programId}/risk-assessments`, { params });
+    return response.data;
+  },
+
+  createRiskAssessment: async (programId: number, assessmentData: any) => {
+    const response: AxiosResponse = await api.post(`/prp/programs/${programId}/risk-assessments`, assessmentData);
+    return response.data;
+  },
+
+  getRiskAssessment: async (assessmentId: number) => {
+    const response: AxiosResponse = await api.get(`/prp/risk-assessments/${assessmentId}`);
+    return response.data;
+  },
+
+  updateRiskAssessment: async (assessmentId: number, assessmentData: any) => {
+    const response: AxiosResponse = await api.put(`/prp/risk-assessments/${assessmentId}`, assessmentData);
+    return response.data;
+  },
+
+  getRiskControls: async (assessmentId: number, params?: { 
+    page?: number; 
+    size?: number; 
+    status?: string 
+  }) => {
+    const response: AxiosResponse = await api.get(`/prp/risk-assessments/${assessmentId}/controls`, { params });
+    return response.data;
+  },
+
+  addRiskControl: async (assessmentId: number, controlData: any) => {
+    const response: AxiosResponse = await api.post(`/prp/risk-assessments/${assessmentId}/controls`, controlData);
+    return response.data;
+  },
+
+  escalateRiskAssessment: async (assessmentId: number) => {
+    const response: AxiosResponse = await api.post(`/prp/risk-assessments/${assessmentId}/escalate`);
+    return response.data;
+  },
+
+  // Corrective Action Endpoints (Phase 2.2)
+  getCorrectiveActions: async (params?: { 
+    page?: number; 
+    size?: number; 
+    status?: string; 
+    severity?: string; 
+    source_type?: string 
+  }) => {
+    const response: AxiosResponse = await api.get('/prp/corrective-actions', { params });
+    return response.data;
+  },
+
+  createCorrectiveAction: async (actionData: any) => {
+    const response: AxiosResponse = await api.post('/prp/corrective-actions', actionData);
+    return response.data;
+  },
+
+  getCorrectiveAction: async (actionId: number) => {
+    const response: AxiosResponse = await api.get(`/prp/corrective-actions/${actionId}`);
+    return response.data;
+  },
+
+  updateCorrectiveAction: async (actionId: number, actionData: any) => {
+    const response: AxiosResponse = await api.put(`/prp/corrective-actions/${actionId}`, actionData);
+    return response.data;
+  },
+
+  completeCorrectiveAction: async (actionId: number, completionData: any) => {
+    const response: AxiosResponse = await api.post(`/prp/corrective-actions/${actionId}/complete`, completionData);
+    return response.data;
+  },
+
+  // Preventive Action Endpoints
+  getPreventiveActions: async (params?: { 
+    page?: number; 
+    size?: number; 
+    status?: string; 
+    trigger_type?: string 
+  }) => {
+    const response: AxiosResponse = await api.get('/prp/preventive-actions', { params });
+    return response.data;
+  },
+
+  createPreventiveAction: async (actionData: any) => {
+    const response: AxiosResponse = await api.post('/prp/preventive-actions', actionData);
+    return response.data;
+  },
+
+  getPreventiveAction: async (actionId: number) => {
+    const response: AxiosResponse = await api.get(`/prp/preventive-actions/${actionId}`);
+    return response.data;
+  },
+
+  updatePreventiveAction: async (actionId: number, actionData: any) => {
+    const response: AxiosResponse = await api.put(`/prp/preventive-actions/${actionId}`, actionData);
+    return response.data;
+  },
+
+  startPreventiveAction: async (actionId: number) => {
+    const response: AxiosResponse = await api.post(`/prp/preventive-actions/${actionId}/start`);
+    return response.data;
+  },
+
+  completePreventiveAction: async (actionId: number, completionData: any) => {
+    const response: AxiosResponse = await api.post(`/prp/preventive-actions/${actionId}/complete`, completionData);
+    return response.data;
+  },
+
+  // CAPA Dashboard and Analytics
+  getCAPADashboard: async () => {
+    const response: AxiosResponse = await api.get('/prp/capa/dashboard');
+    return response.data;
+  },
+
+  getOverdueCAPAActions: async (actionType?: string) => {
+    const response: AxiosResponse = await api.get('/prp/capa/overdue', { 
+      params: { action_type: actionType } 
+    });
+    return response.data;
+  },
+
+  generateCAPAReport: async (reportRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/capa/reports', reportRequest);
+    return response.data;
+  },
+
+  // Phase 2.3: Enhanced Program Management Methods
+
+  // Advanced Program Management
+  getProgramAnalytics: async (programId: number, period: string = '30d') => {
+    const response: AxiosResponse = await api.get(`/prp/programs/${programId}/analytics`, {
+      params: { period }
+    });
+    return response.data;
+  },
+
+  getProgramPerformanceTrends: async (programId: number, trendPeriod: string = '6m') => {
+    const response: AxiosResponse = await api.get(`/prp/programs/${programId}/performance-trends`, {
+      params: { trend_period: trendPeriod }
+    });
+    return response.data;
+  },
+
+  optimizeProgramSchedule: async (programId: number, optimizationParams: any) => {
+    const response: AxiosResponse = await api.post(`/prp/programs/${programId}/optimize-schedule`, optimizationParams);
+    return response.data;
+  },
+
+  getProgramResourceUtilization: async (programId: number, dateFrom?: string, dateTo?: string) => {
+    const params: any = {};
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    
+    const response: AxiosResponse = await api.get(`/prp/programs/${programId}/resource-utilization`, { params });
+    return response.data;
+  },
+
+  // Enhanced Reporting Capabilities
+  generateComprehensiveReport: async (reportRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/reports/comprehensive', reportRequest);
+    return response.data;
+  },
+
+  getComplianceSummaryReport: async (category?: string, department?: string, dateFrom?: string, dateTo?: string) => {
+    const params: any = {};
+    if (category) params.category = category;
+    if (department) params.department = department;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    
+    const response: AxiosResponse = await api.get('/prp/reports/compliance-summary', { params });
+    return response.data;
+  },
+
+  getRiskExposureReport: async (riskLevel?: string, category?: string) => {
+    const params: any = {};
+    if (riskLevel) params.risk_level = riskLevel;
+    if (category) params.category = category;
+    
+    const response: AxiosResponse = await api.get('/prp/reports/risk-exposure', { params });
+    return response.data;
+  },
+
+  exportPRPData: async (exportRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/reports/export', exportRequest);
+    return response.data;
+  },
+
+  // Performance Monitoring and Optimization
+  getPerformanceMetrics: async (metricType: string = 'all') => {
+    const response: AxiosResponse = await api.get('/prp/performance/metrics', {
+      params: { metric_type: metricType }
+    });
+    return response.data;
+  },
+
+  getPerformanceBenchmarks: async (benchmarkType: string = 'industry') => {
+    const response: AxiosResponse = await api.get('/prp/performance/benchmarks', {
+      params: { benchmark_type: benchmarkType }
+    });
+    return response.data;
+  },
+
+  optimizePerformance: async (optimizationRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/performance/optimize', optimizationRequest);
+    return response.data;
+  },
+
+  // Advanced Analytics and Insights
+  getPredictiveAnalytics: async (predictionType: string = 'compliance') => {
+    const response: AxiosResponse = await api.get('/prp/analytics/predictive', {
+      params: { prediction_type: predictionType }
+    });
+    return response.data;
+  },
+
+  getAnalyticalTrends: async (trendType: string = 'compliance', period: string = '12m') => {
+    const response: AxiosResponse = await api.get('/prp/analytics/trends', {
+      params: { trend_type: trendType, period }
+    });
+    return response.data;
+  },
+
+  generateInsights: async (insightRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/analytics/insights', insightRequest);
+    return response.data;
+  },
+
+  // Integration and Automation
+  triggerAutomation: async (automationRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/automation/trigger', automationRequest);
+    return response.data;
+  },
+
+  getAutomationStatus: async (automationId?: string) => {
+    const params = automationId ? { automation_id: automationId } : {};
+    const response: AxiosResponse = await api.get('/prp/automation/status', { params });
+    return response.data;
+  },
+
+  // Advanced Search and Filtering
+  advancedSearch: async (searchRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/search/advanced', searchRequest);
+    return response.data;
+  },
+
+  // Bulk Operations
+  bulkUpdatePrograms: async (bulkRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/bulk/update', bulkRequest);
+    return response.data;
+  },
+
+  bulkExportData: async (exportRequest: any) => {
+    const response: AxiosResponse = await api.post('/prp/bulk/export', exportRequest);
+    return response.data;
+  },
 };
 
 // Dashboard API

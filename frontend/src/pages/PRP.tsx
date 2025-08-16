@@ -70,9 +70,15 @@ import {
   LocalShipping,
   WaterDrop,
   Air,
+  Security,
+  Analytics,
+  Report,
+  AutoGraph,
+  Insights,
 } from '@mui/icons-material';
 import { prpAPI } from '../services/api';
 import { useLocation } from 'react-router-dom';
+import { PRPRiskAssessment, PRPCAPA, PRPAnalytics } from '../components/PRP';
 
 interface PRPProgram {
   id: number;
@@ -893,8 +899,18 @@ const PRP: React.FC = () => {
             iconPosition="start"
           />
           <Tab 
-            icon={<CalendarMonth />} 
-            label="Schedule" 
+            icon={<Security />} 
+            label="Risk Assessment" 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<Build />} 
+            label="CAPA" 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<Analytics />} 
+            label="Analytics" 
             iconPosition="start"
           />
         </Tabs>
@@ -990,18 +1006,9 @@ const PRP: React.FC = () => {
 
       {activeTab === 1 && renderProgramsList()}
       {activeTab === 2 && renderChecklistsList()}
-      {activeTab === 3 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              PRP Schedule
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Calendar view and scheduling features coming soon...
-            </Typography>
-          </CardContent>
-        </Card>
-      )}
+      {activeTab === 3 && <PRPRiskAssessment />}
+      {activeTab === 4 && <PRPCAPA />}
+      {activeTab === 5 && <PRPAnalytics />}
 
       {/* Create Program Dialog */}
       <Dialog open={openProgramDialog} onClose={() => setOpenProgramDialog(false)} maxWidth="md" fullWidth>

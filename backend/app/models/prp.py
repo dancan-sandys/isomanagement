@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
+from datetime import datetime
 
 
 class PRPCategory(str, enum.Enum):
@@ -365,14 +366,16 @@ class RiskMatrix(Base):
 
 
 class RiskAssessment(Base):
-    """Risk assessment for PRP programs"""
+    """Risk assessment for PRP programs - feeds into main risk register"""
     __tablename__ = "prp_risk_assessments"
 
     id = Column(Integer, primary_key=True, index=True)
-    program_id = Column(Integer, ForeignKey("prp_programs.id"), nullable=False)
-    assessment_code = Column(String(50), unique=True, index=True, nullable=False)
+    program_id = Column(Integer, ForeignKey("prp_programs.id", ondelete="CASCADE"), nullable=False)
     
-    # Assessment details
+    # Link to main risk register
+    risk_register_entry_id = Column(Integer, ForeignKey("risk_register_items.id", ondelete="SET NULL"), nullable=True)
+    
+    assessment_code = Column(String(50), unique=True, index=True, nullable=False)
     hazard_identified = Column(Text, nullable=False)
     hazard_description = Column(Text)
     likelihood_level = Column(String(50), nullable=False)
@@ -383,50 +386,41 @@ class RiskAssessment(Base):
             values_callable=lambda enum_cls: [member.value for member in enum_cls],
             validate_strings=True,
             native_enum=False,
-        ),
-        nullable=False,
+        )
     )
-    
-    # Risk evaluation
-    risk_score = Column(Integer)  # Calculated risk score
-    acceptability = Column(Boolean, default=False)  # Is risk acceptable?
-    justification = Column(Text)
-    
-    # Control measures
+    risk_score = Column(Integer)
+    acceptability = Column(Boolean)
     existing_controls = Column(Text)
     additional_controls_required = Column(Text)
-    control_effectiveness = Column(String(50))
-    
-    # Residual risk
-    residual_likelihood = Column(String(50))
-    residual_severity = Column(String(50))
+    control_effectiveness = Column(Text)
     residual_risk_level = Column(
         Enum(
             RiskLevel,
             values_callable=lambda enum_cls: [member.value for member in enum_cls],
             validate_strings=True,
             native_enum=False,
-        ),
+        )
     )
     residual_risk_score = Column(Integer)
-    residual_acceptability = Column(Boolean, default=False)
+    assessment_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    next_review_date = Column(DateTime)
     
-    # Review and approval
-    reviewed_by = Column(Integer, ForeignKey("users.id"))
-    reviewed_at = Column(DateTime(timezone=True))
-    approved_by = Column(Integer, ForeignKey("users.id"))
-    approved_at = Column(DateTime(timezone=True))
+    # Integration with main risk module
+    escalated_to_risk_register = Column(Boolean, default=False)
+    escalation_date = Column(DateTime)
+    escalated_by = Column(Integer, ForeignKey("users.id"))
     
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+
     # Relationships
     program = relationship("PRPProgram")
-    
+    risk_register_entry = relationship("RiskRegisterItem")
+    escalated_by_user = relationship("User", foreign_keys=[escalated_by])
+
     def __repr__(self):
-        return f"<RiskAssessment(id={self.id}, assessment_code='{self.assessment_code}')>"
+        return f"<RiskAssessment(id={self.id}, assessment_code='{self.assessment_code}', risk_level='{self.risk_level}')>"
 
 
 class RiskControl(Base):
