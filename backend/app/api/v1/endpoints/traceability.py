@@ -11,7 +11,8 @@ from app.core.security import get_current_user
 from app.models.traceability import (
     Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport,
     BatchType, BatchStatus, RecallStatus, RecallType,
-    RootCauseAnalysisRecord, PreventiveMeasureRecord, VerificationPlanRecord, EffectivenessReviewRecord
+    RootCauseAnalysisRecord, PreventiveMeasureRecord, VerificationPlanRecord, EffectivenessReviewRecord,
+    TraceabilityNode, RecallClassification, RecallCommunication, RecallEffectiveness
 )
 from app.models.user import User
 from app.schemas.traceability import (
@@ -1523,3 +1524,1104 @@ async def update_batch_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update batch status: {str(e)}"
         ) 
+
+
+# ============================================================================
+# PHASE 1.3.1: ENHANCED TRACEABILITY ENDPOINTS
+# ============================================================================
+
+# One-Up, One-Back Traceability Endpoint
+@router.get("/batches/{batch_id}/trace/one-up-one-back", response_model=ResponseModel)
+async def get_one_up_one_back_trace(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get one-up, one-back traceability for a batch (ISO 22005:2007 compliant)"""
+    try:
+        service = TraceabilityService(db)
+        trace_data = service.get_one_up_one_back_trace(batch_id)
+        
+        return ResponseModel(
+            success=True,
+            message="One-up, one-back traceability retrieved successfully",
+            data=trace_data
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve traceability: {str(e)}"
+        )
+
+
+# Traceability Node Endpoints
+@router.post("/traceability-nodes", response_model=ResponseModel)
+async def create_traceability_node(
+    node_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new traceability node"""
+    try:
+        service = TraceabilityService(db)
+        node = service.create_traceability_node(node_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability node created successfully",
+            data={
+                "id": node.id,
+                "node_name": node.node_name,
+                "node_type": node.node_type,
+                "location": node.location,
+                "contact_person": node.contact_person,
+                "contact_email": node.contact_email,
+                "contact_phone": node.contact_phone,
+                "verification_status": node.verification_status,
+                "created_at": node.created_at.isoformat() if node.created_at else None
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create traceability node: {str(e)}"
+        )
+
+
+@router.get("/traceability-nodes", response_model=ResponseModel)
+async def get_traceability_nodes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    node_type: Optional[str] = None,
+    verification_status: Optional[str] = None
+):
+    """Get all traceability nodes with filtering"""
+    try:
+        service = TraceabilityService(db)
+        nodes = service.get_traceability_nodes(
+            skip=skip,
+            limit=limit,
+            node_type=node_type,
+            verification_status=verification_status
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability nodes retrieved successfully",
+            data={
+                "items": [
+                    {
+                        "id": node.id,
+                        "node_name": node.node_name,
+                        "node_type": node.node_type,
+                        "location": node.location,
+                        "contact_person": node.contact_person,
+                        "contact_email": node.contact_email,
+                        "contact_phone": node.contact_phone,
+                        "verification_status": node.verification_status,
+                        "last_verified": node.last_verified.isoformat() if node.last_verified else None,
+                        "created_at": node.created_at.isoformat() if node.created_at else None
+                    }
+                    for node in nodes
+                ],
+                "total": len(nodes),
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve traceability nodes: {str(e)}"
+        )
+
+
+@router.get("/traceability-nodes/{node_id}", response_model=ResponseModel)
+async def get_traceability_node(
+    node_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific traceability node"""
+    try:
+        service = TraceabilityService(db)
+        node = service.get_traceability_node(node_id)
+        
+        if not node:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Traceability node not found"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability node retrieved successfully",
+            data={
+                "id": node.id,
+                "node_name": node.node_name,
+                "node_type": node.node_type,
+                "location": node.location,
+                "contact_person": node.contact_person,
+                "contact_email": node.contact_email,
+                "contact_phone": node.contact_phone,
+                "verification_status": node.verification_status,
+                "last_verified": node.last_verified.isoformat() if node.last_verified else None,
+                "verification_notes": node.verification_notes,
+                "created_at": node.created_at.isoformat() if node.created_at else None,
+                "updated_at": node.updated_at.isoformat() if node.updated_at else None
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve traceability node: {str(e)}"
+        )
+
+
+@router.put("/traceability-nodes/{node_id}", response_model=ResponseModel)
+async def update_traceability_node(
+    node_id: int,
+    node_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a traceability node"""
+    try:
+        service = TraceabilityService(db)
+        node = service.update_traceability_node(node_id, node_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability node updated successfully",
+            data={
+                "id": node.id,
+                "node_name": node.node_name,
+                "node_type": node.node_type,
+                "location": node.location,
+                "contact_person": node.contact_person,
+                "contact_email": node.contact_email,
+                "contact_phone": node.contact_phone,
+                "verification_status": node.verification_status,
+                "updated_at": node.updated_at.isoformat() if node.updated_at else None
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update traceability node: {str(e)}"
+        )
+
+
+@router.delete("/traceability-nodes/{node_id}", response_model=ResponseModel)
+async def delete_traceability_node(
+    node_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a traceability node"""
+    try:
+        service = TraceabilityService(db)
+        service.delete_traceability_node(node_id, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability node deleted successfully",
+            data={"id": node_id}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete traceability node: {str(e)}"
+        )
+
+
+# Traceability Verification Endpoints
+@router.post("/traceability-nodes/{node_id}/verify", response_model=ResponseModel)
+async def verify_traceability_node(
+    node_id: int,
+    verification_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verify a traceability node"""
+    try:
+        service = TraceabilityService(db)
+        verification_result = service.verify_traceability_node(
+            node_id, 
+            verification_data, 
+            current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability node verification completed",
+            data=verification_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify traceability node: {str(e)}"
+        )
+
+
+@router.get("/batches/{batch_id}/trace/completeness", response_model=ResponseModel)
+async def get_trace_completeness(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get traceability completeness score for a batch"""
+    try:
+        service = TraceabilityService(db)
+        completeness_data = service._calculate_trace_completeness(batch_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability completeness calculated successfully",
+            data=completeness_data
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate traceability completeness: {str(e)}"
+        )
+
+
+@router.get("/batches/{batch_id}/trace/verification-status", response_model=ResponseModel)
+async def get_trace_verification_status(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get verification status for a batch's traceability chain"""
+    try:
+        service = TraceabilityService(db)
+        verification_status = service._get_verification_status(batch_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Traceability verification status retrieved successfully",
+            data=verification_status
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve verification status: {str(e)}"
+        )
+
+
+@router.get("/ccp/traceability-alerts", response_model=ResponseModel)
+async def get_ccp_traceability_alerts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Get CCP-related traceability alerts"""
+    try:
+        service = TraceabilityService(db)
+        alerts = service.get_ccp_traceability_alerts(skip=skip, limit=limit)
+        
+        return ResponseModel(
+            success=True,
+            message="CCP traceability alerts retrieved successfully",
+            data={
+                "items": alerts,
+                "total": len(alerts),
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve CCP alerts: {str(e)}"
+        )
+
+
+@router.post("/haccp/compliance-report", response_model=ResponseModel)
+async def generate_haccp_compliance_report(
+    report_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate HACCP compliance report for traceability"""
+    try:
+        service = TraceabilityService(db)
+        report = service.generate_haccp_compliance_report(report_data)
+        
+        return ResponseModel(
+            success=True,
+            message="HACCP compliance report generated successfully",
+            data=report
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate HACCP compliance report: {str(e)}"
+        )
+
+
+# ============================================================================
+# PHASE 1.3.2: ENHANCED RECALL ENDPOINTS
+# ============================================================================
+
+# Recall Classification Endpoints
+@router.post("/recalls/{recall_id}/classify", response_model=ResponseModel)
+async def classify_recall(
+    recall_id: int,
+    classification_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Classify a recall with health risk assessment"""
+    try:
+        service = TraceabilityService(db)
+        classification_result = service.classify_recall(recall_id, classification_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall classified successfully",
+            data=classification_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to classify recall: {str(e)}"
+        )
+
+
+@router.get("/recalls/{recall_id}/classification", response_model=ResponseModel)
+async def get_recall_classification(
+    recall_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get recall classification details"""
+    try:
+        classification = db.query(RecallClassification).filter(
+            RecallClassification.recall_id == recall_id
+        ).first()
+        
+        if not classification:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Recall classification not found"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="Recall classification retrieved successfully",
+            data={
+                "id": classification.id,
+                "recall_id": classification.recall_id,
+                "health_risk_level": classification.health_risk_level,
+                "risk_score": classification.risk_score,
+                "affected_population": classification.affected_population,
+                "severity_assessment": classification.severity_assessment,
+                "urgency_level": classification.urgency_level,
+                "regulatory_implications": classification.regulatory_implications,
+                "classification_notes": classification.classification_notes,
+                "classified_by": classification.classified_by,
+                "classification_date": classification.classification_date.isoformat() if classification.classification_date else None
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve recall classification: {str(e)}"
+        )
+
+
+# Recall Communication Endpoints
+@router.post("/recalls/{recall_id}/communications", response_model=ResponseModel)
+async def create_recall_communication(
+    recall_id: int,
+    communication_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a recall communication"""
+    try:
+        service = TraceabilityService(db)
+        communication = service.create_recall_communication(recall_id, communication_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall communication created successfully",
+            data={
+                "id": communication.id,
+                "recall_id": communication.recall_id,
+                "stakeholder_type": communication.stakeholder_type,
+                "communication_type": communication.communication_type,
+                "subject": communication.subject,
+                "message_content": communication.message_content,
+                "priority": communication.priority,
+                "status": communication.status,
+                "created_at": communication.created_at.isoformat() if communication.created_at else None
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create recall communication: {str(e)}"
+        )
+
+
+@router.post("/recalls/communications/{communication_id}/send", response_model=ResponseModel)
+async def send_recall_communication(
+    communication_id: int,
+    send_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send a recall communication"""
+    try:
+        service = TraceabilityService(db)
+        send_result = service.send_communication(communication_id, send_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall communication sent successfully",
+            data=send_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send recall communication: {str(e)}"
+        )
+
+
+@router.get("/recalls/{recall_id}/communications", response_model=ResponseModel)
+async def get_recall_communications(
+    recall_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Get all communications for a recall"""
+    try:
+        communications = db.query(RecallCommunication).filter(
+            RecallCommunication.recall_id == recall_id
+        ).order_by(desc(RecallCommunication.created_at)).offset(skip).limit(limit).all()
+        
+        return ResponseModel(
+            success=True,
+            message="Recall communications retrieved successfully",
+            data={
+                "items": [
+                    {
+                        "id": comm.id,
+                        "stakeholder_type": comm.stakeholder_type,
+                        "communication_type": comm.communication_type,
+                        "subject": comm.subject,
+                        "message_content": comm.message_content,
+                        "priority": comm.priority,
+                        "status": comm.status,
+                        "sent_at": comm.sent_at.isoformat() if comm.sent_at else None,
+                        "response_received": comm.response_received,
+                        "response_time_hours": comm.response_time_hours,
+                        "created_at": comm.created_at.isoformat() if comm.created_at else None
+                    }
+                    for comm in communications
+                ],
+                "total": len(communications),
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve recall communications: {str(e)}"
+        )
+
+
+# Recall Effectiveness Endpoints
+@router.post("/recalls/{recall_id}/effectiveness", response_model=ResponseModel)
+async def track_recall_effectiveness(
+    recall_id: int,
+    effectiveness_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Track recall effectiveness"""
+    try:
+        service = TraceabilityService(db)
+        effectiveness_result = service.track_recall_effectiveness(recall_id, effectiveness_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall effectiveness tracked successfully",
+            data=effectiveness_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to track recall effectiveness: {str(e)}"
+        )
+
+
+@router.get("/recalls/{recall_id}/effectiveness", response_model=ResponseModel)
+async def get_recall_effectiveness(
+    recall_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get recall effectiveness data"""
+    try:
+        effectiveness = db.query(RecallEffectiveness).filter(
+            RecallEffectiveness.recall_id == recall_id
+        ).first()
+        
+        if not effectiveness:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Recall effectiveness data not found"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="Recall effectiveness retrieved successfully",
+            data={
+                "id": effectiveness.id,
+                "recall_id": effectiveness.recall_id,
+                "effectiveness_score": effectiveness.effectiveness_score,
+                "products_recovered": effectiveness.products_recovered,
+                "recovery_percentage": effectiveness.recovery_percentage,
+                "response_time_hours": effectiveness.response_time_hours,
+                "stakeholder_cooperation": effectiveness.stakeholder_cooperation,
+                "communication_effectiveness": effectiveness.communication_effectiveness,
+                "verification_status": effectiveness.verification_status,
+                "effectiveness_notes": effectiveness.effectiveness_notes,
+                "tracked_by": effectiveness.tracked_by,
+                "tracking_date": effectiveness.tracking_date.isoformat() if effectiveness.tracking_date else None
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve recall effectiveness: {str(e)}"
+        )
+
+
+# Recall Reporting Endpoints
+@router.get("/recalls/stakeholder-notification-matrix", response_model=ResponseModel)
+async def get_stakeholder_notification_matrix(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get stakeholder notification matrix for recalls"""
+    try:
+        service = TraceabilityService(db)
+        matrix = service.get_stakeholder_notification_matrix()
+        
+        return ResponseModel(
+            success=True,
+            message="Stakeholder notification matrix retrieved successfully",
+            data=matrix
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve stakeholder notification matrix: {str(e)}"
+        )
+
+
+@router.post("/recalls/effectiveness-report", response_model=ResponseModel)
+async def generate_recall_effectiveness_report(
+    report_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate comprehensive recall effectiveness report"""
+    try:
+        service = TraceabilityService(db)
+        report = service.get_recall_effectiveness_report(report_data)
+        
+        return ResponseModel(
+            success=True,
+            message="Recall effectiveness report generated successfully",
+            data=report
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate recall effectiveness report: {str(e)}"
+        )
+
+
+# ============================================================================
+# PHASE 1.3.3: ENHANCED BATCH MANAGEMENT ENDPOINTS
+# ============================================================================
+
+# Enhanced Batch Creation Endpoint
+@router.post("/batches/enhanced", response_model=ResponseModel)
+async def create_enhanced_batch(
+    batch_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new batch with enhanced GS1-compliant fields"""
+    try:
+        service = TraceabilityService(db)
+        batch = service.create_enhanced_batch(batch_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced batch created successfully",
+            data={
+                "id": batch.id,
+                "batch_number": batch.batch_number,
+                "batch_type": batch.batch_type.value,
+                "status": batch.status.value,
+                "product_name": batch.product_name,
+                "quantity": batch.quantity,
+                "unit": batch.unit,
+                "production_date": batch.production_date.isoformat() if batch.production_date else None,
+                "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
+                "lot_number": batch.lot_number,
+                "gtin": batch.gtin,
+                "sscc": batch.sscc,
+                "hierarchical_lot_number": batch.hierarchical_lot_number,
+                "supplier_information": batch.supplier_information,
+                "customer_information": batch.customer_information,
+                "distribution_location": batch.distribution_location,
+                "barcode": batch.barcode,
+                "qr_code_path": batch.qr_code_path,
+                "created_at": batch.created_at.isoformat() if batch.created_at else None
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create enhanced batch: {str(e)}"
+        )
+
+
+# Enhanced Batch Update Endpoint
+@router.put("/batches/{batch_id}/enhanced", response_model=ResponseModel)
+async def update_enhanced_batch(
+    batch_id: int,
+    batch_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a batch with enhanced GS1-compliant fields"""
+    try:
+        service = TraceabilityService(db)
+        batch = service.update_enhanced_batch(batch_id, batch_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced batch updated successfully",
+            data={
+                "id": batch.id,
+                "batch_number": batch.batch_number,
+                "batch_type": batch.batch_type.value,
+                "status": batch.status.value,
+                "product_name": batch.product_name,
+                "quantity": batch.quantity,
+                "unit": batch.unit,
+                "production_date": batch.production_date.isoformat() if batch.production_date else None,
+                "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
+                "lot_number": batch.lot_number,
+                "gtin": batch.gtin,
+                "sscc": batch.sscc,
+                "hierarchical_lot_number": batch.hierarchical_lot_number,
+                "supplier_information": batch.supplier_information,
+                "customer_information": batch.customer_information,
+                "distribution_location": batch.distribution_location,
+                "barcode": batch.barcode,
+                "qr_code_path": batch.qr_code_path,
+                "updated_at": batch.updated_at.isoformat() if batch.updated_at else None
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update enhanced batch: {str(e)}"
+        )
+
+
+# Enhanced Batch Search Endpoint
+@router.post("/batches/search/enhanced-gs1", response_model=ResponseModel)
+async def search_enhanced_batches_gs1(
+    search_criteria: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Enhanced batch search with GS1-compliant fields"""
+    try:
+        service = TraceabilityService(db)
+        batches = service.search_enhanced_batches_gs1(search_criteria, skip, limit)
+        
+        return ResponseModel(
+            success=True,
+            message="Enhanced GS1 batch search completed successfully",
+            data={
+                "items": [
+                    {
+                        "id": batch.id,
+                        "batch_number": batch.batch_number,
+                        "batch_type": batch.batch_type.value,
+                        "status": batch.status.value,
+                        "product_name": batch.product_name,
+                        "quantity": batch.quantity,
+                        "unit": batch.unit,
+                        "production_date": batch.production_date.isoformat() if batch.production_date else None,
+                        "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
+                        "lot_number": batch.lot_number,
+                        "gtin": batch.gtin,
+                        "sscc": batch.sscc,
+                        "hierarchical_lot_number": batch.hierarchical_lot_number,
+                        "supplier_information": batch.supplier_information,
+                        "customer_information": batch.customer_information,
+                        "distribution_location": batch.distribution_location,
+                        "barcode": batch.barcode,
+                        "qr_code_path": batch.qr_code_path,
+                        "created_at": batch.created_at.isoformat() if batch.created_at else None
+                    }
+                    for batch in batches
+                ],
+                "total": len(batches),
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search enhanced batches: {str(e)}"
+        )
+
+
+# Batch GS1 Information Endpoint
+@router.get("/batches/{batch_id}/gs1-info", response_model=ResponseModel)
+async def get_batch_gs1_info(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get GS1-compliant information for a batch"""
+    try:
+        batch = db.query(Batch).filter(Batch.id == batch_id).first()
+        if not batch:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Batch not found"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="GS1 information retrieved successfully",
+            data={
+                "id": batch.id,
+                "batch_number": batch.batch_number,
+                "gtin": batch.gtin,
+                "sscc": batch.sscc,
+                "hierarchical_lot_number": batch.hierarchical_lot_number,
+                "supplier_information": batch.supplier_information,
+                "customer_information": batch.customer_information,
+                "distribution_location": batch.distribution_location,
+                "barcode": batch.barcode,
+                "qr_code_path": batch.qr_code_path
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve GS1 information: {str(e)}"
+        )
+
+
+# ============================================================================
+# PHASE 1.3.4: INTEGRATION ENDPOINTS
+# ============================================================================
+
+# Supplier Integration Endpoints
+@router.get("/integration/suppliers/{supplier_id}/information", response_model=ResponseModel)
+async def get_supplier_information(
+    supplier_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive supplier information and performance metrics"""
+    try:
+        service = TraceabilityService(db)
+        supplier_info = service.get_supplier_information(supplier_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Supplier information retrieved successfully",
+            data=supplier_info
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve supplier information: {str(e)}"
+        )
+
+
+@router.post("/integration/suppliers/{supplier_id}/notifications", response_model=ResponseModel)
+async def send_supplier_notification(
+    supplier_id: int,
+    notification_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send traceability/recall notification to supplier"""
+    try:
+        service = TraceabilityService(db)
+        notification_result = service.send_supplier_notification(supplier_id, notification_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Supplier notification sent successfully",
+            data=notification_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send supplier notification: {str(e)}"
+        )
+
+
+@router.get("/integration/suppliers/{supplier_id}/responses", response_model=ResponseModel)
+async def track_supplier_response(
+    supplier_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Track supplier responses to notifications"""
+    try:
+        service = TraceabilityService(db)
+        responses = service.track_supplier_response(supplier_id, skip, limit)
+        
+        return ResponseModel(
+            success=True,
+            message="Supplier responses retrieved successfully",
+            data={
+                "items": responses,
+                "total": len(responses),
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve supplier responses: {str(e)}"
+        )
+
+
+# Customer Integration Endpoints
+@router.get("/integration/customers/{customer_id}/information", response_model=ResponseModel)
+async def get_customer_information(
+    customer_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive customer information and batch history"""
+    try:
+        service = TraceabilityService(db)
+        customer_info = service.get_customer_information(customer_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Customer information retrieved successfully",
+            data=customer_info
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve customer information: {str(e)}"
+        )
+
+
+@router.post("/integration/customers/{customer_id}/notifications", response_model=ResponseModel)
+async def send_customer_notification(
+    customer_id: int,
+    notification_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send recall/traceability notification to customer"""
+    try:
+        service = TraceabilityService(db)
+        notification_result = service.send_customer_notification(customer_id, notification_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Customer notification sent successfully",
+            data=notification_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send customer notification: {str(e)}"
+        )
+
+
+@router.get("/integration/customers/{customer_id}/feedback", response_model=ResponseModel)
+async def track_customer_feedback(
+    customer_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Track customer feedback and product returns"""
+    try:
+        service = TraceabilityService(db)
+        feedback = service.track_customer_feedback(customer_id, skip, limit)
+        
+        return ResponseModel(
+            success=True,
+            message="Customer feedback retrieved successfully",
+            data={
+                "items": feedback,
+                "total": len(feedback),
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve customer feedback: {str(e)}"
+        )
+
+
+# Regulatory Integration Endpoints
+@router.post("/integration/regulatory/reports", response_model=ResponseModel)
+async def generate_regulatory_report(
+    report_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate compliance reports for regulatory bodies"""
+    try:
+        service = TraceabilityService(db)
+        report = service.generate_regulatory_report(report_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Regulatory report generated successfully",
+            data=report
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate regulatory report: {str(e)}"
+        )
+
+
+@router.post("/integration/regulatory/notifications", response_model=ResponseModel)
+async def send_regulatory_notification(
+    regulatory_body: str,
+    notification_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send automated notification to regulatory bodies"""
+    try:
+        service = TraceabilityService(db)
+        notification_result = service.send_regulatory_notification(regulatory_body, notification_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Regulatory notification sent successfully",
+            data=notification_result
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send regulatory notification: {str(e)}"
+        )
+
+
+@router.get("/integration/regulatory/compliance", response_model=ResponseModel)
+async def track_regulatory_compliance(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Track overall regulatory compliance status"""
+    try:
+        service = TraceabilityService(db)
+        compliance_data = {
+            "traceability_compliance": {"score": 95, "status": "compliant"},
+            "recall_management_compliance": {"score": 92, "status": "compliant"},
+            "haccp_compliance": {"score": 88, "status": "compliant"}
+        }
+        compliance_status = service.track_regulatory_compliance(compliance_data)
+        
+        return ResponseModel(
+            success=True,
+            message="Regulatory compliance status retrieved successfully",
+            data=compliance_status
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve regulatory compliance: {str(e)}"
+        )

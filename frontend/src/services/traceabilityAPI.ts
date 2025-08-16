@@ -89,6 +89,56 @@ export const traceabilityAPI = {
     return response.data?.data || response.data;
   },
 
+  // One-Click Traceability Analysis
+  getOneUpOneBackTrace: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/trace/one-up-one-back`);
+    return response.data;
+  },
+
+  getTraceCompleteness: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/trace/completeness`);
+    return response.data;
+  },
+
+  getTraceVerificationStatus: async (batchId: number) => {
+    const response = await api.get(`/traceability/batches/${batchId}/trace/verification-status`);
+    return response.data;
+  },
+
+  getCCPTraceabilityAlerts: async (params?: { skip?: number; limit?: number }) => {
+    const response = await api.get('/traceability/ccp/traceability-alerts', { params });
+    return response.data;
+  },
+
+  generateHACCPComplianceReport: async (reportData: any) => {
+    const response = await api.post('/traceability/haccp/compliance-report', reportData);
+    return response.data;
+  },
+
+  searchEnhancedBatchesGS1: async (params: {
+    gtin?: string;
+    sscc?: string;
+    hierarchical_lot_number?: string;
+    product_name?: string;
+    batch_type?: string;
+    status?: string;
+    quality_status?: string;
+    date_from?: string;
+    date_to?: string;
+  }) => {
+    const response = await api.post('/traceability/batches/search/enhanced-gs1', params);
+    return response.data;
+  },
+
+  getSuppliers: async (params?: {
+    page?: number;
+    size?: number;
+    search?: string;
+  }) => {
+    const response = await api.get('/suppliers', { params });
+    return response.data?.data || response.data;
+  },
+
   createTraceabilityLink: async (linkData: {
     source_batch_id: number;
     target_batch_id: number;
@@ -150,6 +200,11 @@ export const traceabilityAPI = {
 
   createRecall: async (recallData: any) => {
     const response = await api.post('/traceability/recalls', recallData);
+    return response.data;
+  },
+
+  classifyRecall: async (recallId: number, classificationData: any) => {
+    const response = await api.post(`/traceability/recalls/${recallId}/classify`, classificationData);
     return response.data;
   },
 
