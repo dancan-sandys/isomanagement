@@ -729,7 +729,7 @@ class TraceabilityService:
                 user_id=recall.assigned_to,
                 title=f"New Recall Assignment: {recall.title}",
                 message=f"You have been assigned to handle recall {recall.recall_number}. "
-                       f"Type: {recall.recall_type.value.replace('_', ' ').title()}. "
+                       f"Type: {str(recall.recall_type).replace('_', ' ').title()}. "
                        f"Please review and take appropriate action.",
                 notification_type=NotificationType.WARNING,
                 priority=NotificationPriority.HIGH,
@@ -737,8 +737,8 @@ class TraceabilityService:
                 notification_data={
                     "recall_id": recall.id,
                     "recall_number": recall.recall_number,
-                    "recall_type": recall.recall_type.value,
-                    "status": recall.status.value
+                    "recall_type": str(recall.recall_type),
+                    "status": str(recall.status)
                 }
             )
             
@@ -781,15 +781,15 @@ class TraceabilityService:
             notification = Notification(
                 user_id=recall.assigned_to,
                 title=f"Recall Status Updated: {recall.recall_number}",
-                message=f"Recall {recall.recall_number} status has been updated to {new_status.value.replace('_', ' ').title()}.",
+                message=f"Recall {recall.recall_number} status has been updated to {str(new_status).replace('_', ' ').title()}.",
                 notification_type=NotificationType.INFO,
                 priority=NotificationPriority.MEDIUM,
                 category=NotificationCategory.TRACEABILITY,
                 notification_data={
                     "recall_id": recall.id,
                     "recall_number": recall.recall_number,
-                    "old_status": recall.status.value,
-                    "new_status": new_status.value
+                    "old_status": str(recall.status),
+                    "new_status": str(new_status)
                 }
             )
             
@@ -808,6 +808,7 @@ class TraceabilityService:
         if filters.status:
             query = query.filter(Recall.status == filters.status)
         if filters.recall_type:
+            # Handle enum filtering by comparing string values
             query = query.filter(Recall.recall_type == filters.recall_type)
         if filters.search:
             query = query.filter(

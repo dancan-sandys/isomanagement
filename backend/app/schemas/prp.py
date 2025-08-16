@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from enum import Enum
 
@@ -100,7 +100,8 @@ class PRPProgramCreate(BaseModel):
     escalation_procedure: Optional[str] = None
     preventive_action_procedure: Optional[str] = None
 
-    @validator('program_code')
+    @field_validator('program_code')
+    @classmethod
     def validate_program_code(cls, v):
         if not v.isalnum() and not v.replace('-', '').replace('_', '').isalnum():
             raise ValueError('Program code must contain only alphanumeric characters, hyphens, and underscores')
@@ -169,8 +170,8 @@ class PRPProgramResponse(BaseModel):
 class RiskMatrixCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    likelihood_levels: List[str] = Field(..., min_items=3, max_items=5)
-    severity_levels: List[str] = Field(..., min_items=3, max_items=5)
+    likelihood_levels: List[str] = Field(..., min_length=3, max_length=5)
+    severity_levels: List[str] = Field(..., min_length=3, max_length=5)
     risk_levels: Dict[str, str] = Field(..., description="Matrix mapping likelihood x severity to risk levels")
 
 
@@ -242,9 +243,10 @@ class ChecklistCreate(BaseModel):
     due_date: datetime
     assigned_to: int = Field(..., gt=0)
 
-    @validator('due_date')
-    def validate_due_date(cls, v, values):
-        if 'scheduled_date' in values and v <= values['scheduled_date']:
+    @field_validator('due_date')
+    @classmethod
+    def validate_due_date(cls, v, info):
+        if info.data and 'scheduled_date' in info.data and v <= info.data['scheduled_date']:
             raise ValueError('Due date must be after scheduled date')
         return v
 
@@ -270,7 +272,7 @@ class ChecklistItemCreate(BaseModel):
 
 
 class ChecklistCompletion(BaseModel):
-    items: List[Dict[str, Any]] = Field(..., min_items=1)
+    items: List[Dict[str, Any]] = Field(..., min_length=1)
     general_comments: Optional[str] = None
     corrective_actions_required: bool = False
     corrective_actions: Optional[str] = None
@@ -282,7 +284,7 @@ class NonConformanceCreate(BaseModel):
     description: str = Field(..., min_length=1)
     severity: str = Field(..., min_length=1, max_length=50)
     checklist_id: int = Field(..., gt=0)
-    failed_items: List[int] = Field(..., min_items=1)
+    failed_items: List[int] = Field(..., min_length=1)
 
 
 class ReminderCreate(BaseModel):
@@ -313,7 +315,7 @@ class PRPReportRequest(BaseModel):
     category: Optional[PRPCategory] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
-    format: str = Field("pdf", regex="^(pdf|xlsx|json)$")
+    format: str = Field("pdf", pattern="^(pdf|xlsx|json)$")
     include_risk_assessments: bool = True
     include_corrective_actions: bool = True
     include_trends: bool = True 

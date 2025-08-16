@@ -35,6 +35,712 @@ class PRPService:
         self.upload_dir = "uploads/prp"
         os.makedirs(self.upload_dir, exist_ok=True)
     
+    # ============================================================================
+    # RISK ASSESSMENT ENGINE (Phase 3.1)
+    # ============================================================================
+    
+    def create_risk_matrix(self, matrix_data: RiskMatrixCreate, created_by: int) -> RiskMatrix:
+        """Create a configurable risk matrix with custom scoring algorithms"""
+        
+        # Validate matrix configuration
+        self._validate_risk_matrix_config(matrix_data)
+        
+        # Generate default risk levels mapping if not provided
+        if not matrix_data.risk_levels:
+            matrix_data.risk_levels = self._generate_default_risk_mapping(
+                matrix_data.likelihood_levels, 
+                matrix_data.severity_levels
+            )
+        
+        matrix = RiskMatrix(
+            name=matrix_data.name,
+            description=matrix_data.description,
+            likelihood_levels=matrix_data.likelihood_levels,
+            severity_levels=matrix_data.severity_levels,
+            risk_levels=matrix_data.risk_levels,
+            created_by=created_by
+        )
+        
+        self.db.add(matrix)
+        self.db.commit()
+        self.db.refresh(matrix)
+        
+        return matrix
+    
+    def _validate_risk_matrix_config(self, matrix_data: RiskMatrixCreate) -> None:
+        """Validate risk matrix configuration"""
+        if len(matrix_data.likelihood_levels) < 3:
+            raise ValueError("Risk matrix must have at least 3 likelihood levels")
+        
+        if len(matrix_data.severity_levels) < 3:
+            raise ValueError("Risk matrix must have at least 3 severity levels")
+        
+        # Validate risk levels mapping
+        expected_combinations = len(matrix_data.likelihood_levels) * len(matrix_data.severity_levels)
+        if matrix_data.risk_levels and len(matrix_data.risk_levels) != expected_combinations:
+            raise ValueError(f"Risk levels mapping must cover all {expected_combinations} likelihood-severity combinations")
+    
+    def _generate_default_risk_mapping(self, likelihood_levels: List[str], severity_levels: List[str]) -> Dict[str, str]:
+        """Generate default risk level mapping based on likelihood and severity"""
+        mapping = {}
+        
+        # Define risk level assignment logic
+        for i, likelihood in enumerate(likelihood_levels):
+            for j, severity in enumerate(severity_levels):
+                key = f"{likelihood}_{severity}"
+                
+                # Calculate risk level based on position in matrix
+                risk_score = (i + 1) * (j + 1)
+                
+                if risk_score <= 4:
+                    risk_level = "very_low"
+                elif risk_score <= 6:
+                    risk_level = "low"
+                elif risk_score <= 9:
+                    risk_level = "medium"
+                elif risk_score <= 12:
+                    risk_level = "high"
+                elif risk_score <= 16:
+                    risk_level = "very_high"
+                else:
+                    risk_level = "critical"
+                
+                mapping[key] = risk_level
+        
+        return mapping
+    
+    def calculate_risk_score(self, likelihood_level: str, severity_level: str, matrix_id: int = None) -> Dict[str, Any]:
+        """Calculate risk score using configurable risk matrix"""
+        
+        # Get risk matrix (use default if not specified)
+        if matrix_id:
+            matrix = self.db.query(RiskMatrix).filter(RiskMatrix.id == matrix_id).first()
+            if not matrix:
+                raise ValueError("Risk matrix not found")
+        else:
+            # Use default matrix
+            matrix = self.db.query(RiskMatrix).filter(RiskMatrix.is_active == True).first()
+            if not matrix:
+                # Create default matrix if none exists
+                matrix = self._create_default_risk_matrix()
+        
+        # Find likelihood and severity indices
+        try:
+            likelihood_index = matrix.likelihood_levels.index(likelihood_level)
+            severity_index = matrix.severity_levels.index(severity_level)
+        except ValueError:
+            raise ValueError("Invalid likelihood or severity level")
+        
+        # Calculate risk score
+        risk_score = (likelihood_index + 1) * (severity_index + 1)
+        
+        # Determine risk level from matrix
+        key = f"{likelihood_level}_{severity_level}"
+        risk_level = matrix.risk_levels.get(key, "medium")
+        
+        # Determine acceptability based on risk level
+        acceptability = self._determine_risk_acceptability(risk_level, risk_score)
+        
+        return {
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "acceptability": acceptability,
+            "matrix_used": matrix.name,
+            "calculation_method": "likelihood_x_severity"
+        }
+    
+    def _create_default_risk_matrix(self) -> RiskMatrix:
+        """Create a default ISO 22002-1:2025 compliant risk matrix"""
+        default_matrix = RiskMatrix(
+            name="ISO 22002-1:2025 Default Risk Matrix",
+            description="Default risk matrix for ISO 22002-1:2025 compliance",
+            likelihood_levels=["Rare", "Unlikely", "Possible", "Likely", "Certain"],
+            severity_levels=["Negligible", "Minor", "Moderate", "Major", "Catastrophic"],
+            risk_levels={
+                "Rare_Negligible": "very_low", "Rare_Minor": "low", "Rare_Moderate": "low",
+                "Rare_Major": "medium", "Rare_Catastrophic": "medium",
+                "Unlikely_Negligible": "low", "Unlikely_Minor": "low", "Unlikely_Moderate": "medium",
+                "Unlikely_Major": "medium", "Unlikely_Catastrophic": "high",
+                "Possible_Negligible": "low", "Possible_Minor": "medium", "Possible_Moderate": "medium",
+                "Possible_Major": "high", "Possible_Catastrophic": "high",
+                "Likely_Negligible": "medium", "Likely_Minor": "medium", "Likely_Moderate": "high",
+                "Likely_Major": "high", "Likely_Catastrophic": "very_high",
+                "Certain_Negligible": "medium", "Certain_Minor": "high", "Certain_Moderate": "high",
+                "Certain_Major": "very_high", "Certain_Catastrophic": "critical"
+            },
+            is_active=True,
+            created_by=1  # System user
+        )
+        
+        self.db.add(default_matrix)
+        self.db.commit()
+        self.db.refresh(default_matrix)
+        
+        return default_matrix
+    
+    def _determine_risk_acceptability(self, risk_level: str, risk_score: int) -> bool:
+        """Determine if risk is acceptable based on risk level and score"""
+        acceptability_thresholds = {
+            "very_low": 4,
+            "low": 6,
+            "medium": 9,
+            "high": 12,
+            "very_high": 16,
+            "critical": 25
+        }
+        
+        threshold = acceptability_thresholds.get(risk_level, 9)
+        return risk_score <= threshold
+    
+    def calculate_residual_risk(self, initial_risk_score: int, control_effectiveness: float) -> Dict[str, Any]:
+        """Calculate residual risk after implementing controls"""
+        
+        if not 0 <= control_effectiveness <= 1:
+            raise ValueError("Control effectiveness must be between 0 and 1")
+        
+        # Calculate residual risk score
+        residual_score = int(initial_risk_score * (1 - control_effectiveness))
+        
+        # Determine residual risk level
+        if residual_score <= 4:
+            residual_level = "very_low"
+        elif residual_score <= 6:
+            residual_level = "low"
+        elif residual_score <= 9:
+            residual_level = "medium"
+        elif residual_score <= 12:
+            residual_level = "high"
+        elif residual_score <= 16:
+            residual_level = "very_high"
+        else:
+            residual_level = "critical"
+        
+        # Determine if residual risk is acceptable
+        residual_acceptability = self._determine_risk_acceptability(residual_level, residual_score)
+        
+        return {
+            "residual_risk_score": residual_score,
+            "residual_risk_level": residual_level,
+            "residual_acceptability": residual_acceptability,
+            "risk_reduction": initial_risk_score - residual_score,
+            "risk_reduction_percentage": round((1 - residual_score / initial_risk_score) * 100, 2)
+        }
+    
+    def create_risk_assessment(self, program_id: int, assessment_data: RiskAssessmentCreate, created_by: int) -> RiskAssessment:
+        """Create a risk assessment with advanced scoring and analysis"""
+        
+        # Calculate risk score using risk matrix
+        risk_calculation = self.calculate_risk_score(
+            assessment_data.likelihood_level,
+            assessment_data.severity_level
+        )
+        
+        # Generate assessment code
+        assessment_code = f"RA-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+        
+        assessment = RiskAssessment(
+            program_id=program_id,
+            assessment_code=assessment_code,
+            hazard_identified=assessment_data.hazard_identified,
+            hazard_description=assessment_data.hazard_description,
+            likelihood_level=assessment_data.likelihood_level,
+            severity_level=assessment_data.severity_level,
+            risk_level=risk_calculation["risk_level"],
+            risk_score=risk_calculation["risk_score"],
+            acceptability=risk_calculation["acceptability"],
+            existing_controls=assessment_data.existing_controls,
+            additional_controls_required=assessment_data.additional_controls_required,
+            control_effectiveness=assessment_data.control_effectiveness,
+            assessment_date=datetime.utcnow(),
+            created_by=created_by
+        )
+        
+        self.db.add(assessment)
+        self.db.commit()
+        self.db.refresh(assessment)
+        
+        return assessment
+    
+    # ============================================================================
+    # CORRECTIVE ACTION WORKFLOW (Phase 3.2)
+    # ============================================================================
+    
+    def create_corrective_action(self, action_data: CorrectiveActionCreate, created_by: int) -> CorrectiveAction:
+        """Create a corrective action with root cause analysis framework"""
+        
+        # Generate action code
+        action_code = f"CA-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+        
+        # Perform root cause analysis
+        root_cause_analysis = self._perform_root_cause_analysis(action_data.non_conformance_description)
+        
+        action = CorrectiveAction(
+            action_code=action_code,
+            source_type=action_data.source_type,
+            source_id=action_data.source_id,
+            checklist_id=action_data.checklist_id,
+            program_id=action_data.program_id,
+            non_conformance_description=action_data.non_conformance_description,
+            non_conformance_date=action_data.non_conformance_date,
+            severity=action_data.severity,
+            immediate_cause=action_data.immediate_cause,
+            root_cause_analysis=root_cause_analysis,
+            root_cause_category=action_data.root_cause_category,
+            action_description=action_data.action_description,
+            action_type=action_data.action_type,
+            responsible_person=action_data.responsible_person,
+            assigned_to=action_data.assigned_to,
+            target_completion_date=action_data.target_completion_date,
+            effectiveness_criteria=action_data.effectiveness_criteria,
+            verification_method=action_data.verification_method,
+            created_by=created_by
+        )
+        
+        self.db.add(action)
+        self.db.commit()
+        self.db.refresh(action)
+        
+        # Create notification for assigned person
+        self._create_action_assignment_notification(action)
+        
+        return action
+    
+    def _perform_root_cause_analysis(self, non_conformance_description: str) -> str:
+        """Perform automated root cause analysis using predefined categories"""
+        
+        # Define root cause categories and keywords
+        root_cause_categories = {
+            "equipment": ["equipment", "machine", "device", "tool", "instrument", "calibration", "maintenance"],
+            "process": ["procedure", "process", "method", "workflow", "standard", "protocol"],
+            "personnel": ["training", "skill", "knowledge", "experience", "competency", "human error"],
+            "material": ["material", "supplier", "quality", "specification", "raw material"],
+            "environment": ["environment", "temperature", "humidity", "cleanliness", "facility"],
+            "management": ["supervision", "management", "leadership", "communication", "planning"]
+        }
+        
+        # Analyze description for root cause indicators
+        description_lower = non_conformance_description.lower()
+        category_scores = {}
+        
+        for category, keywords in root_cause_categories.items():
+            score = sum(1 for keyword in keywords if keyword in description_lower)
+            if score > 0:
+                category_scores[category] = score
+        
+        # Determine most likely root cause category
+        if category_scores:
+            most_likely_category = max(category_scores, key=category_scores.get)
+            return f"Automated analysis suggests {most_likely_category} as primary root cause category"
+        else:
+            return "Root cause category requires manual analysis"
+    
+    def _create_action_assignment_notification(self, action: CorrectiveAction) -> None:
+        """Create notification for action assignment"""
+        try:
+            notification = Notification(
+                user_id=action.assigned_to,
+                title=f"Corrective Action Assigned: {action.action_code}",
+                message=f"You have been assigned a corrective action: {action.action_description[:100]}...",
+                notification_type=NotificationType.ACTION_ASSIGNMENT,
+                priority=NotificationPriority.HIGH if action.severity in ["high", "critical"] else NotificationPriority.MEDIUM,
+                category=NotificationCategory.PRP,
+                related_id=action.id,
+                related_type="corrective_action"
+            )
+            self.db.add(notification)
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to create action assignment notification: {e}")
+    
+    def update_action_progress(self, action_id: int, progress_percentage: int, status: str = None) -> CorrectiveAction:
+        """Update corrective action progress with effectiveness tracking"""
+        
+        action = self.db.query(CorrectiveAction).filter(CorrectiveAction.id == action_id).first()
+        if not action:
+            raise ValueError("Corrective action not found")
+        
+        # Update progress
+        action.progress_percentage = progress_percentage
+        
+        # Update status if provided
+        if status:
+            action.status = CorrectiveActionStatus(status)
+        
+        # Check if action is completed
+        if progress_percentage >= 100 and action.status != CorrectiveActionStatus.COMPLETED:
+            action.status = CorrectiveActionStatus.PENDING_VERIFICATION
+            action.actual_completion_date = datetime.utcnow()
+            
+            # Create verification notification
+            self._create_verification_notification(action)
+        
+        self.db.commit()
+        self.db.refresh(action)
+        
+        return action
+    
+    def _create_verification_notification(self, action: CorrectiveAction) -> None:
+        """Create notification for action verification"""
+        try:
+            notification = Notification(
+                user_id=action.effectiveness_verified_by or action.responsible_person,
+                title=f"Action Verification Required: {action.action_code}",
+                message=f"Corrective action {action.action_code} requires verification of effectiveness",
+                notification_type=NotificationType.VERIFICATION_REQUIRED,
+                priority=NotificationPriority.MEDIUM,
+                category=NotificationCategory.PRP,
+                related_id=action.id,
+                related_type="corrective_action"
+            )
+            self.db.add(notification)
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to create verification notification: {e}")
+    
+    def verify_action_effectiveness(self, action_id: int, verification_data: Dict[str, Any], verified_by: int) -> CorrectiveAction:
+        """Verify corrective action effectiveness"""
+        
+        action = self.db.query(CorrectiveAction).filter(CorrectiveAction.id == action_id).first()
+        if not action:
+            raise ValueError("Corrective action not found")
+        
+        # Update verification details
+        action.effectiveness_verification = verification_data.get("verification_details")
+        action.effectiveness_verified_by = verified_by
+        action.effectiveness_verified_at = datetime.utcnow()
+        
+        # Determine if action is effective
+        is_effective = verification_data.get("is_effective", False)
+        
+        if is_effective:
+            action.status = CorrectiveActionStatus.VERIFIED
+            # Check if action should be closed
+            if verification_data.get("close_action", False):
+                action.status = CorrectiveActionStatus.CLOSED
+        else:
+            action.status = CorrectiveActionStatus.ESCALATED
+            # Create escalation notification
+            self._create_escalation_notification(action, verification_data.get("escalation_reason"))
+        
+        self.db.commit()
+        self.db.refresh(action)
+        
+        return action
+    
+    def _create_escalation_notification(self, action: CorrectiveAction, escalation_reason: str = None) -> None:
+        """Create escalation notification for ineffective actions"""
+        try:
+            notification = Notification(
+                user_id=action.responsible_person,
+                title=f"Action Escalation: {action.action_code}",
+                message=f"Corrective action {action.action_code} has been escalated due to ineffectiveness. Reason: {escalation_reason or 'Not provided'}",
+                notification_type=NotificationType.ESCALATION,
+                priority=NotificationPriority.HIGH,
+                category=NotificationCategory.PRP,
+                related_id=action.id,
+                related_type="corrective_action"
+            )
+            self.db.add(notification)
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to create escalation notification: {e}")
+    
+    # ============================================================================
+    # PREVENTIVE ACTION SYSTEM (Phase 3.3)
+    # ============================================================================
+    
+    def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PreventiveAction:
+        """Create a preventive action with trigger identification and planning"""
+        
+        # Generate action code
+        action_code = f"PA-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+        
+        # Identify triggers and plan preventive action
+        trigger_analysis = self._identify_preventive_triggers(action_data.potential_issue)
+        success_criteria = self._generate_success_criteria(action_data.objective)
+        
+        action = PreventiveAction(
+            action_code=action_code,
+            trigger_type=action_data.trigger_type,
+            trigger_description=action_data.trigger_description,
+            program_id=action_data.program_id,
+            action_description=action_data.action_description,
+            objective=action_data.objective,
+            responsible_person=action_data.responsible_person,
+            assigned_to=action_data.assigned_to,
+            implementation_plan=action_data.implementation_plan,
+            resources_required=action_data.resources_required,
+            budget_estimate=action_data.budget_estimate,
+            planned_start_date=action_data.planned_start_date,
+            planned_completion_date=action_data.planned_completion_date,
+            success_criteria=success_criteria,
+            created_by=created_by
+        )
+        
+        self.db.add(action)
+        self.db.commit()
+        self.db.refresh(action)
+        
+        # Create notification for assigned person
+        self._create_preventive_action_notification(action)
+        
+        return action
+    
+    def _identify_preventive_triggers(self, potential_issue: str) -> str:
+        """Identify preventive action triggers from potential issues"""
+        
+        # Define trigger categories and keywords
+        trigger_categories = {
+            "trend_analysis": ["trend", "pattern", "increase", "decrease", "fluctuation", "variation"],
+            "risk_assessment": ["risk", "hazard", "threat", "vulnerability", "exposure"],
+            "audit_findings": ["audit", "finding", "nonconformity", "observation", "recommendation"],
+            "customer_feedback": ["customer", "complaint", "feedback", "satisfaction", "expectation"],
+            "regulatory_change": ["regulation", "standard", "requirement", "compliance", "legislation"],
+            "technology_change": ["technology", "equipment", "system", "upgrade", "innovation"],
+            "process_improvement": ["efficiency", "effectiveness", "optimization", "improvement", "streamline"]
+        }
+        
+        # Analyze potential issue for trigger indicators
+        issue_lower = potential_issue.lower()
+        trigger_scores = {}
+        
+        for category, keywords in trigger_categories.items():
+            score = sum(1 for keyword in keywords if keyword in issue_lower)
+            if score > 0:
+                trigger_scores[category] = score
+        
+        # Determine most likely trigger category
+        if trigger_scores:
+            most_likely_trigger = max(trigger_scores, key=trigger_scores.get)
+            return f"Automated analysis suggests {most_likely_trigger} as primary trigger category"
+        else:
+            return "Trigger category requires manual analysis"
+    
+    def _generate_success_criteria(self, objective: str) -> str:
+        """Generate success criteria based on action objective"""
+        
+        # Define success criteria templates based on objective keywords
+        objective_lower = objective.lower()
+        
+        if any(word in objective_lower for word in ["reduce", "decrease", "minimize"]):
+            return "Measurable reduction in target metric by specified percentage"
+        elif any(word in objective_lower for word in ["improve", "enhance", "increase"]):
+            return "Measurable improvement in target metric by specified percentage"
+        elif any(word in objective_lower for word in ["prevent", "avoid", "eliminate"]):
+            return "Zero occurrences of target issue for specified time period"
+        elif any(word in objective_lower for word in ["implement", "establish", "create"]):
+            return "Successful implementation and verification of new process/system"
+        else:
+            return "Achievement of stated objective with measurable outcomes"
+    
+    def _create_preventive_action_notification(self, action: PreventiveAction) -> None:
+        """Create notification for preventive action assignment"""
+        try:
+            notification = Notification(
+                user_id=action.assigned_to,
+                title=f"Preventive Action Assigned: {action.action_code}",
+                message=f"You have been assigned a preventive action: {action.action_description[:100]}...",
+                notification_type=NotificationType.ACTION_ASSIGNMENT,
+                priority=NotificationPriority.MEDIUM,
+                category=NotificationCategory.PRP,
+                related_id=action.id,
+                related_type="preventive_action"
+            )
+            self.db.add(notification)
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to create preventive action notification: {e}")
+    
+    def start_preventive_action(self, action_id: int, started_by: int) -> PreventiveAction:
+        """Start a preventive action with effectiveness measurement setup"""
+        
+        action = self.db.query(PreventiveAction).filter(PreventiveAction.id == action_id).first()
+        if not action:
+            raise ValueError("Preventive action not found")
+        
+        # Update action status
+        action.status = CorrectiveActionStatus.IN_PROGRESS
+        action.start_date = datetime.utcnow()
+        
+        # Set up effectiveness measurement
+        effectiveness_metrics = self._setup_effectiveness_measurement(action)
+        action.effectiveness_measurement = effectiveness_metrics
+        
+        self.db.commit()
+        self.db.refresh(action)
+        
+        return action
+    
+    def _setup_effectiveness_measurement(self, action: PreventiveAction) -> str:
+        """Set up effectiveness measurement framework for preventive action"""
+        
+        # Define measurement framework based on action type
+        measurement_framework = {
+            "baseline_measurement": "Establish baseline metrics before action implementation",
+            "ongoing_monitoring": "Monitor key performance indicators during implementation",
+            "post_implementation_assessment": "Evaluate effectiveness after implementation",
+            "long_term_tracking": "Track sustained improvements over time",
+            "success_criteria_verification": "Verify achievement of defined success criteria"
+        }
+        
+        return json.dumps(measurement_framework)
+    
+    def measure_action_effectiveness(self, action_id: int, measurement_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Measure preventive action effectiveness"""
+        
+        action = self.db.query(PreventiveAction).filter(PreventiveAction.id == action_id).first()
+        if not action:
+            raise ValueError("Preventive action not found")
+        
+        # Calculate effectiveness score
+        effectiveness_score = self._calculate_effectiveness_score(measurement_data)
+        
+        # Determine if success criteria are met
+        success_criteria_met = self._evaluate_success_criteria(action.success_criteria, measurement_data)
+        
+        # Update action with measurement results
+        action.effectiveness_rating = effectiveness_score
+        action.verification_date = datetime.utcnow()
+        
+        if success_criteria_met:
+            action.status = CorrectiveActionStatus.VERIFIED
+        else:
+            action.status = CorrectiveActionStatus.IN_PROGRESS  # Continue monitoring
+        
+        self.db.commit()
+        
+        return {
+            "effectiveness_score": effectiveness_score,
+            "success_criteria_met": success_criteria_met,
+            "recommendations": self._generate_effectiveness_recommendations(effectiveness_score, measurement_data)
+        }
+    
+    def _calculate_effectiveness_score(self, measurement_data: Dict[str, Any]) -> float:
+        """Calculate effectiveness score based on measurement data"""
+        
+        # Define scoring criteria
+        baseline = measurement_data.get("baseline_value", 0)
+        current = measurement_data.get("current_value", 0)
+        target = measurement_data.get("target_value", 0)
+        
+        if baseline == 0:
+            return 0.0
+        
+        # Calculate improvement percentage
+        if target > baseline:  # Improvement target
+            improvement = (current - baseline) / (target - baseline) if target != baseline else 0
+        else:  # Reduction target
+            improvement = (baseline - current) / (baseline - target) if baseline != target else 0
+        
+        # Convert to 0-5 scale
+        effectiveness_score = min(5.0, max(0.0, improvement * 5))
+        
+        return round(effectiveness_score, 2)
+    
+    def _evaluate_success_criteria(self, success_criteria: str, measurement_data: Dict[str, Any]) -> bool:
+        """Evaluate if success criteria are met"""
+        
+        # Simple evaluation based on effectiveness score
+        effectiveness_score = measurement_data.get("effectiveness_score", 0)
+        
+        # Consider criteria met if effectiveness score is 3.5 or higher
+        return effectiveness_score >= 3.5
+    
+    def _generate_effectiveness_recommendations(self, effectiveness_score: float, measurement_data: Dict[str, Any]) -> List[str]:
+        """Generate recommendations based on effectiveness measurement"""
+        
+        recommendations = []
+        
+        if effectiveness_score < 2.0:
+            recommendations.append("Action requires significant improvement or redesign")
+            recommendations.append("Consider additional resources or alternative approaches")
+        elif effectiveness_score < 3.5:
+            recommendations.append("Action shows moderate effectiveness but needs refinement")
+            recommendations.append("Review implementation approach and adjust as needed")
+        elif effectiveness_score < 4.5:
+            recommendations.append("Action is effective with minor improvements possible")
+            recommendations.append("Consider optimization for better results")
+        else:
+            recommendations.append("Action is highly effective")
+            recommendations.append("Consider documenting as best practice for similar situations")
+        
+        return recommendations
+    
+    def track_continuous_improvement(self, program_id: int) -> Dict[str, Any]:
+        """Track continuous improvement metrics for PRP programs"""
+        
+        # Get all preventive actions for the program
+        preventive_actions = self.db.query(PreventiveAction).filter(
+            PreventiveAction.program_id == program_id
+        ).all()
+        
+        # Calculate improvement metrics
+        total_actions = len(preventive_actions)
+        completed_actions = len([a for a in preventive_actions if a.status == CorrectiveActionStatus.VERIFIED])
+        average_effectiveness = sum(a.effectiveness_rating or 0 for a in preventive_actions) / total_actions if total_actions > 0 else 0
+        
+        # Identify improvement trends
+        improvement_trends = self._identify_improvement_trends(preventive_actions)
+        
+        return {
+            "total_preventive_actions": total_actions,
+            "completed_actions": completed_actions,
+            "completion_rate": (completed_actions / total_actions * 100) if total_actions > 0 else 0,
+            "average_effectiveness": round(average_effectiveness, 2),
+            "improvement_trends": improvement_trends,
+            "recommendations": self._generate_continuous_improvement_recommendations(completed_actions, average_effectiveness)
+        }
+    
+    def _identify_improvement_trends(self, actions: List[PreventiveAction]) -> List[str]:
+        """Identify improvement trends from preventive actions"""
+        
+        trends = []
+        
+        # Analyze effectiveness over time
+        recent_actions = [a for a in actions if a.verification_date and a.verification_date > datetime.utcnow() - timedelta(days=90)]
+        older_actions = [a for a in actions if a.verification_date and a.verification_date <= datetime.utcnow() - timedelta(days=90)]
+        
+        if recent_actions and older_actions:
+            recent_avg = sum(a.effectiveness_rating or 0 for a in recent_actions) / len(recent_actions)
+            older_avg = sum(a.effectiveness_rating or 0 for a in older_actions) / len(older_actions)
+            
+            if recent_avg > older_avg:
+                trends.append("Improving effectiveness over time")
+            elif recent_avg < older_avg:
+                trends.append("Declining effectiveness - review needed")
+        
+        # Analyze trigger types
+        trigger_types = {}
+        for action in actions:
+            trigger_type = action.trigger_type
+            trigger_types[trigger_type] = trigger_types.get(trigger_type, 0) + 1
+        
+        most_common_trigger = max(trigger_types, key=trigger_types.get) if trigger_types else None
+        if most_common_trigger:
+            trends.append(f"Most common trigger: {most_common_trigger}")
+        
+        return trends
+    
+    def _generate_continuous_improvement_recommendations(self, completed_actions: int, average_effectiveness: float) -> List[str]:
+        """Generate continuous improvement recommendations"""
+        
+        recommendations = []
+        
+        if completed_actions < 5:
+            recommendations.append("Increase preventive action implementation")
+            recommendations.append("Focus on high-impact preventive measures")
+        elif average_effectiveness < 3.0:
+            recommendations.append("Review preventive action planning process")
+            recommendations.append("Enhance success criteria definition")
+        elif average_effectiveness >= 4.0:
+            recommendations.append("Document successful preventive actions as best practices")
+            recommendations.append("Consider expanding preventive action program")
+        
+        recommendations.append("Regular review of preventive action effectiveness")
+        recommendations.append("Continuous monitoring of improvement trends")
+        
+        return recommendations
+    
     def create_prp_program(self, program_data: PRPProgramCreate, created_by: int) -> PRPProgram:
         """Create a new PRP program with ISO 22002-1:2025 compliance"""
         

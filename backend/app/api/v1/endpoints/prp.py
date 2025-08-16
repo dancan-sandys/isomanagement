@@ -2689,3 +2689,218 @@ async def bulk_export_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to perform bulk export: {str(e)}"
         )
+
+
+# ============================================================================
+# PHASE 3: ADVANCED BUSINESS LOGIC ENDPOINTS
+# ============================================================================
+
+# Risk Assessment Engine Endpoints (Phase 3.1)
+@router.post("/risk-matrices/calculate-score")
+async def calculate_risk_score(
+    calculation_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Calculate risk score using configurable risk matrix"""
+    try:
+        prp_service = PRPService(db)
+        risk_calculation = prp_service.calculate_risk_score(
+            likelihood_level=calculation_request["likelihood_level"],
+            severity_level=calculation_request["severity_level"],
+            matrix_id=calculation_request.get("matrix_id")
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Risk score calculated successfully",
+            data=risk_calculation
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate risk score: {str(e)}"
+        )
+
+
+@router.post("/risk-assessments/{assessment_id}/calculate-residual-risk")
+async def calculate_residual_risk(
+    assessment_id: int,
+    residual_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Calculate residual risk after implementing controls"""
+    try:
+        prp_service = PRPService(db)
+        residual_calculation = prp_service.calculate_residual_risk(
+            initial_risk_score=residual_request["initial_risk_score"],
+            control_effectiveness=residual_request["control_effectiveness"]
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Residual risk calculated successfully",
+            data=residual_calculation
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate residual risk: {str(e)}"
+        )
+
+
+# Corrective Action Workflow Endpoints (Phase 3.2)
+@router.post("/corrective-actions/{action_id}/update-progress")
+async def update_action_progress(
+    action_id: int,
+    progress_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update corrective action progress with effectiveness tracking"""
+    try:
+        prp_service = PRPService(db)
+        updated_action = prp_service.update_action_progress(
+            action_id=action_id,
+            progress_percentage=progress_request["progress_percentage"],
+            status=progress_request.get("status")
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Action progress updated successfully",
+            data={
+                "action_id": updated_action.id,
+                "progress_percentage": updated_action.progress_percentage,
+                "status": updated_action.status.value,
+                "completion_date": updated_action.actual_completion_date
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update action progress: {str(e)}"
+        )
+
+
+@router.post("/corrective-actions/{action_id}/verify-effectiveness")
+async def verify_action_effectiveness(
+    action_id: int,
+    verification_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verify corrective action effectiveness"""
+    try:
+        prp_service = PRPService(db)
+        verified_action = prp_service.verify_action_effectiveness(
+            action_id=action_id,
+            verification_data=verification_request,
+            verified_by=current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Action effectiveness verified successfully",
+            data={
+                "action_id": verified_action.id,
+                "status": verified_action.status.value,
+                "effectiveness_verified_by": verified_action.effectiveness_verified_by,
+                "effectiveness_verified_at": verified_action.effectiveness_verified_at
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify action effectiveness: {str(e)}"
+        )
+
+
+# Preventive Action System Endpoints (Phase 3.3)
+@router.post("/preventive-actions/{action_id}/start")
+async def start_preventive_action(
+    action_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Start a preventive action with effectiveness measurement setup"""
+    try:
+        prp_service = PRPService(db)
+        started_action = prp_service.start_preventive_action(
+            action_id=action_id,
+            started_by=current_user.id
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Preventive action started successfully",
+            data={
+                "action_id": started_action.id,
+                "status": started_action.status.value,
+                "start_date": started_action.start_date,
+                "effectiveness_measurement": started_action.effectiveness_measurement
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start preventive action: {str(e)}"
+        )
+
+
+@router.post("/preventive-actions/{action_id}/measure-effectiveness")
+async def measure_action_effectiveness(
+    action_id: int,
+    measurement_request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Measure preventive action effectiveness"""
+    try:
+        prp_service = PRPService(db)
+        measurement_result = prp_service.measure_action_effectiveness(
+            action_id=action_id,
+            measurement_data=measurement_request
+        )
+        
+        return ResponseModel(
+            success=True,
+            message="Action effectiveness measured successfully",
+            data=measurement_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to measure action effectiveness: {str(e)}"
+        )
+
+
+@router.get("/programs/{program_id}/continuous-improvement")
+async def get_continuous_improvement_metrics(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get continuous improvement metrics for PRP programs"""
+    try:
+        prp_service = PRPService(db)
+        improvement_metrics = prp_service.track_continuous_improvement(program_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Continuous improvement metrics retrieved successfully",
+            data=improvement_metrics
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve continuous improvement metrics: {str(e)}"
+        )
