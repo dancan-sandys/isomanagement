@@ -57,6 +57,11 @@ class Batch(Base):
     best_before_date = Column(DateTime(timezone=True))
     lot_number = Column(String(50))
     
+    # GS1-compliant identification fields
+    gtin = Column(String(14))  # Global Trade Item Number (14 digits)
+    sscc = Column(String(18))  # Serial Shipping Container Code (18 digits)
+    hierarchical_lot_number = Column(String(50))  # Hierarchical lot numbering system
+    
     # Supplier information (for raw materials)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"))
     supplier_batch_number = Column(String(50))
@@ -72,9 +77,12 @@ class Batch(Base):
     storage_location = Column(String(100))
     storage_conditions = Column(Text)
     
-    # Traceability
-    parent_batches = Column(Text)  # JSON array of parent batch IDs
-    child_batches = Column(Text)  # JSON array of child batch IDs
+    # Enhanced traceability fields
+    parent_batches = Column(JSON)  # JSON array of parent batch IDs with metadata
+    child_batches = Column(JSON)  # JSON array of child batch IDs with metadata
+    supplier_information = Column(JSON)  # JSON object with supplier details
+    customer_information = Column(JSON)  # JSON object with customer details
+    distribution_location = Column(String(100))  # Distribution location tracking
     
     # Barcode/QR code
     barcode = Column(String(100), unique=True)
@@ -117,6 +125,33 @@ class TraceabilityLink(Base):
     
     def __repr__(self):
         return f"<TraceabilityLink(id={self.id}, batch_id={self.batch_id}, linked_batch_id={self.linked_batch_id})>"
+
+
+class TraceabilityNode(Base):
+    __tablename__ = "traceability_nodes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=False)
+    node_type = Column(String(50), nullable=False)  # supplier, production, distribution, customer
+    node_level = Column(Integer, nullable=False)  # 1=immediate, 2=one-up, 3=two-up, etc.
+    relationship_type = Column(String(50), nullable=False)  # ingredient, packaging, process, storage
+    ccp_related = Column(Boolean, default=False)
+    ccp_id = Column(Integer, ForeignKey("ccps.id"))
+    verification_required = Column(Boolean, default=True)
+    verification_status = Column(String(20), default="pending")
+    verification_date = Column(DateTime(timezone=True))
+    verified_by = Column(Integer, ForeignKey("users.id"))
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Relationships
+    batch = relationship("Batch", foreign_keys=[batch_id])
+    
+    def __repr__(self):
+        return f"<TraceabilityNode(id={self.id}, batch_id={self.batch_id}, node_type='{self.node_type}', level={self.node_level})>"
 
 
 class Recall(Base):
@@ -171,6 +206,81 @@ class Recall(Base):
     
     def __repr__(self):
         return f"<Recall(id={self.id}, recall_number='{self.recall_number}', type='{self.recall_type}')>"
+
+
+class RecallClassification(Base):
+    __tablename__ = "recall_classifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    health_risk_level = Column(String(20), nullable=False)  # low, medium, high, critical
+    affected_population = Column(Text)  # vulnerable groups affected
+    exposure_route = Column(String(50))  # ingestion, contact, inhalation
+    severity_assessment = Column(Text)
+    probability_assessment = Column(Text)
+    risk_score = Column(Integer)  # Calculated risk score
+    classification_date = Column(DateTime(timezone=True), nullable=False)
+    classified_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    recall = relationship("Recall", foreign_keys=[recall_id])
+    
+    def __repr__(self):
+        return f"<RecallClassification(id={self.id}, recall_id={self.recall_id}, health_risk_level='{self.health_risk_level}')>"
+
+
+class RecallCommunication(Base):
+    __tablename__ = "recall_communications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    stakeholder_type = Column(String(50), nullable=False)  # customer, supplier, regulator, public
+    communication_method = Column(String(50), nullable=False)  # email, phone, press, social
+    message_template = Column(Text, nullable=False)
+    sent_date = Column(DateTime(timezone=True))
+    sent_by = Column(Integer, ForeignKey("users.id"))
+    confirmation_received = Column(Boolean, default=False)
+    response_time = Column(Integer)  # hours to respond
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    recall = relationship("Recall", foreign_keys=[recall_id])
+    
+    def __repr__(self):
+        return f"<RecallCommunication(id={self.id}, recall_id={self.recall_id}, stakeholder_type='{self.stakeholder_type}')>"
+
+
+class RecallEffectiveness(Base):
+    __tablename__ = "recall_effectiveness"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recall_id = Column(Integer, ForeignKey("recalls.id"), nullable=False)
+    verification_date = Column(DateTime(timezone=True), nullable=False)
+    quantity_recalled_percentage = Column(Float, nullable=False)
+    time_to_complete = Column(Integer)  # hours from initiation to completion
+    customer_response_rate = Column(Float)
+    product_recovery_rate = Column(Float)
+    effectiveness_score = Column(Integer)  # 1-100 scale
+    lessons_learned = Column(Text)
+    improvement_actions = Column(Text)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    recall = relationship("Recall", foreign_keys=[recall_id])
+    
+    def __repr__(self):
+        return f"<RecallEffectiveness(id={self.id}, recall_id={self.recall_id}, effectiveness_score={self.effectiveness_score})>"
 
 
 class RecallEntry(Base):
