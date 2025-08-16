@@ -19,6 +19,16 @@ export interface Product {
   created_by: string;
   created_at: string;
   updated_at?: string;
+  risk_config?: {
+    calculation_method: 'multiplication' | 'addition' | 'matrix';
+    likelihood_scale: number;
+    severity_scale: number;
+    risk_thresholds: {
+      low_threshold: number;
+      medium_threshold: number;
+      high_threshold: number;
+    };
+  };
 }
 
 export interface ProcessFlow {

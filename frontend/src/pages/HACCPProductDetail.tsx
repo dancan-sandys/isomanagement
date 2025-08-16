@@ -6,7 +6,7 @@ import { Add, Edit, Delete } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI } from '../services/api';
 import { AppDispatch, RootState } from '../store';
-import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, deleteCCP } from '../store/slices/haccpSlice';
+import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, deleteCCP, updateProduct } from '../store/slices/haccpSlice';
 
 function TabPanel({ children, value, index }: { children?: React.ReactNode; value: number; index: number }) {
   return (

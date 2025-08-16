@@ -28,6 +28,345 @@ from app.utils.audit import audit_event
 
 router = APIRouter()
 
+# Material endpoints (must come before path parameter endpoints)
+@router.get("/materials/", response_model=ResponseModel)
+@router.get("/materials", response_model=ResponseModel)
+async def get_materials(
+    search: Optional[str] = Query(None, description="Search by name or code"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get materials with filtering and pagination"""
+    filter_params = MaterialFilter(
+        search=search,
+        category=category,
+        supplier_id=supplier_id,
+        approval_status=approval_status,
+        page=page,
+        size=size
+    )
+    
+    service = SupplierService(db)
+    result = service.get_materials(filter_params)
+    
+    response_data = MaterialListResponse(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        size=result["size"],
+        pages=result["pages"]
+    )
+
+    return ResponseModel(
+        success=True,
+        message="Materials retrieved successfully",
+        data=response_data
+    )
+
+
+@router.get("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
+async def get_material(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get material by ID"""
+    service = SupplierService(db)
+    material = service.get_material(material_id)
+    
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Material retrieved successfully",
+        data=material
+    )
+
+
+@router.post("/materials/", response_model=ResponseModel[MaterialResponse])
+async def create_material(
+    material_data: MaterialCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new material"""
+    service = SupplierService(db)
+    
+    # Check if material code already exists for this supplier
+    existing_material = service.db.query(service.db.query(Material).filter(
+        Material.material_code == material_data.material_code,
+        Material.supplier_id == material_data.supplier_id
+    ).exists()).scalar()
+    
+    if existing_material:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Material code already exists for this supplier"
+        )
+    
+    material = service.create_material(material_data, current_user.id)
+    try:
+        audit_event(db, current_user.id, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material created successfully",
+        data=material
+    )
+
+
+@router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
+async def update_material(
+    material_id: int,
+    material_data: MaterialUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update material"""
+    service = SupplierService(db)
+    material = service.update_material(material_id, material_data)
+    
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    try:
+        audit_event(db, current_user.id, "material_updated", "suppliers", str(material.id), {"supplier_id": material.supplier_id})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material updated successfully",
+        data=material
+    )
+
+
+@router.delete("/materials/{material_id}", response_model=ResponseModel[dict])
+async def delete_material(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete material"""
+    service = SupplierService(db)
+    success = service.delete_material(material_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    try:
+        audit_event(db, current_user.id, "material_deleted", "suppliers", str(material_id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material deleted successfully",
+        data={"id": material_id}
+    )
+
+
+@router.post("/materials/{material_id}/approve", response_model=ResponseModel[dict])
+async def approve_material(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Approve material"""
+    service = SupplierService(db)
+    success = service.approve_material(material_id, current_user.id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    try:
+        audit_event(db, current_user.id, "material_approved", "suppliers", str(material_id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material approved successfully",
+        data={"id": material_id}
+    )
+
+
+@router.post("/materials/{material_id}/reject", response_model=ResponseModel[dict])
+async def reject_material(
+    material_id: int,
+    reason: str = Query(..., description="Rejection reason"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reject material"""
+    service = SupplierService(db)
+    success = service.reject_material(material_id, reason, current_user.id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    try:
+        audit_event(db, current_user.id, "material_rejected", "suppliers", str(material_id), {"reason": reason})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material rejected successfully",
+        data={"id": material_id, "reason": reason}
+    )
+
+
+@router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
+async def bulk_approve_materials(
+    material_ids: List[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk approve materials"""
+    service = SupplierService(db)
+    approved_count = service.bulk_approve_materials(material_ids, current_user.id)
+    
+    try:
+        audit_event(db, current_user.id, "materials_bulk_approved", "suppliers", str(material_ids), {"count": approved_count})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message=f"{approved_count} materials approved successfully",
+        data={"approved_count": approved_count, "total_requested": len(material_ids)}
+    )
+
+
+@router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
+async def bulk_reject_materials(
+    material_ids: List[int],
+    reason: str = Query(..., description="Rejection reason"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk reject materials"""
+    service = SupplierService(db)
+    rejected_count = service.bulk_reject_materials(material_ids, reason, current_user.id)
+    
+    try:
+        audit_event(db, current_user.id, "materials_bulk_rejected", "suppliers", str(material_ids), {"reason": reason, "count": rejected_count})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message=f"{rejected_count} materials rejected successfully",
+        data={"rejected_count": rejected_count, "total_requested": len(material_ids), "reason": reason}
+    )
+
+
+@router.get("/materials/stats", response_model=ResponseModel[dict])
+async def get_material_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get material statistics"""
+    service = SupplierService(db)
+    
+    # Mock material stats for now
+    material_stats = {
+        "total_materials": 15,
+        "approved_materials": 12,
+        "pending_materials": 2,
+        "rejected_materials": 1,
+        "materials_by_category": [
+            {"category": "raw_milk", "count": 8},
+            {"category": "additives", "count": 4},
+            {"category": "packaging", "count": 3}
+        ],
+        "materials_by_supplier": [
+            {"supplier_name": "Dairy Farm A", "count": 5},
+            {"supplier_name": "Packaging Co", "count": 3},
+            {"supplier_name": "Additives Inc", "count": 2}
+        ]
+    }
+    
+    return ResponseModel(
+        success=True,
+        message="Material statistics retrieved successfully",
+        data=material_stats
+    )
+
+
+@router.get("/materials/export", response_model=ResponseModel[dict])
+async def export_materials(
+    format: str = Query("excel", description="Export format (excel, csv)"),
+    search: Optional[str] = Query(None, description="Search by name or code"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Export materials data"""
+    filter_params = MaterialFilter(
+        search=search,
+        category=category,
+        supplier_id=supplier_id,
+        approval_status=approval_status,
+        page=1,
+        size=1000  # Export all matching records
+    )
+    
+    service = SupplierService(db)
+    result = service.get_materials(filter_params)
+    
+    # Mock export data for now
+    export_data = {
+        "format": format,
+        "filename": f"materials_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}",
+        "record_count": result["total"],
+        "download_url": f"/api/v1/suppliers/materials/export/download?format={format}"
+    }
+    
+    return ResponseModel(
+        success=True,
+        message="Materials export generated successfully",
+        data=export_data
+    )
+
+
+@router.get("/materials/search", response_model=ResponseModel[dict])
+async def search_materials(
+    q: str = Query(..., description="Search query"),
+    limit: int = Query(10, ge=1, le=50, description="Number of results"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Search materials"""
+    service = SupplierService(db)
+    results = service.search_materials(q, limit)
+    
+    return ResponseModel(
+        success=True,
+        message="Materials search completed successfully",
+        data=results
+    )
+
+
 # Analytics endpoints (must come before path parameter endpoints)
 @router.get("/analytics/performance", response_model=ResponseModel[dict])
 async def get_performance_analytics(

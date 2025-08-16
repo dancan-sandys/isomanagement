@@ -49,14 +49,14 @@ const RiskThresholds: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    scope_type: 'site' as const,
+    scope_type: 'site' as 'site' | 'product' | 'category',
     scope_id: undefined as number | undefined,
     low_threshold: 4,
     medium_threshold: 8,
     high_threshold: 15,
     likelihood_scale: 5,
     severity_scale: 5,
-    calculation_method: 'multiplication' as const
+    calculation_method: 'multiplication' as 'multiplication' | 'addition' | 'matrix'
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
