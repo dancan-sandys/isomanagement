@@ -5,29 +5,28 @@ from app.core.database import Base
 import enum
 from datetime import datetime
 from .haccp import RiskLevel
-from .risk import RiskRegisterItem
 
 
 class PRPCategory(str, enum.Enum):
     # ISO 22002-1:2025 Required Categories
-    FACILITY_EQUIPMENT_DESIGN = "facility_equipment_design"
-    FACILITY_LAYOUT = "facility_layout"
-    PRODUCTION_EQUIPMENT = "production_equipment"
-    CLEANING_SANITATION = "cleaning_sanitation"
+    CONSTRUCTION_AND_LAYOUT = "construction_and_layout"
+    LAYOUT_OF_PREMISES = "layout_of_premises"
+    SUPPLIES_OF_AIR_WATER_ENERGY = "supplies_of_air_water_energy"
+    SUPPORTING_SERVICES = "supporting_services"
+    SUITABILITY_CLEANING_MAINTENANCE = "suitability_cleaning_maintenance"
+    MANAGEMENT_OF_PURCHASED_MATERIALS = "management_of_purchased_materials"
+    PREVENTION_OF_CROSS_CONTAMINATION = "prevention_of_cross_contamination"
+    CLEANING_AND_SANITIZING = "cleaning_and_sanitizing"
     PEST_CONTROL = "pest_control"
-    PERSONNEL_HYGIENE = "personnel_hygiene"
-    WASTE_MANAGEMENT = "waste_management"
-    STORAGE_TRANSPORTATION = "storage_transportation"
-    SUPPLIER_CONTROL = "supplier_control"
+    PERSONNEL_HYGIENE_FACILITIES = "personnel_hygiene_facilities"
+    PERSONNEL_HYGIENE_PRACTICES = "personnel_hygiene_practices"
+    REPROCESSING = "reprocessing"
+    PRODUCT_RECALL_PROCEDURES = "product_recall_procedures"
+    WAREHOUSING = "warehousing"
     PRODUCT_INFORMATION_CONSUMER_AWARENESS = "product_information_consumer_awareness"
-    FOOD_DEFENSE_BIOVIGILANCE = "food_defense_biovigilance"
-    WATER_QUALITY = "water_quality"
-    AIR_QUALITY = "air_quality"
-    EQUIPMENT_CALIBRATION = "equipment_calibration"
-    MAINTENANCE = "maintenance"
-    PERSONNEL_TRAINING = "personnel_training"
-    RECALL_PROCEDURES = "recall_procedures"
-    TRANSPORTATION = "transportation"
+    FOOD_DEFENSE_BIOVIGILANCE_BIOTERRORISM = "food_defense_biovigilance_bioterrorism"
+    CONTROL_OF_NONCONFORMING_PRODUCT = "control_of_nonconforming_product"
+    PRODUCT_RELEASE = "product_release"
 
 
 class PRPFrequency(str, enum.Enum):
@@ -52,6 +51,16 @@ class ChecklistStatus(str, enum.Enum):
     COMPLETED = "completed"
     OVERDUE = "overdue"
     FAILED = "failed"
+
+
+class RiskLevel(str, enum.Enum):
+    """Risk levels for PRP risk assessment"""
+    VERY_LOW = "very_low"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very_high"
+    CRITICAL = "critical"
 
 
 class PRPProgram(Base):
@@ -334,16 +343,6 @@ class PRPSchedule(Base):
         return f"<PRPSchedule(id={self.id}, program_id={self.program_id}, frequency='{self.frequency}')>" 
 
 
-class RiskLevel(str, enum.Enum):
-    """Risk levels for PRP risk assessment"""
-    VERY_LOW = "very_low"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    VERY_HIGH = "very_high"
-    CRITICAL = "critical"
-
-
 class RiskMatrix(Base):
     """Risk matrix configuration for PRP risk assessment"""
     __tablename__ = "prp_risk_matrices"
@@ -375,7 +374,7 @@ class RiskAssessment(Base):
     program_id = Column(Integer, ForeignKey("prp_programs.id", ondelete="CASCADE"), nullable=False)
     
     # Link to main risk register
-    risk_register_entry_id = Column(Integer, ForeignKey("risk_register.id", ondelete="SET NULL"), nullable=True)
+    # risk_register_entry_id = Column(Integer, ForeignKey("risk_register.id", ondelete="SET NULL"), nullable=True)
     
     assessment_code = Column(String(50), unique=True, index=True, nullable=False)
     hazard_identified = Column(Text, nullable=False)
@@ -418,7 +417,7 @@ class RiskAssessment(Base):
 
     # Relationships
     program = relationship("PRPProgram")
-    risk_register_entry = relationship("RiskRegisterItem", foreign_keys=[risk_register_entry_id])
+    # risk_register_entry = relationship("RiskRegisterItem", foreign_keys=[risk_register_entry_id])
     escalated_by_user = relationship("User", foreign_keys=[escalated_by])
 
     def __repr__(self):

@@ -659,7 +659,7 @@ async def get_fsms_compliance_score(
 
 @router.get("/cross-module-kpis")
 async def get_cross_module_kpis(
-    period: str = Query(default="month", regex="^(week|month|quarter|year)$"),
+    period: str = Query(default="month", pattern="^(week|month|quarter|year)$"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

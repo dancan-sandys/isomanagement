@@ -1008,3 +1008,148 @@ class HACCPService:
         }
         
         return report_data 
+
+    def add_validation_evidence(self, ccp_id: int, evidence_data: dict, user_id: int) -> CCP:
+        """Add validation evidence to a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        # Get existing validation evidence or initialize empty list
+        current_evidence = ccp.validation_evidence or []
+        
+        # Add new evidence with metadata
+        new_evidence = {
+            **evidence_data,
+            "added_by": user_id,
+            "added_at": datetime.utcnow().isoformat(),
+            "evidence_id": len(current_evidence) + 1
+        }
+        
+        current_evidence.append(new_evidence)
+        ccp.validation_evidence = current_evidence
+        ccp.updated_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(ccp)
+        
+        return ccp
+    
+    def remove_validation_evidence(self, ccp_id: int, evidence_id: int, user_id: int) -> CCP:
+        """Remove validation evidence from a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        current_evidence = ccp.validation_evidence or []
+        
+        # Find and remove the evidence
+        updated_evidence = [e for e in current_evidence if e.get("evidence_id") != evidence_id]
+        
+        if len(updated_evidence) == len(current_evidence):
+            raise ValueError("Evidence not found")
+        
+        ccp.validation_evidence = updated_evidence
+        ccp.updated_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(ccp)
+        
+        return ccp
+    
+    def get_validation_evidence_summary(self, ccp_id: int) -> dict:
+        """Get a summary of validation evidence for a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        evidence = ccp.validation_evidence or []
+        
+        # Group evidence by type
+        evidence_by_type = {}
+        for e in evidence:
+            evidence_type = e.get("type", "unknown")
+            if evidence_type not in evidence_by_type:
+                evidence_by_type[evidence_type] = []
+            evidence_by_type[evidence_type].append(e)
+        
+        return {
+            "total_evidence": len(evidence),
+            "evidence_by_type": evidence_by_type,
+            "has_sop_references": any(e.get("type") == "sop_reference" for e in evidence),
+            "has_scientific_studies": any(e.get("type") == "scientific_study" for e in evidence),
+            "has_process_authority": any(e.get("type") == "process_authority_letter" for e in evidence),
+            "validation_complete": len(evidence) > 0
+        } 
+    def add_validation_evidence(self, ccp_id: int, evidence_data: dict, user_id: int) -> CCP:
+        """Add validation evidence to a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        # Get existing validation evidence or initialize empty list
+        current_evidence = ccp.validation_evidence or []
+        
+        # Add new evidence with metadata
+        new_evidence = {
+            **evidence_data,
+            "added_by": user_id,
+            "added_at": datetime.utcnow().isoformat(),
+            "evidence_id": len(current_evidence) + 1
+        }
+        
+        current_evidence.append(new_evidence)
+        ccp.validation_evidence = current_evidence
+        ccp.updated_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(ccp)
+        
+        return ccp
+    
+    def remove_validation_evidence(self, ccp_id: int, evidence_id: int, user_id: int) -> CCP:
+        """Remove validation evidence from a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        current_evidence = ccp.validation_evidence or []
+        
+        # Find and remove the evidence
+        updated_evidence = [e for e in current_evidence if e.get("evidence_id") != evidence_id]
+        
+        if len(updated_evidence) == len(current_evidence):
+            raise ValueError("Evidence not found")
+        
+        ccp.validation_evidence = updated_evidence
+        ccp.updated_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(ccp)
+        
+        return ccp
+    
+    def get_validation_evidence_summary(self, ccp_id: int) -> dict:
+        """Get a summary of validation evidence for a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        evidence = ccp.validation_evidence or []
+        
+        # Group evidence by type
+        evidence_by_type = {}
+        for e in evidence:
+            evidence_type = e.get("type", "unknown")
+            if evidence_type not in evidence_by_type:
+                evidence_by_type[evidence_type] = []
+            evidence_by_type[evidence_type].append(e)
+        
+        return {
+            "total_evidence": len(evidence),
+            "evidence_by_type": evidence_by_type,
+            "has_sop_references": any(e.get("type") == "sop_reference" for e in evidence),
+            "has_scientific_studies": any(e.get("type") == "scientific_study" for e in evidence),
+            "has_process_authority": any(e.get("type") == "process_authority_letter" for e in evidence),
+            "validation_complete": len(evidence) > 0
+        }

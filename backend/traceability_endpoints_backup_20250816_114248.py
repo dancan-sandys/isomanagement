@@ -770,8 +770,8 @@ async def list_recalls(
             {
                 "id": r.id,
                 "recall_number": r.recall_number,
-                "recall_type": str(r.recall_type),
-                "status": str(r.status),
+                "recall_type": r.recall_type.value,
+                "status": r.status.value,
                 "title": r.title,
                 "reason": r.reason,
                 "issue_discovered_date": r.issue_discovered_date.isoformat() if r.issue_discovered_date else None,
@@ -816,8 +816,8 @@ async def get_recall(
             data={
                 "id": recall.id,
                 "recall_number": recall.recall_number,
-                "recall_type": str(recall.recall_type),
-                "status": str(recall.status),
+                "recall_type": recall.recall_type.value,
+                "status": recall.status.value,
                 "title": recall.title,
                 "description": recall.description,
                 "reason": recall.reason,
@@ -980,25 +980,6 @@ async def get_enhanced_traceability_dashboard(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve enhanced dashboard data: {str(e)}"
         )
-
-
-# Dashboard Statistics
-@router.get("/dashboard", response_model=ResponseModel)
-async def get_traceability_dashboard(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get traceability dashboard statistics"""
-    try:
-        service = TraceabilityService(db)
-        stats = service.get_dashboard_stats()
-        return ResponseModel(
-            success=True,
-            message="Dashboard statistics retrieved successfully",
-            data=stats
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve dashboard statistics: {str(e)}")
 
 
 # Recall Entry Management

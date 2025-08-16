@@ -62,6 +62,59 @@ class CriticalLimitParameter(BaseModel):
             if values.get('value') is None:
                 raise ValueError("Qualitative limits must have a 'value' field")
         return v
+    
+    @field_validator('unit')
+    @classmethod
+    def validate_ucum_unit(cls, v, values):
+        """Validate UCUM unit for the parameter type"""
+        if v is None:
+            return v
+        
+        parameter = values.get('parameter', '').lower()
+        if parameter in ['temperature', 'temp']:
+            if not validate_ucum_unit('temperature', v):
+                raise ValueError(f"Invalid temperature unit: {v}. Valid units: {UCUM_UNITS['temperature']}")
+        elif parameter in ['time', 'duration']:
+            if not validate_ucum_unit('time', v):
+                raise ValueError(f"Invalid time unit: {v}. Valid units: {UCUM_UNITS['time']}")
+        elif parameter in ['pressure', 'press']:
+            if not validate_ucum_unit('pressure', v):
+                raise ValueError(f"Invalid pressure unit: {v}. Valid units: {UCUM_UNITS['pressure']}")
+        elif parameter in ['ph', 'ph_value']:
+            if not validate_ucum_unit('ph', v):
+                raise ValueError(f"Invalid pH unit: {v}. Valid units: {UCUM_UNITS['ph']}")
+        elif parameter in ['aw', 'water_activity']:
+            if not validate_ucum_unit('aw', v):
+                raise ValueError(f"Invalid water activity unit: {v}. Valid units: {UCUM_UNITS['aw']}")
+        elif parameter in ['concentration', 'conc']:
+            if not validate_ucum_unit('concentration', v):
+                raise ValueError(f"Invalid concentration unit: {v}. Valid units: {UCUM_UNITS['concentration']}")
+        elif parameter in ['weight', 'mass']:
+            if not validate_ucum_unit('weight', v):
+                raise ValueError(f"Invalid weight unit: {v}. Valid units: {UCUM_UNITS['weight']}")
+        elif parameter in ['volume', 'vol']:
+            if not validate_ucum_unit('volume', v):
+                raise ValueError(f"Invalid volume unit: {v}. Valid units: {UCUM_UNITS['volume']}")
+        elif parameter in ['length', 'distance']:
+            if not validate_ucum_unit('length', v):
+                raise ValueError(f"Invalid length unit: {v}. Valid units: {UCUM_UNITS['length']}")
+        elif parameter in ['area']:
+            if not validate_ucum_unit('area', v):
+                raise ValueError(f"Invalid area unit: {v}. Valid units: {UCUM_UNITS['area']}")
+        elif parameter in ['flow', 'flow_rate']:
+            if not validate_ucum_unit('flow', v):
+                raise ValueError(f"Invalid flow unit: {v}. Valid units: {UCUM_UNITS['flow']}")
+        elif parameter in ['speed', 'velocity']:
+            if not validate_ucum_unit('speed', v):
+                raise ValueError(f"Invalid speed unit: {v}. Valid units: {UCUM_UNITS['speed']}")
+        elif parameter in ['energy']:
+            if not validate_ucum_unit('energy', v):
+                raise ValueError(f"Invalid energy unit: {v}. Valid units: {UCUM_UNITS['energy']}")
+        elif parameter in ['power']:
+            if not validate_ucum_unit('power', v):
+                raise ValueError(f"Invalid power unit: {v}. Valid units: {UCUM_UNITS['power']}")
+        
+        return v
 
 class ValidationEvidence(BaseModel):
     type: Literal["sop_reference", "scientific_study", "process_authority_letter", "validation_study", "regulatory_requirement"] = Field(..., description="Type of validation evidence")
@@ -99,6 +152,118 @@ UCUM_UNITS = {
     "energy": ["J", "kJ", "cal"],  # Energy units
     "power": ["W", "kW"],  # Power units
 }
+
+# Unit conversion factors (to base units)
+UNIT_CONVERSIONS = {
+    # Temperature conversions (to Celsius)
+    "K": lambda x: x - 273.15,  # Kelvin to Celsius
+    "F": lambda x: (x - 32) * 5/9,  # Fahrenheit to Celsius
+    "Cel": lambda x: x,  # Celsius to Celsius (base unit)
+    
+    # Time conversions (to minutes)
+    "s": lambda x: x / 60,  # seconds to minutes
+    "min": lambda x: x,  # minutes to minutes (base unit)
+    "h": lambda x: x * 60,  # hours to minutes
+    
+    # Pressure conversions (to Pa)
+    "Pa": lambda x: x,  # Pascal to Pascal (base unit)
+    "kPa": lambda x: x * 1000,  # kilopascal to Pascal
+    "bar": lambda x: x * 100000,  # bar to Pascal
+    
+    # Weight conversions (to grams)
+    "mg": lambda x: x / 1000,  # milligrams to grams
+    "g": lambda x: x,  # grams to grams (base unit)
+    "kg": lambda x: x * 1000,  # kilograms to grams
+    
+    # Volume conversions (to liters)
+    "mL": lambda x: x / 1000,  # milliliters to liters
+    "L": lambda x: x,  # liters to liters (base unit)
+    "m3": lambda x: x * 1000,  # cubic meters to liters
+}
+
+def validate_ucum_unit(parameter_type: str, unit: str) -> bool:
+    """Validate if a unit is valid for a given parameter type"""
+    if parameter_type not in UCUM_UNITS:
+        return False
+    return unit in UCUM_UNITS[parameter_type]
+
+def convert_to_base_unit(value: float, unit: str) -> tuple[float, str]:
+    """Convert a value to its base unit"""
+    if unit in UNIT_CONVERSIONS:
+        converted_value = UNIT_CONVERSIONS[unit](value)
+        # Return base unit name
+        base_units = {
+            "Cel": "Cel", "K": "Cel", "F": "Cel",
+            "min": "min", "h": "min", "s": "min",
+            "Pa": "Pa", "kPa": "Pa", "bar": "Pa",
+            "g": "g", "kg": "g", "mg": "g",
+            "L": "L", "mL": "L", "m3": "L"
+        }
+        return converted_value, base_units.get(unit, unit)
+    return value, unit
+
+def get_parameter_type_from_unit(unit: str) -> Optional[str]:
+    """Get parameter type from unit"""
+    for param_type, units in UCUM_UNITS.items():
+        if unit in units:
+            return param_type
+    return None
+
+# Unit conversion factors (to base units)
+UNIT_CONVERSIONS = {
+    # Temperature conversions (to Celsius)
+    "K": lambda x: x - 273.15,  # Kelvin to Celsius
+    "F": lambda x: (x - 32) * 5/9,  # Fahrenheit to Celsius
+    "Cel": lambda x: x,  # Celsius to Celsius (base unit)
+    
+    # Time conversions (to minutes)
+    "s": lambda x: x / 60,  # seconds to minutes
+    "min": lambda x: x,  # minutes to minutes (base unit)
+    "h": lambda x: x * 60,  # hours to minutes
+    
+    # Pressure conversions (to Pa)
+    "Pa": lambda x: x,  # Pascal to Pascal (base unit)
+    "kPa": lambda x: x * 1000,  # kilopascal to Pascal
+    "bar": lambda x: x * 100000,  # bar to Pascal
+    
+    # Weight conversions (to grams)
+    "mg": lambda x: x / 1000,  # milligrams to grams
+    "g": lambda x: x,  # grams to grams (base unit)
+    "kg": lambda x: x * 1000,  # kilograms to grams
+    
+    # Volume conversions (to liters)
+    "mL": lambda x: x / 1000,  # milliliters to liters
+    "L": lambda x: x,  # liters to liters (base unit)
+    "m3": lambda x: x * 1000,  # cubic meters to liters
+}
+
+def validate_ucum_unit(parameter_type: str, unit: str) -> bool:
+    """Validate if a unit is valid for a given parameter type"""
+    if parameter_type not in UCUM_UNITS:
+        return False
+    return unit in UCUM_UNITS[parameter_type]
+
+def convert_to_base_unit(value: float, unit: str) -> tuple[float, str]:
+    """Convert a value to its base unit"""
+    if unit in UNIT_CONVERSIONS:
+        converted_value = UNIT_CONVERSIONS[unit](value)
+        # Return base unit name
+        base_units = {
+            "Cel": "Cel", "K": "Cel", "F": "Cel",
+            "min": "min", "h": "min", "s": "min",
+            "Pa": "Pa", "kPa": "Pa", "bar": "Pa",
+            "g": "g", "kg": "g", "mg": "g",
+            "L": "L", "mL": "L", "m3": "L"
+        }
+        return converted_value, base_units.get(unit, unit)
+    return value, unit
+
+def get_parameter_type_from_unit(unit: str) -> Optional[str]:
+    """Get parameter type from unit"""
+    for param_type, units in UCUM_UNITS.items():
+        if unit in units:
+            return param_type
+    return None
 
 
 # Risk Assessment Schemas
@@ -627,22 +792,6 @@ class HACCPReportRequest(BaseModel):
     date_to: Optional[datetime] = None
     include_charts: bool = True
     format: str = Field("pdf", pattern="^(pdf|excel|html)$")
-UCUM_UNITS = {
-    "temperature": ["Cel", "K", "F"],  # Celsius, Kelvin, Fahrenheit
-    "time": ["min", "h", "s"],  # minutes, hours, seconds
-    "pressure": ["Pa", "kPa", "bar"],  # Pascal, kilopascal, bar
-    "ph": ["pH"],  # pH units
-    "aw": ["1"],  # Water activity (dimensionless)
-    "concentration": ["g/L", "mg/L", "ppm", "ppb"],  # Concentration units
-    "weight": ["g", "kg", "mg"],  # Weight units
-    "volume": ["L", "mL", "m3"],  # Volume units
-    "length": ["m", "cm", "mm"],  # Length units
-    "area": ["m2", "cm2"],  # Area units
-    "flow": ["L/min", "m3/h"],  # Flow rate units
-    "speed": ["rpm", "m/s"],  # Speed units
-    "energy": ["J", "kJ", "cal"],  # Energy units
-    "power": ["W", "kW"],  # Power units
-}
 
 # Decision Tree Schemas (Codex Alimentarius)
 class DecisionTreeAnswer(BaseModel):
@@ -696,53 +845,6 @@ class DecisionTreeResponse(BaseModel):
     current_question: int
     can_proceed: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
-
-# Product Risk Configuration Schemas (ISO 22000 compliant)
-class ProductRiskConfigCreate(BaseModel):
-    calculation_method: Literal["multiplication", "addition", "matrix"] = "multiplication"
-    likelihood_scale: int = Field(ge=1, le=10, default=5)
-    severity_scale: int = Field(ge=1, le=10, default=5)
-    low_threshold: int = Field(ge=1, default=4)
-    medium_threshold: int = Field(ge=1, default=8)
-    high_threshold: int = Field(ge=1, default=15)
-    
-    @field_validator('medium_threshold')
-    @classmethod
-    def validate_threshold_order(cls, v, values):
-        if 'low_threshold' in values.data and v <= values.data['low_threshold']:
-            raise ValueError('medium_threshold must be greater than low_threshold')
-        return v
-    
-    @field_validator('high_threshold')
-    @classmethod
-    def validate_high_threshold(cls, v, values):
-        if 'medium_threshold' in values.data and v <= values.data['medium_threshold']:
-            raise ValueError('high_threshold must be greater than medium_threshold')
-        return v
-
-class ProductRiskConfigUpdate(BaseModel):
-    calculation_method: Optional[Literal["multiplication", "addition", "matrix"]] = None
-    likelihood_scale: Optional[int] = Field(None, ge=1, le=10)
-    severity_scale: Optional[int] = Field(None, ge=1, le=10)
-    low_threshold: Optional[int] = Field(None, ge=1)
-    medium_threshold: Optional[int] = Field(None, ge=1)
-    high_threshold: Optional[int] = Field(None, ge=1)
-
-class ProductRiskConfigResponse(BaseModel):
-    id: int
-    product_id: int
-    calculation_method: str
-    likelihood_scale: int
-    severity_scale: int
-    low_threshold: int
-    medium_threshold: int
-    high_threshold: int
-    created_at: datetime
-    created_by: Optional[int] = None
     updated_at: Optional[datetime] = None
     
     class Config:

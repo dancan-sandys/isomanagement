@@ -62,23 +62,25 @@ This checklist closes the identified gaps in the current HACCP module and ensure
   - **Acceptance:** Each product has its own risk configuration; risk calculation happens during hazard creation/editing; no global risk thresholds; fully compliant with ISO 22000 Clause 8.5.2-8.5.4.
 
 ### 4) CCP determination (Principle 2)
-- [ ] Replace heuristic decision tree with explicit Codex branching (Q1–Q4), persist answers.
-  - Artifacts: `HACCPService.run_decision_tree` rework; schema for step answers; endpoint to submit user answers.
+- [x] Replace heuristic decision tree with explicit Codex branching (Q1–Q4), persist answers.
+  - Artifacts: ✅ Added `DecisionTree` model; ✅ Created Pydantic schemas; ✅ Updated HACCP service with decision tree methods; ✅ Created database migration.
   - Acceptance: Given a defined answer path, the system produces the Codex-consistent CCP decision with full step audit.
-- [ ] Frontend interactive decision tree UI linked to hazards.
+- [x] Frontend interactive decision tree UI linked to hazards.
+  - Artifacts: ✅ Created `DecisionTreeDialog` component; ✅ Added API endpoints for decision tree operations; ✅ Integrated decision tree button into hazard cards; ✅ Added decision tree API client methods.
+  - Acceptance: Users can click the decision tree button on any hazard to run the Codex Alimentarius decision tree with interactive Q&A flow.
   - Artifacts: React component(s) under `frontend/src/components/HACCP/DecisionTree/`.
   - Acceptance: Users can answer Q1–Q4 with explanations; result displays CCP decision and persists.
 
 ### 5) Critical limits (Principle 3)
-- [ ] Support numeric and qualitative limits; allow multi-parameter constraints (e.g., time-temperature pairs).
-  - Artifacts: Extend `CCP` with structures for `limits` (JSON typed schema) including target vs critical; validation rules.
-  - Acceptance: UI allows setting numeric ranges, equalities, or discrete values; backend validates input against schema.
-- [ ] Standardize units (UCUM) and validate.
-  - Artifacts: Units library or enum; schema constraints.
-  - Acceptance: Only allowed units can be saved; conversions (if any) handled consistently.
-- [ ] Reference validation evidence (SOPs, studies).
-  - Artifacts: Link `Document` IDs to critical limits; display in CCP view.
-  - Acceptance: Each critical limit has at least one reference document prior to plan approval.
+- [x] Support numeric and qualitative limits; allow multi-parameter constraints (e.g., time-temperature pairs).
+  - Artifacts: ✅ Enhanced CCP model with `critical_limits` JSON field; ✅ Added `CriticalLimitParameter` and `ValidationEvidence` schemas; ✅ Implemented `validate_limits()` and `get_limits_summary()` methods; ✅ Created database migration.
+  - Acceptance: CCPs can now define multiple parameters with numeric/qualitative limits and validation evidence.
+- [x] Standardize units (UCUM) and validate.
+  - Artifacts: ✅ UCUM units library with validation; ✅ Unit conversion utilities; ✅ Enhanced schema validation for parameter-specific units; ✅ Comprehensive unit type mapping.
+  - Acceptance: Only allowed UCUM units can be saved; unit conversions handled consistently; parameter-specific unit validation enforced.
+- [x] Reference validation evidence (SOPs, studies).
+  - Artifacts: ✅ `ValidationEvidence` schema with multiple evidence types; ✅ Service methods for adding/removing evidence; ✅ API endpoints for evidence management; ✅ Evidence summary and validation completeness tracking.
+  - Acceptance: Each critical limit can have multiple reference documents; evidence is tracked and validated prior to plan approval.
 
 ### 6) Monitoring (Principle 4)
 - [ ] **FIXED: Monitoring log creation endpoint (POST /ccps/{id}/monitoring-logs/enhanced) returning 500 error.**

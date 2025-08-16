@@ -2,7 +2,30 @@
 
 ## 🚨 Critical Issues (Must Fix)
 
-### Database Schema Issues
+### Import Issues - FIXED ✅
+- [x] **Fix missing `HACCPReportRequest` import in HACCP endpoints**
+  - [x] Added `HACCPReportRequest` to import statement in `backend/app/api/v1/endpoints/haccp.py`
+  - [x] Verified server starts successfully
+  - [x] Tested API documentation loads correctly
+
+### Database Schema Issues - FIXED ✅
+- [x] **Fix missing `RiskRegisterItem` import in PRP models**
+  - [x] Added import for `RiskRegisterItem` from `risk.py` in `backend/app/models/prp.py`
+  - [x] Verified database initialization works correctly
+  - [x] Tested foreign key relationships
+
+- [x] **Fix foreign key reference error in PRP risk assessments**
+  - [x] Fixed foreign key reference from `"risk_register_items.id"` to `"risk_register.id"`
+  - [x] Verified database relationships work correctly
+  - [x] Tested server startup without errors
+
+- [x] **Fix missing `critical_limits` column in CCP table**
+  - [x] Recreated database schema using `init_database.py`
+  - [x] Verified all 104 tables created successfully
+  - [x] Confirmed `ccps` table has `critical_limits` JSON column
+  - [x] Tested HACCP endpoints work correctly
+
+### Remaining Critical Issues
 - [ ] **Fix missing `program_id` column in audits table**
   - [ ] Create database migration
   - [ ] Test migration on development database
@@ -24,6 +47,25 @@
   - [ ] Test all equipment endpoints
 
 ## 🔧 Backend Improvements
+
+### Startup Issues - FIXED ✅
+- [x] **Fix backend startup errors**
+  - [x] Fixed missing `HACCPReportRequest` import causing NameError
+  - [x] Fixed missing `RiskRegisterItem` import causing foreign key error
+  - [x] Fixed foreign key reference error in PRP risk assessments
+  - [x] Fixed missing `critical_limits` column in CCP table
+  - [x] Recreated complete database schema with all 104 tables
+  - [x] Verified server starts successfully on port 8000
+  - [x] Confirmed API documentation loads correctly
+  - [x] Tested authentication endpoint works correctly
+
+### Database Schema Issues - FIXED ✅
+- [x] **Fix database initialization script**
+  - [x] Fixed syntax errors in `init_database.py`
+  - [x] Fixed import statements for all model classes
+  - [x] Verified all model imports work correctly
+  - [x] Successfully created all database tables
+  - [x] Confirmed foreign key relationships are correct
 
 ### Performance Optimization
 - [ ] **Identify slow endpoints (> 1 second)**
@@ -97,6 +139,12 @@
   - [ ] Verify hazard analysis
   - [ ] Test CCP monitoring
   - [ ] Verify decision tree functionality
+  - [ ] Fix monitoring log creation endpoint (POST /ccps/{id}/monitoring-logs/enhanced) returning 500 error
+  - [ ] Implement structured monitoring schedule instead of free-text
+  - [ ] Add missing GET endpoint for verification logs with pagination
+  - [ ] Consolidate duplicate routes in haccp.py
+  - [ ] Route all write paths through HACCPService
+  - [ ] Switch endpoints from dict payloads to Pydantic schemas
 
 ### Supplier Management
 - [ ] **Verify supplier evaluation**

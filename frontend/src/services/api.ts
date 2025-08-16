@@ -2032,3 +2032,37 @@ export const riskThresholdAPI = {
   calculate: (likelihood: number, severity: number, scope_type?: string, scope_id?: number) =>
     api.post('/haccp/risk-thresholds/calculate', { likelihood, severity, scope_type, scope_id })
 };
+
+// Decision Tree API
+export const decisionTreeAPI = {
+  // Create decision tree for a hazard
+  createDecisionTree: async (hazardId: number, data: {
+    q1_answer: boolean;
+    q1_justification?: string;
+  }) => {
+    const response = await api.post(`/haccp/hazards/${hazardId}/decision-tree`, data);
+    return response.data;
+  },
+
+  // Answer a decision tree question
+  answerQuestion: async (hazardId: number, data: {
+    question_number: number;
+    answer: boolean;
+    justification?: string;
+  }) => {
+    const response = await api.post(`/haccp/hazards/${hazardId}/decision-tree/answer`, data);
+    return response.data;
+  },
+
+  // Get decision tree for a hazard
+  getDecisionTree: async (hazardId: number) => {
+    const response = await api.get(`/haccp/hazards/${hazardId}/decision-tree`);
+    return response.data;
+  },
+
+  // Get decision tree status
+  getDecisionTreeStatus: async (hazardId: number) => {
+    const response = await api.get(`/haccp/hazards/${hazardId}/decision-tree/status`);
+    return response.data;
+  }
+};

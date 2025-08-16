@@ -22,7 +22,7 @@ from app.schemas.haccp import (
     DecisionTreeCreate, DecisionTreeUpdate, DecisionTreeResponse, DecisionTreeQuestionResponse,
     RiskThresholdCreate, RiskThresholdUpdate, RiskThresholdResponse,
     HazardReviewCreate, HazardReviewUpdate, HazardReviewResponse,
-    HACCPReportRequest
+    HACCPReportRequest, ValidationEvidence
 )
 from app.services.haccp_service import HACCPService
 from app.utils.audit import audit_event
@@ -2720,3 +2720,91 @@ async def get_decision_tree_status(
     """Get the current status of a decision tree"""
     haccp_service = HACCPService(db)
     return haccp_service.get_decision_tree_status(hazard_id)
+# Validation Evidence Endpoints
+@router.post("/ccps/{ccp_id}/validation-evidence")
+async def add_validation_evidence(
+    ccp_id: int,
+    evidence_data: ValidationEvidence,
+    current_user: User = Depends(require_permission_dependency("haccp:edit")),
+    db: Session = Depends(get_db)
+):
+    """Add validation evidence to a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        ccp = haccp_service.add_validation_evidence(ccp_id, evidence_data.dict(), current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Validation evidence added successfully",
+            data={"ccp_id": ccp.id, "evidence_count": len(ccp.validation_evidence or [])}
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add validation evidence: {str(e)}"
+        )
+
+
+@router.delete("/ccps/{ccp_id}/validation-evidence/{evidence_id}")
+async def remove_validation_evidence(
+    ccp_id: int,
+    evidence_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:edit")),
+    db: Session = Depends(get_db)
+):
+    """Remove validation evidence from a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        ccp = haccp_service.remove_validation_evidence(ccp_id, evidence_id, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Validation evidence removed successfully",
+            data={"ccp_id": ccp.id, "evidence_count": len(ccp.validation_evidence or [])}
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove validation evidence: {str(e)}"
+        )
+
+
+@router.get("/ccps/{ccp_id}/validation-evidence/summary")
+async def get_validation_evidence_summary(
+    ccp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get validation evidence summary for a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        summary = haccp_service.get_validation_evidence_summary(ccp_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Validation evidence summary retrieved successfully",
+            data=summary
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get validation evidence summary: {str(e)}"
+        )
