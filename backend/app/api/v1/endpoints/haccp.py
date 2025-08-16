@@ -14,11 +14,15 @@ from app.models.haccp import (
 )
 from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
-    ProductCreate, ProductUpdate, ProcessFlowCreate, HazardCreate, CCPCreate,
-    MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, HACCPReportRequest,
-    HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanVersionCreate,
+    ProductCreate, ProductUpdate, ProductResponse, ProcessFlowCreate, ProcessFlowUpdate, ProcessFlowResponse,
+    HazardCreate, HazardUpdate, HazardResponse, CCPCreate, CCPUpdate, CCPResponse,
+    MonitoringLogCreate, MonitoringLogResponse, VerificationLogCreate, VerificationLogResponse,
+    HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanResponse, HACCPPlanVersionCreate, HACCPPlanVersionResponse,
+    HACCPPlanApprovalCreate, HACCPPlanApprovalResponse, ProductRiskConfigCreate, ProductRiskConfigUpdate, ProductRiskConfigResponse,
+    DecisionTreeCreate, DecisionTreeUpdate, DecisionTreeResponse, DecisionTreeQuestionResponse,
     RiskThresholdCreate, RiskThresholdUpdate, RiskThresholdResponse,
-    HazardReviewCreate, HazardReviewUpdate, HazardReviewResponse
+    HazardReviewCreate, HazardReviewUpdate, HazardReviewResponse,
+    HACCPReportRequest
 )
 from app.services.haccp_service import HACCPService
 from app.utils.audit import audit_event
@@ -2406,55 +2410,16 @@ async def calculate_risk_level(
 
 
 # Hazard Review Management
-@router.post("/hazards/{hazard_id}/reviews")
+@router.post("/hazards/{hazard_id}/reviews", response_model=HazardReviewResponse)
 async def create_hazard_review(
     hazard_id: int,
     review_data: HazardReviewCreate,
-    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a hazard review"""
-    try:
-        # Verify hazard exists
-        hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
-        if not hazard:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Hazard not found"
-            )
-        
-        # Create review
-        review = HazardReview(
-            hazard_id=hazard_id,
-            reviewer_id=current_user.id,
-            review_status=review_data.review_status,
-            review_comments=review_data.review_comments,
-            hazard_identification_adequate=review_data.hazard_identification_adequate,
-            risk_assessment_appropriate=review_data.risk_assessment_appropriate,
-            control_measures_suitable=review_data.control_measures_suitable,
-            ccp_determination_correct=review_data.ccp_determination_correct
-        )
-        
-        if review_data.review_status in ["approved", "rejected"]:
-            review.review_date = datetime.utcnow()
-        
-        db.add(review)
-        db.commit()
-        db.refresh(review)
-        
-        return ResponseModel(
-            success=True,
-            message="Hazard review created successfully",
-            data={"id": review.id}
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create hazard review: {str(e)}"
-        )
+    haccp_service = HACCPService(db)
+    return haccp_service.create_hazard_review(hazard_id, review_data, current_user.id)
 
 
 @router.get("/hazards/{hazard_id}/reviews")
@@ -2605,3 +2570,153 @@ async def get_hazard_review_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve hazard review status: {str(e)}"
         )
+
+
+# Decision Tree Endpoints (Codex Alimentarius)
+@router.post("/hazards/{hazard_id}/decision-tree", response_model=DecisionTreeResponse)
+async def create_decision_tree(
+    hazard_id: int,
+    decision_data: DecisionTreeCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Start the Codex Alimentarius decision tree for a hazard"""
+    haccp_service = HACCPService(db)
+    decision_tree = haccp_service.create_decision_tree(
+        hazard_id, 
+        decision_data.q1_answer, 
+        decision_data.q1_justification, 
+        current_user.id
+    )
+    
+    # Convert to response format
+    return DecisionTreeResponse(
+        id=decision_tree.id,
+        hazard_id=decision_tree.hazard_id,
+        q1_answer=decision_tree.q1_answer,
+        q1_justification=decision_tree.q1_justification,
+        q1_answered_by=decision_tree.q1_answered_by,
+        q1_answered_at=decision_tree.q1_answered_at,
+        q2_answer=decision_tree.q2_answer,
+        q2_justification=decision_tree.q2_justification,
+        q2_answered_by=decision_tree.q2_answered_by,
+        q2_answered_at=decision_tree.q2_answered_at,
+        q3_answer=decision_tree.q3_answer,
+        q3_justification=decision_tree.q3_justification,
+        q3_answered_by=decision_tree.q3_answered_by,
+        q3_answered_at=decision_tree.q3_answered_at,
+        q4_answer=decision_tree.q4_answer,
+        q4_justification=decision_tree.q4_justification,
+        q4_answered_by=decision_tree.q4_answered_by,
+        q4_answered_at=decision_tree.q4_answered_at,
+        is_ccp=decision_tree.is_ccp,
+        decision_reasoning=decision_tree.decision_reasoning,
+        decision_date=decision_tree.decision_date,
+        decision_by=decision_tree.decision_by,
+        status=decision_tree.status,
+        current_question=decision_tree.get_current_question(),
+        can_proceed=decision_tree.can_proceed_to_next_question(),
+        created_at=decision_tree.created_at,
+        updated_at=decision_tree.updated_at
+    )
+
+@router.post("/hazards/{hazard_id}/decision-tree/answer", response_model=DecisionTreeResponse)
+async def answer_decision_tree_question(
+    hazard_id: int,
+    question_response: DecisionTreeQuestionResponse,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Answer a specific question in the decision tree"""
+    haccp_service = HACCPService(db)
+    decision_tree = haccp_service.answer_decision_tree_question(
+        hazard_id,
+        question_response.question_number,
+        question_response.answer,
+        question_response.justification or "",
+        current_user.id
+    )
+    
+    # Convert to response format
+    return DecisionTreeResponse(
+        id=decision_tree.id,
+        hazard_id=decision_tree.hazard_id,
+        q1_answer=decision_tree.q1_answer,
+        q1_justification=decision_tree.q1_justification,
+        q1_answered_by=decision_tree.q1_answered_by,
+        q1_answered_at=decision_tree.q1_answered_at,
+        q2_answer=decision_tree.q2_answer,
+        q2_justification=decision_tree.q2_justification,
+        q2_answered_by=decision_tree.q2_answered_by,
+        q2_answered_at=decision_tree.q2_answered_at,
+        q3_answer=decision_tree.q3_answer,
+        q3_justification=decision_tree.q3_justification,
+        q3_answered_by=decision_tree.q3_answered_by,
+        q3_answered_at=decision_tree.q3_answered_at,
+        q4_answer=decision_tree.q4_answer,
+        q4_justification=decision_tree.q4_justification,
+        q4_answered_by=decision_tree.q4_answered_by,
+        q4_answered_at=decision_tree.q4_answered_at,
+        is_ccp=decision_tree.is_ccp,
+        decision_reasoning=decision_tree.decision_reasoning,
+        decision_date=decision_tree.decision_date,
+        decision_by=decision_tree.decision_by,
+        status=decision_tree.status,
+        current_question=decision_tree.get_current_question(),
+        can_proceed=decision_tree.can_proceed_to_next_question(),
+        created_at=decision_tree.created_at,
+        updated_at=decision_tree.updated_at
+    )
+
+@router.get("/hazards/{hazard_id}/decision-tree", response_model=DecisionTreeResponse)
+async def get_decision_tree(
+    hazard_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the decision tree for a hazard"""
+    haccp_service = HACCPService(db)
+    decision_tree = haccp_service.get_decision_tree(hazard_id)
+    
+    if not decision_tree:
+        raise HTTPException(status_code=404, detail="Decision tree not found")
+    
+    return DecisionTreeResponse(
+        id=decision_tree.id,
+        hazard_id=decision_tree.hazard_id,
+        q1_answer=decision_tree.q1_answer,
+        q1_justification=decision_tree.q1_justification,
+        q1_answered_by=decision_tree.q1_answered_by,
+        q1_answered_at=decision_tree.q1_answered_at,
+        q2_answer=decision_tree.q2_answer,
+        q2_justification=decision_tree.q2_justification,
+        q2_answered_by=decision_tree.q2_answered_by,
+        q2_answered_at=decision_tree.q2_answered_at,
+        q3_answer=decision_tree.q3_answer,
+        q3_justification=decision_tree.q3_justification,
+        q3_answered_by=decision_tree.q3_answered_by,
+        q3_answered_at=decision_tree.q3_answered_at,
+        q4_answer=decision_tree.q4_answer,
+        q4_justification=decision_tree.q4_justification,
+        q4_answered_by=decision_tree.q4_answered_by,
+        q4_answered_at=decision_tree.q4_answered_at,
+        is_ccp=decision_tree.is_ccp,
+        decision_reasoning=decision_tree.decision_reasoning,
+        decision_date=decision_tree.decision_date,
+        decision_by=decision_tree.decision_by,
+        status=decision_tree.status,
+        current_question=decision_tree.get_current_question(),
+        can_proceed=decision_tree.can_proceed_to_next_question(),
+        created_at=decision_tree.created_at,
+        updated_at=decision_tree.updated_at
+    )
+
+@router.get("/hazards/{hazard_id}/decision-tree/status")
+async def get_decision_tree_status(
+    hazard_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the current status of a decision tree"""
+    haccp_service = HACCPService(db)
+    return haccp_service.get_decision_tree_status(hazard_id)

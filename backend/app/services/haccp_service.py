@@ -11,7 +11,7 @@ from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
     HazardType, RiskLevel, CCPStatus,
     HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus,
-    ProductRiskConfig
+    ProductRiskConfig, DecisionTree
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
@@ -349,6 +349,116 @@ class HACCPService:
             self.db.rollback()
 
         return DecisionTreeResult(is_ccp=is_ccp, justification=justification, steps=steps)
+
+    def create_decision_tree(self, hazard_id: int, q1_answer: bool, q1_justification: str, user_id: int) -> DecisionTree:
+        """Create a new decision tree for a hazard"""
+        
+        # Verify hazard exists
+        hazard = self.db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise ValueError("Hazard not found")
+        
+        # Check if decision tree already exists
+        existing_tree = self.db.query(DecisionTree).filter(DecisionTree.hazard_id == hazard_id).first()
+        if existing_tree:
+            raise ValueError("Decision tree already exists for this hazard")
+        
+        decision_tree = DecisionTree(
+            hazard_id=hazard_id,
+            q1_answer=q1_answer,
+            q1_justification=q1_justification,
+            q1_answered_by=user_id
+        )
+        
+        # If Q1 is No, determine CCP decision immediately
+        if not q1_answer:
+            decision_tree.is_ccp = False
+            decision_tree.decision_reasoning = "Q1: Control at this step is not necessary for safety"
+            decision_tree.decision_date = datetime.utcnow()
+            decision_tree.decision_by = user_id
+            decision_tree.status = "completed"
+        
+        self.db.add(decision_tree)
+        self.db.commit()
+        self.db.refresh(decision_tree)
+        
+        return decision_tree
+    
+    def answer_decision_tree_question(self, hazard_id: int, question_number: int, answer: bool, justification: str, user_id: int) -> DecisionTree:
+        """Answer a specific question in the decision tree"""
+        
+        decision_tree = self.db.query(DecisionTree).filter(DecisionTree.hazard_id == hazard_id).first()
+        if not decision_tree:
+            raise ValueError("Decision tree not found for this hazard")
+        
+        # Update the appropriate question
+        if question_number == 1:
+            decision_tree.q1_answer = answer
+            decision_tree.q1_justification = justification
+            decision_tree.q1_answered_by = user_id
+            decision_tree.q1_answered_at = datetime.utcnow()
+        elif question_number == 2:
+            if not decision_tree.can_proceed_to_next_question():
+                raise ValueError("Cannot answer Q2 - previous questions do not allow proceeding")
+            decision_tree.q2_answer = answer
+            decision_tree.q2_justification = justification
+            decision_tree.q2_answered_by = user_id
+            decision_tree.q2_answered_at = datetime.utcnow()
+        elif question_number == 3:
+            if not decision_tree.can_proceed_to_next_question():
+                raise ValueError("Cannot answer Q3 - previous questions do not allow proceeding")
+            decision_tree.q3_answer = answer
+            decision_tree.q3_justification = justification
+            decision_tree.q3_answered_by = user_id
+            decision_tree.q3_answered_at = datetime.utcnow()
+        elif question_number == 4:
+            if not decision_tree.can_proceed_to_next_question():
+                raise ValueError("Cannot answer Q4 - previous questions do not allow proceeding")
+            decision_tree.q4_answer = answer
+            decision_tree.q4_justification = justification
+            decision_tree.q4_answered_by = user_id
+            decision_tree.q4_answered_at = datetime.utcnow()
+        else:
+            raise ValueError("Invalid question number")
+        
+        # Determine CCP decision if all questions are answered or if we can stop early
+        if not answer or question_number == 4:  # If answer is No or this is Q4
+            is_ccp, reasoning = decision_tree.determine_ccp_decision()
+            decision_tree.is_ccp = is_ccp
+            decision_tree.decision_reasoning = reasoning
+            decision_tree.decision_date = datetime.utcnow()
+            decision_tree.decision_by = user_id
+            decision_tree.status = "completed"
+        
+        self.db.commit()
+        self.db.refresh(decision_tree)
+        
+        return decision_tree
+    
+    def get_decision_tree(self, hazard_id: int) -> Optional[DecisionTree]:
+        """Get the decision tree for a hazard"""
+        return self.db.query(DecisionTree).filter(DecisionTree.hazard_id == hazard_id).first()
+    
+    def get_decision_tree_status(self, hazard_id: int) -> dict:
+        """Get the current status of a decision tree"""
+        decision_tree = self.get_decision_tree(hazard_id)
+        if not decision_tree:
+            return {
+                "exists": False,
+                "current_question": 1,
+                "can_proceed": True,
+                "is_ccp": None,
+                "status": "not_started"
+            }
+        
+        return {
+            "exists": True,
+            "current_question": decision_tree.get_current_question(),
+            "can_proceed": decision_tree.can_proceed_to_next_question(),
+            "is_ccp": decision_tree.is_ccp,
+            "status": decision_tree.status,
+            "decision_reasoning": decision_tree.decision_reasoning
+        }
 
     # --- HACCP Plan methods ---
     def create_haccp_plan(self, product_id: int, title: str, description: Optional[str], content: str, created_by: int,

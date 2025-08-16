@@ -313,7 +313,7 @@ class PRPReportRequest(BaseModel):
     category: Optional[PRPCategory] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
-    format: str = Field("pdf", regex="^(pdf|xlsx|json)$")
+    format: str = Field("pdf", pattern="^(pdf|xlsx|json)$")
     include_risk_assessments: bool = True
     include_corrective_actions: bool = True
     include_trends: bool = True 

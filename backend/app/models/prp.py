@@ -4,6 +4,8 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
 from datetime import datetime
+from .haccp import RiskLevel
+from .risk import RiskRegisterItem
 
 
 class PRPCategory(str, enum.Enum):
@@ -373,7 +375,7 @@ class RiskAssessment(Base):
     program_id = Column(Integer, ForeignKey("prp_programs.id", ondelete="CASCADE"), nullable=False)
     
     # Link to main risk register
-    risk_register_entry_id = Column(Integer, ForeignKey("risk_register_items.id", ondelete="SET NULL"), nullable=True)
+    risk_register_entry_id = Column(Integer, ForeignKey("risk_register.id", ondelete="SET NULL"), nullable=True)
     
     assessment_code = Column(String(50), unique=True, index=True, nullable=False)
     hazard_identified = Column(Text, nullable=False)
@@ -416,7 +418,7 @@ class RiskAssessment(Base):
 
     # Relationships
     program = relationship("PRPProgram")
-    risk_register_entry = relationship("RiskRegisterItem")
+    risk_register_entry = relationship("RiskRegisterItem", foreign_keys=[risk_register_entry_id])
     escalated_by_user = relationship("User", foreign_keys=[escalated_by])
 
     def __repr__(self):

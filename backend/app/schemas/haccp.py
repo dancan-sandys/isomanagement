@@ -31,6 +31,76 @@ class DecisionTreeQuestion(str, Enum):
     Q4 = "Is this step specifically designed to eliminate or reduce the likely occurrence of the hazard to an acceptable level?"
 
 
+# Enhanced Critical Limits Schemas (Multi-parameter support)
+class CriticalLimitParameter(BaseModel):
+    parameter: str = Field(..., description="Parameter name (e.g., temperature, time, pH)")
+    limit_type: Literal["numeric", "qualitative"] = Field("numeric", description="Type of limit")
+    
+    # Numeric limits
+    min_value: Optional[float] = Field(None, description="Minimum value for numeric limits")
+    max_value: Optional[float] = Field(None, description="Maximum value for numeric limits")
+    unit: Optional[str] = Field(None, description="UCUM unit code (e.g., Cel, min, pH)")
+    
+    # Qualitative limits
+    value: Optional[str] = Field(None, description="Expected value for qualitative limits")
+    
+    # Common fields
+    condition: Optional[str] = Field(None, description="Condition when this limit applies")
+    description: Optional[str] = Field(None, description="Description of the limit")
+    
+    @field_validator('limit_type')
+    @classmethod
+    def validate_limit_type(cls, v, values):
+        if v == "numeric":
+            if values.get('value') is not None:
+                raise ValueError("Numeric limits should not have 'value' field")
+            if values.get('min_value') is None and values.get('max_value') is None:
+                raise ValueError("Numeric limits must have at least min_value or max_value")
+        elif v == "qualitative":
+            if values.get('min_value') is not None or values.get('max_value') is not None:
+                raise ValueError("Qualitative limits should not have min_value or max_value")
+            if values.get('value') is None:
+                raise ValueError("Qualitative limits must have a 'value' field")
+        return v
+
+class ValidationEvidence(BaseModel):
+    type: Literal["sop_reference", "scientific_study", "process_authority_letter", "validation_study", "regulatory_requirement"] = Field(..., description="Type of validation evidence")
+    
+    # SOP Reference
+    document_id: Optional[int] = Field(None, description="ID of the referenced document")
+    section: Optional[str] = Field(None, description="Section of the document")
+    
+    # Scientific Study
+    reference: Optional[str] = Field(None, description="Study reference (journal, year, etc.)")
+    study_id: Optional[str] = Field(None, description="Study identifier")
+    
+    # Process Authority Letter
+    authority: Optional[str] = Field(None, description="Name of the process authority")
+    date: Optional[str] = Field(None, description="Date of the letter")
+    
+    # Common fields
+    description: str = Field(..., description="Description of the evidence")
+    url: Optional[str] = Field(None, description="URL to the evidence document")
+
+# UCUM Units for common food safety parameters
+UCUM_UNITS = {
+    "temperature": ["Cel", "K", "F"],  # Celsius, Kelvin, Fahrenheit
+    "time": ["min", "h", "s"],  # minutes, hours, seconds
+    "pressure": ["Pa", "kPa", "bar"],  # Pascal, kilopascal, bar
+    "ph": ["pH"],  # pH units
+    "aw": ["1"],  # Water activity (dimensionless)
+    "concentration": ["g/L", "mg/L", "ppm", "ppb"],  # Concentration units
+    "weight": ["g", "kg", "mg"],  # Weight units
+    "volume": ["L", "mL", "m3"],  # Volume units
+    "length": ["m", "cm", "mm"],  # Length units
+    "area": ["m2", "cm2"],  # Area units
+    "flow": ["L/min", "m3/h"],  # Flow rate units
+    "speed": ["rpm", "m/s"],  # Speed units
+    "energy": ["J", "kJ", "cal"],  # Energy units
+    "power": ["W", "kW"],  # Power units
+}
+
+
 # Risk Assessment Schemas
 class RiskThresholdCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -279,10 +349,17 @@ class CCPCreate(BaseModel):
     ccp_number: str = Field(..., min_length=1, max_length=20)
     ccp_name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
+    
+    # Enhanced critical limits
+    critical_limits: Optional[List[CriticalLimitParameter]] = None
+    validation_evidence: Optional[List[ValidationEvidence]] = None
+    
+    # Legacy fields for backward compatibility
     critical_limit_min: Optional[float] = None
     critical_limit_max: Optional[float] = None
     critical_limit_unit: Optional[str] = Field(None, max_length=50)
     critical_limit_description: Optional[str] = None
+    
     monitoring_frequency: Optional[str] = Field(None, max_length=100)
     monitoring_method: Optional[str] = None
     monitoring_responsible: Optional[int] = None
@@ -299,10 +376,17 @@ class CCPUpdate(BaseModel):
     ccp_name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     status: Optional[CCPStatus] = None
+    
+    # Enhanced critical limits
+    critical_limits: Optional[List[CriticalLimitParameter]] = None
+    validation_evidence: Optional[List[ValidationEvidence]] = None
+    
+    # Legacy fields for backward compatibility
     critical_limit_min: Optional[float] = None
     critical_limit_max: Optional[float] = None
     critical_limit_unit: Optional[str] = Field(None, max_length=50)
     critical_limit_description: Optional[str] = None
+    
     monitoring_frequency: Optional[str] = Field(None, max_length=100)
     monitoring_method: Optional[str] = None
     monitoring_responsible: Optional[int] = None
@@ -321,10 +405,18 @@ class CCPResponse(BaseModel):
     ccp_name: str
     description: Optional[str] = None
     status: CCPStatus
+    
+    # Enhanced critical limits
+    critical_limits: Optional[List[Dict[str, Any]]] = None
+    validation_evidence: Optional[List[Dict[str, Any]]] = None
+    limits_summary: Optional[str] = None
+    
+    # Legacy fields for backward compatibility
     critical_limit_min: Optional[float] = None
     critical_limit_max: Optional[float] = None
     critical_limit_unit: Optional[str] = None
     critical_limit_description: Optional[str] = None
+    
     monitoring_frequency: Optional[str] = None
     monitoring_method: Optional[str] = None
     monitoring_responsible: Optional[int] = None
@@ -535,13 +627,79 @@ class HACCPReportRequest(BaseModel):
     date_to: Optional[datetime] = None
     include_charts: bool = True
     format: str = Field("pdf", pattern="^(pdf|excel|html)$")
+UCUM_UNITS = {
+    "temperature": ["Cel", "K", "F"],  # Celsius, Kelvin, Fahrenheit
+    "time": ["min", "h", "s"],  # minutes, hours, seconds
+    "pressure": ["Pa", "kPa", "bar"],  # Pascal, kilopascal, bar
+    "ph": ["pH"],  # pH units
+    "aw": ["1"],  # Water activity (dimensionless)
+    "concentration": ["g/L", "mg/L", "ppm", "ppb"],  # Concentration units
+    "weight": ["g", "kg", "mg"],  # Weight units
+    "volume": ["L", "mL", "m3"],  # Volume units
+    "length": ["m", "cm", "mm"],  # Length units
+    "area": ["m2", "cm2"],  # Area units
+    "flow": ["L/min", "m3/h"],  # Flow rate units
+    "speed": ["rpm", "m/s"],  # Speed units
+    "energy": ["J", "kJ", "cal"],  # Energy units
+    "power": ["W", "kW"],  # Power units
+}
 
+# Decision Tree Schemas (Codex Alimentarius)
+class DecisionTreeAnswer(BaseModel):
+    answer: bool
+    justification: Optional[str] = None
 
-class HACCPReportResponse(BaseModel):
-    report_id: str
-    report_url: str
-    generated_at: datetime
-    file_size: Optional[int] = None 
+class DecisionTreeQuestionResponse(BaseModel):
+    question_number: int
+    answer: bool
+    justification: Optional[str] = None
+
+class DecisionTreeCreate(BaseModel):
+    hazard_id: int
+    q1_answer: bool
+    q1_justification: Optional[str] = None
+
+class DecisionTreeUpdate(BaseModel):
+    q1_answer: Optional[bool] = None
+    q1_justification: Optional[str] = None
+    q2_answer: Optional[bool] = None
+    q2_justification: Optional[str] = None
+    q3_answer: Optional[bool] = None
+    q3_justification: Optional[bool] = None
+    q4_answer: Optional[bool] = None
+    q4_justification: Optional[str] = None
+
+class DecisionTreeResponse(BaseModel):
+    id: int
+    hazard_id: int
+    q1_answer: Optional[bool] = None
+    q1_justification: Optional[str] = None
+    q1_answered_by: Optional[int] = None
+    q1_answered_at: Optional[datetime] = None
+    q2_answer: Optional[bool] = None
+    q2_justification: Optional[str] = None
+    q2_answered_by: Optional[int] = None
+    q2_answered_at: Optional[datetime] = None
+    q3_answer: Optional[bool] = None
+    q3_justification: Optional[str] = None
+    q3_answered_by: Optional[int] = None
+    q3_answered_at: Optional[datetime] = None
+    q4_answer: Optional[bool] = None
+    q4_justification: Optional[str] = None
+    q4_answered_by: Optional[int] = None
+    q4_answered_at: Optional[datetime] = None
+    is_ccp: Optional[bool] = None
+    decision_reasoning: Optional[str] = None
+    decision_date: Optional[datetime] = None
+    decision_by: Optional[int] = None
+    status: str
+    current_question: int
+    can_proceed: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
 
 # Product Risk Configuration Schemas (ISO 22000 compliant)
 class ProductRiskConfigCreate(BaseModel):
@@ -588,7 +746,7 @@ class ProductRiskConfigResponse(BaseModel):
     updated_at: Optional[datetime] = None
     
     class Config:
-        from_attributes = True # Product Risk Configuration Schemas (ISO 22000 compliant)
+        from_attributes = True
 
 # Product Risk Configuration Schemas (ISO 22000 compliant)
 class ProductRiskConfigCreate(BaseModel):
