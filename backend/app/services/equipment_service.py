@@ -92,4 +92,129 @@ class EquipmentService:
         self.db.refresh(rec)
         return rec
 
+    # Analytics and Statistics
+    def get_equipment_stats(self) -> dict:
+        """Get equipment statistics and analytics"""
+        total_equipment = self.db.query(Equipment).count()
+        active_equipment = total_equipment  # All equipment is considered active since there's no is_active field
+        maintenance_plans = self.db.query(MaintenancePlan).count()
+        calibration_plans = self.db.query(CalibrationPlan).count()
+        pending_work_orders = self.db.query(MaintenanceWorkOrder).filter(MaintenanceWorkOrder.completed_at == None).count()
+        
+        return {
+            "total_equipment": total_equipment,
+            "active_equipment": active_equipment,
+            "maintenance_plans": maintenance_plans,
+            "calibration_plans": calibration_plans,
+            "pending_work_orders": pending_work_orders,
+            "equipment_by_type": self._get_equipment_by_type(),
+            "maintenance_status": self._get_maintenance_status()
+        }
+
+    def get_upcoming_maintenance(self) -> List[dict]:
+        """Get upcoming maintenance schedules"""
+        upcoming_date = datetime.utcnow() + timedelta(days=30)
+        plans = self.db.query(MaintenancePlan).filter(
+            MaintenancePlan.next_due_at <= upcoming_date,
+            MaintenancePlan.next_due_at >= datetime.utcnow()
+        ).order_by(MaintenancePlan.next_due_at.asc()).all()
+        
+        return [
+            {
+                "id": plan.id,
+                "equipment_id": plan.equipment_id,
+                "equipment_name": plan.equipment.name if plan.equipment else "Unknown",
+                "maintenance_type": plan.maintenance_type.value if plan.maintenance_type else None,
+                "next_due_at": plan.next_due_at.isoformat() if plan.next_due_at else None,
+                "frequency_days": plan.frequency_days,
+                "notes": plan.notes
+            }
+            for plan in plans
+        ]
+
+    def get_overdue_calibrations(self) -> List[dict]:
+        """Get overdue calibration schedules"""
+        overdue_plans = self.db.query(CalibrationPlan).filter(
+            CalibrationPlan.next_due_at < datetime.utcnow()
+        ).order_by(CalibrationPlan.next_due_at.asc()).all()
+        
+        return [
+            {
+                "id": plan.id,
+                "equipment_id": plan.equipment_id,
+                "equipment_name": plan.equipment.name if plan.equipment else "Unknown",
+                "next_due_at": plan.next_due_at.isoformat() if plan.next_due_at else None,
+                "days_overdue": (datetime.utcnow() - plan.next_due_at).days if plan.next_due_at else 0,
+                "notes": plan.notes
+            }
+            for plan in overdue_plans
+        ]
+
+    def get_equipment_alerts(self) -> List[dict]:
+        """Get equipment alerts and notifications"""
+        alerts = []
+        
+        # Overdue calibrations
+        overdue_calibrations = self.get_overdue_calibrations()
+        for cal in overdue_calibrations:
+            alerts.append({
+                "type": "overdue_calibration",
+                "severity": "high",
+                "title": f"Overdue Calibration: {cal['equipment_name']}",
+                "message": f"Calibration is {cal['days_overdue']} days overdue",
+                "equipment_id": cal["equipment_id"],
+                "due_date": cal["next_due_at"]
+            })
+        
+        # Upcoming maintenance
+        upcoming_maintenance = self.get_upcoming_maintenance()
+        for maint in upcoming_maintenance:
+            if maint["next_due_at"]:
+                try:
+                    next_due = datetime.fromisoformat(maint["next_due_at"].replace('Z', '+00:00'))
+                    days_until_due = (next_due - datetime.utcnow()).days
+                except:
+                    days_until_due = 0
+            else:
+                days_until_due = 0
+            if days_until_due <= 7:
+                alerts.append({
+                    "type": "upcoming_maintenance",
+                    "severity": "medium" if days_until_due <= 3 else "low",
+                    "title": f"Upcoming Maintenance: {maint['equipment_name']}",
+                    "message": f"Maintenance due in {days_until_due} days",
+                    "equipment_id": maint["equipment_id"],
+                    "due_date": maint["next_due_at"]
+                })
+        
+        return alerts
+
+    def _get_equipment_by_type(self) -> dict:
+        """Get equipment count by type"""
+        from sqlalchemy import func
+        result = self.db.query(
+            Equipment.equipment_type,
+            func.count(Equipment.id).label('count')
+        ).group_by(Equipment.equipment_type).all()
+        
+        return {row.equipment_type: row.count for row in result}
+
+    def _get_maintenance_status(self) -> dict:
+        """Get maintenance status summary"""
+        total_plans = self.db.query(MaintenancePlan).count()
+        overdue_plans = self.db.query(MaintenancePlan).filter(
+            MaintenancePlan.next_due_at < datetime.utcnow()
+        ).count()
+        upcoming_plans = self.db.query(MaintenancePlan).filter(
+            MaintenancePlan.next_due_at >= datetime.utcnow(),
+            MaintenancePlan.next_due_at <= datetime.utcnow() + timedelta(days=30)
+        ).count()
+        
+        return {
+            "total_plans": total_plans,
+            "overdue": overdue_plans,
+            "upcoming": upcoming_plans,
+            "on_schedule": total_plans - overdue_plans - upcoming_plans
+        }
+
 

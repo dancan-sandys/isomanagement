@@ -139,14 +139,31 @@ def require_permission_dependency(permission_string: str):
         except (ValueError, KeyError):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Invalid permission format: {permission_string}"
+                detail=f"Invalid permission format: {permission_string}. Expected format: 'module:action'"
             )
         
         rbac_service = RBACService(db)
         if not rbac_service.has_permission(current_user.id, module, action):
+            # Get user's current permissions for better error message
+            user_permissions = rbac_service.get_user_permissions(current_user.id)
+            user_modules = rbac_service.get_user_modules(current_user.id)
+            
+            error_detail = {
+                "error": "Insufficient permissions",
+                "required_permission": permission_string,
+                "required_module": module.value,
+                "required_action": action.value,
+                "user_id": current_user.id,
+                "user_username": current_user.username,
+                "user_has_module_access": module in user_modules,
+                "user_permissions_count": len(user_permissions),
+                "available_modules": [m.value for m in user_modules],
+                "available_permissions": [f"{p.module.value}:{p.action.value}" for p in user_permissions[:10]]  # Limit to first 10
+            }
+            
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required: {permission_string}"
+                detail=error_detail
             )
         
         return current_user
@@ -165,22 +182,40 @@ def require_any_permission_dependency(permissions: List[str]):
         rbac_service = RBACService(db)
         
         has_any = False
+        checked_permissions = []
         for permission_string in permissions:
             try:
                 module_str, action_str = permission_string.split(":")
                 module = Module(module_str)
                 action = PermissionType(action_str)
+                checked_permissions.append(f"{module.value}:{action.value}")
                 
                 if rbac_service.has_permission(current_user.id, module, action):
                     has_any = True
                     break
             except (ValueError, KeyError):
+                checked_permissions.append(f"INVALID: {permission_string}")
                 continue
         
         if not has_any:
+            # Get user's current permissions for better error message
+            user_permissions = rbac_service.get_user_permissions(current_user.id)
+            user_modules = rbac_service.get_user_modules(current_user.id)
+            
+            error_detail = {
+                "error": "Insufficient permissions",
+                "required_permissions": permissions,
+                "checked_permissions": checked_permissions,
+                "user_id": current_user.id,
+                "user_username": current_user.username,
+                "user_permissions_count": len(user_permissions),
+                "available_modules": [m.value for m in user_modules],
+                "available_permissions": [f"{p.module.value}:{p.action.value}" for p in user_permissions[:10]]  # Limit to first 10
+            }
+            
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required one of: {', '.join(permissions)}"
+                detail=error_detail
             )
         
         return current_user
@@ -200,9 +235,22 @@ def require_module_access_dependency(module: Module):
         
         user_modules = rbac_service.get_user_modules(current_user.id)
         if module not in user_modules:
+            # Get user's current permissions for better error message
+            user_permissions = rbac_service.get_user_permissions(current_user.id)
+            
+            error_detail = {
+                "error": "Module access denied",
+                "required_module": module.value,
+                "user_id": current_user.id,
+                "user_username": current_user.username,
+                "user_permissions_count": len(user_permissions),
+                "available_modules": [m.value for m in user_modules],
+                "available_permissions": [f"{p.module.value}:{p.action.value}" for p in user_permissions[:10]]  # Limit to first 10
+            }
+            
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied to module: {module.value}"
+                detail=error_detail
             )
         
         return current_user

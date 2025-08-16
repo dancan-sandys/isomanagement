@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
@@ -7,9 +7,9 @@ import csv
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import require_permission_dependency
+from app.core.permissions import require_permission_dependency, check_permission
 from app.models.user import User
-from app.services.storage_service import StorageService
+from app.models.rbac import Module, PermissionType
 from app.models.audit_mgmt import (
     Audit as AuditModel, AuditStatus, AuditType,
     AuditChecklistTemplate, AuditChecklistItem, ChecklistResponse,
@@ -33,8 +33,238 @@ from io import BytesIO
 from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def can_perform_destructive_action(audit: AuditModel, current_user: User, db: Session) -> bool:
+    """
+    Check if user can perform destructive actions (delete, update) on an audit
+    Returns True if user is lead auditor or program manager
+    """
+    # Super admin or audit manager can perform all actions
+    if check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+        return True
+    
+    # Lead auditor can perform destructive actions on their own audits
+    if audit.lead_auditor_id == current_user.id:
+        return True
+    
+    return False
+
+
+def check_audit_ownership(audit: AuditModel, current_user: User, db: Session, action: str = "access") -> bool:
+    """
+    Check if user has ownership or appropriate permissions for audit actions
+    Returns True if user can perform the action, raises HTTPException otherwise
+    
+    Action restrictions:
+    - view/read: Lead auditor, team auditor, auditee, program manager
+    - update: Lead auditor, program manager only
+    - delete: Lead auditor, program manager only
+    - create: Any user with audits:create permission
+    """
+    # Super admin or audit manager can perform all actions
+    if check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+        return True
+    
+    # For destructive operations (delete, update), only lead auditor or program manager
+    if action in ["delete", "update"]:
+        if audit.lead_auditor_id == current_user.id:
+            return True
+        else:
+            logger.warning(
+                f"Unauthorized destructive action attempt: User {current_user.id} ({current_user.username}) "
+                f"attempted to {action} audit {audit.id} (Lead: {audit.lead_auditor_id})"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "Access denied",
+                    "message": f"Only the lead auditor or program manager can {action} this audit",
+                    "audit_id": audit.id,
+                    "audit_title": audit.title,
+                    "required_role": "Lead Auditor or Program Manager",
+                    "user_role": "User",
+                    "action": action,
+                    "lead_auditor_id": audit.lead_auditor_id
+                }
+            )
+    
+    # For view/read operations, allow lead auditor, team auditor, and auditee
+    if action in ["view", "read"]:
+        # Lead auditor can access their own audits
+        if audit.lead_auditor_id == current_user.id:
+            return True
+        
+        # Team auditor can access audits they're assigned to
+        if audit.auditor_id == current_user.id:
+            return True
+        
+        # Check if user is an auditee (read-only access)
+        auditee = db.query(AuditAuditee).filter(
+            AuditAuditee.audit_id == audit.id,
+            AuditAuditee.user_id == current_user.id
+        ).first()
+        
+        if auditee:
+            return True
+    
+    # Log unauthorized access attempt
+    logger.warning(
+        f"Unauthorized audit access attempt: User {current_user.id} ({current_user.username}) "
+        f"attempted to {action} audit {audit.id} (Lead: {audit.lead_auditor_id}, Team: {audit.auditor_id})"
+    )
+    
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "Access denied",
+            "message": f"You do not have permission to {action} this audit",
+            "audit_id": audit.id,
+            "audit_title": audit.title,
+            "required_role": "Lead Auditor, Team Auditor, or Auditee",
+            "user_role": "User",
+            "action": action
+        }
+    )
+
+
+def check_finding_ownership(finding: AuditFinding, current_user: User, db: Session, action: str = "access") -> bool:
+    """
+    Check if user has ownership or appropriate permissions for finding actions
+    
+    Action restrictions:
+    - view/read: Lead auditor, team auditor, auditee, program manager
+    - update: Lead auditor, finding creator, program manager only
+    - delete: Lead auditor, program manager only
+    """
+    # Get the audit to check ownership
+    audit = db.query(AuditModel).filter(AuditModel.id == finding.audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Super admin or audit manager can perform all actions
+    if check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+        return True
+    
+    # For destructive operations (delete), only lead auditor or program manager
+    if action == "delete":
+        if audit.lead_auditor_id == current_user.id:
+            return True
+        else:
+            logger.warning(
+                f"Unauthorized finding deletion attempt: User {current_user.id} ({current_user.username}) "
+                f"attempted to delete finding {finding.id} in audit {audit.id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "Access denied",
+                    "message": "Only the lead auditor or program manager can delete findings",
+                    "finding_id": finding.id,
+                    "audit_id": audit.id,
+                    "required_role": "Lead Auditor or Program Manager",
+                    "user_role": "User",
+                    "action": action
+                }
+            )
+    
+    # For update operations, allow lead auditor, finding creator, or program manager
+    if action == "update":
+        if audit.lead_auditor_id == current_user.id:
+            return True
+        if finding.created_by == current_user.id:
+            return True
+        else:
+            logger.warning(
+                f"Unauthorized finding update attempt: User {current_user.id} ({current_user.username}) "
+                f"attempted to update finding {finding.id} in audit {audit.id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "Access denied",
+                    "message": "Only the lead auditor, finding creator, or program manager can update findings",
+                    "finding_id": finding.id,
+                    "audit_id": audit.id,
+                    "required_role": "Lead Auditor, Finding Creator, or Program Manager",
+                    "user_role": "User",
+                    "action": action,
+                    "finding_creator_id": finding.created_by
+                }
+            )
+    
+    # For view/read operations, check audit ownership
+    if action in ["view", "read"]:
+        return check_audit_ownership(audit, current_user, db, action)
+    
+    return True
+
+
+@router.get("/{audit_id:int}/permissions", dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_audit_permissions(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Get user's permissions for a specific audit
+    Useful for frontend to show/hide UI elements based on user permissions
+    """
+    audit = db.query(AuditModel).get(audit_id)
+    if not audit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check basic view access
+    try:
+        check_audit_ownership(audit, current_user, db, "view")
+    except HTTPException:
+        # If user can't even view, return minimal permissions
+        return {
+            "can_view": False,
+            "can_update": False,
+            "can_delete": False,
+            "can_approve": False,
+            "is_lead_auditor": False,
+            "is_team_auditor": False,
+            "is_auditee": False,
+            "is_program_manager": False
+        }
+    
+    # Check if user is program manager
+    is_program_manager = check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db)
+    
+    # Check if user is lead auditor
+    is_lead_auditor = audit.lead_auditor_id == current_user.id
+    
+    # Check if user is team auditor
+    is_team_auditor = audit.auditor_id == current_user.id
+    
+    # Check if user is auditee
+    auditee = db.query(AuditAuditee).filter(
+        AuditAuditee.audit_id == audit.id,
+        AuditAuditee.user_id == current_user.id
+    ).first()
+    is_auditee = auditee is not None
+    
+    # Determine permissions based on role
+    can_update = is_program_manager or is_lead_auditor
+    can_delete = is_program_manager or is_lead_auditor
+    can_approve = is_program_manager or is_lead_auditor
+    
+    return {
+        "can_view": True,
+        "can_update": can_update,
+        "can_delete": can_delete,
+        "can_approve": can_approve,
+        "is_lead_auditor": is_lead_auditor,
+        "is_team_auditor": is_team_auditor,
+        "is_auditee": is_auditee,
+        "is_program_manager": is_program_manager,
+        "audit_id": audit_id,
+        "lead_auditor_id": audit.lead_auditor_id,
+        "team_auditor_id": audit.auditor_id
+    }
 
 
 @router.get("/", response_model=AuditListResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
@@ -100,7 +330,11 @@ async def create_audit(
 async def get_audit(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for view access
+    check_audit_ownership(audit, current_user, db, "view")
+    
     return audit
 
 
@@ -108,7 +342,11 @@ async def get_audit(audit_id: int, db: Session = Depends(get_db), current_user: 
 async def update_audit(audit_id: int, payload: AuditUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for update access
+    check_audit_ownership(audit, current_user, db, "update")
+    
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field in {"audit_type", "status"} and value is not None:
             value = (AuditType(value) if field == "audit_type" else AuditStatus(value))
@@ -126,7 +364,11 @@ async def update_audit(audit_id: int, payload: AuditUpdate, db: Session = Depend
 async def delete_audit(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for delete access
+    check_audit_ownership(audit, current_user, db, "delete")
+    
     db.delete(audit)
     db.commit()
     try:
@@ -286,7 +528,16 @@ async def add_checklist_item(audit_id: int, payload: ChecklistItemCreate, db: Se
 async def update_checklist_item(item_id: int, payload: ChecklistItemUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     item = db.query(AuditChecklistItem).get(item_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Checklist item not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Checklist item not found")
+    
+    # Get the audit to check ownership
+    audit = db.query(AuditModel).get(item.audit_id)
+    if not audit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for checklist item update
+    check_audit_ownership(audit, current_user, db, "update")
+    
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "response" and value is not None:
             value = ChecklistResponse(value)
@@ -330,7 +581,11 @@ async def add_finding(audit_id: int, payload: FindingCreate, db: Session = Depen
 async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     finding = db.query(AuditFinding).get(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    
+    # Check ownership for finding update
+    check_finding_ownership(finding, current_user, db, "update")
+    
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "severity" and value is not None:
             value = FindingSeverity(value)
@@ -347,7 +602,11 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
 async def list_attachments(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for view access
+    check_audit_ownership(audit, current_user, db, "view")
+    
     return (
         db.query(AuditAttachment)
         .filter(AuditAttachment.audit_id == audit_id)
@@ -359,7 +618,10 @@ async def list_attachments(audit_id: int, db: Session = Depends(get_db), current
 async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for upload access
+    check_audit_ownership(audit, current_user, db, "update")
     
     # Use storage service for secure file handling
     storage_service = StorageService()
@@ -370,7 +632,8 @@ async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Ses
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="File upload failed")
+        logger.error(f"File upload failed for audit {audit_id}: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload failed")
     
     attachment = AuditAttachment(
         audit_id=audit_id,
@@ -391,7 +654,15 @@ async def upload_attachment(audit_id: int, file: UploadFile = File(...), db: Ses
 async def download_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     att = db.query(AuditAttachment).get(attachment_id)
     if not att:
-        raise HTTPException(status_code=404, detail="Attachment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    
+    # Get the audit to check ownership
+    audit = db.query(AuditModel).get(att.audit_id)
+    if not audit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for download access
+    check_audit_ownership(audit, current_user, db, "view")
     
     # Use storage service for secure file download
     storage_service = StorageService()
@@ -402,7 +673,15 @@ async def download_attachment(attachment_id: int, db: Session = Depends(get_db),
 async def delete_attachment(attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     att = db.query(AuditAttachment).get(attachment_id)
     if not att:
-        raise HTTPException(status_code=404, detail="Attachment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    
+    # Get the audit to check ownership
+    audit = db.query(AuditModel).get(att.audit_id)
+    if not audit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for delete access
+    check_audit_ownership(audit, current_user, db, "delete")
     
     # Use storage service to delete the file
     storage_service = StorageService()
@@ -858,7 +1137,11 @@ async def export_audit_report(
 async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for view access
+    check_audit_ownership(audit, current_user, db, "view")
+    
     return db.query(AuditAuditee).filter(AuditAuditee.audit_id == audit_id).order_by(AuditAuditee.added_at.desc()).all()
 
 
@@ -866,7 +1149,11 @@ async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_us
 async def add_auditee(audit_id: int, user_id: int = Query(...), role: Optional[str] = Query(None), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     audit = db.query(AuditModel).get(audit_id)
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for update access
+    check_audit_ownership(audit, current_user, db, "update")
+    
     aa = AuditAuditee(audit_id=audit_id, user_id=user_id, role=role)
     db.add(aa)
     db.commit()
@@ -882,7 +1169,16 @@ async def add_auditee(audit_id: int, user_id: int = Query(...), role: Optional[s
 async def remove_auditee(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     aa = db.query(AuditAuditee).get(id)
     if not aa:
-        raise HTTPException(status_code=404, detail="Auditee not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Auditee not found")
+    
+    # Get the audit to check ownership
+    audit = db.query(AuditModel).get(aa.audit_id)
+    if not audit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+    
+    # Check ownership for delete access
+    check_audit_ownership(audit, current_user, db, "delete")
+    
     audit_id = aa.audit_id
     db.delete(aa)
     db.commit()
@@ -903,7 +1199,11 @@ async def create_or_update_plan(
 ):
 	audit = db.query(AuditModel).get(audit_id)
 	if not audit:
-		raise HTTPException(status_code=404, detail="Audit not found")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+	
+	# Check ownership for update access
+	check_audit_ownership(audit, current_user, db, "update")
+	
 	plan = db.query(AuditPlan).filter(AuditPlan.audit_id == audit_id).first()
 	if plan is None:
 		plan = AuditPlan(audit_id=audit_id)
@@ -921,9 +1221,16 @@ async def approve_plan(
 	db: Session = Depends(get_db),
 	current_user: User = Depends(get_current_user)
 ):
+	audit = db.query(AuditModel).get(audit_id)
+	if not audit:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+	
+	# Check ownership for approve access (only lead auditor or program manager)
+	check_audit_ownership(audit, current_user, db, "update")
+	
 	plan = db.query(AuditPlan).filter(AuditPlan.audit_id == audit_id).first()
 	if not plan:
-		raise HTTPException(status_code=404, detail="Audit plan not found")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit plan not found")
 	plan.approved_by = current_user.id
 	plan.approved_at = datetime.utcnow()
 	db.commit()
@@ -937,9 +1244,16 @@ async def get_plan(
 	db: Session = Depends(get_db),
 	current_user: User = Depends(get_current_user)
 ):
+	audit = db.query(AuditModel).get(audit_id)
+	if not audit:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit not found")
+	
+	# Check ownership for view access
+	check_audit_ownership(audit, current_user, db, "view")
+	
 	plan = db.query(AuditPlan).filter(AuditPlan.audit_id == audit_id).first()
 	if not plan:
-		raise HTTPException(status_code=404, detail="Audit plan not found")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit plan not found")
 	return plan
 
 

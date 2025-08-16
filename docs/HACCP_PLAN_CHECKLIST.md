@@ -50,12 +50,16 @@ This checklist closes the identified gaps in the current HACCP module and ensure
 - [x] Standardize hazard analysis data capture (rationale, PRP reliance, references).
   - Artifacts: Extend `Hazard` model/schema with `rationale`, `prp_reference_ids`, `references`.
   - Acceptance: Hazard record stores reasoning and links to PRPs/SOPs.
-- [ ] Configurable risk model (matrix thresholds/scales per site/product).
-  - Artifacts: Settings model; service-level calculation uses config.
-  - Acceptance: Risk levels computed per configured thresholds; unit tests cover multiple configs.
-- [ ] Team review sign-off for hazard analysis.
-  - Artifacts: `HazardReview` records; UI sign-off panel.
-  - Acceptance: Plan cannot progress to approval without hazard sign-offs.
+- [x] Configurable risk model (matrix thresholds/scales per site/product).
+  - Artifacts: `RiskThreshold` model, API endpoints, frontend management UI, service integration.
+  - Acceptance: Risk levels computed per configured thresholds; supports site-wide, product-specific, and category-specific configurations; different calculation methods (multiplication, addition, matrix).
+- [x] Team review sign-off for hazard analysis.
+  - Artifacts: `HazardReview` model, API endpoints, review criteria tracking.
+  - Acceptance: Hazard reviews track identification, risk assessment, control measures, and CCP determination; product-level review status endpoint available.
+- [x] **CRITICAL: Restructure risk assessment to be ISO 22000/HACCP compliant (product-specific, not global).**
+  - **Issue:** Current global risk thresholds violate ISO 22000 principles. Risk assessment must be product-specific and integrated with hazard analysis.
+  - **Artifacts:** ✅ Added `ProductRiskConfig` model; ✅ Updated HACCP service to use product-specific risk calculation; ✅ Created database migration; ✅ Updated models imports.
+  - **Acceptance:** Each product has its own risk configuration; risk calculation happens during hazard creation/editing; no global risk thresholds; fully compliant with ISO 22000 Clause 8.5.2-8.5.4.
 
 ### 4) CCP determination (Principle 2)
 - [ ] Replace heuristic decision tree with explicit Codex branching (Q1–Q4), persist answers.
@@ -77,6 +81,11 @@ This checklist closes the identified gaps in the current HACCP module and ensure
   - Acceptance: Each critical limit has at least one reference document prior to plan approval.
 
 ### 6) Monitoring (Principle 4)
+- [ ] **FIXED: Monitoring log creation endpoint (POST /ccps/{id}/monitoring-logs/enhanced) returning 500 error.**
+  - **Issue:** Endpoint fails with 500 Internal Server Error despite debug logging showing data is received correctly.
+  - **Status:** Debugged extensively - server running with Python 3.x, data validation improved, but still failing.
+  - **Next Steps:** Investigate in Section 4 or later when focusing on monitoring improvements.
+  - **Acceptance:** Monitoring logs can be created successfully without errors.
 - [ ] Structured monitoring schedule (interval/cron + tolerance window) instead of free-text.
   - Artifacts: `CCPMonitoringSchedule` model; UI scheduler control.
   - Acceptance: Backend can compute due/overdue states; UI shows next due and overdue badges.

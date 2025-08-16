@@ -1,5 +1,5 @@
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any, Literal
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from enum import Enum
 
@@ -31,7 +31,104 @@ class DecisionTreeQuestion(str, Enum):
     Q4 = "Is this step specifically designed to eliminate or reduce the likely occurrence of the hazard to an acceptable level?"
 
 
-# Product Schemas
+# Risk Assessment Schemas
+class RiskThresholdCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    scope_type: str = Field(..., pattern="^(site|product|category)$")
+    scope_id: Optional[int] = None
+    low_threshold: int = Field(..., ge=1, le=25)
+    medium_threshold: int = Field(..., ge=1, le=25)
+    high_threshold: int = Field(..., ge=1, le=25)
+    likelihood_scale: int = Field(5, ge=1, le=10)
+    severity_scale: int = Field(5, ge=1, le=10)
+    calculation_method: str = Field("multiplication", pattern="^(multiplication|addition|matrix)$")
+
+    @field_validator('medium_threshold')
+    @classmethod
+    def validate_medium_threshold(cls, v, info):
+        if 'low_threshold' in info.data and v <= info.data['low_threshold']:
+            raise ValueError('medium_threshold must be greater than low_threshold')
+        return v
+
+    @field_validator('high_threshold')
+    @classmethod
+    def validate_high_threshold(cls, v, info):
+        if 'medium_threshold' in info.data and v <= info.data['medium_threshold']:
+            raise ValueError('high_threshold must be greater than medium_threshold')
+        return v
+
+
+class RiskThresholdUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    low_threshold: Optional[int] = Field(None, ge=1, le=25)
+    medium_threshold: Optional[int] = Field(None, ge=1, le=25)
+    high_threshold: Optional[int] = Field(None, ge=1, le=25)
+    likelihood_scale: Optional[int] = Field(None, ge=1, le=10)
+    severity_scale: Optional[int] = Field(None, ge=1, le=10)
+    calculation_method: Optional[str] = Field(None, pattern="^(multiplication|addition|matrix)$")
+
+
+class RiskThresholdResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    scope_type: str
+    scope_id: Optional[int] = None
+    low_threshold: int
+    medium_threshold: int
+    high_threshold: int
+    likelihood_scale: int
+    severity_scale: int
+    calculation_method: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: int
+
+    model_config = {"from_attributes": True}
+
+
+# Hazard Review Schemas
+class HazardReviewCreate(BaseModel):
+    hazard_id: int
+    reviewer_id: int
+    review_status: str = Field("pending", pattern="^(pending|approved|rejected)$")
+    review_comments: Optional[str] = None
+    hazard_identification_adequate: bool
+    risk_assessment_appropriate: bool
+    control_measures_suitable: bool
+    ccp_determination_correct: bool
+
+
+class HazardReviewUpdate(BaseModel):
+    review_status: Optional[str] = Field(None, pattern="^(pending|approved|rejected)$")
+    review_comments: Optional[str] = None
+    hazard_identification_adequate: Optional[bool] = None
+    risk_assessment_appropriate: Optional[bool] = None
+    control_measures_suitable: Optional[bool] = None
+    ccp_determination_correct: Optional[bool] = None
+
+
+class HazardReviewResponse(BaseModel):
+    id: int
+    hazard_id: int
+    reviewer_id: int
+    review_status: str
+    review_comments: Optional[str] = None
+    review_date: Optional[datetime] = None
+    hazard_identification_adequate: bool
+    risk_assessment_appropriate: bool
+    control_measures_suitable: bool
+    ccp_determination_correct: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    reviewer_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+# Product Management Schemas
 class ProductCreate(BaseModel):
     product_code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
@@ -445,3 +542,97 @@ class HACCPReportResponse(BaseModel):
     report_url: str
     generated_at: datetime
     file_size: Optional[int] = None 
+
+# Product Risk Configuration Schemas (ISO 22000 compliant)
+class ProductRiskConfigCreate(BaseModel):
+    calculation_method: Literal["multiplication", "addition", "matrix"] = "multiplication"
+    likelihood_scale: int = Field(ge=1, le=10, default=5)
+    severity_scale: int = Field(ge=1, le=10, default=5)
+    low_threshold: int = Field(ge=1, default=4)
+    medium_threshold: int = Field(ge=1, default=8)
+    high_threshold: int = Field(ge=1, default=15)
+    
+    @field_validator('medium_threshold')
+    @classmethod
+    def validate_threshold_order(cls, v, values):
+        if 'low_threshold' in values.data and v <= values.data['low_threshold']:
+            raise ValueError('medium_threshold must be greater than low_threshold')
+        return v
+    
+    @field_validator('high_threshold')
+    @classmethod
+    def validate_high_threshold(cls, v, values):
+        if 'medium_threshold' in values.data and v <= values.data['medium_threshold']:
+            raise ValueError('high_threshold must be greater than medium_threshold')
+        return v
+
+class ProductRiskConfigUpdate(BaseModel):
+    calculation_method: Optional[Literal["multiplication", "addition", "matrix"]] = None
+    likelihood_scale: Optional[int] = Field(None, ge=1, le=10)
+    severity_scale: Optional[int] = Field(None, ge=1, le=10)
+    low_threshold: Optional[int] = Field(None, ge=1)
+    medium_threshold: Optional[int] = Field(None, ge=1)
+    high_threshold: Optional[int] = Field(None, ge=1)
+
+class ProductRiskConfigResponse(BaseModel):
+    id: int
+    product_id: int
+    calculation_method: str
+    likelihood_scale: int
+    severity_scale: int
+    low_threshold: int
+    medium_threshold: int
+    high_threshold: int
+    created_at: datetime
+    created_by: Optional[int] = None
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True # Product Risk Configuration Schemas (ISO 22000 compliant)
+
+# Product Risk Configuration Schemas (ISO 22000 compliant)
+class ProductRiskConfigCreate(BaseModel):
+    calculation_method: Literal["multiplication", "addition", "matrix"] = "multiplication"
+    likelihood_scale: int = Field(ge=1, le=10, default=5)
+    severity_scale: int = Field(ge=1, le=10, default=5)
+    low_threshold: int = Field(ge=1, default=4)
+    medium_threshold: int = Field(ge=1, default=8)
+    high_threshold: int = Field(ge=1, default=15)
+    
+    @field_validator('medium_threshold')
+    @classmethod
+    def validate_threshold_order(cls, v, values):
+        if 'low_threshold' in values.data and v <= values.data['low_threshold']:
+            raise ValueError('medium_threshold must be greater than low_threshold')
+        return v
+    
+    @field_validator('high_threshold')
+    @classmethod
+    def validate_high_threshold(cls, v, values):
+        if 'medium_threshold' in values.data and v <= values.data['medium_threshold']:
+            raise ValueError('high_threshold must be greater than medium_threshold')
+        return v
+
+class ProductRiskConfigUpdate(BaseModel):
+    calculation_method: Optional[Literal["multiplication", "addition", "matrix"]] = None
+    likelihood_scale: Optional[int] = Field(None, ge=1, le=10)
+    severity_scale: Optional[int] = Field(None, ge=1, le=10)
+    low_threshold: Optional[int] = Field(None, ge=1)
+    medium_threshold: Optional[int] = Field(None, ge=1)
+    high_threshold: Optional[int] = Field(None, ge=1)
+
+class ProductRiskConfigResponse(BaseModel):
+    id: int
+    product_id: int
+    calculation_method: str
+    likelihood_scale: int
+    severity_scale: int
+    low_threshold: int
+    medium_threshold: int
+    high_threshold: int
+    created_at: datetime
+    created_by: Optional[int] = None
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
