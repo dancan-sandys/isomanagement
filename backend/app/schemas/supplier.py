@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, validator
+from pydantic import EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -42,7 +43,7 @@ class SupplierBase(BaseModel):
     name: str = Field(..., description="Supplier name")
     category: SupplierCategory
     contact_person: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     website: Optional[str] = None
     address_line1: Optional[str] = None
@@ -58,6 +59,16 @@ class SupplierBase(BaseModel):
     risk_level: str = Field(default="low", description="low, medium, high")
     notes: Optional[str] = None
 
+    @validator('phone')
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return v
+        import re
+        pattern = re.compile(r'^[+]?[\d\s\-()]{7,20}$')
+        if not pattern.match(v):
+            raise ValueError("Invalid phone format. Use +, digits, spaces, dashes, parentheses (7-20 chars)")
+        return v
+
 
 class SupplierCreate(SupplierBase):
     pass
@@ -69,7 +80,7 @@ class SupplierUpdate(BaseModel):
     status: Optional[SupplierStatus] = None
     category: Optional[SupplierCategory] = None
     contact_person: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     website: Optional[str] = None
     address_line1: Optional[str] = None
@@ -226,7 +237,7 @@ class IncomingDeliveryBase(BaseModel):
     delivery_number: str = Field(..., description="Unique delivery number")
     delivery_date: datetime
     expected_delivery_date: Optional[datetime] = None
-    quantity_received: float = Field(..., alias="quantity")
+    quantity_received: float = Field(..., alias="quantity", gt=0)
     unit: Optional[str] = None
     batch_number: Optional[str] = None
     lot_number: Optional[str] = None
@@ -247,7 +258,7 @@ class IncomingDeliveryUpdate(BaseModel):
     delivery_number: Optional[str] = None
     delivery_date: Optional[datetime] = None
     expected_delivery_date: Optional[datetime] = None
-    quantity_received: Optional[float] = Field(None, alias="quantity")
+    quantity_received: Optional[float] = Field(None, alias="quantity", gt=0)
     unit: Optional[str] = None
     batch_number: Optional[str] = None
     lot_number: Optional[str] = None
@@ -309,6 +320,14 @@ class SupplierDocumentUpdate(BaseModel):
     issuing_authority: Optional[str] = None
     is_valid: Optional[bool] = None
     is_verified: Optional[bool] = None
+
+    @validator('expiry_date')
+    def validate_dates(cls, v: Optional[datetime], values: Dict[str, Any]) -> Optional[datetime]:
+        # If both issue and expiry are present, ensure expiry >= issue
+        issue = values.get('issue_date')
+        if v and issue and v < issue:
+            raise ValueError('expiry_date cannot be earlier than issue_date')
+        return v
 
 
 class SupplierDocumentResponse(SupplierDocumentBase):
