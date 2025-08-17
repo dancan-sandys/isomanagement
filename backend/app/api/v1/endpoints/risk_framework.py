@@ -7,6 +7,15 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_permission
 from app.models.user import User
 from app.schemas.common import ResponseModel
+from app.schemas.risk import (
+    RiskManagementFrameworkCreate, RiskManagementFrameworkUpdate, RiskManagementFrameworkResponse,
+    RiskContextCreate, RiskContextUpdate, RiskContextResponse,
+    FSMSRiskIntegrationCreate, FSMSRiskIntegrationResponse,
+    RiskAssessmentCreate, RiskAssessmentResponse,
+    RiskTreatmentCreate, RiskTreatmentResponse,
+    RiskDashboardData, RiskAnalyticsFilter,
+    RiskKPICreate, RiskKPIResponse
+)
 from app.services.risk_management_service import RiskManagementService
 from app.utils.audit import audit_event
 
@@ -53,16 +62,16 @@ async def get_risk_framework(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve framework: {str(e)}")
 
 
-@router.post("/framework")
+@router.post("/framework", response_model=ResponseModel)
 async def create_risk_framework(
-    framework_data: dict,
+    framework_data: RiskManagementFrameworkCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create or update the risk management framework"""
     try:
         service = RiskManagementService(db)
-        framework = service.create_framework(framework_data)
+        framework = service.create_framework(framework_data.model_dump())
         
         try:
             audit_event(db, current_user.id, "risk_framework_created", "risk_framework", str(framework.id))
@@ -72,7 +81,7 @@ async def create_risk_framework(
         return ResponseModel(
             success=True,
             message="Risk management framework created/updated",
-            data={"id": framework.id}
+            data=RiskManagementFrameworkResponse.model_validate(framework)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create framework: {str(e)}")
@@ -114,7 +123,11 @@ async def get_risk_matrix(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve risk matrix: {str(e)}")
 
 
-@router.get("/context")
+# ============================================================================
+# RISK CONTEXT MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/context", response_model=ResponseModel)
 async def get_risk_context(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -132,35 +145,22 @@ async def get_risk_context(
         return ResponseModel(
             success=True,
             message="Risk context retrieved",
-            data={
-                "id": context.id,
-                "organizational_context": context.organizational_context,
-                "external_context": context.external_context,
-                "internal_context": context.internal_context,
-                "risk_management_context": context.risk_management_context,
-                "stakeholder_analysis": context.stakeholder_analysis,
-                "risk_criteria": context.risk_criteria,
-                "review_frequency": context.review_frequency,
-                "last_review_date": context.last_review_date,
-                "next_review_date": context.next_review_date,
-                "created_at": context.created_at,
-                "updated_at": context.updated_at
-            }
+            data=RiskContextResponse.model_validate(context)
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve risk context: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve context: {str(e)}")
 
 
-@router.post("/context")
+@router.post("/context", response_model=ResponseModel)
 async def create_risk_context(
-    context_data: dict,
+    context_data: RiskContextCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create or update the risk context"""
     try:
         service = RiskManagementService(db)
-        context = service.create_risk_context(context_data)
+        context = service.create_risk_context(context_data.model_dump())
         
         try:
             audit_event(db, current_user.id, "risk_context_created", "risk_context", str(context.id))
@@ -170,242 +170,42 @@ async def create_risk_context(
         return ResponseModel(
             success=True,
             message="Risk context created/updated",
-            data={"id": context.id}
+            data=RiskContextResponse.model_validate(context)
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create risk context: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create context: {str(e)}")
 
 
-@router.post("/{risk_id}/assess")
-async def assess_risk(
-    risk_id: int,
-    assessment_data: dict,
+# ============================================================================
+# FSMS INTEGRATION ENDPOINTS
+# ============================================================================
+
+@router.post("/fsms-integration", response_model=ResponseModel)
+async def create_fsms_integration(
+    integration_data: FSMSRiskIntegrationCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Perform comprehensive risk assessment"""
+    """Create FSMS risk integration"""
     try:
         service = RiskManagementService(db)
-        assessment_data["assessor_id"] = current_user.id
-        risk = service.assess_risk(risk_id, assessment_data)
+        integration = service.create_fsms_integration(integration_data.model_dump(), current_user.id)
         
         try:
-            audit_event(db, current_user.id, "risk_assessed", "risk", str(risk_id))
+            audit_event(db, current_user.id, "fsms_integration_created", "fsms_integration", str(integration.id))
         except Exception:
             pass
             
         return ResponseModel(
             success=True,
-            message="Risk assessment completed",
-            data={
-                "risk_id": risk.id,
-                "risk_score": risk.risk_score,
-                "residual_risk_score": risk.residual_risk_score,
-                "residual_risk_level": risk.residual_risk_level,
-                "next_monitoring_date": risk.next_monitoring_date,
-                "next_review_date": risk.next_review_date
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to assess risk: {str(e)}")
-
-
-@router.post("/{risk_id}/treat")
-async def plan_risk_treatment(
-    risk_id: int,
-    treatment_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Plan comprehensive risk treatment"""
-    try:
-        service = RiskManagementService(db)
-        treatment_data["approver_id"] = current_user.id
-        risk = service.plan_risk_treatment(risk_id, treatment_data)
-        
-        try:
-            audit_event(db, current_user.id, "risk_treatment_planned", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk treatment planned",
-            data={
-                "risk_id": risk.id,
-                "treatment_strategy": risk.risk_treatment_strategy,
-                "treatment_approved": risk.risk_treatment_approved
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to plan treatment: {str(e)}")
-
-
-@router.post("/{risk_id}/treat/approve")
-async def approve_risk_treatment(
-    risk_id: int,
-    approval_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Approve risk treatment plan"""
-    try:
-        service = RiskManagementService(db)
-        risk = service.approve_risk_treatment(
-            risk_id, 
-            current_user.id, 
-            approval_data.get("approval_notes")
-        )
-        
-        try:
-            audit_event(db, current_user.id, "risk_treatment_approved", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk treatment approved",
-            data={
-                "risk_id": risk.id,
-                "treatment_approved": risk.risk_treatment_approved,
-                "approval_date": risk.risk_treatment_approval_date
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to approve treatment: {str(e)}")
-
-
-@router.post("/{risk_id}/monitor")
-async def schedule_monitoring(
-    risk_id: int,
-    monitoring_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Schedule risk monitoring"""
-    try:
-        service = RiskManagementService(db)
-        risk = service.schedule_monitoring(risk_id, monitoring_data)
-        
-        try:
-            audit_event(db, current_user.id, "risk_monitoring_scheduled", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk monitoring scheduled",
-            data={
-                "risk_id": risk.id,
-                "monitoring_frequency": risk.monitoring_frequency,
-                "next_monitoring_date": risk.next_monitoring_date
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to schedule monitoring: {str(e)}")
-
-
-@router.post("/{risk_id}/review")
-async def schedule_review(
-    risk_id: int,
-    review_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Schedule risk review"""
-    try:
-        service = RiskManagementService(db)
-        risk = service.schedule_review(risk_id, review_data)
-        
-        try:
-            audit_event(db, current_user.id, "risk_review_scheduled", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk review scheduled",
-            data={
-                "risk_id": risk.id,
-                "review_frequency": risk.review_frequency,
-                "next_review_date": risk.next_review_date
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to schedule review: {str(e)}")
-
-
-@router.post("/{risk_id}/review/conduct")
-async def conduct_review(
-    risk_id: int,
-    review_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Conduct risk review"""
-    try:
-        service = RiskManagementService(db)
-        risk = service.conduct_review(risk_id, review_data)
-        
-        try:
-            audit_event(db, current_user.id, "risk_review_conducted", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk review conducted",
-            data={
-                "risk_id": risk.id,
-                "last_review_date": risk.last_review_date,
-                "next_review_date": risk.next_review_date,
-                "review_outcome": risk.review_outcome
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to conduct review: {str(e)}")
-
-
-@router.post("/{risk_id}/fsms/integrate")
-async def integrate_with_fsms(
-    risk_id: int,
-    fsms_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Integrate risk with FSMS elements"""
-    try:
-        service = RiskManagementService(db)
-        fsms_data["integrated_by"] = current_user.id
-        integration = service.integrate_with_fsms(risk_id, fsms_data)
-        
-        try:
-            audit_event(db, current_user.id, "risk_fsms_integrated", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk integrated with FSMS",
-            data={"integration_id": integration.id}
+            message="FSMS integration created",
+            data=FSMSRiskIntegrationResponse.model_validate(integration)
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to integrate with FSMS: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create integration: {str(e)}")
 
 
-@router.get("/{risk_id}/fsms/integrations")
+@router.get("/fsms-integration/{risk_id}", response_model=ResponseModel)
 async def get_fsms_integrations(
     risk_id: int,
     current_user: User = Depends(get_current_user),
@@ -418,193 +218,313 @@ async def get_fsms_integrations(
         return ResponseModel(
             success=True,
             message="FSMS integrations retrieved",
-            data=[{
-                "id": integration.id,
-                "fsms_element": integration.fsms_element,
-                "fsms_element_id": integration.fsms_element_id,
-                "impact_on_fsms": integration.impact_on_fsms,
-                "integration_date": integration.integration_date
-            } for integration in integrations]
+            data=[FSMSRiskIntegrationResponse.model_validate(i) for i in integrations]
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve FSMS integrations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve integrations: {str(e)}")
 
 
-@router.post("/{risk_id}/correlate")
-async def correlate_risks(
-    risk_id: int,
-    correlation_data: dict,
+@router.post("/integrate/haccp-hazard/{hazard_id}", response_model=ResponseModel)
+async def create_risk_from_haccp_hazard(
+    hazard_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create risk correlation"""
+    """Create risk from HACCP hazard"""
     try:
         service = RiskManagementService(db)
-        correlated_risk_id = correlation_data.get("correlated_risk_id")
-        if not correlated_risk_id:
-            raise HTTPException(status_code=400, detail="correlated_risk_id is required")
-            
-        correlation_data["identified_by"] = current_user.id
-        correlation = service.correlate_risks(risk_id, correlated_risk_id, correlation_data)
+        risk = service.create_risk_from_haccp_hazard(hazard_id, current_user.id)
         
         try:
-            audit_event(db, current_user.id, "risk_correlation_created", "risk", str(risk_id))
+            audit_event(db, current_user.id, "risk_from_hazard_created", "risk", str(risk.id))
         except Exception:
             pass
             
         return ResponseModel(
             success=True,
-            message="Risk correlation created",
-            data={"correlation_id": correlation.id}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create correlation: {str(e)}")
-
-
-@router.get("/{risk_id}/correlations")
-async def get_risk_correlations(
-    risk_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get correlations for a risk"""
-    try:
-        service = RiskManagementService(db)
-        correlations = service.get_risk_correlations(risk_id)
-        return ResponseModel(
-            success=True,
-            message="Risk correlations retrieved",
-            data=[{
-                "id": correlation.id,
-                "primary_risk_id": correlation.primary_risk_id,
-                "correlated_risk_id": correlation.correlated_risk_id,
-                "correlation_type": correlation.correlation_type,
-                "correlation_strength": correlation.correlation_strength,
-                "correlation_date": correlation.correlation_date
-            } for correlation in correlations]
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve correlations: {str(e)}")
-
-
-@router.post("/{risk_id}/resources/allocate")
-async def allocate_resources(
-    risk_id: int,
-    allocation_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Allocate resources to risk treatment"""
-    try:
-        service = RiskManagementService(db)
-        allocation_data["approver_id"] = current_user.id
-        allocation = service.allocate_resources(risk_id, allocation_data)
-        
-        try:
-            audit_event(db, current_user.id, "risk_resources_allocated", "risk", str(risk_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Resources allocated",
-            data={"allocation_id": allocation.id}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to allocate resources: {str(e)}")
-
-
-@router.post("/resources/{allocation_id}/approve")
-async def approve_resource_allocation(
-    allocation_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Approve resource allocation"""
-    try:
-        service = RiskManagementService(db)
-        allocation = service.approve_resource_allocation(allocation_id, current_user.id)
-        
-        try:
-            audit_event(db, current_user.id, "risk_resource_allocation_approved", "risk_allocation", str(allocation_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Resource allocation approved",
-            data={"allocation_id": allocation.id}
+            message="Risk created from HACCP hazard",
+            data={"risk_id": risk.id, "risk_number": risk.risk_number}
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to approve allocation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create risk from hazard: {str(e)}")
 
 
-@router.post("/{risk_id}/communicate")
-async def create_communication(
-    risk_id: int,
-    communication_data: dict,
+@router.post("/integrate/prp-nonconformance/{prp_id}", response_model=ResponseModel)
+async def create_risk_from_prp_nonconformance(
+    prp_id: int,
+    nonconformance_data: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create risk communication"""
+    """Create risk from PRP non-conformance"""
     try:
+        nonconformance_description = nonconformance_data.get("description", "PRP non-conformance identified")
         service = RiskManagementService(db)
-        communication_data["sent_by"] = current_user.id
-        communication = service.create_communication(risk_id, communication_data)
+        risk = service.create_risk_from_prp_nonconformance(prp_id, nonconformance_description, current_user.id)
         
         try:
-            audit_event(db, current_user.id, "risk_communication_created", "risk", str(risk_id))
+            audit_event(db, current_user.id, "risk_from_prp_created", "risk", str(risk.id))
         except Exception:
             pass
             
         return ResponseModel(
             success=True,
-            message="Risk communication created",
-            data={"communication_id": communication.id}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create communication: {str(e)}")
-
-
-@router.post("/communications/{communication_id}/send")
-async def send_communication(
-    communication_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Send risk communication"""
-    try:
-        service = RiskManagementService(db)
-        communication = service.send_communication(communication_id)
-        
-        try:
-            audit_event(db, current_user.id, "risk_communication_sent", "risk_communication", str(communication_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="Risk communication sent",
-            data={"communication_id": communication.id}
+            message="Risk created from PRP non-conformance",
+            data={"risk_id": risk.id, "risk_number": risk.risk_number}
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send communication: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create risk from PRP: {str(e)}")
 
 
-@router.post("/kpis")
-async def create_kpi(
-    kpi_data: dict,
+@router.post("/integrate/supplier-evaluation/{supplier_id}", response_model=ResponseModel)
+async def create_risk_from_supplier_evaluation(
+    supplier_id: int,
+    evaluation_data: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create risk KPI"""
+    """Create risk from supplier evaluation"""
+    try:
+        evaluation_findings = evaluation_data.get("findings", "Supplier evaluation findings identified")
+        service = RiskManagementService(db)
+        risk = service.create_risk_from_supplier_evaluation(supplier_id, evaluation_findings, current_user.id)
+        
+        try:
+            audit_event(db, current_user.id, "risk_from_supplier_created", "risk", str(risk.id))
+        except Exception:
+            pass
+            
+        return ResponseModel(
+            success=True,
+            message="Risk created from supplier evaluation",
+            data={"risk_id": risk.id, "risk_number": risk.risk_number}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create risk from supplier: {str(e)}")
+
+
+@router.post("/integrate/audit-finding/{finding_id}", response_model=ResponseModel)
+async def create_risk_from_audit_finding(
+    finding_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create risk from audit finding"""
     try:
         service = RiskManagementService(db)
-        kpi = service.create_kpi(kpi_data)
+        risk = service.create_risk_from_audit_finding(finding_id, current_user.id)
+        
+        try:
+            audit_event(db, current_user.id, "risk_from_audit_created", "risk", str(risk.id))
+        except Exception:
+            pass
+            
+        return ResponseModel(
+            success=True,
+            message="Risk created from audit finding",
+            data={"risk_id": risk.id, "risk_number": risk.risk_number}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create risk from audit: {str(e)}")
+
+
+@router.post("/integrate/audit-opportunity/{finding_id}", response_model=ResponseModel)
+async def create_opportunity_from_audit_finding(
+    finding_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create opportunity from audit finding"""
+    try:
+        service = RiskManagementService(db)
+        opportunity = service.create_opportunity_from_audit_finding(finding_id, current_user.id)
+        
+        try:
+            audit_event(db, current_user.id, "opportunity_from_audit_created", "risk", str(opportunity.id))
+        except Exception:
+            pass
+            
+        return ResponseModel(
+            success=True,
+            message="Opportunity created from audit finding",
+            data={"opportunity_id": opportunity.id, "risk_number": opportunity.risk_number}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create opportunity from audit: {str(e)}")
+
+
+# ============================================================================
+# RISK ASSESSMENT AND TREATMENT ENDPOINTS
+# ============================================================================
+
+@router.post("/assess", response_model=ResponseModel)
+async def assess_risk(
+    assessment_data: RiskAssessmentCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Conduct risk assessment"""
+    try:
+        service = RiskManagementService(db)
+        assessment_data_dict = assessment_data.model_dump()
+        assessment_data_dict['assessor_id'] = current_user.id
+        risk = service.assess_risk(assessment_data.risk_id, assessment_data_dict)
+        
+        try:
+            audit_event(db, current_user.id, "risk_assessed", "risk", str(assessment_data.risk_id))
+        except Exception:
+            pass
+            
+        return ResponseModel(
+            success=True,
+            message="Risk assessment completed",
+            data=RiskAssessmentResponse.model_validate(risk)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to assess risk: {str(e)}")
+
+
+@router.post("/treat", response_model=ResponseModel)
+async def plan_risk_treatment(
+    treatment_data: RiskTreatmentCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Plan risk treatment"""
+    try:
+        service = RiskManagementService(db)
+        risk = service.plan_risk_treatment(treatment_data.risk_id, treatment_data.model_dump())
+        
+        try:
+            audit_event(db, current_user.id, "risk_treatment_planned", "risk", str(treatment_data.risk_id))
+        except Exception:
+            pass
+            
+        return ResponseModel(
+            success=True,
+            message="Risk treatment planned",
+            data=RiskTreatmentResponse.model_validate(risk)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to plan treatment: {str(e)}")
+
+
+# ============================================================================
+# RISK ANALYTICS AND REPORTING ENDPOINTS
+# ============================================================================
+
+@router.get("/analytics", response_model=ResponseModel)
+async def get_risk_analytics(
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    category: Optional[str] = None,
+    severity: Optional[str] = None,
+    status: Optional[str] = None,
+    include_opportunities: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get comprehensive risk analytics"""
+    try:
+        service = RiskManagementService(db)
+        filters = RiskAnalyticsFilter(
+            date_from=date_from,
+            date_to=date_to,
+            category=category,
+            severity=severity,
+            status=status,
+            include_opportunities=include_opportunities
+        )
+        analytics = service.get_risk_analytics(filters)
+        return ResponseModel(
+            success=True,
+            message="Risk analytics retrieved",
+            data=analytics
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve analytics: {str(e)}")
+
+
+@router.get("/trends", response_model=ResponseModel)
+async def get_risk_trends(
+    period: str = Query("monthly", description="Trend period: weekly, monthly, quarterly"),
+    periods_back: int = Query(12, description="Number of periods to include"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get risk trends analysis"""
+    try:
+        service = RiskManagementService(db)
+        trends = service.get_risk_trends(period, periods_back)
+        return ResponseModel(
+            success=True,
+            message="Risk trends retrieved",
+            data=trends
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve trends: {str(e)}")
+
+
+@router.get("/performance", response_model=ResponseModel)
+async def get_risk_performance(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get risk management performance metrics"""
+    try:
+        service = RiskManagementService(db)
+        performance = service.get_risk_performance()
+        return ResponseModel(
+            success=True,
+            message="Risk performance metrics retrieved",
+            data=performance
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve performance: {str(e)}")
+
+
+@router.get("/compliance-status", response_model=ResponseModel)
+async def get_compliance_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get ISO compliance status"""
+    try:
+        service = RiskManagementService(db)
+        compliance = service.get_compliance_status()
+        return ResponseModel(
+            success=True,
+            message="Compliance status retrieved",
+            data=compliance
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve compliance status: {str(e)}")
+
+
+# ============================================================================
+# ENHANCED KPI ENDPOINTS
+# ============================================================================
+
+@router.post("/kpis", response_model=ResponseModel)
+async def create_kpi_enhanced(
+    kpi_data: RiskKPICreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create risk KPI with proper validation"""
+    try:
+        service = RiskManagementService(db)
+        kpi = service.create_kpi(kpi_data.model_dump())
         
         try:
             audit_event(db, current_user.id, "risk_kpi_created", "risk_kpi", str(kpi.id))
@@ -614,71 +534,26 @@ async def create_kpi(
         return ResponseModel(
             success=True,
             message="Risk KPI created",
-            data={"kpi_id": kpi.id}
+            data=RiskKPIResponse.model_validate(kpi)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create KPI: {str(e)}")
 
 
-@router.put("/kpis/{kpi_id}/value")
-async def update_kpi_value(
-    kpi_id: int,
-    value_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Update KPI current value"""
-    try:
-        service = RiskManagementService(db)
-        new_value = value_data.get("value")
-        if new_value is None:
-            raise HTTPException(status_code=400, detail="value is required")
-            
-        kpi = service.update_kpi_value(kpi_id, new_value)
-        
-        try:
-            audit_event(db, current_user.id, "risk_kpi_updated", "risk_kpi", str(kpi_id))
-        except Exception:
-            pass
-            
-        return ResponseModel(
-            success=True,
-            message="KPI value updated",
-            data={
-                "kpi_id": kpi.id,
-                "current_value": kpi.kpi_current_value,
-                "last_updated": kpi.last_updated
-            }
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update KPI: {str(e)}")
-
-
-@router.get("/kpis")
-async def get_kpis(
+@router.get("/kpis", response_model=ResponseModel)
+async def get_kpis_enhanced(
     category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get KPIs, optionally filtered by category"""
+    """Get KPIs with enhanced response"""
     try:
         service = RiskManagementService(db)
         kpis = service.get_kpis(category)
         return ResponseModel(
             success=True,
             message="KPIs retrieved",
-            data=[{
-                "id": kpi.id,
-                "name": kpi.kpi_name,
-                "description": kpi.kpi_description,
-                "category": kpi.kpi_category,
-                "target": kpi.kpi_target,
-                "current_value": kpi.kpi_current_value,
-                "unit": kpi.kpi_unit,
-                "status": kpi.kpi_status
-            } for kpi in kpis]
+            data=[RiskKPIResponse.model_validate(kpi) for kpi in kpis]
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve KPIs: {str(e)}")
