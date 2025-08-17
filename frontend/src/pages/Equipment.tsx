@@ -34,6 +34,7 @@ import {
   LinearProgress,
   InputAdornment,
   FormHelperText,
+  Link,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,6 +52,7 @@ import {
   CalendarToday as CalendarIcon,
   LocationOn as LocationIcon,
   Settings as SettingsIcon,
+  Verified as VerifiedIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -396,6 +398,7 @@ const EquipmentPage: React.FC = () => {
                   <TableCell>Frequency (Days)</TableCell>
                   <TableCell>Last Maintenance</TableCell>
                   <TableCell>Next Due</TableCell>
+                  <TableCell>PRP</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -414,6 +417,13 @@ const EquipmentPage: React.FC = () => {
                     <TableCell>{plan.frequency_days}</TableCell>
                     <TableCell>{plan.last_maintenance_date || 'Never'}</TableCell>
                     <TableCell>{plan.next_due_date || 'Not scheduled'}</TableCell>
+                    <TableCell>
+                      {plan.prp_document_id ? (
+                        <Link href={`/documents/${plan.prp_document_id}`} underline="hover">Doc #{plan.prp_document_id}</Link>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={plan.status || 'Active'}
@@ -462,6 +472,7 @@ const EquipmentPage: React.FC = () => {
               <TableCell>Created</TableCell>
               <TableCell>Completed</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Verification</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -481,6 +492,13 @@ const EquipmentPage: React.FC = () => {
                         color={getWorkOrderStatusColor(!!wo.completed_at)}
                         size="small"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {wo.verified_at ? (
+                        <Chip icon={<VerifiedIcon />} label={`Verified ${new Date(wo.verified_at).toLocaleDateString()}`} color="success" size="small" />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
                     </TableCell>
                 <TableCell align="right">
                       {!wo.completed_at && (

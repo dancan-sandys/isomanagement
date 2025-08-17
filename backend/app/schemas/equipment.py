@@ -43,6 +43,7 @@ class MaintenancePlanResponse(BaseModel):
     last_maintenance_date: Optional[datetime] = None
     next_due_date: Optional[datetime] = None
     status: Optional[str] = None
+    prp_document_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -72,6 +73,8 @@ class MaintenanceWorkOrderResponse(BaseModel):
     assigned_to: Optional[int] = None
     due_date: Optional[datetime] = None
     created_by: Optional[int] = None
+    verified_by: Optional[int] = None
+    verified_at: Optional[datetime] = None
     # Enriched
     equipment_name: Optional[str] = None
 
