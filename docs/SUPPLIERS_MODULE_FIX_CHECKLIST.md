@@ -9,10 +9,10 @@ This checklist tracks the end-to-end fixes to stabilize and align the Suppliers 
   - [x] Remove duplicate alerts endpoint (`/alerts`)
   - [x] Remove duplicate supplier stats endpoint (`/stats`)
   - [x] Remove duplicate material stats endpoint (`/materials/stats`)
-- [ ] Standardize all endpoints to return `ResponseModel<T>` envelopes
+- [x] Standardize all endpoints to return `ResponseModel<T>` envelopes
   - [x] Wrap alerts/analytics/stats in `ResponseModel`
   - [x] Wrap document endpoints and add pagination envelope
-  - [ ] Wrap remaining delivery endpoints and COA upload
+  - [x] Wrap remaining delivery endpoints and COA upload
 
 ## 2) Materials Approvals and Bulk Actions
 - [x] Implement service methods in `SupplierService`
@@ -48,7 +48,7 @@ This checklist tracks the end-to-end fixes to stabilize and align the Suppliers 
   - [ ] (Optional) Migrate DB columns to JSON to eliminate conversions
 
 ## 6) Supplier Listings and Metrics
-- [ ] Compute `materials_count` per supplier via aggregate instead of hardcoded 0
+- [x] Compute `materials_count` per supplier via aggregate instead of hardcoded 0
 - [ ] Ensure dashboard stats match FE expectations and remain wrapped in `ResponseModel`
 
 ## 7) Alerts and Analytics
@@ -56,7 +56,7 @@ This checklist tracks the end-to-end fixes to stabilize and align the Suppliers 
 - [x] Keep analytics endpoints returning envelopes matching FE typings
 
 ## 8) Search Endpoint (Optional or Adjust FE)
-- [ ] Provide `/suppliers/search` (name/code/contact) OR align FE to use global `/search`
+- [x] Provide `/suppliers/search` (name/code/contact) OR align FE to use global `/search`
 
 ## 9) ISO Alignment Touchpoints (user-friendly, PRP/Traceability integration)
 - [x] COA enforcement for critical categories (raw milk, additives, cultures) is in place — extend/parametrize as needed

@@ -369,6 +369,26 @@ async def search_materials(
         data=results
     )
 
+@router.get("/search", response_model=ResponseModel[dict])
+async def search_suppliers(
+    query: str = Query(..., description="Search by name, code or contact"),
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = f"%{query}%"
+    rows = (
+        db.query(Supplier.id, Supplier.name, Supplier.supplier_code, Supplier.contact_person)
+        .filter(or_(Supplier.name.ilike(q), Supplier.supplier_code.ilike(q), Supplier.contact_person.ilike(q)))
+        .order_by(Supplier.name.asc())
+        .limit(limit)
+        .all()
+    )
+    items = [
+        {"id": r.id, "name": r.name, "supplier_code": r.supplier_code, "contact_person": r.contact_person}
+        for r in rows
+    ]
+    return ResponseModel(success=True, message="Suppliers search completed successfully", data={"items": items})
 
 # Analytics endpoints (must come before path parameter endpoints)
 @router.get("/analytics/performance", response_model=ResponseModel[dict])
@@ -1024,7 +1044,7 @@ async def inspect_delivery(
 
 
 # Delivery -> Batch linkage
-@router.post("/deliveries/{delivery_id}/create-batch", response_model=dict)
+@router.post("/deliveries/{delivery_id}/create-batch", response_model=ResponseModel[dict])
 async def create_batch_from_delivery(
     delivery_id: int,
     link_to_batch_id: Optional[int] = Query(None, description="If provided, create a traceability link to this target batch"),
@@ -1096,7 +1116,7 @@ async def create_batch_from_delivery(
         audit_event(db, current_user.id, "delivery_batch_created", "suppliers", str(delivery_id), {"batch_id": batch.id, "link_id": link_id})
     except Exception:
         pass
-    return {"batch_id": batch.id, "link_id": link_id}
+    return ResponseModel(success=True, message="Batch created from delivery", data={"batch_id": batch.id, "link_id": link_id})
 
 
 # Delivery endpoints
