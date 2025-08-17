@@ -34,7 +34,8 @@ async def get_dashboard_stats(
         total_documents = db.query(func.count(Document.id)).scalar() or 0
         # Also normalize document type counts to strings to avoid enum coercion errors downstream
         doc_type_counts = db.query(cast(Document.document_type, String), func.count(Document.id)).group_by(cast(Document.document_type, String)).all()
-        total_haccp_plans = db.query(func.count(Product.id)).scalar() or 0
+        total_products = db.query(func.count(Product.id)).scalar() or 0
+        total_haccp_plans = db.query(func.count(Product.id)).filter(Product.haccp_plan_approved == True).scalar() or 0
         total_prp_programs = db.query(func.count(PRPProgram.id)).scalar() or 0
         total_suppliers = db.query(func.count(Supplier.id)).scalar() or 0
         
@@ -85,6 +86,7 @@ async def get_dashboard_stats(
         
         stats = {
             "totalDocuments": total_documents,
+            "totalProducts": total_products,
             "totalHaccpPlans": total_haccp_plans,
             "totalPrpPrograms": total_prp_programs,
             "totalSuppliers": total_suppliers,

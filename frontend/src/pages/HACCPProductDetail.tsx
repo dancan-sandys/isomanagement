@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { Add, Edit, Delete, Help } from '@mui/icons-material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem, Card, CardContent, CardActions } from '@mui/material';
+import { Add, Edit, Delete, Help, Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, decisionTreeAPI } from '../services/api';
 import DecisionTreeDialog from '../components/DecisionTreeDialog';
@@ -49,6 +49,9 @@ const HACCPProductDetail: React.FC = () => {
     ccp_justification: '' 
   });
   const [ccpForm, setCcpForm] = useState({ hazard_id: '', ccp_number: '', ccp_name: '', description: '', critical_limit_min: '', critical_limit_max: '', critical_limit_unit: '', monitoring_frequency: '', monitoring_method: '', monitoring_responsible: '', monitoring_equipment: '', corrective_actions: '', verification_frequency: '', verification_method: '', verification_responsible: '' });
+
+  // Reference management state
+  const [referenceForm, setReferenceForm] = useState({ title: '', url: '', description: '', type: 'document' });
 
   const [userSearch, setUserSearch] = useState('');
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
@@ -178,7 +181,26 @@ const HACCPProductDetail: React.FC = () => {
   const handleTabChange = (_e: any, v: number) => setSelectedTab(v);
 
   const handleSaveFlow = async () => {
-    const payload: any = { step_number: flowForm.step_number === '' ? null : Number(flowForm.step_number), step_name: flowForm.step_name, description: flowForm.description, equipment: flowForm.equipment, temperature: flowForm.temperature === '' ? null : Number(flowForm.temperature), time_minutes: flowForm.time_minutes === '' ? null : Number(flowForm.time_minutes), ph: flowForm.ph === '' ? null : Number(flowForm.ph), aw: flowForm.aw === '' ? null : Number(flowForm.aw) };
+    // Validate required fields
+    if (!flowForm.step_number || flowForm.step_number === '') {
+      alert('Step number is required');
+      return;
+    }
+    if (!flowForm.step_name || flowForm.step_name.trim() === '') {
+      alert('Step name is required');
+      return;
+    }
+    
+    const payload: any = { 
+      step_number: Number(flowForm.step_number), 
+      step_name: flowForm.step_name.trim(), 
+      description: flowForm.description, 
+      equipment: flowForm.equipment, 
+      temperature: flowForm.temperature === '' ? null : Number(flowForm.temperature), 
+      time_minutes: flowForm.time_minutes === '' ? null : Number(flowForm.time_minutes), 
+      ph: flowForm.ph === '' ? null : Number(flowForm.ph), 
+      aw: flowForm.aw === '' ? null : Number(flowForm.aw) 
+    };
     try {
       if (selectedFlow) await dispatch(updateProcessFlow({ flowId: selectedFlow.id, flowData: payload })).unwrap();
       else await dispatch(createProcessFlow({ productId, flowData: payload })).unwrap();
@@ -217,6 +239,40 @@ const HACCPProductDetail: React.FC = () => {
       else await dispatch(createCCP({ productId, ccpData: payload })).unwrap();
       setCcpDialogOpen(false); setSelectedCcpItem(null); dispatch(fetchProduct(productId));
     } catch {}
+  };
+
+  // Reference management functions
+  const addReference = () => {
+    if (referenceForm.title.trim() && referenceForm.url.trim()) {
+      const newReference = {
+        id: Date.now(),
+        title: referenceForm.title.trim(),
+        url: referenceForm.url.trim(),
+        description: referenceForm.description.trim(),
+        type: referenceForm.type
+      };
+      setHazardForm(prev => ({
+        ...prev,
+        references: [...prev.references, newReference]
+      }));
+      setReferenceForm({ title: '', url: '', description: '', type: 'document' });
+    }
+  };
+
+  const removeReference = (index: number) => {
+    setHazardForm(prev => ({
+      ...prev,
+      references: prev.references.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateReference = (index: number, field: string, value: string) => {
+    setHazardForm(prev => ({
+      ...prev,
+      references: prev.references.map((ref, i) => 
+        i === index ? { ...ref, [field]: value } : ref
+      )
+    }));
   };
 
   const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string }>({});
@@ -585,7 +641,141 @@ const HACCPProductDetail: React.FC = () => {
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Rationale (Hazard Analysis)" value={hazardForm.rationale} onChange={(e) => setHazardForm({ ...hazardForm, rationale: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="PRP Reference IDs (comma-separated)" value={hazardForm.prp_reference_ids.join(', ')} onChange={(e) => setHazardForm({ ...hazardForm, prp_reference_ids: e.target.value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id)) })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="References (JSON format)" value={JSON.stringify(hazardForm.references)} onChange={(e) => { try { setHazardForm({ ...hazardForm, references: JSON.parse(e.target.value) }); } catch {} }} /></Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" gutterBottom>
+                References
+              </Typography>
+              <Box sx={{ mb: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Title"
+                      value={referenceForm.title}
+                      onChange={(e) => setReferenceForm({ ...referenceForm, title: e.target.value })}
+                      placeholder="Reference title"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="URL"
+                      value={referenceForm.url}
+                      onChange={(e) => setReferenceForm({ ...referenceForm, url: e.target.value })}
+                      placeholder="https://..."
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={2}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Type</InputLabel>
+                      <Select
+                        value={referenceForm.type}
+                        onChange={(e) => setReferenceForm({ ...referenceForm, type: e.target.value })}
+                        label="Type"
+                      >
+                        <MenuItem value="document">Document</MenuItem>
+                        <MenuItem value="website">Website</MenuItem>
+                        <MenuItem value="standard">Standard</MenuItem>
+                        <MenuItem value="regulation">Regulation</MenuItem>
+                        <MenuItem value="guideline">Guideline</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Description"
+                      value={referenceForm.description}
+                      onChange={(e) => setReferenceForm({ ...referenceForm, description: e.target.value })}
+                      placeholder="Brief description"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={1}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={addReference}
+                      disabled={!referenceForm.title.trim() || !referenceForm.url.trim()}
+                      sx={{ height: '40px', minWidth: '40px' }}
+                    >
+                      <AddIcon />
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Box>
+              
+              {/* Display existing references */}
+              {hazardForm.references.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Added References ({hazardForm.references.length})
+                  </Typography>
+                  {hazardForm.references.map((ref, index) => (
+                    <Card key={ref.id || index} sx={{ mb: 1, p: 1 }}>
+                      <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                        <Grid container spacing={1} alignItems="center">
+                          <Grid item xs={12} md={3}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Title"
+                              value={ref.title}
+                              onChange={(e) => updateReference(index, 'title', e.target.value)}
+                            />
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="URL"
+                              value={ref.url}
+                              onChange={(e) => updateReference(index, 'url', e.target.value)}
+                            />
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Type</InputLabel>
+                              <Select
+                                value={ref.type || 'document'}
+                                onChange={(e) => updateReference(index, 'type', e.target.value)}
+                                label="Type"
+                              >
+                                <MenuItem value="document">Document</MenuItem>
+                                <MenuItem value="website">Website</MenuItem>
+                                <MenuItem value="standard">Standard</MenuItem>
+                                <MenuItem value="regulation">Regulation</MenuItem>
+                                <MenuItem value="guideline">Guideline</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Description"
+                              value={ref.description || ''}
+                              onChange={(e) => updateReference(index, 'description', e.target.value)}
+                            />
+                          </Grid>
+                          <Grid item xs={12} md={1}>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => removeReference(index)}
+                            >
+                              <RemoveIcon />
+                            </IconButton>
+                          </Grid>
+                        </Grid>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </Grid>
             <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Likelihood" value={hazardForm.likelihood} onChange={(e) => setHazardForm({ ...hazardForm, likelihood: e.target.value })} /></Grid>
             <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Severity" value={hazardForm.severity} onChange={(e) => setHazardForm({ ...hazardForm, severity: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth label="Control Measures" value={hazardForm.control_measures} onChange={(e) => setHazardForm({ ...hazardForm, control_measures: e.target.value })} /></Grid>

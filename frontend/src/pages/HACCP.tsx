@@ -404,9 +404,20 @@ const HACCP: React.FC = () => {
 
   const handleSaveFlow = async () => {
     if (!selectedProduct) return;
+    
+    // Validate required fields
+    if (!flowForm.step_number || flowForm.step_number === '') {
+      alert('Step number is required');
+      return;
+    }
+    if (!flowForm.step_name || flowForm.step_name.trim() === '') {
+      alert('Step name is required');
+      return;
+    }
+    
     const payload: any = {
-      step_number: flowForm.step_number === '' ? null : Number(flowForm.step_number),
-      step_name: flowForm.step_name,
+      step_number: Number(flowForm.step_number),
+      step_name: flowForm.step_name.trim(),
       description: flowForm.description,
       equipment: flowForm.equipment,
       temperature: flowForm.temperature === '' ? null : Number(flowForm.temperature),

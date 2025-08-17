@@ -460,6 +460,25 @@ async def create_process_flow(
                 detail="Product not found"
             )
         
+        # Validate required fields
+        if not flow_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Request body cannot be empty. Required fields: step_number, step_name"
+            )
+        
+        if "step_number" not in flow_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required field: step_number"
+            )
+        
+        if "step_name" not in flow_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required field: step_name"
+            )
+        
         process_flow = ProcessFlow(
             product_id=product_id,
             step_number=flow_data["step_number"],

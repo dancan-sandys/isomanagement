@@ -25,6 +25,46 @@
   - [x] Confirmed `ccps` table has `critical_limits` JSON column
   - [x] Tested HACCP endpoints work correctly
 
+### Database Schema Issues - FIXED ✅
+- [x] **Fix missing risk assessment columns in database tables**
+  - [x] Fixed missing columns in `products` table (risk_assessment_required, risk_assessment_frequency, etc.)
+  - [x] Fixed missing columns in `ccps` table (critical_limits, validation_evidence, etc.)
+  - [x] Fixed missing columns in `process_flows` table (risk_assessment_required, risk_assessment_frequency, etc.)
+  - [x] Fixed missing columns in `ccp_monitoring_logs` table (batch_id, batch_number, equipment_id, log_metadata)
+  - [x] Fixed missing `rationale` column in `hazards` table
+  - [x] Created and ran database update scripts to add missing columns
+  - [x] Verified all database queries work correctly
+  - [x] Tested HACCP endpoints and document upload functionality
+  - [x] Tested HACCP dashboard endpoint works correctly
+  - [x] Verified process_flows table has all required columns for product deletion
+
+### Dashboard Statistics Issues - FIXED ✅
+- [x] **Fix dashboard showing 0 products count despite products being present**
+  - [x] Identified issue: main dashboard was incorrectly using `totalHaccpPlans` to count all products
+  - [x] Fixed dashboard statistics endpoint to correctly calculate `totalProducts` (all products) and `totalHaccpPlans` (only approved plans)
+  - [x] Updated response structure to include both `totalProducts` and `totalHaccpPlans` fields
+  - [x] Verified HACCP dashboard correctly displays total products count
+  - [x] Tested dashboard statistics endpoint returns correct data
+
+### API Validation Issues - FIXED ✅
+- [x] **Fix process flow creation endpoint validation**
+  - [x] Identified issue: API call sending empty JSON `{}` but endpoint requires `step_number` and `step_name`
+  - [x] Process flow creation endpoint expects required fields: `step_number` and `step_name`
+  - [x] Fixed frontend validation to ensure `step_number` and `step_name` are always provided
+  - [x] Added client-side validation to prevent empty/null values from being sent
+  - [x] Improved backend error messages to be more descriptive
+  - [x] Backend validation is working correctly - frontend now sends proper data structure
+
+### User Experience Improvements - FIXED ✅
+- [x] **Improve References field usability in Hazard forms**
+  - [x] Replaced JSON textarea with user-friendly form interface
+  - [x] Added structured input fields for Title, URL, Type, and Description
+  - [x] Implemented add/remove functionality for multiple references
+  - [x] Added reference type selection (Document, Website, Standard, Regulation, Guideline)
+  - [x] Created visual card-based interface for managing existing references
+  - [x] Added validation to ensure required fields (Title and URL) are provided
+  - [x] Improved user experience by eliminating need for manual JSON editing
+
 ### Remaining Critical Issues
 - [ ] **Fix missing `program_id` column in audits table**
   - [ ] Create database migration
