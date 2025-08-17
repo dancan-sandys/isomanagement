@@ -314,7 +314,7 @@ async def create_calibration_plan(
     current_user: User = Depends(get_current_user)
 ):
     svc = EquipmentService(db)
-    return svc.create_calibration_plan(equipment_id=equipment_id, schedule_date=payload.schedule_date, notes=payload.notes)
+    return svc.create_calibration_plan(equipment_id=equipment_id, schedule_date=payload.schedule_date, frequency_days=payload.frequency_days, notes=payload.notes)
 
 
 @router.get("/calibration-plans", response_model=list[CalibrationPlanResponse])

@@ -61,6 +61,7 @@ class CalibrationPlan(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=False)
+    frequency_days = Column(Integer, nullable=False, default=365)
     schedule_date = Column(DateTime(timezone=True), nullable=False)
     last_calibrated_at = Column(DateTime(timezone=True), nullable=True)
     next_due_at = Column(DateTime(timezone=True), nullable=True)

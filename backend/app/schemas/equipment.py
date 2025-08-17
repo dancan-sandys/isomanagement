@@ -71,6 +71,7 @@ class MaintenanceWorkOrderResponse(BaseModel):
 
 class CalibrationPlanCreate(BaseModel):
     schedule_date: datetime
+    frequency_days: int
     notes: Optional[str] = None
 
 
@@ -78,6 +79,7 @@ class CalibrationPlanResponse(BaseModel):
     id: int
     equipment_id: int
     schedule_date: datetime
+    frequency_days: int
     last_calibrated_at: Optional[datetime] = None
     next_due_at: Optional[datetime] = None
     active: bool
@@ -129,6 +131,7 @@ class MaintenanceWorkOrderUpdate(BaseModel):
 
 class CalibrationPlanUpdate(BaseModel):
     schedule_date: Optional[datetime] = None
+    frequency_days: Optional[int] = None
     notes: Optional[str] = None
     active: Optional[bool] = None
 

@@ -154,8 +154,8 @@ class EquipmentService:
         return q.order_by(MaintenanceWorkOrder.created_at.desc()).all()
 
     # Calibration
-    def create_calibration_plan(self, *, equipment_id: int, schedule_date: datetime, notes: Optional[str]) -> CalibrationPlan:
-        plan = CalibrationPlan(equipment_id=equipment_id, schedule_date=schedule_date, next_due_at=schedule_date, notes=notes)
+    def create_calibration_plan(self, *, equipment_id: int, schedule_date: datetime, frequency_days: int, notes: Optional[str]) -> CalibrationPlan:
+        plan = CalibrationPlan(equipment_id=equipment_id, schedule_date=schedule_date, frequency_days=frequency_days, next_due_at=schedule_date, notes=notes)
         self.db.add(plan)
         self.db.commit()
         self.db.refresh(plan)
@@ -167,15 +167,19 @@ class EquipmentService:
             q = q.filter(CalibrationPlan.equipment_id == equipment_id)
         return q.order_by(CalibrationPlan.next_due_at.asc().nulls_last()).all()
 
-    def update_calibration_plan(self, plan_id: int, *, schedule_date: Optional[datetime] = None, notes: Optional[str] = None, active: Optional[bool] = None) -> Optional[CalibrationPlan]:
+    def update_calibration_plan(self, plan_id: int, *, schedule_date: Optional[datetime] = None, frequency_days: Optional[int] = None, notes: Optional[str] = None, active: Optional[bool] = None) -> Optional[CalibrationPlan]:
         plan = self.db.query(CalibrationPlan).filter(CalibrationPlan.id == plan_id).first()
         if not plan:
             return None
         if schedule_date is not None:
             plan.schedule_date = schedule_date
-            # if no last calibration, next_due follows schedule
             if plan.last_calibrated_at is None:
                 plan.next_due_at = schedule_date
+        if frequency_days is not None:
+            plan.frequency_days = frequency_days
+            # If we have a last calibration date, compute next due accordingly
+            base = plan.last_calibrated_at or plan.schedule_date or datetime.utcnow()
+            plan.next_due_at = base + timedelta(days=plan.frequency_days)
         if notes is not None:
             plan.notes = notes
         if active is not None:
@@ -197,8 +201,10 @@ class EquipmentService:
         # Update plan last/next
         plan = self.db.query(CalibrationPlan).filter(CalibrationPlan.id == plan_id).first()
         if plan:
-            plan.last_calibrated_at = rec.performed_at if hasattr(rec, 'performed_at') and rec.performed_at else datetime.utcnow()
-            # Keep schedule cadence; if we add frequency_days later, update next_due_at accordingly
+            performed = rec.performed_at if hasattr(rec, 'performed_at') and rec.performed_at else datetime.utcnow()
+            plan.last_calibrated_at = performed
+            if getattr(plan, 'frequency_days', None):
+                plan.next_due_at = performed + timedelta(days=plan.frequency_days)
         self.db.add(rec)
         self.db.commit()
         self.db.refresh(rec)
