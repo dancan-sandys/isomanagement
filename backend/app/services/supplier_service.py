@@ -248,8 +248,11 @@ class SupplierService:
         offset = (filter_params.page - 1) * filter_params.size
         materials = query.offset(offset).limit(filter_params.size).all()
 
+        # Normalize list-like fields for response safety
+        normalized_items = [self._material_to_response_safe(m) for m in materials]
+
         return {
-            "items": materials,
+            "items": normalized_items,
             "total": total,
             "page": filter_params.page,
             "size": filter_params.size,
@@ -258,7 +261,8 @@ class SupplierService:
 
     def get_material(self, material_id: int) -> Optional[Material]:
         """Get material by ID"""
-        return self.db.query(Material).filter(Material.id == material_id).first()
+        material = self.db.query(Material).filter(Material.id == material_id).first()
+        return self._material_to_response_safe(material) if material else None
 
     def update_material(self, material_id: int, material_data: MaterialUpdate) -> Optional[Material]:
         """Update material"""
@@ -272,7 +276,7 @@ class SupplierService:
 
         self.db.commit()
         self.db.refresh(material)
-        return material
+        return self._material_to_response_safe(material)
 
     def delete_material(self, material_id: int) -> bool:
         """Delete material"""
@@ -855,3 +859,89 @@ class SupplierService:
             }
             for supplier in overdue_suppliers
         ] 
+
+    # Material approval utilities
+    def approve_material(self, material_id: int, approved_by: int) -> Optional[Material]:
+        """Approve a material and return updated record."""
+        material = self.get_material(material_id)
+        if not material:
+            return None
+        material.approval_status = "approved"
+        # Touch updated_at via commit; optionally track approver via specifications meta
+        self.db.commit()
+        self.db.refresh(material)
+        return material
+
+    def reject_material(self, material_id: int, reason: str, rejected_by: int) -> Optional[Material]:
+        """Reject a material with reason and return updated record."""
+        material = self.get_material(material_id)
+        if not material:
+            return None
+        material.approval_status = "rejected"
+        # Persist reason into acceptable_limits metadata if possible
+        try:
+            limits = material.acceptable_limits or {}
+            if isinstance(limits, dict):
+                limits["rejection_reason"] = reason
+                material.acceptable_limits = limits
+        except Exception:
+            pass
+        self.db.commit()
+        self.db.refresh(material)
+        return material
+
+    def bulk_approve_materials(self, material_ids: List[int], approved_by: int) -> int:
+        """Bulk approve materials; returns count."""
+        q = self.db.query(Material).filter(Material.id.in_(material_ids))
+        count = 0
+        for m in q.all():
+            m.approval_status = "approved"
+            count += 1
+        self.db.commit()
+        return count
+
+    def bulk_reject_materials(self, material_ids: List[int], reason: str, rejected_by: int) -> int:
+        """Bulk reject materials; returns count."""
+        q = self.db.query(Material).filter(Material.id.in_(material_ids))
+        count = 0
+        for m in q.all():
+            m.approval_status = "rejected"
+            try:
+                limits = m.acceptable_limits or {}
+                if isinstance(limits, dict):
+                    limits["rejection_reason"] = reason
+                    m.acceptable_limits = limits
+            except Exception:
+                pass
+            count += 1
+        self.db.commit()
+        return count
+
+    # Lightweight normalization helpers for Material list-like fields stored as Text/JSON
+    def _ensure_list(self, value: Any) -> Optional[List[str]]:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                import json as _json
+                parsed = _json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+                return [value]
+            except Exception:
+                return [value]
+        return [str(value)]
+
+    def _material_to_response_safe(self, material: Material) -> Material:
+        """Normalize list-like fields to avoid Pydantic validation errors."""
+        try:
+            material.allergens = self._ensure_list(material.allergens)  # type: ignore
+        except Exception:
+            pass
+        try:
+            material.quality_parameters = self._ensure_list(material.quality_parameters)  # type: ignore
+        except Exception:
+            pass
+        return material 

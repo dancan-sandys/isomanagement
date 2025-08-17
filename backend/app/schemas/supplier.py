@@ -226,7 +226,7 @@ class IncomingDeliveryBase(BaseModel):
     delivery_number: str = Field(..., description="Unique delivery number")
     delivery_date: datetime
     expected_delivery_date: Optional[datetime] = None
-    quantity_received: float
+    quantity_received: float = Field(..., alias="quantity")
     unit: Optional[str] = None
     batch_number: Optional[str] = None
     lot_number: Optional[str] = None
@@ -239,12 +239,15 @@ class IncomingDeliveryCreate(IncomingDeliveryBase):
     supplier_id: int
     material_id: int
 
+    class Config:
+        populate_by_name = True
+
 
 class IncomingDeliveryUpdate(BaseModel):
     delivery_number: Optional[str] = None
     delivery_date: Optional[datetime] = None
     expected_delivery_date: Optional[datetime] = None
-    quantity_received: Optional[float] = None
+    quantity_received: Optional[float] = Field(None, alias="quantity")
     unit: Optional[str] = None
     batch_number: Optional[str] = None
     lot_number: Optional[str] = None
@@ -256,6 +259,9 @@ class IncomingDeliveryUpdate(BaseModel):
     corrective_actions: Optional[str] = None
     storage_location: Optional[str] = None
     storage_conditions: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
 
 
 class IncomingDeliveryResponse(IncomingDeliveryBase):

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -143,7 +144,7 @@ async def update_material(
         )
     
     try:
-        audit_event(db, current_user.id, "material_updated", "suppliers", str(material.id), {"supplier_id": material.supplier_id})
+        audit_event(db, current_user.id, "material_updated", "suppliers", str(material.id))
     except Exception:
         pass
     return ResponseModel(
@@ -180,7 +181,7 @@ async def delete_material(
     )
 
 
-@router.post("/materials/{material_id}/approve", response_model=ResponseModel[dict])
+@router.post("/materials/{material_id}/approve", response_model=ResponseModel[MaterialResponse])
 async def approve_material(
     material_id: int,
     db: Session = Depends(get_db),
@@ -188,14 +189,14 @@ async def approve_material(
 ):
     """Approve material"""
     service = SupplierService(db)
-    success = service.approve_material(material_id, current_user.id)
-    
-    if not success:
+    material = service.approve_material(material_id, current_user.id)
+
+    if not material:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Material not found"
         )
-    
+
     try:
         audit_event(db, current_user.id, "material_approved", "suppliers", str(material_id))
     except Exception:
@@ -203,27 +204,30 @@ async def approve_material(
     return ResponseModel(
         success=True,
         message="Material approved successfully",
-        data={"id": material_id}
+        data=material
     )
 
 
-@router.post("/materials/{material_id}/reject", response_model=ResponseModel[dict])
+@router.post("/materials/{material_id}/reject", response_model=ResponseModel[MaterialResponse])
 async def reject_material(
     material_id: int,
-    reason: str = Query(..., description="Rejection reason"),
+    payload: RejectMaterialPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Reject material"""
     service = SupplierService(db)
-    success = service.reject_material(material_id, reason, current_user.id)
-    
-    if not success:
+    reason = payload.rejection_reason or payload.reason or ""
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="rejection_reason is required")
+    material = service.reject_material(material_id, reason, current_user.id)
+
+    if not material:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Material not found"
         )
-    
+
     try:
         audit_event(db, current_user.id, "material_rejected", "suppliers", str(material_id), {"reason": reason})
     except Exception:
@@ -231,50 +235,49 @@ async def reject_material(
     return ResponseModel(
         success=True,
         message="Material rejected successfully",
-        data={"id": material_id, "reason": reason}
+        data=material
     )
 
 
 @router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
 async def bulk_approve_materials(
-    material_ids: List[int],
+    payload: BulkApproveMaterialsPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Bulk approve materials"""
     service = SupplierService(db)
-    approved_count = service.bulk_approve_materials(material_ids, current_user.id)
-    
+    approved_count = service.bulk_approve_materials(payload.material_ids, current_user.id)
+
     try:
-        audit_event(db, current_user.id, "materials_bulk_approved", "suppliers", str(material_ids), {"count": approved_count})
+        audit_event(db, current_user.id, "materials_bulk_approved", "suppliers", str(payload.material_ids), {"count": approved_count})
     except Exception:
         pass
     return ResponseModel(
         success=True,
         message=f"{approved_count} materials approved successfully",
-        data={"approved_count": approved_count, "total_requested": len(material_ids)}
+        data={"approved_count": approved_count, "total_requested": len(payload.material_ids)}
     )
 
 
 @router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
 async def bulk_reject_materials(
-    material_ids: List[int],
-    reason: str = Query(..., description="Rejection reason"),
+    payload: BulkRejectMaterialsPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Bulk reject materials"""
     service = SupplierService(db)
-    rejected_count = service.bulk_reject_materials(material_ids, reason, current_user.id)
-    
+    rejected_count = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, current_user.id)
+
     try:
-        audit_event(db, current_user.id, "materials_bulk_rejected", "suppliers", str(material_ids), {"reason": reason, "count": rejected_count})
+        audit_event(db, current_user.id, "materials_bulk_rejected", "suppliers", str(payload.material_ids), {"reason": payload.rejection_reason, "count": rejected_count})
     except Exception:
         pass
     return ResponseModel(
         success=True,
         message=f"{rejected_count} materials rejected successfully",
-        data={"rejected_count": rejected_count, "total_requested": len(material_ids), "reason": reason}
+        data={"rejected_count": rejected_count, "total_requested": len(payload.material_ids), "reason": payload.rejection_reason}
     )
 
 
@@ -377,63 +380,69 @@ async def get_performance_analytics(
     current_user: User = Depends(get_current_user)
 ):
     """Get performance analytics"""
-    service = SupplierService(db)
-    
-    # Mock analytics data for now
-    analytics_data = {
-        "trends": [
-            {"date": "2024-01", "average_score": 4.2},
-            {"date": "2024-02", "average_score": 4.3},
-            {"date": "2024-03", "average_score": 4.1},
-            {"date": "2024-04", "average_score": 4.4}
-        ],
-        "category_performance": [
-            {"category": "raw_milk", "average_score": 4.3},
-            {"category": "additives", "average_score": 4.1},
-            {"category": "packaging", "average_score": 4.2}
-        ],
-        "risk_distribution": [
-            {"risk_level": "low", "count": 5},
-            {"risk_level": "medium", "count": 2},
-            {"risk_level": "high", "count": 1}
-        ]
-    }
-    
-    return ResponseModel(
-        success=True,
-        message="Performance analytics retrieved successfully",
-        data=analytics_data
-    )
+    # Reuse the later implementation but wrap in ResponseModel for consistency
+    q = db.query(SupplierEvaluation)
+    if supplier_id:
+        q = q.filter(SupplierEvaluation.supplier_id == supplier_id)
+    if date_from:
+        q = q.filter(SupplierEvaluation.evaluation_date >= date_from)
+    if date_to:
+        q = q.filter(SupplierEvaluation.evaluation_date <= date_to)
+
+    evals = q.all()
+    from collections import defaultdict
+    bucket: Dict[str, List[float]] = defaultdict(list)
+    for e in evals:
+        try:
+            d = e.evaluation_date.date().isoformat()
+        except Exception:
+            continue
+        bucket[d].append(e.overall_score or 0.0)
+    trends = [
+        {"date": d, "average_score": round(sum(scores) / max(1, len(scores)), 2)}
+        for d, scores in sorted(bucket.items())
+    ]
+    cat_rows = db.query(Supplier.category, func.avg(Supplier.overall_score)).group_by(Supplier.category).all()
+    category_performance = [
+        {"category": (cat.value if hasattr(cat, 'value') else str(cat) or 'unknown'), "average_score": float(avg or 0.0)}
+        for cat, avg in cat_rows
+    ]
+    risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
+    risk_distribution = [
+        {"risk_level": str(risk or 'unknown'), "count": int(count)} for risk, count in risk_rows
+    ]
+    data = {"trends": trends, "category_performance": category_performance, "risk_distribution": risk_distribution}
+    return ResponseModel(success=True, message="Performance analytics retrieved successfully", data=data)
 
 @router.get("/analytics/risk-assessment", response_model=ResponseModel[dict])
 async def get_risk_assessment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get risk assessment analytics"""
-    service = SupplierService(db)
-    
-    # Mock risk assessment data for now
-    risk_data = {
-        "risk_matrix": [
-            {"risk_level": "low", "count": 5, "percentage": 62.5},
-            {"risk_level": "medium", "count": 2, "percentage": 25.0},
-            {"risk_level": "high", "count": 1, "percentage": 12.5}
+    risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
+    total = sum(int(c) for _, c in risk_rows) or 1
+    risk_matrix = [
+        {"risk_level": str(r or 'unknown'), "count": int(c), "percentage": round(100.0 * int(c) / total, 2)}
+        for r, c in risk_rows
+    ]
+    high_risk = db.query(Supplier).filter(Supplier.risk_level == "high").limit(10).all()
+    from collections import Counter
+    cnt = Counter()
+    for s in db.query(Supplier).filter(Supplier.risk_level == "high").all():
+        try:
+            key = s.created_at.strftime('%Y-%m')
+            cnt[key] += 1
+        except Exception:
+            continue
+    risk_trends = [{"date": k, "high_risk_count": v} for k, v in sorted(cnt.items())]
+    data = {
+        "risk_matrix": risk_matrix,
+        "high_risk_suppliers": [
+            {"id": s.id, "name": s.name, "risk_level": s.risk_level} for s in high_risk
         ],
-        "high_risk_suppliers": [],
-        "risk_trends": [
-            {"date": "2024-01", "high_risk_count": 1},
-            {"date": "2024-02", "high_risk_count": 1},
-            {"date": "2024-03", "high_risk_count": 0},
-            {"date": "2024-04", "high_risk_count": 1}
-        ]
+        "risk_trends": risk_trends,
     }
-    
-    return ResponseModel(
-        success=True,
-        message="Risk assessment retrieved successfully",
-        data=risk_data
-    )
+    return ResponseModel(success=True, message="Risk assessment retrieved successfully", data=data)
 
 # Alerts endpoints (must come before path parameter endpoints)
 @router.get("/alerts", response_model=ResponseModel[dict])
@@ -447,39 +456,56 @@ async def get_alerts(
     current_user: User = Depends(get_current_user)
 ):
     """Get alerts with filtering and pagination"""
-    # Mock alerts data for now
-    alerts_data = {
-        "items": [
-            {
-                "id": 1,
-                "type": "expired_certificate",
-                "severity": "high",
-                "title": "Certificate Expired",
-                "description": "Supplier ABC's certificate has expired",
-                "created_at": "2024-01-15T10:00:00",
-                "resolved": False
-            },
-            {
-                "id": 2,
-                "type": "overdue_evaluation",
-                "severity": "medium",
-                "title": "Evaluation Overdue",
-                "description": "Supplier XYZ evaluation is overdue",
-                "created_at": "2024-01-14T09:00:00",
-                "resolved": True
-            }
-        ],
-        "total": 2,
+    service = SupplierService(db)
+    delivery_alerts = service.get_noncompliant_delivery_alerts()
+    overdue = service.get_overdue_evaluations()
+
+    items: List[Dict[str, Any]] = []
+    for a in delivery_alerts:
+        created_at = a.get("alert_date") or datetime.utcnow()
+        title = (f"Noncompliant delivery {a.get('delivery_number', '')}").strip() or "Noncompliant delivery"
+        description = f"{a.get('supplier_name', '')} - {a.get('material_name', '')} ({a.get('inspection_status', 'n/a')})"
+        items.append({
+            "id": f"delivery-{a.get('delivery_id')}",
+            "type": "quality_alert",
+            "severity": "high" if a.get("days_since_delivery", 0) > 7 else "medium",
+            "title": title,
+            "description": description,
+            "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
+            "resolved": False,
+        })
+    for o in overdue:
+        created_at = o.get("next_evaluation_date") or datetime.utcnow()
+        title = (f"Overdue evaluation: {o.get('supplier_name', '')}").strip() or "Overdue evaluation"
+        description = f"Due {o.get('next_evaluation_date')}"
+        items.append({
+            "id": f"overdue-{o.get('supplier_id')}",
+            "type": "overdue_evaluation",
+            "severity": "medium",
+            "title": title,
+            "description": description,
+            "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
+            "resolved": False,
+        })
+
+    if severity:
+        items = [i for i in items if i.get("severity") == severity]
+    if type:
+        items = [i for i in items if i.get("type") == type]
+    if resolved is not None:
+        items = [i for i in items if i.get("resolved") == resolved]
+
+    total = len(items)
+    start = (page - 1) * size
+    end = start + size
+    data = {
+        "items": items[start:end],
+        "total": total,
         "page": page,
         "size": size,
-        "pages": 1
+        "pages": (total + size - 1) // size,
     }
-    
-    return ResponseModel(
-        success=True,
-        message="Alerts retrieved successfully",
-        data=alerts_data
-    )
+    return ResponseModel(success=True, message="Alerts retrieved successfully", data=data)
 
 @router.post("/alerts/{alert_id}/resolve", response_model=ResponseModel[dict])
 async def resolve_alert(
@@ -503,95 +529,77 @@ async def get_supplier_stats(
 ):
     """Get supplier statistics"""
     service = SupplierService(db)
-    
-    # Get basic stats from service
-    dashboard_stats = service.get_dashboard_stats()
-    
-    # Count suppliers by status
-    suppliers_by_status = dashboard_stats.get("suppliers_by_status", [])
-    pending_approval = len([s for s in suppliers_by_status if s.get("status") == "pending_approval"])
-    suspended_suppliers = len([s for s in suppliers_by_status if s.get("status") == "suspended"])
-    blacklisted_suppliers = len([s for s in suppliers_by_status if s.get("status") == "blacklisted"])
-    
-    stats_data = {
-        "total_suppliers": dashboard_stats.get("total_suppliers", 0),
-        "active_suppliers": dashboard_stats.get("active_suppliers", 0),
-        "pending_approval": pending_approval,
-        "suspended_suppliers": suspended_suppliers,
-        "blacklisted_suppliers": blacklisted_suppliers,
-        "overdue_evaluations": dashboard_stats.get("overdue_evaluations", 0),
-        "upcoming_evaluations": 0,  # Mock data
-        "recent_deliveries": len(dashboard_stats.get("recent_deliveries", [])),
-        "quality_alerts": 0  # Mock data
+    dash = service.get_dashboard_stats()
+    data = {
+        "total_suppliers": dash.get("total_suppliers", 0),
+        "active_suppliers": dash.get("active_suppliers", 0),
+        "pending_approval": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.PENDING_APPROVAL).count()),
+        "suspended_suppliers": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.SUSPENDED).count()),
+        "blacklisted_suppliers": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.BLACKLISTED).count()),
+        "overdue_evaluations": dash.get("overdue_evaluations", 0),
+        "upcoming_evaluations": 0,
+        "recent_deliveries": len(dash.get("recent_deliveries", [])),
+        "quality_alerts": len(service.get_noncompliant_delivery_alerts()),
     }
-    
-    return ResponseModel(
-        success=True,
-        message="Supplier statistics retrieved successfully",
-        data=stats_data
-    )
+    return ResponseModel(success=True, message="Supplier statistics retrieved successfully", data=data)
 
 @router.get("/materials/stats", response_model=ResponseModel[dict])
 async def get_material_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get material statistics"""
-    service = SupplierService(db)
-    
-    # Mock material stats for now
-    material_stats = {
-        "total_materials": 15,
-        "approved_materials": 12,
-        "pending_materials": 2,
-        "rejected_materials": 1,
-        "materials_by_category": [
-            {"category": "raw_milk", "count": 8},
-            {"category": "additives", "count": 4},
-            {"category": "packaging", "count": 3}
-        ],
-        "materials_by_supplier": [
-            {"supplier_name": "Dairy Farm A", "count": 5},
-            {"supplier_name": "Packaging Co", "count": 3},
-            {"supplier_name": "Additives Inc", "count": 2}
-        ]
-    }
-    
+    total = int(db.query(Material).count())
+    approved = int(db.query(Material).filter(Material.approval_status == "approved").count())
+    pending = int(db.query(Material).filter(Material.approval_status == "pending").count())
+    rejected = int(db.query(Material).filter(Material.approval_status == "rejected").count())
+    by_category = db.query(Material.category, func.count(Material.id)).group_by(Material.category).all()
+    by_supplier = db.query(Supplier.name, func.count(Material.id)).join(Supplier, Supplier.id == Material.supplier_id).group_by(Supplier.name).all()
     return ResponseModel(
         success=True,
         message="Material statistics retrieved successfully",
-        data=material_stats
+        data={
+            "total_materials": total,
+            "approved_materials": approved,
+            "pending_materials": pending,
+            "rejected_materials": rejected,
+            "materials_by_category": [{"category": str(cat or "unknown"), "count": int(cnt)} for cat, cnt in by_category],
+            "materials_by_supplier": [{"supplier_name": name, "count": int(cnt)} for name, cnt in by_supplier],
+        }
     )
 
-@router.get("/evaluations/stats", response_model=ResponseModel[dict])
+@router.get("/evaluations/stats", response_model=Dict[str, Any])
 async def get_evaluation_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get evaluation statistics"""
-    service = SupplierService(db)
-    
-    # Mock evaluation stats for now
-    evaluation_stats = {
-        "total_evaluations": 25,
-        "completed_evaluations": 20,
-        "in_progress_evaluations": 3,
-        "scheduled_evaluations": 2,
-        "overdue_evaluations": 1,
-        "average_score": 4.2,
-        "evaluations_by_month": [
-            {"month": "2024-01", "count": 8, "average_score": 4.3},
-            {"month": "2024-02", "count": 6, "average_score": 4.1},
-            {"month": "2024-03", "count": 7, "average_score": 4.4},
-            {"month": "2024-04", "count": 4, "average_score": 4.0}
-        ]
+    total = int(db.query(SupplierEvaluation).count())
+    completed = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.COMPLETED).count())
+    in_progress = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.IN_PROGRESS).count())
+    scheduled = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.PENDING).count())
+    overdue = int(db.query(Supplier).filter(and_(Supplier.next_evaluation_date < datetime.now(), Supplier.next_evaluation_date.isnot(None))).count())
+    avg = float(db.query(func.avg(SupplierEvaluation.overall_score)).scalar() or 0.0)
+
+    # Monthly histogram in Python
+    from collections import Counter
+    rows = db.query(SupplierEvaluation).all()
+    c = Counter()
+    for ev in rows:
+        try:
+            key = ev.evaluation_date.strftime('%Y-%m')
+            c[key] += 1
+        except Exception:
+            continue
+    by_month = [{"month": k, "count": v, "average_score": avg} for k, v in sorted(c.items())]
+
+    return {
+        "total_evaluations": total,
+        "completed_evaluations": completed,
+        "in_progress_evaluations": in_progress,
+        "scheduled_evaluations": scheduled,
+        "overdue_evaluations": overdue,
+        "average_score": avg,
+        "evaluations_by_month": by_month,
     }
-    
-    return ResponseModel(
-        success=True,
-        message="Evaluation statistics retrieved successfully",
-        data=evaluation_stats
-    )
 
 # Dashboard endpoints (must come before path parameter endpoints)
 @router.get("/dashboard/stats", response_model=ResponseModel)
@@ -768,173 +776,6 @@ async def bulk_update_suppliers(
     )
 
 
-# Material endpoints
-@router.get("/materials/", response_model=ResponseModel)
-@router.get("/materials", response_model=ResponseModel)
-async def get_materials(
-    search: Optional[str] = Query(None, description="Search by name or code"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
-    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get materials with filtering and pagination"""
-    filter_params = MaterialFilter(
-        search=search,
-        category=category,
-        supplier_id=supplier_id,
-        approval_status=approval_status,
-        page=page,
-        size=size
-    )
-    
-    service = SupplierService(db)
-    result = service.get_materials(filter_params)
-    
-    response_data = MaterialListResponse(
-        items=result["items"],
-        total=result["total"],
-        page=result["page"],
-        size=result["size"],
-        pages=result["pages"]
-    )
-
-    return ResponseModel(
-        success=True,
-        message="Materials retrieved successfully",
-        data=response_data
-    )
-
-
-@router.get("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
-async def get_material(
-    material_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get material by ID"""
-    service = SupplierService(db)
-    material = service.get_material(material_id)
-    
-    if not material:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Material not found"
-        )
-    
-    return ResponseModel(
-        success=True,
-        message="Material retrieved successfully",
-        data=material
-    )
-
-
-@router.post("/materials/", response_model=ResponseModel[MaterialResponse])
-async def create_material(
-    material_data: MaterialCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Create a new material"""
-    service = SupplierService(db)
-    
-    # Check if material code already exists for this supplier
-    existing_material = service.db.query(service.db.query(Material).filter(
-        Material.material_code == material_data.material_code,
-        Material.supplier_id == material_data.supplier_id
-    ).exists()).scalar()
-    
-    if existing_material:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Material code already exists for this supplier"
-        )
-    
-    material = service.create_material(material_data, current_user.id)
-    try:
-        audit_event(db, current_user.id, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
-    except Exception:
-        pass
-    return ResponseModel(
-        success=True,
-        message="Material created successfully",
-        data=material
-    )
-
-
-@router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
-async def update_material(
-    material_id: int,
-    material_data: MaterialUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update material"""
-    service = SupplierService(db)
-    material = service.update_material(material_id, material_data)
-    
-    if not material:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Material not found"
-        )
-    
-    try:
-        audit_event(db, current_user.id, "material_updated", "suppliers", str(material.id))
-    except Exception:
-        pass
-    return ResponseModel(
-        success=True,
-        message="Material updated successfully",
-        data=material
-    )
-
-
-@router.delete("/materials/{material_id}", response_model=ResponseModel[dict])
-async def delete_material(
-    material_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Delete material"""
-    service = SupplierService(db)
-    success = service.delete_material(material_id)
-    
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Material not found"
-        )
-    
-    try:
-        audit_event(db, current_user.id, "material_deleted", "suppliers", str(material_id))
-    except Exception:
-        pass
-    return ResponseModel(
-        success=True,
-        message="Material deleted successfully",
-        data={"message": "Material deleted successfully"}
-    )
-
-
-@router.post("/materials/bulk/action", response_model=ResponseModel[dict])
-async def bulk_update_materials(
-    action_data: BulkMaterialAction,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Bulk update materials"""
-    service = SupplierService(db)
-    result = service.bulk_update_materials(action_data)
-    
-    return ResponseModel(
-        success=True,
-        message=f"Bulk material action completed successfully",
-        data=result
-    )
 
 
 # Evaluation endpoints
@@ -1132,6 +973,18 @@ class InspectPayload(BaseModel):
     status: str
     comments: Optional[str] = None
 
+
+class RejectMaterialPayload(BaseModel):
+    rejection_reason: Optional[str] = None
+    reason: Optional[str] = None
+
+class BulkApproveMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    comments: Optional[str] = None
+
+class BulkRejectMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    rejection_reason: str
 
 @router.post("/deliveries/{delivery_id}/inspect", response_model=IncomingDeliveryResponse)
 async def inspect_delivery(
@@ -1369,26 +1222,32 @@ async def delete_delivery(
 
 
 # Document endpoints
-@router.get("/{supplier_id}/documents/", response_model=DocumentListResponse)
+@router.get("/{supplier_id}/documents/", response_model=ResponseModel[DocumentListResponse])
+@router.get("/{supplier_id}/documents", response_model=ResponseModel[DocumentListResponse])
 async def get_supplier_documents(
     supplier_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get documents for a supplier"""
     service = SupplierService(db)
     documents = service.get_documents(supplier_id)
-    
-    return DocumentListResponse(
-        items=documents,
-        total=len(documents),
-        page=1,
-        size=len(documents),
-        pages=1
+    total = len(documents)
+    start = (page - 1) * size
+    end = start + size
+    response = DocumentListResponse(
+        items=documents[start:end],
+        total=total,
+        page=page,
+        size=size,
+        pages=(total + size - 1) // size
     )
+    return ResponseModel(success=True, message="Supplier documents retrieved successfully", data=response)
 
 
-@router.get("/documents/{document_id}", response_model=SupplierDocumentResponse)
+@router.get("/documents/{document_id}", response_model=ResponseModel[SupplierDocumentResponse])
 async def get_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1403,19 +1262,19 @@ async def get_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
-    
-    return document
+    return ResponseModel(success=True, message="Supplier document retrieved successfully", data=document)
 
 
-@router.post("/{supplier_id}/documents/", response_model=SupplierDocumentResponse)
+@router.post("/{supplier_id}/documents/", response_model=ResponseModel[SupplierDocumentResponse])
+@router.post("/{supplier_id}/documents", response_model=ResponseModel[SupplierDocumentResponse])
 async def create_document(
     supplier_id: int,
-    document_type: str = Query(..., description="Document type"),
-    document_name: str = Query(..., description="Document name"),
-    document_number: Optional[str] = Query(None, description="Document number"),
-    issue_date: Optional[datetime] = Query(None, description="Issue date"),
-    expiry_date: Optional[datetime] = Query(None, description="Expiry date"),
-    issuing_authority: Optional[str] = Query(None, description="Issuing authority"),
+    document_type: str = Form(..., description="Document type"),
+    document_name: str = Form(..., description="Document name"),
+    document_number: Optional[str] = Form(None, description="Document number"),
+    issue_date: Optional[datetime] = Form(None, description="Issue date"),
+    expiry_date: Optional[datetime] = Form(None, description="Expiry date"),
+    issuing_authority: Optional[str] = Form(None, description="Issuing authority"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1439,7 +1298,12 @@ async def create_document(
     file_path = f"{upload_dir}/{supplier_id}_{file.filename}"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+    # Compute size after write
+    try:
+        file_size = os.path.getsize(file_path)
+    except Exception:
+        file_size = None
+
     document_data = SupplierDocumentCreate(
         supplier_id=supplier_id,
         document_type=document_type,
@@ -1449,7 +1313,7 @@ async def create_document(
         expiry_date=expiry_date,
         issuing_authority=issuing_authority,
         file_path=file_path,
-        file_size=file.size,
+        file_size=file_size,
         file_type=file.content_type,
         original_filename=file.filename
     )
@@ -1459,10 +1323,10 @@ async def create_document(
         audit_event(db, current_user.id, "supplier_document_uploaded", "suppliers", str(document.id), {"supplier_id": supplier_id})
     except Exception:
         pass
-    return document
+    return ResponseModel(success=True, message="Supplier document uploaded successfully", data=document)
 
 
-@router.put("/documents/{document_id}", response_model=SupplierDocumentResponse)
+@router.put("/documents/{document_id}", response_model=ResponseModel[SupplierDocumentResponse])
 async def update_document(
     document_id: int,
     document_data: SupplierDocumentUpdate,
@@ -1483,10 +1347,10 @@ async def update_document(
         audit_event(db, current_user.id, "supplier_document_updated", "suppliers", str(document.id))
     except Exception:
         pass
-    return document
+    return ResponseModel(success=True, message="Supplier document updated successfully", data=document)
 
 
-@router.delete("/documents/{document_id}")
+@router.delete("/documents/{document_id}", response_model=ResponseModel[dict])
 async def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1506,8 +1370,62 @@ async def delete_document(
         audit_event(db, current_user.id, "supplier_document_deleted", "suppliers", str(document_id))
     except Exception:
         pass
-    return {"message": "Document deleted successfully"}
+    return ResponseModel(success=True, message="Document deleted successfully", data={"message": "Document deleted successfully"})
 
+
+@router.get("/documents/{document_id}/download")
+async def download_supplier_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Download a supplier document file"""
+    service = SupplierService(db)
+    document = service.get_document(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if not document.file_path or not os.path.exists(document.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    from fastapi.responses import FileResponse
+    return FileResponse(document.file_path, filename=os.path.basename(document.file_path))
+
+
+class VerifyDocumentPayload(BaseModel):
+    verification_status: str
+    verification_comments: Optional[str] = None
+
+
+@router.post("/documents/{document_id}/verify", response_model=ResponseModel[SupplierDocumentResponse])
+async def verify_supplier_document(
+    document_id: int,
+    payload: VerifyDocumentPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Verify or reject a supplier document"""
+    service = SupplierService(db)
+    document = service.get_document(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    status_val = (payload.verification_status or "").lower()
+    if status_val == "verified":
+        document.is_verified = True
+        document.is_valid = True
+    elif status_val == "rejected":
+        document.is_verified = False
+        document.is_valid = False
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification_status")
+    # Optionally persist comments in issuing_authority or extend schema; skip for now
+    document.verified_by = current_user.id
+    document.verified_at = datetime.utcnow()
+    db.commit()
+    db.refresh(document)
+    try:
+        audit_event(db, current_user.id, "supplier_document_verified", "suppliers", str(document.id), {"verification_status": status_val})
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Supplier document verification updated", data=document)
 
 
 @router.get("/alerts/expired-certificates")
@@ -1733,224 +1651,3 @@ async def get_delivery_alert_summary(
     service = SupplierService(db)
     summary = service.get_delivery_alert_summary()
     return summary 
-
-
-# New lightweight analytics and stats endpoints (dict response_model to avoid strict validation issues)
-
-@router.get("/analytics/performance", response_model=Dict[str, Any])
-async def get_performance_analytics(
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
-    supplier_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    q = db.query(SupplierEvaluation)
-    if supplier_id:
-        q = q.filter(SupplierEvaluation.supplier_id == supplier_id)
-    if date_from:
-        q = q.filter(SupplierEvaluation.evaluation_date >= date_from)
-    if date_to:
-        q = q.filter(SupplierEvaluation.evaluation_date <= date_to)
-
-    evals = q.all()
-    # Build daily average trend in Python to avoid backend-specific SQL
-    from collections import defaultdict
-    bucket: Dict[str, List[float]] = defaultdict(list)
-    for e in evals:
-        try:
-            d = e.evaluation_date.date().isoformat()
-        except Exception:
-            continue
-        bucket[d].append(e.overall_score or 0.0)
-    trends = [
-        {"date": d, "average_score": round(sum(scores) / max(1, len(scores)), 2)}
-        for d, scores in sorted(bucket.items())
-    ]
-
-    # Category performance
-    cat_rows = db.query(Supplier.category, func.avg(Supplier.overall_score)).group_by(Supplier.category).all()
-    category_performance = [
-        {"category": (cat.value if hasattr(cat, 'value') else str(cat) or 'unknown'), "average_score": float(avg or 0.0)}
-        for cat, avg in cat_rows
-    ]
-
-    # Risk distribution
-    risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
-    risk_distribution = [
-        {"risk_level": str(risk or 'unknown'), "count": int(count)} for risk, count in risk_rows
-    ]
-
-    return {
-        "trends": trends,
-        "category_performance": category_performance,
-        "risk_distribution": risk_distribution,
-    }
-
-
-@router.get("/analytics/risk-assessment", response_model=Dict[str, Any])
-async def get_risk_assessment(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
-    total = sum(int(c) for _, c in risk_rows) or 1
-    risk_matrix = [
-        {"risk_level": str(r or 'unknown'), "count": int(c), "percentage": round(100.0 * int(c) / total, 2)}
-        for r, c in risk_rows
-    ]
-    high_risk = db.query(Supplier).filter(Supplier.risk_level == "high").limit(10).all()
-    # Simple monthly trend using Python
-    from collections import Counter
-    cnt = Counter()
-    for s in db.query(Supplier).filter(Supplier.risk_level == "high").all():
-        try:
-            key = s.created_at.strftime('%Y-%m')
-            cnt[key] += 1
-        except Exception:
-            continue
-    risk_trends = [{"date": k, "high_risk_count": v} for k, v in sorted(cnt.items())]
-    return {
-        "risk_matrix": risk_matrix,
-        "high_risk_suppliers": [
-            {"id": s.id, "name": s.name, "risk_level": s.risk_level} for s in high_risk
-        ],
-        "risk_trends": risk_trends,
-    }
-
-
-@router.get("/alerts", response_model=Dict[str, Any])
-async def get_alerts(
-    severity: Optional[str] = Query(None),
-    type: Optional[str] = Query(None),
-    resolved: Optional[bool] = Query(None),
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    service = SupplierService(db)
-    delivery_alerts = service.get_noncompliant_delivery_alerts()
-    overdue = service.get_overdue_evaluations()
-
-    items: List[Dict[str, Any]] = []
-    for a in delivery_alerts:
-        created_at = a.get("alert_date") or datetime.utcnow()
-        title = (f"Noncompliant delivery {a.get('delivery_number', '')}").strip() or "Noncompliant delivery"
-        description = f"{a.get('supplier_name', '')} - {a.get('material_name', '')} ({a.get('inspection_status', 'n/a')})"
-        items.append({
-            "id": f"delivery-{a.get('delivery_id')}",
-            "type": "quality_alert",
-            "severity": "high" if a.get("days_since_delivery", 0) > 7 else "medium",
-            "title": title,
-            "description": description,
-            "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
-            "resolved": False,
-        })
-    for o in overdue:
-        created_at = o.get("next_evaluation_date") or datetime.utcnow()
-        title = (f"Overdue evaluation: {o.get('supplier_name', '')}").strip() or "Overdue evaluation"
-        description = f"Due {o.get('next_evaluation_date')}"
-        items.append({
-            "id": f"overdue-{o.get('supplier_id')}",
-            "type": "overdue_evaluation",
-            "severity": "medium",
-            "title": title,
-            "description": description,
-            "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
-            "resolved": False,
-        })
-
-    if severity:
-        items = [i for i in items if i.get("severity") == severity]
-    if type:
-        items = [i for i in items if i.get("type") == type]
-    if resolved is not None:
-        items = [i for i in items if i.get("resolved") == resolved]
-
-    total = len(items)
-    start = (page - 1) * size
-    end = start + size
-    return {
-        "items": items[start:end],
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": (total + size - 1) // size,
-    }
-
-
-@router.get("/stats", response_model=Dict[str, Any])
-async def get_supplier_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    service = SupplierService(db)
-    dash = service.get_dashboard_stats()
-    return {
-        "total_suppliers": dash.get("total_suppliers", 0),
-        "active_suppliers": dash.get("active_suppliers", 0),
-        "pending_approval": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.PENDING_APPROVAL).count()),
-        "suspended_suppliers": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.SUSPENDED).count()),
-        "blacklisted_suppliers": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.BLACKLISTED).count()),
-        "overdue_evaluations": dash.get("overdue_evaluations", 0),
-        "upcoming_evaluations": 0,
-        "recent_deliveries": len(dash.get("recent_deliveries", [])),
-        "quality_alerts": len(service.get_noncompliant_delivery_alerts()),
-    }
-
-
-@router.get("/materials/stats", response_model=Dict[str, Any])
-async def get_material_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    total = int(db.query(Material).count())
-    approved = int(db.query(Material).filter(Material.approval_status == "approved").count())
-    pending = int(db.query(Material).filter(Material.approval_status == "pending").count())
-    rejected = int(db.query(Material).filter(Material.approval_status == "rejected").count())
-    by_category = db.query(Material.category, func.count(Material.id)).group_by(Material.category).all()
-    by_supplier = db.query(Supplier.name, func.count(Material.id)).join(Supplier, Supplier.id == Material.supplier_id).group_by(Supplier.name).all()
-    return {
-        "total_materials": total,
-        "approved_materials": approved,
-        "pending_materials": pending,
-        "rejected_materials": rejected,
-        "materials_by_category": [{"category": str(cat or "unknown"), "count": int(cnt)} for cat, cnt in by_category],
-        "materials_by_supplier": [{"supplier_name": name, "count": int(cnt)} for name, cnt in by_supplier],
-    }
-
-
-@router.get("/evaluations/stats", response_model=Dict[str, Any])
-async def get_evaluation_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    total = int(db.query(SupplierEvaluation).count())
-    completed = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.COMPLETED).count())
-    in_progress = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.IN_PROGRESS).count())
-    scheduled = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.PENDING).count())
-    overdue = int(db.query(Supplier).filter(and_(Supplier.next_evaluation_date < datetime.now(), Supplier.next_evaluation_date.isnot(None))).count())
-    avg = float(db.query(func.avg(SupplierEvaluation.overall_score)).scalar() or 0.0)
-
-    # Monthly histogram in Python
-    from collections import Counter
-    rows = db.query(SupplierEvaluation).all()
-    c = Counter()
-    for ev in rows:
-        try:
-            key = ev.evaluation_date.strftime('%Y-%m')
-            c[key] += 1
-        except Exception:
-            continue
-    by_month = [{"month": k, "count": v, "average_score": avg} for k, v in sorted(c.items())]
-
-    return {
-        "total_evaluations": total,
-        "completed_evaluations": completed,
-        "in_progress_evaluations": in_progress,
-        "scheduled_evaluations": scheduled,
-        "overdue_evaluations": overdue,
-        "average_score": avg,
-        "evaluations_by_month": by_month,
-    }
