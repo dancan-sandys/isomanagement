@@ -28,12 +28,20 @@ def upgrade():
         batch_op.add_column(sa.Column('assigned_to', sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column('due_date', sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column('created_by', sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column('verified_by', sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column('verified_at', sa.DateTime(timezone=True), nullable=True))
         batch_op.create_foreign_key('fk_mwo_assigned_to_user', 'users', ['assigned_to'], ['id'])
         batch_op.create_foreign_key('fk_mwo_created_by_user', 'users', ['created_by'], ['id'])
+        batch_op.create_foreign_key('fk_mwo_verified_by_user', 'users', ['verified_by'], ['id'])
 
     # Indexes for work orders
     op.create_index('ix_mwo_due_date', 'maintenance_work_orders', ['due_date'])
     op.create_index('ix_mwo_status', 'maintenance_work_orders', ['status'])
+
+    # Maintenance plans: PRP link
+    with op.batch_alter_table('maintenance_plans') as batch_op:
+        batch_op.add_column(sa.Column('prp_document_id', sa.Integer(), nullable=True))
+        batch_op.create_foreign_key('fk_maintenance_plan_prp_document', 'documents', ['prp_document_id'], ['id'])
 
     # Calibration plans: frequency + index
     with op.batch_alter_table('calibration_plans') as batch_op:
@@ -78,10 +86,18 @@ def downgrade():
     with op.batch_alter_table('calibration_plans') as batch_op:
         batch_op.drop_column('frequency_days')
 
+    # Maintenance plans
+    with op.batch_alter_table('maintenance_plans') as batch_op:
+        batch_op.drop_constraint('fk_maintenance_plan_prp_document', type_='foreignkey')
+        batch_op.drop_column('prp_document_id')
+
     # Maintenance work orders
     with op.batch_alter_table('maintenance_work_orders') as batch_op:
         batch_op.drop_constraint('fk_mwo_assigned_to_user', type_='foreignkey')
         batch_op.drop_constraint('fk_mwo_created_by_user', type_='foreignkey')
+        batch_op.drop_constraint('fk_mwo_verified_by_user', type_='foreignkey')
+        batch_op.drop_column('verified_at')
+        batch_op.drop_column('verified_by')
         batch_op.drop_column('created_by')
         batch_op.drop_column('due_date')
         batch_op.drop_column('assigned_to')

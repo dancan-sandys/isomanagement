@@ -54,6 +54,8 @@ class MaintenancePlan(Base):
     next_due_at = Column(DateTime(timezone=True), nullable=True)
     active = Column(Boolean, default=True, nullable=False)
     notes = Column(Text, nullable=True)
+    # PRP/SOP linkage (ISO)
+    prp_document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
 
     equipment = relationship("Equipment", back_populates="maintenance_plans")
 
@@ -75,6 +77,9 @@ class MaintenanceWorkOrder(Base):
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Verification tracking (ISO)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class CalibrationPlan(Base):
