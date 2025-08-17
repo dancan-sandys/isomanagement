@@ -42,8 +42,8 @@ This checklist tracks the end-to-end fixes to stabilize and align the Suppliers 
 - [ ] Ensure delivery endpoints return `ResponseModel<T>` consistently
 
 ## 5) Materials Serialization (Schema/Model Mismatch)
-- [ ] Normalize `Material` JSON/text fields to prevent 422/500
-  - [ ] On create/update: serialize lists (`allergens`, `quality_parameters`) to JSON strings for DB Text columns
+- [x] Normalize `Material` JSON/text fields to prevent 422/500
+  - [x] On create/update: serialize lists (`allergens`, `quality_parameters`) to JSON strings for DB Text columns
   - [x] On read: parse JSON strings back to arrays for responses
   - [ ] (Optional) Migrate DB columns to JSON to eliminate conversions
 

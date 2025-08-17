@@ -217,8 +217,18 @@ class SupplierService:
     # Material operations
     def create_material(self, material_data: MaterialCreate, created_by: int) -> Material:
         """Create a new material"""
+        # Normalize list-like fields destined for Text columns by JSON-encoding them
+        material_payload = material_data.dict()
+        try:
+            import json as _json
+            if isinstance(material_payload.get("allergens"), list):
+                material_payload["allergens"] = _json.dumps(material_payload["allergens"])  # Text column
+            if isinstance(material_payload.get("quality_parameters"), list):
+                material_payload["quality_parameters"] = _json.dumps(material_payload["quality_parameters"])  # Text column
+        except Exception:
+            pass
         material = Material(
-            **material_data.dict(),
+            **material_payload,
             created_by=created_by
         )
         self.db.add(material)
@@ -279,6 +289,15 @@ class SupplierService:
             return None
 
         update_data = material_data.dict(exclude_unset=True)
+        # Normalize list-like fields destined for Text columns by JSON-encoding them
+        try:
+            import json as _json
+            if isinstance(update_data.get("allergens"), list):
+                update_data["allergens"] = _json.dumps(update_data["allergens"])  # Text column
+            if isinstance(update_data.get("quality_parameters"), list):
+                update_data["quality_parameters"] = _json.dumps(update_data["quality_parameters"])  # Text column
+        except Exception:
+            pass
         for field, value in update_data.items():
             setattr(material, field, value)
 
