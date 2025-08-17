@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
-from app.models.equipment import Equipment, MaintenancePlan, MaintenanceType, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
+from app.models.equipment import Equipment, MaintenancePlan, MaintenanceType, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord, WorkOrderStatus, WorkOrderPriority
 
 
 class EquipmentService:
@@ -10,8 +10,8 @@ class EquipmentService:
         self.db = db
 
     # Equipment
-    def create_equipment(self, *, name: str, equipment_type: str, serial_number: Optional[str], location: Optional[str], notes: Optional[str], created_by: Optional[int]) -> Equipment:
-        eq = Equipment(name=name, equipment_type=equipment_type, serial_number=serial_number, location=location, notes=notes, created_by=created_by)
+    def create_equipment(self, *, name: str, equipment_type: str, serial_number: Optional[str], location: Optional[str], notes: Optional[str], created_by: Optional[int], is_active: Optional[bool] = True, critical_to_food_safety: Optional[bool] = False) -> Equipment:
+        eq = Equipment(name=name, equipment_type=equipment_type, serial_number=serial_number, location=location, notes=notes, created_by=created_by, is_active=is_active if is_active is not None else True, critical_to_food_safety=critical_to_food_safety if critical_to_food_safety is not None else False)
         self.db.add(eq)
         self.db.commit()
         self.db.refresh(eq)
@@ -99,8 +99,20 @@ class EquipmentService:
         self.db.commit()
         return True
 
-    def create_work_order(self, *, equipment_id: int, plan_id: Optional[int], title: str, description: Optional[str]) -> MaintenanceWorkOrder:
-        wo = MaintenanceWorkOrder(equipment_id=equipment_id, plan_id=plan_id, title=title, description=description)
+    def create_work_order(self, *, equipment_id: int, plan_id: Optional[int], title: str, description: Optional[str], priority: Optional[str] = None, assigned_to: Optional[int] = None, due_date: Optional[datetime] = None, created_by: Optional[int] = None) -> MaintenanceWorkOrder:
+        # Normalize priority
+        pr = WorkOrderPriority(priority.upper()) if priority else WorkOrderPriority.MEDIUM
+        wo = MaintenanceWorkOrder(
+            equipment_id=equipment_id,
+            plan_id=plan_id,
+            title=title,
+            description=description,
+            status=WorkOrderStatus.PENDING,
+            priority=pr,
+            assigned_to=assigned_to,
+            due_date=due_date,
+            created_by=created_by,
+        )
         self.db.add(wo)
         self.db.commit()
         self.db.refresh(wo)
@@ -109,7 +121,7 @@ class EquipmentService:
     def get_work_order(self, work_order_id: int) -> Optional[MaintenanceWorkOrder]:
         return self.db.query(MaintenanceWorkOrder).filter(MaintenanceWorkOrder.id == work_order_id).first()
 
-    def update_work_order(self, work_order_id: int, *, title: Optional[str] = None, description: Optional[str] = None) -> Optional[MaintenanceWorkOrder]:
+    def update_work_order(self, work_order_id: int, *, title: Optional[str] = None, description: Optional[str] = None, status: Optional[str] = None, priority: Optional[str] = None, assigned_to: Optional[int] = None, due_date: Optional[datetime] = None) -> Optional[MaintenanceWorkOrder]:
         wo = self.get_work_order(work_order_id)
         if not wo:
             return None
@@ -117,6 +129,14 @@ class EquipmentService:
             wo.title = title
         if description is not None:
             wo.description = description
+        if status is not None:
+            wo.status = WorkOrderStatus(status.upper())
+        if priority is not None:
+            wo.priority = WorkOrderPriority(priority.upper())
+        if assigned_to is not None:
+            wo.assigned_to = assigned_to
+        if due_date is not None:
+            wo.due_date = due_date
         self.db.commit()
         self.db.refresh(wo)
         return wo
@@ -135,6 +155,7 @@ class EquipmentService:
             return None
         wo.completed_by = completed_by
         wo.completed_at = datetime.utcnow()
+        wo.status = WorkOrderStatus.COMPLETED
         # Update plan last_performed and next_due if applicable
         if wo.plan_id:
             plan = self.db.query(MaintenancePlan).filter(MaintenancePlan.id == wo.plan_id).first()
@@ -145,12 +166,14 @@ class EquipmentService:
         self.db.refresh(wo)
         return wo
 
-    def list_work_orders(self, equipment_id: Optional[int] = None, plan_id: Optional[int] = None) -> List[MaintenanceWorkOrder]:
+    def list_work_orders(self, equipment_id: Optional[int] = None, plan_id: Optional[int] = None, status: Optional[str] = None) -> List[MaintenanceWorkOrder]:
         q = self.db.query(MaintenanceWorkOrder)
         if equipment_id is not None:
             q = q.filter(MaintenanceWorkOrder.equipment_id == equipment_id)
         if plan_id is not None:
             q = q.filter(MaintenanceWorkOrder.plan_id == plan_id)
+        if status is not None:
+            q = q.filter(MaintenanceWorkOrder.status == WorkOrderStatus(status.upper()))
         return q.order_by(MaintenanceWorkOrder.created_at.desc()).all()
 
     # Calibration

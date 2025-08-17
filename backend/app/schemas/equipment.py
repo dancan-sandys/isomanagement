@@ -9,6 +9,8 @@ class EquipmentCreate(BaseModel):
     serial_number: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    is_active: Optional[bool] = True
+    critical_to_food_safety: Optional[bool] = False
 
 
 class EquipmentResponse(EquipmentCreate):
@@ -51,6 +53,9 @@ class MaintenanceWorkOrderCreate(BaseModel):
     plan_id: Optional[int] = None
     title: str
     description: Optional[str] = None
+    priority: Optional[str] = 'MEDIUM'
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
 
 
 class MaintenanceWorkOrderResponse(BaseModel):
@@ -62,6 +67,11 @@ class MaintenanceWorkOrderResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
     completed_by: Optional[int] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    created_by: Optional[int] = None
     # Enriched
     equipment_name: Optional[str] = None
 
@@ -103,6 +113,11 @@ class CalibrationRecordResponse(BaseModel):
     file_path: str
     file_type: Optional[str] = None
     uploaded_by: int
+    # ISO metadata
+    certificate_number: Optional[str] = None
+    calibrated_by: Optional[str] = None
+    result: Optional[str] = None
+    comments: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -115,6 +130,8 @@ class EquipmentUpdate(BaseModel):
     serial_number: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    is_active: Optional[bool] = None
+    critical_to_food_safety: Optional[bool] = None
 
 
 class MaintenancePlanUpdate(BaseModel):
@@ -127,6 +144,10 @@ class MaintenancePlanUpdate(BaseModel):
 class MaintenanceWorkOrderUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
 
 
 class CalibrationPlanUpdate(BaseModel):

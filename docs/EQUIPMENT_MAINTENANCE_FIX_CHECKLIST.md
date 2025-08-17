@@ -18,51 +18,51 @@ This checklist guides fixing functional gaps across models, schemas, services, e
   - [x] Add `CalibrationPlan.frequency_days: int` (nullable=False, with sensible default)
   - [ ] Backfill existing rows (set from business default, e.g., 365)
   - [ ] Index `CalibrationPlan.next_due_at`
-- [ ] Maintenance plan scheduling
+- [x] Maintenance plan scheduling
   - [x] Ensure `MaintenancePlan.next_due_at` is set at creation: now + `frequency_days` (or `start_date` if added)
   - [ ] Add optional `start_date` (nullable) if needed for predictable scheduling
-- [ ] Work order richness
-  - [ ] Add `status` Enum('PENDING','COMPLETED') with default 'PENDING'
-  - [ ] Add `priority` Enum('LOW','MEDIUM','HIGH') (optional, default 'MEDIUM')
-  - [ ] Add `assigned_to` (FK users.id, nullable)
-  - [ ] Add `due_date` (nullable, indexed)
-  - [ ] Add `created_by` (FK users.id)
-- [ ] Equipment completeness (ISO/PRP)
-  - [ ] Add `is_active` (bool, default True)
-  - [ ] Add `critical_to_food_safety` (bool, default False)
+- [x] Work order richness
+  - [x] Add `status` Enum('PENDING','COMPLETED') with default 'PENDING'
+  - [x] Add `priority` Enum('LOW','MEDIUM','HIGH') (optional, default 'MEDIUM')
+  - [x] Add `assigned_to` (FK users.id, nullable)
+  - [x] Add `due_date` (nullable, indexed)
+  - [x] Add `created_by` (FK users.id)
+- [x] Equipment completeness (ISO/PRP)
+  - [x] Add `is_active` (bool, default True)
+  - [x] Add `critical_to_food_safety` (bool, default False)
   - [ ] Add optional metadata: `asset_tag`, `manufacturer`, `model`, `commissioned_at`, `decommissioned_at`, `owner_department`, `warranty_expiry`
-- [ ] Calibration record auditability
-  - [ ] Keep join via plan_id; do not duplicate equipment_id
-  - [ ] Add optional metadata: `certificate_number`, `calibrated_by` (text/vendor), `result` (pass/fail/text), `comments`
+- [x] Calibration record auditability
+  - [x] Keep join via plan_id; do not duplicate equipment_id
+  - [x] Add optional metadata: `certificate_number`, `calibrated_by` (text/vendor), `result` (pass/fail/text), `comments`
 - [ ] Create Alembic migration(s) for all above
   - [ ] Include safe defaults and data backfills
   - [ ] Add indexes (`next_due_at`, `due_date`, `status`)
 
 ## Phase 2 — Schemas (Pydantic)
 - [x] Equipment
-  - [x] Extend `EquipmentCreate`/`EquipmentResponse` with new optional fields (`is_active`, criticality, asset metadata) — NOTE: planned for later after model changes
+  - [x] Extend `EquipmentCreate`/`EquipmentResponse` with `is_active`, `critical_to_food_safety`
 - [x] Maintenance Plan
   - [x] `MaintenancePlanCreate`: allow lowercase `maintenance_type`; optionally `start_date` — accepting lowercase via service normalization
-  - [x] `MaintenancePlanResponse`: include `equipment_name`, `last_maintenance_date` (alias of `last_performed_at`), `next_due_date` (alias of `next_due_at`), and computed `status`
+  - [x] `MaintenancePlanResponse`: include `equipment_name`, `last_maintenance_date`, `next_due_date`, computed `status`
 - [x] Work Orders
-  - [x] `MaintenanceWorkOrderCreate/Response`: include `equipment_name`
+  - [x] `MaintenanceWorkOrderCreate/Response`: include `status`, `priority`, `assigned_to`, `due_date`, `created_by`, and `equipment_name`
 - [x] Calibration
   - [x] `CalibrationPlanCreate/Response`: include `frequency_days`, `equipment_name`, `last_calibration_date` (alias), computed `status`
-  - [ ] `CalibrationRecordResponse`: add certificate metadata fields and `download_url` when applicable
+  - [x] `CalibrationRecordResponse`: add certificate metadata fields
 - [x] Input normalization helpers (case-insensitive enum handling)
 
 ## Phase 3 — Services
 - [x] `EquipmentService`
   - [x] Normalize `maintenance_type` input (case-insensitive)
-  - [x] `create_maintenance_plan`: set `next_due_at` on creation; accept optional `start_date`
-  - [x] `list_maintenance_plans`: support `equipment_id` filter; enrich response via endpoint
-  - [x] `create_work_order`: base implementation
-  - [x] `list_work_orders`: filters and equipment_name enrichment via endpoint
-  - [x] `complete_work_order`: update plan `last_performed_at` and `next_due_at`
-  - [x] `create_calibration_plan`: require/accept `frequency_days`; set `next_due_at = schedule_date`
-  - [x] `record_calibration`: use `performed_at` and update `next_due_at = performed_at + frequency_days`
-  - [ ] `get_equipment_stats/_get_maintenance_status`: update metrics to use `is_active` and improved status buckets
-  - [x] `get_upcoming_maintenance/get_overdue_calibrations`: rely on `next_due_at` and include `equipment_name`
+  - [x] `create_maintenance_plan`: set `next_due_at` on creation
+  - [x] `list_maintenance_plans`: support `equipment_id` filter
+  - [x] `create_work_order`: set `status='PENDING'`, capture `created_by`, optional `assigned_to`, `due_date`, `priority`
+  - [x] `list_work_orders`: filter by `equipment_id`, `plan_id`, `status`; include `equipment_name` via endpoint
+  - [x] `complete_work_order`: set `status='COMPLETED'`; update plan `last_performed_at` and `next_due_at`
+  - [x] `create_calibration_plan`: require `frequency_days`; set `next_due_at = schedule_date`
+  - [x] `record_calibration`: use `performed_at` as calibration date; set plan `last_calibrated_at` and `next_due_at = performed_at + frequency_days`
+  - [ ] `get_equipment_stats/_get_maintenance_status`: update metrics to use `is_active`
+  - [x] `get_upcoming_maintenance/get_overdue_calibrations`: rely on `next_due_at`
 - [ ] `EquipmentCalibrationService`
   - [ ] Fix queries: join `CalibrationRecord -> CalibrationPlan` and use `CalibrationRecord.performed_at`
   - [ ] Use `CalibrationPlan.frequency_days` for next calibration computations
@@ -71,60 +71,31 @@ This checklist guides fixing functional gaps across models, schemas, services, e
 
 ## Phase 4 — Endpoints (FastAPI)
 - [x] Equipment CRUD
-  - [x] GET `/equipment/{id}`
-  - [x] PUT `/equipment/{id}`
-  - [x] DELETE `/equipment/{id}`
-- [x] Maintenance Plans
-  - [x] GET `/equipment/maintenance-plans?equipment_id=` (param variant), keep existing path-based
-  - [x] PUT `/equipment/maintenance-plans/{plan_id}`
-  - [x] DELETE `/equipment/maintenance-plans/{plan_id}`
-- [x] Work Orders
-  - [x] GET `/equipment/work-orders/{id}`
-  - [x] PUT `/equipment/work-orders/{id}`
-  - [x] DELETE `/equipment/work-orders/{id}`
-  - [x] Enhance GET `/equipment/work-orders` to accept filters
-- [x] Calibration Plans & Records
-  - [x] GET `/equipment/calibration-plans?equipment_id=` (param variant), keep existing path-based
-  - [x] PUT `/equipment/calibration-plans/{plan_id}`
-  - [x] DELETE `/equipment/calibration-plans/{plan_id}`
-  - [x] GET `/equipment/calibration-records/{record_id}/download` (stream file)
-- [x] History & Analytics
-  - [x] GET `/equipment/maintenance-history`
-  - [x] GET `/equipment/calibration-history`
-  - [ ] Ensure analytics endpoints return shapes used by UI
-- [x] Response DTOs
-  - [x] Ensure enriched DTOs include `equipment_name`, aliased date fields, and computed `status`
+- [x] Maintenance Plans (param/list, update, delete)
+- [x] Work Orders (filters, CRUD)
+- [x] Calibration Plans & Records (param/list, update, delete, download)
+- [x] History endpoints
+- [x] Response DTO enrichment (names, status, aliased dates)
 
 ## Phase 5 — Frontend alignment
-- [x] `src/services/equipmentAPI.ts`
-  - [x] Verify all methods match backend routes and payloads
-  - [x] Ensure `list*` methods support `equipment_id` param variants
-  - [x] Implement `downloadCalibrationCertificate(recordId)` against new download endpoint
-- [x] `src/pages/Equipment.tsx`
-  - [x] Load and display maintenance plans (`equipmentAPI.listMaintenancePlans`)
-  - [x] Load and display calibration plans (`equipmentAPI.listCalibrationPlans`)
-  - [x] Expect enriched fields (`equipment_name`, `status`, aliased dates)
+- [x] `src/services/equipmentAPI.ts` verified
+- [x] `src/pages/Equipment.tsx` loads plans/calibrations
 
 ## Phase 6 — Tests & QA
 - [ ] Backend API tests
-  - [ ] Update `backend/test_equipment_endpoints.py` to exercise new endpoints and payloads
-  - [ ] Add tests for upload + download calibration certificate
-  - [ ] Add service-layer tests for scheduling logic (maintenance/calibration next due)
-- [ ] Frontend e2e smoke (existing scripts)
-  - [ ] Run `frontend_functionality_test.py` and ensure Equipment flows pass
+- [ ] Frontend e2e smoke
 - [ ] Performance & indexes
-  - [ ] Verify list endpoints with filters perform adequately; add indexes if needed
 
 ## Phase 7 — ISO/PRP alignment
-- [ ] Confirm required calibration traceability fields (certificate number, provider, date, next due, status)
-- [ ] Confirm maintenance PRP linkage (SOP/PRP document id, verification on completion)
-- [ ] Add `critical_to_food_safety` to support risk-based prioritization
-- [ ] Ensure auditability: timestamps, `created_by/updated_by`, user actions on completion/verification
-- [ ] Update docs to reflect compliance alignment
+- [ ] Confirm calibration traceability fields
+- [ ] Maintenance PRP linkage (SOP/PRP id, verification)
+- [ ] Risk flag (`critical_to_food_safety`) usage in UI/KPIs
+- [ ] Auditability: created_by/updated_by, verification user
+- [ ] Update docs
 
 ## Phase 8 — Deployment & Data
 - [ ] Generate and apply Alembic migrations
-- [ ] Backfill `next_due_at` for maintenance plans and calibration plans
+- [ ] Backfill `next_due_at` for existing plans
 - [ ] Seed demo data for new fields (optional)
 
 ---

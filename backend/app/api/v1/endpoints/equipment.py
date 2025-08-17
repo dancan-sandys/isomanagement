@@ -33,7 +33,7 @@ async def create_equipment(
     current_user: User = Depends(get_current_user)
 ):
     svc = EquipmentService(db)
-    return svc.create_equipment(name=payload.name, equipment_type=payload.equipment_type, serial_number=payload.serial_number, location=payload.location, notes=payload.notes, created_by=current_user.id)
+    return svc.create_equipment(name=payload.name, equipment_type=payload.equipment_type, serial_number=payload.serial_number, location=payload.location, notes=payload.notes, created_by=current_user.id, is_active=payload.is_active, critical_to_food_safety=payload.critical_to_food_safety)
 
 
 @router.get("/", response_model=list[EquipmentResponse])
@@ -190,18 +190,19 @@ async def create_work_order(
     current_user: User = Depends(get_current_user)
 ):
     svc = EquipmentService(db)
-    return svc.create_work_order(equipment_id=payload.equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description)
+    return svc.create_work_order(equipment_id=payload.equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description, priority=payload.priority, assigned_to=payload.assigned_to, due_date=payload.due_date, created_by=current_user.id)
 
 
 @router.get("/work-orders", response_model=list[MaintenanceWorkOrderResponse])
 async def list_work_orders(
     equipment_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     svc = EquipmentService(db)
-    items = svc.list_work_orders(equipment_id=equipment_id, plan_id=plan_id)
+    items = svc.list_work_orders(equipment_id=equipment_id, plan_id=plan_id, status=status)
     enriched: list[MaintenanceWorkOrderResponse] = []
     for wo in items:
         eq = svc.get_equipment(wo.equipment_id)
@@ -214,6 +215,11 @@ async def list_work_orders(
             created_at=wo.created_at,
             completed_at=wo.completed_at,
             completed_by=wo.completed_by,
+            status=wo.status.value if wo.status else None,
+            priority=wo.priority.value if wo.priority else None,
+            assigned_to=wo.assigned_to,
+            due_date=wo.due_date,
+            created_by=wo.created_by,
             equipment_name=eq.name if eq else None,
         ))
     return enriched
@@ -239,6 +245,11 @@ async def get_work_order(
         created_at=wo.created_at,
         completed_at=wo.completed_at,
         completed_by=wo.completed_by,
+        status=wo.status.value if wo.status else None,
+        priority=wo.priority.value if wo.priority else None,
+        assigned_to=wo.assigned_to,
+        due_date=wo.due_date,
+        created_by=wo.created_by,
         equipment_name=eq.name if eq else None,
     )
 
@@ -264,6 +275,11 @@ async def update_work_order(
         created_at=wo.created_at,
         completed_at=wo.completed_at,
         completed_by=wo.completed_by,
+        status=wo.status.value if wo.status else None,
+        priority=wo.priority.value if wo.priority else None,
+        assigned_to=wo.assigned_to,
+        due_date=wo.due_date,
+        created_by=wo.created_by,
         equipment_name=eq.name if eq else None,
     )
 
@@ -288,6 +304,11 @@ async def complete_work_order(
         created_at=wo.created_at,
         completed_at=wo.completed_at,
         completed_by=wo.completed_by,
+        status=wo.status.value if wo.status else None,
+        priority=wo.priority.value if wo.priority else None,
+        assigned_to=wo.assigned_to,
+        due_date=wo.due_date,
+        created_by=wo.created_by,
         equipment_name=eq.name if eq else None,
     )
 
@@ -340,6 +361,7 @@ async def list_calibration_plans(
             id=plan.id,
             equipment_id=plan.equipment_id,
             schedule_date=plan.schedule_date,
+            frequency_days=plan.frequency_days,
             last_calibrated_at=plan.last_calibrated_at,
             next_due_at=plan.next_due_at,
             active=plan.active,
@@ -376,6 +398,7 @@ async def update_calibration_plan(
         id=plan.id,
         equipment_id=plan.equipment_id,
         schedule_date=plan.schedule_date,
+        frequency_days=plan.frequency_days,
         last_calibrated_at=plan.last_calibrated_at,
         next_due_at=plan.next_due_at,
         active=plan.active,
