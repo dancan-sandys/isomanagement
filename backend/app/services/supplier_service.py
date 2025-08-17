@@ -99,6 +99,14 @@ class SupplierService:
         offset = (filter_params.page - 1) * filter_params.size
         suppliers = query.offset(offset).limit(filter_params.size).all()
 
+        # Pre-compute materials count by supplier for this page set
+        material_counts_rows = (
+            self.db.query(Material.supplier_id, func.count(Material.id))
+            .group_by(Material.supplier_id)
+            .all()
+        )
+        supplier_id_to_material_count = {sid: int(cnt) for sid, cnt in material_counts_rows}
+
         def normalize_enum(val: Any) -> str:
             try:
                 return (val.value if hasattr(val, "value") else str(val)).lower()
@@ -135,7 +143,7 @@ class SupplierService:
                 "overall_score": float(s.overall_score or 0.0),
                 "last_evaluation_date": s.last_evaluation_date,
                 "next_evaluation_date": s.next_evaluation_date,
-                "materials_count": 0,
+                "materials_count": supplier_id_to_material_count.get(s.id, 0),
                 "created_at": s.created_at,
                 "updated_at": s.updated_at,
                 "created_by": s.created_by,

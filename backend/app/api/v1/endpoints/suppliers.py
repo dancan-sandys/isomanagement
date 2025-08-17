@@ -917,7 +917,7 @@ async def delete_evaluation(
 
 
 # COA upload/download and delivery inspection endpoints
-@router.post("/deliveries/{delivery_id}/coa", response_model=dict)
+@router.post("/deliveries/{delivery_id}/coa", response_model=ResponseModel[dict])
 async def upload_delivery_coa(
     delivery_id: int,
     coa_file: UploadFile = File(...),
@@ -947,7 +947,7 @@ async def upload_delivery_coa(
         audit_event(db, current_user.id, "delivery_coa_uploaded", "suppliers", str(delivery.id))
     except Exception:
         pass
-    return {"file_path": file_path}
+    return ResponseModel(success=True, message="COA uploaded successfully", data={"file_path": file_path})
 
 
 @router.get("/deliveries/{delivery_id}/coa/download")
@@ -1139,7 +1139,7 @@ async def get_deliveries(
     )
 
 
-@router.get("/deliveries/{delivery_id}", response_model=IncomingDeliveryResponse)
+@router.get("/deliveries/{delivery_id}", response_model=ResponseModel[IncomingDeliveryResponse])
 async def get_delivery(
     delivery_id: int,
     db: Session = Depends(get_db),
@@ -1155,10 +1155,10 @@ async def get_delivery(
             detail="Delivery not found"
         )
     
-    return delivery
-
-
-@router.post("/deliveries/", response_model=IncomingDeliveryResponse)
+        return ResponseModel(success=True, message="Delivery retrieved successfully", data=delivery)
+ 
+ 
+@router.post("/deliveries/", response_model=ResponseModel[IncomingDeliveryResponse])
 async def create_delivery(
     delivery_data: IncomingDeliveryCreate,
     db: Session = Depends(get_db),
@@ -1171,10 +1171,10 @@ async def create_delivery(
         audit_event(db, current_user.id, "delivery_created", "suppliers", str(delivery.id), {"supplier_id": delivery.supplier_id})
     except Exception:
         pass
-    return delivery
+    return ResponseModel(success=True, message="Delivery created successfully", data=delivery)
 
 
-@router.put("/deliveries/{delivery_id}", response_model=IncomingDeliveryResponse)
+@router.put("/deliveries/{delivery_id}", response_model=ResponseModel[IncomingDeliveryResponse])
 async def update_delivery(
     delivery_id: int,
     delivery_data: IncomingDeliveryUpdate,
@@ -1195,7 +1195,7 @@ async def update_delivery(
         audit_event(db, current_user.id, "delivery_updated", "suppliers", str(delivery.id))
     except Exception:
         pass
-    return delivery
+    return ResponseModel(success=True, message="Delivery updated successfully", data=delivery)
 
 
 @router.delete("/deliveries/{delivery_id}")
