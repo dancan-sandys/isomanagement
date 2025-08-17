@@ -945,3 +945,79 @@ class CCPValidation(Base):
             self.review_status == "approved" and 
             not self.is_expired()
         )
+
+
+class HACCPEvidenceAttachment(Base):
+    __tablename__ = "haccp_evidence_attachments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Link to the HACCP record (monitoring log, verification log, etc.)
+    record_type = Column(String(50), nullable=False)  # 'monitoring_log', 'verification_log', 'validation', etc.
+    record_id = Column(Integer, nullable=False)  # ID of the specific record
+    
+    # Link to Document storage
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    
+    # Evidence metadata
+    evidence_type = Column(String(50), nullable=False)  # 'photo', 'document', 'certificate', 'test_result', etc.
+    description = Column(Text, nullable=True)
+    upload_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Upload information
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    file_type = Column(String(50), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    document = relationship("Document")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+    
+    def __repr__(self):
+        return f"<HACCPEvidenceAttachment(id={self.id}, record_type='{self.record_type}', record_id={self.record_id})>"
+
+
+class HACCPAuditLog(Base):
+    __tablename__ = "haccp_audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Event information
+    event_type = Column(String(50), nullable=False)  # 'create', 'update', 'delete', 'approve', 'verify', etc.
+    event_description = Column(Text, nullable=False)
+    
+    # Record information
+    record_type = Column(String(50), nullable=False)  # 'ccp', 'monitoring_log', 'verification_log', 'validation', etc.
+    record_id = Column(Integer, nullable=False)
+    
+    # User information
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_role = Column(String(50), nullable=True)
+    
+    # Change information
+    old_values = Column(Text, nullable=True)  # JSON string of old values
+    new_values = Column(Text, nullable=True)  # JSON string of new values
+    changed_fields = Column(Text, nullable=True)  # JSON array of changed field names
+    
+    # E-signature information
+    signature_hash = Column(String(255), nullable=True)  # Hash of the e-signature
+    signature_timestamp = Column(DateTime, nullable=True)
+    signature_method = Column(String(50), nullable=True)  # 'digital_signature', 'biometric', 'password', etc.
+    
+    # Metadata
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    user_agent = Column(Text, nullable=True)
+    session_id = Column(String(255), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    
+    def __repr__(self):
+        return f"<HACCPAuditLog(id={self.id}, event_type='{self.event_type}', record_type='{self.record_type}')>"

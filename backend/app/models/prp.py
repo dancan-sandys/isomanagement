@@ -166,6 +166,7 @@ class PRPProgram(Base):
     risk_assessments = relationship("RiskAssessment", back_populates="program")
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
     risk_assessments_enhanced = relationship("HACCPRiskAssessment", foreign_keys="HACCPRiskAssessment.prp_program_id", cascade="all, delete-orphan")
+    audit_integrations = relationship("PRPAuditIntegration", foreign_keys="PRPAuditIntegration.prp_program_id", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<PRPProgram(id={self.id}, program_code='{self.program_code}', name='{self.name}')>"

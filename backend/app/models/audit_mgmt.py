@@ -49,12 +49,24 @@ class AuditProgram(Base):
     kpis = Column(JSON)  # JSON structure for KPI targets and metrics
     status = Column(Enum(ProgramStatus), nullable=False, default=ProgramStatus.DRAFT)
     created_by = Column(Integer, nullable=False)
+    # Risk integration fields
+    risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
+    risk_assessment_required = Column(Boolean, default=True)
+    risk_assessment_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    last_risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    next_risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    risk_monitoring_plan = Column(Text, nullable=True)
+    risk_improvement_plan = Column(Text, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     audits = relationship("Audit", back_populates="program", cascade="all, delete-orphan")
     manager = relationship("User", foreign_keys=[manager_id])
+    risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
 
 
 class Audit(Base):
@@ -80,11 +92,26 @@ class Audit(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Risk integration fields
+    risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
+    risk_assessment_method = Column(String(100), nullable=True)
+    risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    risk_assessor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    risk_treatment_plan = Column(Text, nullable=True)
+    risk_monitoring_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    risk_control_effectiveness = Column(Integer, nullable=True)
+    risk_residual_score = Column(Integer, nullable=True)
+    risk_residual_level = Column(String(50), nullable=True)
+    
     # Relationships
     program = relationship("AuditProgram", back_populates="audits")
     checklist_items = relationship("AuditChecklistItem", back_populates="audit", cascade="all, delete-orphan")
     findings = relationship("AuditFinding", back_populates="audit", cascade="all, delete-orphan")
     attachments = relationship("AuditAttachment", back_populates="audit", cascade="all, delete-orphan")
+    risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
+    risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
 
 
 class AuditChecklistTemplate(Base):
@@ -164,7 +191,25 @@ class AuditFinding(Base):
     related_nc_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Risk integration fields
+    risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
+    risk_assessment_method = Column(String(100), nullable=True)
+    risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    risk_assessor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    risk_treatment_plan = Column(Text, nullable=True)
+    risk_monitoring_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    risk_control_effectiveness = Column(Integer, nullable=True)
+    risk_residual_score = Column(Integer, nullable=True)
+    risk_residual_level = Column(String(50), nullable=True)
+    risk_acceptable = Column(Boolean, nullable=True)
+    risk_justification = Column(Text, nullable=True)
+    
     audit = relationship("Audit", back_populates="findings")
+    risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
+    risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_finding_id", cascade="all, delete-orphan")
+    prp_integrations = relationship("PRPAuditIntegration", foreign_keys="PRPAuditIntegration.audit_finding_id", cascade="all, delete-orphan")
 
 
 class AuditAttachment(Base):

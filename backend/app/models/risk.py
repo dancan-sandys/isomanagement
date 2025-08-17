@@ -150,6 +150,23 @@ class RiskRegisterItem(Base):
     last_review_date = Column(DateTime(timezone=True), nullable=True)
     review_outcome = Column(Text, nullable=True)
 
+    # Strategic Risk Fields
+    strategic_impact = Column(Text, nullable=True)
+    business_unit = Column(String(100), nullable=True)
+    project_association = Column(String(100), nullable=True)
+    stakeholder_impact = Column(JSON, nullable=True)
+    market_impact = Column(Text, nullable=True)
+    competitive_impact = Column(Text, nullable=True)
+    regulatory_impact = Column(Text, nullable=True)
+    financial_impact = Column(JSON, nullable=True)
+    operational_impact = Column(JSON, nullable=True)
+    reputational_impact = Column(Text, nullable=True)
+    risk_velocity = Column(String(50), nullable=True)  # slow, medium, fast
+    risk_persistence = Column(String(50), nullable=True)  # temporary, persistent, permanent
+    risk_contagion = Column(Boolean, nullable=True)  # Can it spread to other areas
+    risk_cascade = Column(Boolean, nullable=True)  # Can it trigger other risks
+    risk_amplification = Column(Boolean, nullable=True)  # Can it amplify other risks
+
     # Audit fields
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

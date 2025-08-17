@@ -153,27 +153,80 @@ This checklist closes the identified gaps in the current HACCP module and ensure
   - **Acceptance:** ✅ Batch remains on hold until QA disposition is recorded with e-signature.
 
 ### 8) Verification (Principle 6)
-- [ ] Define and schedule verification activities (record review, direct observation, sampling/testing, calibration checks).
-  - Artifacts: `CCPVerificationProgram`, scheduled tasks, UI dashboard.
-  - Acceptance: Verification tasks appear on a calendar/queue and require role-based completion.
-- [ ] Role segregation enforcement (operator vs verifier).
-  - Acceptance: The same user cannot verify their own monitoring logs.
-- [ ] Add missing GET endpoint for verification logs and pagination.
-  - Artifacts: `GET /haccp/ccps/{ccp_id}/verification-logs` with paging; update `frontend/src/services/haccpAPI.ts`.
-  - Acceptance: Frontend call returns paged logs without 404.
+- [x] Define and schedule verification activities (record review, direct observation, sampling/testing, calibration checks).
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive verification program system
+  - **Artifacts:** ✅ `CCPVerificationProgram` model, ✅ scheduled tasks, ✅ API endpoints
+  - **Features:**
+    - Verification program creation with frequency scheduling
+    - Multiple verification types (record review, direct observation, sampling/testing, calibration checks)
+    - Automatic next verification date calculation
+    - Due/overdue verification tracking
+    - Role-based verification requirements
+  - **API Endpoints:** ✅ `POST /ccps/{ccp_id}/verification-programs`, `GET /ccps/{ccp_id}/verification-programs`, `GET /verification/due`
+  - **Acceptance:** ✅ Verification tasks appear on a calendar/queue and require role-based completion.
+- [x] Role segregation enforcement (operator vs verifier).
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive role segregation system
+  - **Features:**
+    - Automatic check preventing users from verifying their own monitoring logs
+    - Role-based verification requirements enforcement
+    - Verifier role tracking in verification logs
+    - Detailed error messages for role violations
+  - **Acceptance:** ✅ The same user cannot verify their own monitoring logs.
+- [x] Add missing GET endpoint for verification logs and pagination.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive verification log management
+  - **Artifacts:** ✅ `GET /haccp/ccps/{ccp_id}/verification-logs` with paging, ✅ Enhanced verification log creation
+  - **Features:**
+    - Paginated verification log retrieval
+    - Enhanced verification log creation with role checks
+    - Verification program linkage
+    - Comprehensive verification metadata
+  - **Acceptance:** ✅ Frontend call returns paged logs without 404.
 
 ### 9) Validation and revalidation
-- [ ] Add `CCPValidation` artifacts linking to process authority letters/tests.
-  - Acceptance: Plan cannot reach approval without validation entries.
+- [x] Add `CCPValidation` artifacts linking to process authority letters/tests.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive validation system
+  - **Features:**
+    - Multiple validation types (process authority letter, scientific study, validation test, expert opinion)
+    - Document linkage for validation artifacts
+    - External reference support
+    - Validation review workflow with approval/rejection
+    - Validation status tracking for HACCP plan approval
+    - Expiration date management
+  - **API Endpoints:** ✅ `POST /ccps/{ccp_id}/validations`, `GET /ccps/{ccp_id}/validations`, `POST /validations/{validation_id}/review`, `GET /ccps/{ccp_id}/validation-status`
+  - **Acceptance:** ✅ Plan cannot reach approval without validation entries.
 - [ ] Revalidation scheduling and triggers (formula changes, equipment changes, trend shifts).
-  - Acceptance: Revalidation tasks are generated when configured triggers occur.
+  - **Status:** 🔄 **PARTIALLY IMPLEMENTED** - Basic validation system in place
+  - **Features:**
+    - Validation expiration tracking
+    - Validation status monitoring
+    - Manual revalidation triggers
+  - **Pending:** Automated revalidation scheduling based on triggers
+  - **Acceptance:** Revalidation tasks are generated when configured triggers occur.
 
 ### 10) Recordkeeping and evidence (Principle 7)
-- [ ] Replace free-text `evidence_files` with first-class attachments linked to `Document` storage.
-  - Acceptance: Evidence is uploaded/stored with metadata and versioning.
-- [ ] Immutable monitoring/verification logs with e-signatures; full audit trail.
-  - Artifacts: Append-only or WORM-like constraints; audit log entries.
-  - Acceptance: Updates preserve history; signatures captured on critical events.
+- [x] Replace free-text `evidence_files` with first-class attachments linked to `Document` storage.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive evidence management system
+  - **Features:**
+    - First-class evidence attachments linked to Document storage
+    - Support for multiple record types (monitoring logs, verification logs, validations, CCPs, hazards)
+    - Multiple evidence types (photo, document, certificate, test_result, calibration, sop, other)
+    - Comprehensive metadata tracking (file size, type, upload date, description)
+    - Document versioning and metadata management
+    - Evidence attachment lifecycle management
+  - **API Endpoints:** ✅ `POST /evidence/attachments`, `GET /evidence/attachments/{record_type}/{record_id}`, `DELETE /evidence/attachments/{attachment_id}`
+  - **Acceptance:** ✅ Evidence is uploaded/stored with metadata and versioning.
+- [x] Immutable monitoring/verification logs with e-signatures; full audit trail.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive audit trail and e-signature system
+  - **Features:**
+    - Comprehensive audit logging for all HACCP activities
+    - E-signature support with multiple signature methods
+    - Full audit trail with before/after values and change tracking
+    - User role tracking and session information
+    - IP address and user agent logging for security
+    - Immutable audit logs with comprehensive metadata
+    - Support for all HACCP record types and events
+  - **Artifacts:** ✅ Append-only audit log entries with comprehensive metadata
+  - **Acceptance:** ✅ Updates preserve history; signatures captured on critical events.
 
 ### 11) Service-layer consolidation and endpoint cleanup
 - [ ] Deduplicate routes in `haccp.py`; keep single definitions.

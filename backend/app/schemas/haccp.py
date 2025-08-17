@@ -1112,3 +1112,53 @@ class ValidationResponse(BaseModel):
     updated_at: datetime
     
     model_config = {"from_attributes": True}
+
+# Evidence Attachment Schemas
+class EvidenceAttachmentCreate(BaseModel):
+    record_type: str = Field(..., pattern="^(monitoring_log|verification_log|validation|ccp|hazard)$")
+    record_id: int
+    document_id: int
+    evidence_type: str = Field(..., pattern="^(photo|document|certificate|test_result|calibration|sop|other)$")
+    description: Optional[str] = None
+    file_size: Optional[int] = None
+    file_type: Optional[str] = None
+
+
+class EvidenceAttachmentResponse(BaseModel):
+    id: int
+    record_type: str
+    record_id: int
+    document_id: int
+    evidence_type: str
+    description: Optional[str] = None
+    upload_date: datetime
+    uploaded_by: int
+    file_size: Optional[int] = None 
+    file_type: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+# Audit Log Schemas
+class AuditLogResponse(BaseModel):
+    id: int
+    event_type: str
+    event_description: str
+    record_type: str
+    record_id: int
+    user_id: int
+    user_role: Optional[str] = None
+    old_values: Optional[str] = None
+    new_values: Optional[str] = None
+    changed_fields: Optional[str] = None
+    signature_hash: Optional[str] = None
+    signature_timestamp: Optional[datetime] = None
+    signature_method: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    session_id: Optional[str] = None
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}

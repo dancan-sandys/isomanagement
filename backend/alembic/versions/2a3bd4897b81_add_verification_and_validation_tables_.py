@@ -17,14 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create verification_type enum
-    op.execute("CREATE TYPE verification_type AS ENUM ('record_review', 'direct_observation', 'sampling_testing', 'calibration_check')")
-    
     # Create ccp_verification_programs table
     op.create_table('ccp_verification_programs',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('ccp_id', sa.Integer(), nullable=False),
-        sa.Column('verification_type', sa.Enum('record_review', 'direct_observation', 'sampling_testing', 'calibration_check', name='verification_type'), nullable=False),
+        sa.Column('verification_type', sa.String(length=50), nullable=False),  # Use String instead of Enum for SQLite
         sa.Column('frequency', sa.String(length=50), nullable=False),
         sa.Column('frequency_value', sa.Integer(), nullable=True),
         sa.Column('last_verification_date', sa.DateTime(), nullable=True),
@@ -42,17 +39,11 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_ccp_verification_programs_id'), 'ccp_verification_programs', ['id'], unique=False)
     
-    # Create validation_type enum
-    op.execute("CREATE TYPE validation_type AS ENUM ('process_authority_letter', 'scientific_study', 'validation_test', 'expert_opinion')")
-    
-    # Create validation_review_status enum
-    op.execute("CREATE TYPE validation_review_status AS ENUM ('pending', 'approved', 'rejected')")
-    
     # Create ccp_validations table
     op.create_table('ccp_validations',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('ccp_id', sa.Integer(), nullable=False),
-        sa.Column('validation_type', sa.Enum('process_authority_letter', 'scientific_study', 'validation_test', 'expert_opinion', name='validation_type'), nullable=False),
+        sa.Column('validation_type', sa.String(length=50), nullable=False),  # Use String instead of Enum for SQLite
         sa.Column('validation_title', sa.String(length=200), nullable=False),
         sa.Column('validation_description', sa.Text(), nullable=True),
         sa.Column('document_id', sa.Integer(), nullable=True),
@@ -64,7 +55,7 @@ def upgrade() -> None:
         sa.Column('critical_limits_validated', sa.Text(), nullable=True),
         sa.Column('reviewed_by', sa.Integer(), nullable=True),
         sa.Column('reviewed_at', sa.DateTime(), nullable=True),
-        sa.Column('review_status', sa.Enum('pending', 'approved', 'rejected', name='validation_review_status'), nullable=True),
+        sa.Column('review_status', sa.String(length=20), nullable=True),  # Use String instead of Enum for SQLite
         sa.Column('review_notes', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.Column('created_by', sa.Integer(), nullable=True),
@@ -98,8 +89,3 @@ def downgrade() -> None:
     op.drop_table('ccp_validations')
     op.drop_index(op.f('ix_ccp_verification_programs_id'), table_name='ccp_verification_programs')
     op.drop_table('ccp_verification_programs')
-    
-    # Drop enums
-    op.execute("DROP TYPE validation_review_status")
-    op.execute("DROP TYPE validation_type")
-    op.execute("DROP TYPE verification_type")

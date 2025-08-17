@@ -3310,3 +3310,92 @@ async def create_verification_program(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create verification program: {str(e)}"
         )
+
+# Evidence Management Endpoints
+@router.post("/evidence/attachments")
+async def create_evidence_attachment(
+    attachment_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create an evidence attachment for a HACCP record"""
+    try:
+        haccp_service = HACCPService(db)
+        attachment = haccp_service.create_evidence_attachment(attachment_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Evidence attachment created successfully",
+            data={
+                "id": attachment.id,
+                "record_type": attachment.record_type,
+                "record_id": attachment.record_id,
+                "document_id": attachment.document_id,
+                "evidence_type": attachment.evidence_type
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create evidence attachment: {str(e)}"
+        )
+
+
+@router.get("/evidence/attachments/{record_type}/{record_id}")
+async def get_evidence_attachments(
+    record_type: str,
+    record_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all evidence attachments for a specific record"""
+    try:
+        haccp_service = HACCPService(db)
+        attachments = haccp_service.get_evidence_attachments(record_type, record_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Evidence attachments retrieved successfully",
+            data={"items": attachments, "total": len(attachments)}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get evidence attachments: {str(e)}"
+        )
+
+
+@router.delete("/evidence/attachments/{attachment_id}")
+async def delete_evidence_attachment(
+    attachment_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
+    db: Session = Depends(get_db)
+):
+    """Delete an evidence attachment"""
+    try:
+        haccp_service = HACCPService(db)
+        success = haccp_service.delete_evidence_attachment(attachment_id, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Evidence attachment deleted successfully",
+            data={"attachment_id": attachment_id}
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete evidence attachment: {str(e)}"
+        )

@@ -2,7 +2,7 @@
 from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
-from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, CCPMonitoringSchedule, CCPVerificationProgram, CCPValidation, RiskLevel
+from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, CCPMonitoringSchedule, CCPVerificationProgram, CCPValidation, HACCPEvidenceAttachment, HACCPAuditLog, RiskLevel
 from .prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
     RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
@@ -24,6 +24,12 @@ from .haccp_risk import (
     HACCPRiskMonitoringType, HACCPRiskMonitoringResult, HACCPRiskIntegrationType,
     HACCPElementType, HACCPRiskReviewOutcome
 )
+from .audit_risk import (
+    AuditRiskAssessment, AuditRiskIntegration, AuditRiskMonitoring, AuditRiskReview,
+    AuditRiskAssessmentType, AuditRiskReviewStatus, AuditRiskReviewType,
+    AuditRiskMonitoringType, AuditRiskMonitoringResult, AuditRiskIntegrationType,
+    AuditElementType, AuditRiskReviewOutcome, PRPAuditIntegration
+)
 from .notification import Notification, NotificationType, NotificationCategory, NotificationPriority
 from .management_review import ManagementReview, ReviewAgendaItem, ReviewAction, ManagementReviewStatus
 from .audit_mgmt import (
@@ -41,7 +47,7 @@ __all__ = [
     "Document", "DocumentVersion", "DocumentApproval", "DocumentChangeLog", "DocumentTemplate",
     
     # HACCP models
-    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig", "DecisionTree", "CCPMonitoringSchedule", "CCPVerificationProgram", "CCPValidation",
+    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig", "DecisionTree", "CCPMonitoringSchedule", "CCPVerificationProgram", "CCPValidation", "HACCPEvidenceAttachment", "HACCPAuditLog", "HACCPEvidenceAttachment", "HACCPAuditLog",
     
     # PRP models
     "PRPProgram", "PRPChecklist", "PRPChecklistItem", "PRPTemplate", "PRPSchedule",
@@ -68,6 +74,10 @@ __all__ = [
     "HACCPRiskAssessmentType", "HACCPRiskReviewStatus", "HACCPRiskReviewType",
     "HACCPRiskMonitoringType", "HACCPRiskMonitoringResult", "HACCPRiskIntegrationType",
     "HACCPElementType", "HACCPRiskReviewOutcome",
+    "AuditRiskAssessment", "AuditRiskIntegration", "AuditRiskMonitoring", "AuditRiskReview",
+    "AuditRiskAssessmentType", "AuditRiskReviewStatus", "AuditRiskReviewType",
+    "AuditRiskMonitoringType", "AuditRiskMonitoringResult", "AuditRiskIntegrationType",
+    "AuditElementType", "AuditRiskReviewOutcome", "PRPAuditIntegration",
     # Notification models
     "Notification", "NotificationType", "NotificationCategory", "NotificationPriority",
     # Management Reviews

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_, or_
 import uuid
+from enum import Enum
 
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
@@ -27,17 +28,199 @@ from app.models.haccp import CCPMonitoringSchedule
 from app.schemas.haccp import MonitoringScheduleStatus
 from app.models.equipment import Equipment
 from app.models.haccp import CCPVerificationProgram, CCPValidation
+from app.models.haccp import HACCPAuditLog, HACCPEvidenceAttachment
+from app.models.document import Document
 
 logger = logging.getLogger(__name__)
 
 
+class HACCPValidationError(Exception):
+    """Custom exception for HACCP validation errors"""
+    pass
+
+
+class HACCPBusinessError(Exception):
+    """Custom exception for HACCP business logic errors"""
+    pass
+
+
+class HACCPActionType(Enum):
+    """Enum for HACCP action types"""
+    MONITOR = "monitor"
+    VERIFY = "verify"
+    VALIDATE = "validate"
+    REVIEW = "review"
+    APPROVE = "approve"
+
+
+class HACCPValidationService:
+    """Service for HACCP data validation"""
+    
+    @staticmethod
+    def validate_risk_assessment(likelihood: int, severity: int) -> None:
+        """Validate risk assessment parameters"""
+        if not (1 <= likelihood <= 5):
+            raise HACCPValidationError("Likelihood must be between 1 and 5")
+        if not (1 <= severity <= 5):
+            raise HACCPValidationError("Severity must be between 1 and 5")
+    
+    @staticmethod
+    def validate_critical_limits(critical_limits: Dict[str, Any]) -> None:
+        """Validate critical limits data"""
+        if not critical_limits:
+            raise HACCPValidationError("Critical limits cannot be empty")
+        
+        required_fields = ['parameter', 'min_value', 'max_value', 'unit']
+        for field in required_fields:
+            if field not in critical_limits:
+                raise HACCPValidationError(f"Critical limit missing required field: {field}")
+    
+    @staticmethod
+    def validate_monitoring_schedule(schedule_data: Dict[str, Any]) -> None:
+        """Validate monitoring schedule data"""
+        if not schedule_data.get('frequency'):
+            raise HACCPValidationError("Monitoring frequency is required")
+        
+        valid_frequencies = ['hourly', 'daily', 'weekly', 'monthly', 'quarterly']
+        if schedule_data['frequency'] not in valid_frequencies:
+            raise HACCPValidationError(f"Invalid frequency. Must be one of: {valid_frequencies}")
+
+
+class HACCPNotificationService:
+    """Service for HACCP notifications"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def notify_ccp_deviation(self, ccp_id: int, deviation_details: str, user_id: int) -> None:
+        """Notify relevant users about CCP deviation"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            return
+        
+        # Notify HACCP team members
+        haccp_users = self.db.query(User).filter(User.role.has(name="HACCP Team")).all()
+        
+        for user in haccp_users:
+            notification = Notification(
+                user_id=user.id,
+                type=NotificationType.ALERT,
+                priority=NotificationPriority.HIGH,
+                category=NotificationCategory.HACCP,
+                title="CCP Deviation Detected",
+                message=f"CCP '{ccp.name}' has a deviation: {deviation_details}",
+                data={
+                    "ccp_id": ccp_id,
+                    "deviation_details": deviation_details,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            self.db.add(notification)
+        
+        self.db.commit()
+    
+    def notify_overdue_monitoring(self, ccp_id: int) -> None:
+        """Notify about overdue monitoring"""
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            return
+        
+        # Notify assigned monitors
+        assigned_users = self.db.query(User).join(CCPMonitoringSchedule).filter(
+            CCPMonitoringSchedule.ccp_id == ccp_id
+        ).all()
+        
+        for user in assigned_users:
+            notification = Notification(
+                user_id=user.id,
+                type=NotificationType.REMINDER,
+                priority=NotificationPriority.MEDIUM,
+                category=NotificationCategory.HACCP,
+                title="Overdue CCP Monitoring",
+                message=f"Monitoring for CCP '{ccp.name}' is overdue",
+                data={
+                    "ccp_id": ccp_id,
+                    "overdue_since": datetime.utcnow().isoformat()
+                }
+            )
+            self.db.add(notification)
+        
+        self.db.commit()
+
+
+class HACCPAuditService:
+    """Service for HACCP audit logging"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def log_haccp_action(self, action_type: str, record_type: str, record_id: int, 
+                        user_id: int, details: Dict[str, Any] = None) -> HACCPAuditLog:
+        """Log HACCP actions for audit trail"""
+        audit_log = HACCPAuditLog(
+            event_type=action_type,
+            event_description=f"{action_type.title()} action on {record_type}",
+            record_type=record_type,
+            record_id=record_id,
+            user_id=user_id,
+            old_values=json.dumps(details.get('old_values', {})) if details else None,
+            new_values=json.dumps(details.get('new_values', {})) if details else None,
+            changed_fields=json.dumps(details.get('changed_fields', [])) if details else None,
+            ip_address=details.get('ip_address'),
+            user_agent=details.get('user_agent'),
+            session_id=details.get('session_id')
+        )
+        
+        self.db.add(audit_log)
+        self.db.commit()
+        self.db.refresh(audit_log)
+        
+        return audit_log
+
+
+class HACCPRiskCalculationService:
+    """Service for HACCP risk calculations"""
+    
+    @staticmethod
+    def calculate_risk_score(likelihood: int, severity: int) -> int:
+        """Calculate risk score based on likelihood and severity"""
+        return likelihood * severity
+    
+    @staticmethod
+    def determine_risk_level(risk_score: int, product_config: Optional[ProductRiskConfig] = None) -> RiskLevel:
+        """Determine risk level based on score and product configuration"""
+        if product_config:
+            if risk_score <= product_config.low_threshold:
+                return RiskLevel.LOW
+            elif risk_score <= product_config.medium_threshold:
+                return RiskLevel.MEDIUM
+            elif risk_score <= product_config.high_threshold:
+                return RiskLevel.HIGH
+            else:
+                return RiskLevel.CRITICAL
+        else:
+            # Default thresholds
+            if risk_score <= 4:
+                return RiskLevel.LOW
+            elif risk_score <= 8:
+                return RiskLevel.MEDIUM
+            elif risk_score <= 15:
+                return RiskLevel.HIGH
+            else:
+                return RiskLevel.CRITICAL
+
+
 class HACCPService:
     """
-    Service for handling HACCP business logic
+    Enhanced service for handling HACCP business logic with consolidated functionality
     """
     
     def __init__(self, db: Session):
         self.db = db
+        self.validation_service = HACCPValidationService()
+        self.notification_service = HACCPNotificationService(db)
+        self.audit_service = HACCPAuditService(db)
+        self.risk_service = HACCPRiskCalculationService()
 
     def user_has_required_training(self, user_id: int, action: str, *, ccp_id: int | None = None, equipment_id: int | None = None) -> bool:
         """
@@ -47,76 +230,76 @@ class HACCPService:
           for all those programs.
         - If no role requirements exist, return True (no configured requirements).
         """
-        user: Optional[User] = self.db.query(User).filter(User.id == user_id).first()
-        if not user or not user.role_id:
-            return False
-
-        required_program_ids: set[int] = set()
-        # Prefer action/CCP/equipment-scoped HACCP requirements if available
         try:
-            scoped_q = self.db.query(HACCPRequiredTraining).filter(
-                HACCPRequiredTraining.role_id == user.role_id,
-                HACCPRequiredTraining.action == TrainingAction(action) if action else TrainingAction.MONITOR,
-                HACCPRequiredTraining.is_mandatory == True,
-            )
-            if ccp_id is not None:
-                scoped_q = scoped_q.filter(
-                    (HACCPRequiredTraining.ccp_id == ccp_id) | (HACCPRequiredTraining.ccp_id.is_(None))
-                )
-            if equipment_id is not None:
-                scoped_q = scoped_q.filter(
-                    (HACCPRequiredTraining.equipment_id == equipment_id) | (HACCPRequiredTraining.equipment_id.is_(None))
-                )
-            scoped_records = scoped_q.all()
-            # If any record exists with specific scoping, keep only the most specific ones
-            specific = [r for r in scoped_records if (r.ccp_id is not None) or (r.equipment_id is not None)]
-            chosen = specific if specific else scoped_records
-            required_program_ids = {r.program_id for r in chosen}
-        except (SQLAlchemyError, OperationalError):
-            # Table may not exist yet; ignore and fall back to role-level
-            required_program_ids = set()
+            user: Optional[User] = self.db.query(User).filter(User.id == user_id).first()
+            if not user or not user.role_id:
+                return False
 
-        if not required_program_ids:
-            # Fallback to role-wide requirements
+            required_program_ids: set[int] = set()
+            # Prefer action/CCP/equipment-scoped HACCP requirements if available
             try:
-                required_records = self.db.query(RoleRequiredTraining).filter(
-                    RoleRequiredTraining.role_id == user.role_id,
-                    RoleRequiredTraining.is_mandatory == True,
-                ).all()
-                required_program_ids = {rec.program_id for rec in required_records}
+                scoped_q = self.db.query(HACCPRequiredTraining).filter(
+                    HACCPRequiredTraining.role_id == user.role_id,
+                    HACCPRequiredTraining.action == TrainingAction(action) if action else TrainingAction.MONITOR,
+                    HACCPRequiredTraining.is_mandatory == True,
+                )
+                if ccp_id is not None:
+                    scoped_q = scoped_q.filter(
+                        (HACCPRequiredTraining.ccp_id == ccp_id) | (HACCPRequiredTraining.ccp_id.is_(None))
+                    )
+                if equipment_id is not None:
+                    scoped_q = scoped_q.filter(
+                        (HACCPRequiredTraining.equipment_id == equipment_id) | (HACCPRequiredTraining.equipment_id.is_(None))
+                    )
+                scoped_records = scoped_q.all()
+                # If any record exists with specific scoping, keep only the most specific ones
+                specific = [r for r in scoped_records if (r.ccp_id is not None) or (r.equipment_id is not None)]
+                chosen = specific if specific else scoped_records
+                required_program_ids = {r.program_id for r in chosen}
             except (SQLAlchemyError, OperationalError):
+                # Table may not exist yet; ignore and fall back to role-level
                 required_program_ids = set()
 
-        if not required_program_ids:
-            return True  # No requirements configured => allow
+            if not required_program_ids:
+                # Fallback to role-wide requirements
+                try:
+                    required_records = self.db.query(RoleRequiredTraining).filter(
+                        RoleRequiredTraining.role_id == user.role_id,
+                        RoleRequiredTraining.is_mandatory == True,
+                    ).all()
+                    required_program_ids = {rec.program_id for rec in required_records}
+                except (SQLAlchemyError, OperationalError):
+                    required_program_ids = set()
 
-        # Compute set of program_ids the user has completed via attendance or certificates
-        # Attendance-based completion
-        attended_program_ids = {
-            pid for (pid,) in self.db.query(TrainingSession.program_id)
-                .join(TrainingAttendance, TrainingAttendance.session_id == TrainingSession.id)
-                .filter(
-                    TrainingAttendance.user_id == user_id,
-                    TrainingAttendance.attended == True,
-                )
-                .distinct()
-                .all()
-        }
+            if not required_program_ids:
+                return True  # No requirements configured => allow
 
-        # Certificate-based completion
-        certified_program_ids = {
-            pid for (pid,) in self.db.query(TrainingSession.program_id)
-                .join(TrainingCertificate, TrainingCertificate.session_id == TrainingSession.id)
-                .filter(TrainingCertificate.user_id == user_id)
-                .distinct()
-                .all()
-        }
+            # Compute set of program_ids the user has completed via attendance or certificates
+            # Attendance-based completion
+            attended_program_ids = {
+                pid for (pid,) in self.db.query(TrainingSession.program_id)
+                    .join(TrainingAttendance, TrainingAttendance.session_id == TrainingSession.id)
+                    .filter(
+                        TrainingAttendance.user_id == user_id,
+                        TrainingAttendance.status == "completed"
+                    )
+            }
 
-        completed_program_ids = attended_program_ids.union(certified_program_ids)
+            # Certificate-based completion
+            certified_program_ids = {
+                pid for (pid,) in self.db.query(TrainingCertificate.program_id)
+                    .filter(
+                        TrainingCertificate.user_id == user_id,
+                        TrainingCertificate.status == "valid"
+                    )
+            }
 
-        # Require all mandatory programs to be completed
-        missing = required_program_ids.difference(completed_program_ids)
-        return len(missing) == 0
+            completed_program_ids = attended_program_ids | certified_program_ids
+            return required_program_ids.issubset(completed_program_ids)
+            
+        except Exception as e:
+            logger.error(f"Error checking user training requirements: {e}")
+            return False
     
     def create_product(self, product_data: ProductCreate, created_by: int) -> Product:
         """Create a new product"""
@@ -1686,3 +1869,284 @@ class HACCPService:
             validation_summary["validation_types"][validation.validation_type] += 1
         
         return validation_summary
+
+    def create_evidence_attachment(self, attachment_data: dict, uploaded_by: int) -> HACCPEvidenceAttachment:
+        """Create an evidence attachment linked to a HACCP record"""
+        
+        # Validate that the record exists
+        record_type = attachment_data["record_type"]
+        record_id = attachment_data["record_id"]
+        
+        if record_type == "monitoring_log":
+            record = self.db.query(CCPMonitoringLog).filter(CCPMonitoringLog.id == record_id).first()
+        elif record_type == "verification_log":
+            record = self.db.query(CCPVerificationLog).filter(CCPVerificationLog.id == record_id).first()
+        elif record_type == "validation":
+            record = self.db.query(CCPValidation).filter(CCPValidation.id == record_id).first()
+        elif record_type == "ccp":
+            record = self.db.query(CCP).filter(CCP.id == record_id).first()
+        elif record_type == "hazard":
+            record = self.db.query(Hazard).filter(Hazard.id == record_id).first()
+        else:
+            raise ValueError(f"Invalid record_type: {record_type}")
+        
+        if not record:
+            raise ValueError(f"{record_type} with id {record_id} not found")
+        
+        # Validate that the document exists
+        document = self.db.query(Document).filter(Document.id == attachment_data["document_id"]).first()
+        if not document:
+            raise ValueError("Document not found")
+        
+        # Create evidence attachment
+        attachment = HACCPEvidenceAttachment(
+            record_type=attachment_data["record_type"],
+            record_id=attachment_data["record_id"],
+            document_id=attachment_data["document_id"],
+            evidence_type=attachment_data["evidence_type"],
+            description=attachment_data.get("description"),
+            uploaded_by=uploaded_by,
+            file_size=attachment_data.get("file_size"),
+            file_type=attachment_data.get("file_type")
+        )
+        
+        self.db.add(attachment)
+        self.db.commit()
+        self.db.refresh(attachment)
+        
+        # Log the evidence attachment creation
+        self._log_audit_event(
+            event_type="create",
+            event_description=f"Evidence attachment created for {record_type} {record_id}",
+            record_type=record_type,
+            record_id=record_id,
+            user_id=uploaded_by,
+            new_values=f"Document: {document.title}, Type: {attachment_data['evidence_type']}"
+        )
+        
+        return attachment
+    
+    def get_evidence_attachments(self, record_type: str, record_id: int) -> List[HACCPEvidenceAttachment]:
+        """Get all evidence attachments for a specific record"""
+        return self.db.query(HACCPEvidenceAttachment).filter(
+            HACCPEvidenceAttachment.record_type == record_type,
+            HACCPEvidenceAttachment.record_id == record_id
+        ).all()
+    
+    def delete_evidence_attachment(self, attachment_id: int, deleted_by: int) -> bool:
+        """Delete an evidence attachment"""
+        attachment = self.db.query(HACCPEvidenceAttachment).filter(
+            HACCPEvidenceAttachment.id == attachment_id
+        ).first()
+        
+        if not attachment:
+            raise ValueError("Evidence attachment not found")
+        
+        # Log the deletion before removing
+        self._log_audit_event(
+            event_type="delete",
+            event_description=f"Evidence attachment deleted",
+            record_type=attachment.record_type,
+            record_id=attachment.record_id,
+            user_id=deleted_by,
+            old_values=f"Document ID: {attachment.document_id}, Type: {attachment.evidence_type}"
+        )
+        
+        self.db.delete(attachment)
+        self.db.commit()
+        
+        return True
+    
+    def _log_audit_event(self, event_type: str, event_description: str, record_type: str, 
+                        record_id: int, user_id: int, old_values: str = None, 
+                        new_values: str = None, changed_fields: str = None,
+                        signature_hash: str = None, signature_method: str = None,
+                        ip_address: str = None, user_agent: str = None, 
+                        session_id: str = None) -> HACCPAuditLog:
+        """Log an audit event for HACCP activities"""
+        
+        # Get user role
+        user = self.db.query(User).filter(User.id == user_id).first()
+        user_role = user.role.name if user and user.role else None
+        
+        # Create audit log entry
+        audit_log = HACCPAuditLog(
+            event_type=event_type,
+            event_description=event_description,
+            record_type=record_type,
+            record_id=record_id,
+            user_id=user_id,
+            user_role=user_role,
+            old_values=old_values,
+            new_values=new_values,
+            changed_fields=changed_fields,
+            signature_hash=signature_hash,
+            signature_timestamp=datetime.utcnow() if signature_hash else None,
+            signature_method=signature_method,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_id=session_id
+        )
+        
+        self.db.add(audit_log)
+        self.db.commit()
+        self.db.refresh(audit_log)
+        
+        return audit_log
+    
+    def get_audit_logs(self, record_type: str = None, record_id: int = None, 
+                      event_type: str = None, user_id: int = None,
+                      start_date: datetime = None, end_date: datetime = None,
+                      skip: int = 0, limit: int = 100) -> dict:
+        """Get audit logs with filtering and pagination"""
+        
+        query = self.db.query(HACCPAuditLog)
+        
+        # Apply filters
+        if record_type:
+            query = query.filter(HACCPAuditLog.record_type == record_type)
+        if record_id:
+            query = query.filter(HACCPAuditLog.record_id == record_id)
+        if event_type:
+            query = query.filter(HACCPAuditLog.event_type == event_type)
+        if user_id:
+            query = query.filter(HACCPAuditLog.user_id == user_id)
+        if start_date:
+            query = query.filter(HACCPAuditLog.created_at >= start_date)
+        if end_date:
+            query = query.filter(HACCPAuditLog.created_at <= end_date)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination and ordering
+        logs = query.order_by(HACCPAuditLog.created_at.desc()).offset(skip).limit(limit).all()
+        
+        return {
+            "items": logs,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+    
+    def add_e_signature(self, record_type: str, record_id: int, user_id: int,
+                       signature_hash: str, signature_method: str = "digital_signature",
+                       ip_address: str = None, user_agent: str = None,
+                       session_id: str = None) -> HACCPAuditLog:
+        """Add an e-signature to a HACCP record"""
+        
+        # Validate that the record exists
+        if record_type == "monitoring_log":
+            record = self.db.query(CCPMonitoringLog).filter(CCPMonitoringLog.id == record_id).first()
+        elif record_type == "verification_log":
+            record = self.db.query(CCPVerificationLog).filter(CCPVerificationLog.id == record_id).first()
+        elif record_type == "validation":
+            record = self.db.query(CCPValidation).filter(CCPValidation.id == record_id).first()
+        elif record_type == "ccp":
+            record = self.db.query(CCP).filter(CCP.id == record_id).first()
+        elif record_type == "hazard":
+            record = self.db.query(Hazard).filter(Hazard.id == record_id).first()
+        else:
+            raise ValueError(f"Invalid record_type: {record_type}")
+        
+        if not record:
+            raise ValueError(f"{record_type} with id {record_id} not found")
+        
+        # Log the e-signature
+        audit_log = self._log_audit_event(
+            event_type="e_signature",
+            event_description=f"E-signature added to {record_type} {record_id}",
+            record_type=record_type,
+            record_id=record_id,
+            user_id=user_id,
+            signature_hash=signature_hash,
+            signature_method=signature_method,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_id=session_id
+        )
+        
+        return audit_log
+
+    def create_evidence_attachment(self, attachment_data: dict, uploaded_by: int) -> HACCPEvidenceAttachment:
+        """Create an evidence attachment linked to a HACCP record"""
+        
+        # Validate that the record exists
+        record_type = attachment_data["record_type"]
+        record_id = attachment_data["record_id"]
+        
+        if record_type == "monitoring_log":
+            record = self.db.query(CCPMonitoringLog).filter(CCPMonitoringLog.id == record_id).first()
+        elif record_type == "verification_log":
+            record = self.db.query(CCPVerificationLog).filter(CCPVerificationLog.id == record_id).first()
+        elif record_type == "validation":
+            record = self.db.query(CCPValidation).filter(CCPValidation.id == record_id).first()
+        elif record_type == "ccp":
+            record = self.db.query(CCP).filter(CCP.id == record_id).first()
+        elif record_type == "hazard":
+            record = self.db.query(Hazard).filter(Hazard.id == record_id).first()
+        else:
+            raise ValueError(f"Invalid record_type: {record_type}")
+        
+        if not record:
+            raise ValueError(f"{record_type} with id {record_id} not found")
+        
+        # Validate that the document exists
+        document = self.db.query(Document).filter(Document.id == attachment_data["document_id"]).first()
+        if not document:
+            raise ValueError("Document not found")
+        
+        # Create evidence attachment
+        attachment = HACCPEvidenceAttachment(
+            record_type=attachment_data["record_type"],
+            record_id=attachment_data["record_id"],
+            document_id=attachment_data["document_id"],
+            evidence_type=attachment_data["evidence_type"],
+            description=attachment_data.get("description"),
+            uploaded_by=uploaded_by,
+            file_size=attachment_data.get("file_size"),
+            file_type=attachment_data.get("file_type")
+        )
+        
+        self.db.add(attachment)
+        self.db.commit()
+        self.db.refresh(attachment)
+        
+        return attachment
+
+    def _log_audit_event(self, event_type: str, event_description: str, record_type: str, 
+                        record_id: int, user_id: int, old_values: str = None, 
+                        new_values: str = None, changed_fields: str = None,
+                        signature_hash: str = None, signature_method: str = None,
+                        ip_address: str = None, user_agent: str = None, 
+                        session_id: str = None) -> HACCPAuditLog:
+        """Log an audit event for HACCP activities"""
+        
+        # Get user role
+        user = self.db.query(User).filter(User.id == user_id).first()
+        user_role = user.role.name if user and user.role else None
+        
+        # Create audit log entry
+        audit_log = HACCPAuditLog(
+            event_type=event_type,
+            event_description=event_description,
+            record_type=record_type,
+            record_id=record_id,
+            user_id=user_id,
+            user_role=user_role,
+            old_values=old_values,
+            new_values=new_values,
+            changed_fields=changed_fields,
+            signature_hash=signature_hash,
+            signature_timestamp=datetime.utcnow() if signature_hash else None,
+            signature_method=signature_method,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_id=session_id
+        )
+        
+        self.db.add(audit_log)
+        self.db.commit()
+        self.db.refresh(audit_log)
+        
+        return audit_log
