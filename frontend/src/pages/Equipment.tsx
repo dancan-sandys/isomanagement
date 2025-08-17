@@ -132,12 +132,16 @@ const EquipmentPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [equipmentData, workOrdersData] = await Promise.all([
+      const [equipmentData, workOrdersData, maintenancePlansData, calibrationPlansData] = await Promise.all([
         equipmentAPI.list(),
         equipmentAPI.listWorkOrders(),
+        equipmentAPI.listMaintenancePlans(),
+        equipmentAPI.listCalibrationPlans(),
       ]);
       setEquipment(equipmentData || []);
       setWorkOrders(workOrdersData || []);
+      setMaintenancePlans(maintenancePlansData || []);
+      setCalibrationPlans(calibrationPlansData || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -242,7 +246,8 @@ const EquipmentPage: React.FC = () => {
   };
 
   const getMaintenanceTypeColor = (type: string) => {
-    return type === 'preventive' ? 'success' : 'warning';
+    const t = (type || '').toLowerCase();
+    return t === 'preventive' ? 'success' : 'warning';
   };
 
   const getWorkOrderStatusColor = (completed: boolean) => {
