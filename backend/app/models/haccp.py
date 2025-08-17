@@ -173,7 +173,7 @@ class Hazard(Base):
     # Hazard analysis data capture (Principle 1)
     rationale = Column(Text)  # Reasoning for hazard identification and assessment
     prp_reference_ids = Column(JSON)  # Array of PRP/SOP document IDs that control this hazard
-    references = Column(JSON)  # Array of reference documents (studies, regulations, etc.)
+    reference_documents = Column(JSON)  # Array of reference documents (studies, regulations, etc.)
     
     # Risk assessment
     likelihood = Column(Integer)  # 1-5 scale

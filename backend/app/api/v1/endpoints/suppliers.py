@@ -27,6 +27,27 @@ from app.schemas.supplier import (
 from app.schemas.common import ResponseModel
 from app.utils.audit import audit_event
 
+# Payload classes for API endpoints
+class InspectPayload(BaseModel):
+    status: str
+    comments: Optional[str] = None
+
+
+class RejectMaterialPayload(BaseModel):
+    rejection_reason: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class BulkApproveMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    comments: Optional[str] = None
+
+
+class BulkRejectMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    rejection_reason: str
+
+
 router = APIRouter()
 
 # Material endpoints (must come before path parameter endpoints)
@@ -989,22 +1010,6 @@ async def download_delivery_coa(
     return FileResponse(delivery.coa_file_path, filename=os.path.basename(delivery.coa_file_path))
 
 
-class InspectPayload(BaseModel):
-    status: str
-    comments: Optional[str] = None
-
-
-class RejectMaterialPayload(BaseModel):
-    rejection_reason: Optional[str] = None
-    reason: Optional[str] = None
-
-class BulkApproveMaterialsPayload(BaseModel):
-    material_ids: List[int]
-    comments: Optional[str] = None
-
-class BulkRejectMaterialsPayload(BaseModel):
-    material_ids: List[int]
-    rejection_reason: str
 
 @router.post("/deliveries/{delivery_id}/inspect", response_model=IncomingDeliveryResponse)
 async def inspect_delivery(

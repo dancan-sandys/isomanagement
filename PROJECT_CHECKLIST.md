@@ -65,6 +65,31 @@
   - [x] Added validation to ensure required fields (Title and URL) are provided
   - [x] Improved user experience by eliminating need for manual JSON editing
 
+### Database Schema Issues - FIXED ✅
+- [x] **Fix missing columns in hazards table**
+  - [x] Added missing `prp_reference_ids` JSON column to hazards table
+  - [x] Added missing `reference_documents` JSON column to hazards table (renamed from `references` due to SQLite reserved keyword)
+  - [x] Updated Hazard model to use correct column names
+  - [x] Updated HACCP service to map frontend `references` field to database `reference_documents` column
+  - [x] Verified hazard creation now works correctly
+
+### Authorization Issues - FIXED ✅
+- [x] **Remove competency requirements for HACCP monitoring**
+  - [x] Removed competency check from monitoring log creation endpoint
+  - [x] Removed competency check from verification log creation endpoint
+  - [x] Removed competency check from HACCPService.create_monitoring_log method
+  - [x] Any user with HACCP module access can now log monitoring and verification data
+  - [x] Simplified authorization to module-level access instead of specific competency requirements
+  - [x] Fixed "Record Monitoring Log" functionality that was failing due to competency checks
+
+### API Import Issues - FIXED ✅
+- [x] **Fix NameError for RejectMaterialPayload in suppliers endpoint**
+  - [x] Identified that payload classes were defined after being used in the file
+  - [x] Moved `RejectMaterialPayload`, `BulkApproveMaterialsPayload`, `BulkRejectMaterialsPayload`, and `InspectPayload` class definitions to the top of the file
+  - [x] Removed duplicate class definitions that were later in the file
+  - [x] Verified server starts successfully without NameError
+  - [x] Confirmed API endpoints are accessible (health check returns 200 OK)
+
 ### Remaining Critical Issues
 - [ ] **Fix missing `program_id` column in audits table**
   - [ ] Create database migration

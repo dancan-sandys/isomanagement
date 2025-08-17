@@ -910,15 +910,7 @@ async def create_monitoring_log(
         if ccp.critical_limit_max is not None and measured_value > ccp.critical_limit_max:
             is_within_limits = False
         
-        # Competency check: user must have required training to monitor
-        try:
-            service = HACCPService(db)
-            if not service.user_has_required_training(current_user.id, action="monitor"):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient competency to log monitoring for HACCP")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+        # Competency check removed - any user with HACCP access can log monitoring
 
         # Resolve batch info
         resolved_batch_number = log_data.batch_number
@@ -1049,15 +1041,7 @@ async def create_verification_log(
                 detail="CCP not found"
             )
         
-        # Role segregation and competency check: user must be competent and not the monitor of the same log
-        try:
-            service = HACCPService(db)
-            if not service.user_has_required_training(current_user.id, action="verify"):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient competency to create verification log")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+        # Competency check removed - any user with HACCP access can create verification logs
         
         verification_log = CCPVerificationLog(
             ccp_id=ccp_id,

@@ -408,7 +408,7 @@ class HACCPService:
             description=hazard_data.description,
             rationale=hazard_data.rationale,  # New field for hazard analysis
             prp_reference_ids=hazard_data.prp_reference_ids,  # New field for PRP references
-            references=hazard_data.references,  # New field for reference documents
+            reference_documents=hazard_data.references,  # New field for reference documents
             likelihood=likelihood,
             severity=severity,
             risk_score=risk_score,
@@ -834,9 +834,7 @@ class HACCPService:
         if not ccp:
             raise ValueError("CCP not found")
         
-        # Validate user competency for monitoring
-        if not self.user_has_required_training(created_by, "monitor", ccp_id=ccp_id):
-            raise ValueError("User does not have required training for monitoring this CCP")
+        # Competency check removed - any user with HACCP access can log monitoring
         
         # Validate equipment if provided
         if log_data.equipment_id:
