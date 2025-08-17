@@ -242,6 +242,167 @@ export const riskAPI = {
   },
 
   // ============================================================================
+  // ENHANCED ANALYTICS & COMPLIANCE ENDPOINTS
+  // ============================================================================
+  
+  // Comprehensive Analytics
+  getAnalytics: async (filters?: {
+    date_from?: string;
+    date_to?: string;
+    category?: string;
+    severity?: string;
+    status?: string;
+    include_opportunities?: boolean;
+  }) => {
+    const response: AxiosResponse = await api.get('/risk-framework/analytics', { params: filters });
+    return response.data;
+  },
+  
+  // Risk Trends
+  getTrends: async (period: string = 'monthly', periods_back: number = 12) => {
+    const response: AxiosResponse = await api.get('/risk-framework/trends', { 
+      params: { period, periods_back } 
+    });
+    return response.data;
+  },
+  
+  // Performance Metrics
+  getPerformance: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/performance');
+    return response.data;
+  },
+  
+  // ISO Compliance Status
+  getComplianceStatus: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/compliance-status');
+    return response.data;
+  },
+
+  // ============================================================================
+  // FSMS INTEGRATION ENDPOINTS
+  // ============================================================================
+  
+  // Create FSMS Integration
+  createFSMSIntegration: async (integrationData: {
+    risk_register_item_id: number;
+    fsms_element: string;
+    fsms_element_id?: number;
+    impact_on_fsms: string;
+    food_safety_objective_id?: number;
+    interested_party_impact?: Record<string, any>;
+    compliance_requirement?: string;
+  }) => {
+    const response: AxiosResponse = await api.post('/risk-framework/fsms-integration', integrationData);
+    return response.data;
+  },
+  
+  // Get FSMS Integrations
+  getFSMSIntegrations: async (riskId: number) => {
+    const response: AxiosResponse = await api.get(`/risk-framework/fsms-integration/${riskId}`);
+    return response.data;
+  },
+  
+  // Create Risk from HACCP Hazard
+  createRiskFromHazard: async (hazardId: number) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/integrate/haccp-hazard/${hazardId}`);
+    return response.data;
+  },
+  
+  // Create Risk from PRP Non-conformance
+  createRiskFromPRP: async (prpId: number, description: string) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/integrate/prp-nonconformance/${prpId}`, {
+      description
+    });
+    return response.data;
+  },
+  
+  // Create Risk from Supplier Evaluation
+  createRiskFromSupplier: async (supplierId: number, findings: string) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/integrate/supplier-evaluation/${supplierId}`, {
+      findings
+    });
+    return response.data;
+  },
+  
+  // Create Risk from Audit Finding
+  createRiskFromAudit: async (findingId: number) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/integrate/audit-finding/${findingId}`);
+    return response.data;
+  },
+  
+  // Create Opportunity from Audit Finding
+  createOpportunityFromAudit: async (findingId: number) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/integrate/audit-opportunity/${findingId}`);
+    return response.data;
+  },
+
+  // ============================================================================
+  // ENHANCED RISK ASSESSMENT & TREATMENT
+  // ============================================================================
+  
+  // Conduct Risk Assessment (ISO 31000:2018 compliant)
+  conductAssessment: async (assessmentData: {
+    risk_id: number;
+    risk_context_id?: number;
+    assessment_method: string;
+    assessor_id: number;
+    assessment_data: Record<string, any>;
+  }) => {
+    const response: AxiosResponse = await api.post('/risk-framework/assess', assessmentData);
+    return response.data;
+  },
+  
+  // Plan Risk Treatment (ISO 31000:2018 compliant)
+  planTreatment: async (treatmentData: {
+    risk_id: number;
+    treatment_strategy: 'avoid' | 'transfer' | 'mitigate' | 'accept';
+    treatment_plan: string;
+    treatment_cost?: number;
+    treatment_benefit?: number;
+    treatment_timeline?: string;
+  }) => {
+    const response: AxiosResponse = await api.post('/risk-framework/treat', treatmentData);
+    return response.data;
+  },
+
+  // ============================================================================
+  // RISK CONTEXT & FRAMEWORK MANAGEMENT
+  // ============================================================================
+  
+  // Risk Context Management
+  getRiskContext: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/context');
+    return response.data;
+  },
+  
+  createRiskContext: async (contextData: RiskContext) => {
+    const response: AxiosResponse = await api.post('/risk-framework/context', contextData);
+    return response.data;
+  },
+  
+  // Enhanced KPI Management
+  createKPIEnhanced: async (kpiData: {
+    kpi_name: string;
+    kpi_description?: string;
+    kpi_category: string;
+    kpi_formula?: string;
+    kpi_target?: number;
+    kpi_unit?: string;
+    kpi_frequency: string;
+    kpi_owner: number;
+  }) => {
+    const response: AxiosResponse = await api.post('/risk-framework/kpis', kpiData);
+    return response.data;
+  },
+  
+  getKPIsEnhanced: async (category?: string) => {
+    const response: AxiosResponse = await api.get('/risk-framework/kpis', { 
+      params: category ? { category } : {} 
+    });
+    return response.data;
+  },
+
+  // ============================================================================
   // EXISTING ACTION OPERATIONS (Enhanced)
   // ============================================================================
   addAction: async (id: number, payload: { title: string; description?: string; assigned_to?: number; due_date?: string }) => {
