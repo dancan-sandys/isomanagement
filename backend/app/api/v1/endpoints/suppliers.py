@@ -1011,6 +1011,18 @@ async def download_delivery_coa(
 
 
 
+class RejectMaterialPayload(BaseModel):
+    rejection_reason: Optional[str] = None
+    reason: Optional[str] = None
+
+class BulkApproveMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    comments: Optional[str] = None
+
+class BulkRejectMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    rejection_reason: str
+
 @router.post("/deliveries/{delivery_id}/inspect", response_model=IncomingDeliveryResponse)
 async def inspect_delivery(
     delivery_id: int,
