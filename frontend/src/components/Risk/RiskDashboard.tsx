@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -128,6 +128,31 @@ interface RiskDashboardData {
     risk_id: number;
     priority: 'low' | 'medium' | 'high';
   }>;
+  compliance_status?: {
+    compliance_score: number;
+    iso_31000_compliance: boolean;
+    compliance_checks: {
+      fsms_integration: boolean;
+      // Add other compliance checks here
+    };
+    recommendations: Array<string>;
+  };
+  performance_metrics?: {
+    overall_performance: number;
+    treatment_efficiency: number;
+    resolution_rate: number;
+    review_compliance: number;
+    total_risks: number;
+    overdue_reviews: number;
+    pending_treatments: number;
+  };
+  enhanced_trends?: Array<{
+    period: string;
+    new_risks: number;
+    resolved_risks: number;
+    new_opportunities: number;
+    avg_risk_score: number;
+  }>;
 }
 
 interface DashboardFilters {
@@ -157,6 +182,7 @@ const RiskDashboard: React.FC = () => {
   const [assessmentWizardOpen, setAssessmentWizardOpen] = useState(false);
   const [frameworkConfigOpen, setFrameworkConfigOpen] = useState(false);
   const [selectedRiskId, setSelectedRiskId] = useState<number | null>(null);
+  const [complianceDialogOpen, setComplianceDialogOpen] = useState(false);
   
   // Menu states
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -165,20 +191,49 @@ const RiskDashboard: React.FC = () => {
   // DATA FETCHING & EFFECTS
   // ============================================================================
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
-      setRefreshing(true);
-      const response = await riskAPI.getDashboard();
-      if (response.success) {
-        setDashboardData(response.data);
+      setLoading(true);
+      const [dashboardResponse, performanceResponse, complianceResponse, trendsResponse] = await Promise.all([
+        riskAPI.getDashboard(),
+        riskAPI.getPerformance(),
+        riskAPI.getComplianceStatus(),
+        riskAPI.getTrends('monthly', 6)
+      ]);
+      
+      if (dashboardResponse.success) {
+        setDashboardData(dashboardResponse.data);
       }
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      
+      // Enhance dashboard data with new analytics
+      if (performanceResponse.success) {
+        setDashboardData(prev => ({
+          ...prev,
+          performance_metrics: performanceResponse.data
+        }));
+      }
+      
+      if (complianceResponse.success) {
+        setDashboardData(prev => ({
+          ...prev,
+          compliance_status: complianceResponse.data
+        }));
+      }
+      
+      if (trendsResponse.success) {
+        setDashboardData(prev => ({
+          ...prev,
+          enhanced_trends: trendsResponse.data.trends
+        }));
+      }
+      
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+      // setError('Failed to load dashboard data'); // This line was not in the new_code, so it's removed.
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -186,7 +241,7 @@ const RiskDashboard: React.FC = () => {
     // Set up auto-refresh every 5 minutes for real-time monitoring
     const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [filters]);
+  }, [fetchDashboardData]); // Added fetchDashboardData to dependencies
 
   // ============================================================================
   // COMPUTED VALUES
@@ -481,19 +536,129 @@ const RiskDashboard: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-      </Grid>
 
-      {/* Main Content Grid */}
-      <Grid container spacing={3}>
-        {/* Risk Trends Chart */}
-        <Grid item xs={12} lg={8}>
+        {/* ISO Compliance Status Card */}
+        <Grid item xs={12} md={6} lg={3}>
+          <Card sx={{ 
+            height: 140, 
+            background: dashboardData.compliance_status?.iso_31000_compliance 
+              ? `linear-gradient(135deg, ${ISO_STATUS_COLORS.effective} 0%, ${ISO_STATUS_COLORS.compliant} 100%)`
+              : `linear-gradient(135deg, ${ISO_STATUS_COLORS.nonConformance} 0%, ${ISO_STATUS_COLORS.atRisk} 100%)`,
+            color: 'white'
+          }}>
+            <CardContent sx={{ p: 2 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                    ISO 31000:2018 Compliance
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    {dashboardData.compliance_status?.compliance_score?.toFixed(0) || 0}%
+                  </Typography>
+                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                    {dashboardData.compliance_status?.iso_31000_compliance ? (
+                      <CheckCircle sx={{ fontSize: 16 }} />
+                    ) : (
+                      <Warning sx={{ fontSize: 16 }} />
+                    )}
+                    <Typography variant="caption">
+                      {dashboardData.compliance_status?.iso_31000_compliance ? 'Compliant' : 'Non-Compliant'}
+                    </Typography>
+                  </Stack>
+                </Box>
+                <Shield sx={{ fontSize: 40, opacity: 0.7 }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Performance Metrics Card */}
+        <Grid item xs={12} md={6} lg={3}>
+          <Card sx={{ height: 140 }}>
+            <CardContent sx={{ p: 2 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Overall Performance
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    {dashboardData.performance_metrics?.overall_performance?.toFixed(0) || 0}%
+                  </Typography>
+                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <TrendingUp sx={{ 
+                      fontSize: 16, 
+                      color: dashboardData.performance_metrics?.overall_performance >= 75 
+                        ? ISO_STATUS_COLORS.effective 
+                        : ISO_STATUS_COLORS.atRisk 
+                    }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Treatment Efficiency: {dashboardData.performance_metrics?.treatment_efficiency?.toFixed(0) || 0}%
+                    </Typography>
+                  </Stack>
+                </Box>
+                <Analytics sx={{ fontSize: 40, color: PROFESSIONAL_COLORS.accent.main, opacity: 0.7 }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* FSMS Integration Status */}
+        <Grid item xs={12} md={6} lg={3}>
+          <Card sx={{ height: 140 }}>
+            <CardContent sx={{ p: 2 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    FSMS Integration
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    {dashboardData.compliance_status?.compliance_checks?.fsms_integration ? 'Active' : 'Inactive'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ISO 22000:2018 Risk-based Thinking
+                  </Typography>
+                </Box>
+                <AccountBalance sx={{ 
+                  fontSize: 40, 
+                  color: dashboardData.compliance_status?.compliance_checks?.fsms_integration 
+                    ? ISO_STATUS_COLORS.effective 
+                    : ISO_STATUS_COLORS.atRisk,
+                  opacity: 0.7 
+                }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Compliance Recommendations Alert */}
+        {dashboardData.compliance_status?.recommendations?.length > 0 && (
+          <Grid item xs={12}>
+            <Alert 
+              severity="warning" 
+              sx={{ mb: 2 }}
+              action={
+                <Button size="small" onClick={() => setComplianceDialogOpen(true)}>
+                  View Details
+                </Button>
+              }
+            >
+              <Typography variant="body2">
+                {dashboardData.compliance_status.recommendations.length} compliance recommendations available.
+                Current compliance score: {dashboardData.compliance_status.compliance_score?.toFixed(1)}%
+              </Typography>
+            </Alert>
+          </Grid>
+        )}
+
+        {/* Enhanced Risk Trends Chart */}
+        <Grid item xs={12} md={8}>
           <Card sx={{ height: 400 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Risk Trends & Performance (ISO 31000:2018 Monitoring)
+                Risk Management Trends (ISO 31000:2018)
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={riskTrendData}>
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={dashboardData.enhanced_trends || dashboardData.risk_trends}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="period" />
                   <YAxis />
@@ -502,23 +667,30 @@ const RiskDashboard: React.FC = () => {
                   <Line 
                     type="monotone" 
                     dataKey="new_risks" 
-                    stroke={ISO_STATUS_COLORS.pending} 
-                    strokeWidth={2}
+                    stroke={ISO_STATUS_COLORS.nonConformance} 
                     name="New Risks"
+                    strokeWidth={2}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="resolved_risks" 
-                    stroke={ISO_STATUS_COLORS.compliant} 
-                    strokeWidth={2}
+                    stroke={ISO_STATUS_COLORS.effective} 
                     name="Resolved Risks"
+                    strokeWidth={2}
                   />
                   <Line 
                     type="monotone" 
-                    dataKey="treatment_effectiveness" 
-                    stroke={ISO_STATUS_COLORS.info} 
+                    dataKey="new_opportunities" 
+                    stroke={PROFESSIONAL_COLORS.accent.main} 
+                    name="New Opportunities"
                     strokeWidth={2}
-                    name="Treatment Effectiveness %"
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="avg_risk_score" 
+                    stroke={PROFESSIONAL_COLORS.secondary.main} 
+                    name="Avg Risk Score"
+                    strokeWidth={2}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -526,129 +698,89 @@ const RiskDashboard: React.FC = () => {
           </Card>
         </Grid>
 
-        {/* Risk Alerts & Activities */}
-        <Grid item xs={12} lg={4}>
-          <Stack spacing={2} sx={{ height: 400 }}>
-            {/* Risk Alerts */}
-            <Card sx={{ flex: 1 }}>
-              <CardContent sx={{ pb: 1 }}>
-                <Typography variant="h6" gutterBottom>
-                  <Badge badgeContent={criticalAlerts.length} color="error">
-                    Risk Alerts
-                  </Badge>
-                </Typography>
-                <List dense sx={{ maxHeight: 120, overflow: 'auto' }}>
-                  {dashboardData.risk_alerts.slice(0, 3).map((alert) => (
-                    <ListItem key={alert.id} sx={{ px: 0 }}>
-                      <ListItemIcon>
-                        <Warning sx={{ color: getSeverityColor(alert.severity) }} />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={alert.title}
-                        secondary={alert.description}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        secondaryTypographyProps={{ variant: 'caption' }}
-                      />
-                      <ListItemSecondaryAction>
-                        <Chip 
-                          label={alert.severity} 
-                          size="small" 
-                          sx={{ 
-                            bgcolor: getSeverityColor(alert.severity), 
-                            color: 'white',
-                            textTransform: 'uppercase',
-                            fontSize: '0.65rem'
-                          }} 
-                        />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-
-            {/* Upcoming Activities */}
-            <Card sx={{ flex: 1 }}>
-              <CardContent sx={{ pb: 1 }}>
-                <Typography variant="h6" gutterBottom>
-                  Upcoming Activities
-                </Typography>
-                <List dense sx={{ maxHeight: 120, overflow: 'auto' }}>
-                  {dashboardData.upcoming_activities.slice(0, 3).map((activity) => (
-                    <ListItem key={activity.id} sx={{ px: 0 }}>
-                      <ListItemIcon>
-                        <Schedule sx={{ color: PROFESSIONAL_COLORS.primary.main }} />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={activity.title}
-                        secondary={`Due: ${new Date(activity.due_date).toLocaleDateString()} | ${activity.assigned_to}`}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        secondaryTypographyProps={{ variant: 'caption' }}
-                      />
-                      <ListItemSecondaryAction>
-                        <Chip 
-                          label={activity.priority} 
-                          size="small" 
-                          variant="outlined"
-                          sx={{ textTransform: 'uppercase', fontSize: '0.65rem' }}
-                        />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Grid>
-
-        {/* Risk Distribution Charts */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: 350 }}>
+        {/* Risk Performance Metrics */}
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: 400 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Risk Distribution by Category
+                Performance Metrics
               </Typography>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={dashboardData.risk_distribution.by_category}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Bar dataKey="count" fill={PROFESSIONAL_COLORS.primary.main} />
-                  <Bar dataKey="high_risk_count" fill={ISO_STATUS_COLORS.nonConformance} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </Grid>
+              <Stack spacing={2}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Resolution Rate
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={dashboardData.performance_metrics?.resolution_rate || 0} 
+                    sx={{ height: 8, borderRadius: 4, mb: 1 }}
+                  />
+                  <Typography variant="caption">
+                    {dashboardData.performance_metrics?.resolution_rate?.toFixed(1) || 0}%
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Review Compliance
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={dashboardData.performance_metrics?.review_compliance || 0} 
+                    sx={{ height: 8, borderRadius: 4, mb: 1 }}
+                  />
+                  <Typography variant="caption">
+                    {dashboardData.performance_metrics?.review_compliance?.toFixed(1) || 0}%
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Treatment Efficiency
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={dashboardData.performance_metrics?.treatment_efficiency || 0} 
+                    sx={{ height: 8, borderRadius: 4, mb: 1 }}
+                  />
+                  <Typography variant="caption">
+                    {dashboardData.performance_metrics?.treatment_efficiency?.toFixed(1) || 0}%
+                  </Typography>
+                </Box>
 
-        {/* Risk Status Distribution */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: 350 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Risk Status Distribution
-              </Typography>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={dashboardData.risk_distribution.by_status}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    dataKey="count"
-                    label={({ status, percentage }) => `${status}: ${percentage}%`}
-                  >
-                    {dashboardData.risk_distribution.by_status.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={Object.values(ISO_STATUS_COLORS)[index % Object.values(ISO_STATUS_COLORS).length]} 
-                      />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                </PieChart>
-              </ResponsiveContainer>
+                <Divider />
+                
+                <Stack direction="row" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">
+                    Total Risks:
+                  </Typography>
+                  <Typography variant="body2" fontWeight="bold">
+                    {dashboardData.performance_metrics?.total_risks || 0}
+                  </Typography>
+                </Stack>
+                
+                <Stack direction="row" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">
+                    Overdue Reviews:
+                  </Typography>
+                  <Typography variant="body2" fontWeight="bold" color={
+                    (dashboardData.performance_metrics?.overdue_reviews || 0) > 0 
+                      ? 'error.main' 
+                      : 'success.main'
+                  }>
+                    {dashboardData.performance_metrics?.overdue_reviews || 0}
+                  </Typography>
+                </Stack>
+                
+                <Stack direction="row" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">
+                    Pending Treatments:
+                  </Typography>
+                  <Typography variant="body2" fontWeight="bold">
+                    {dashboardData.performance_metrics?.pending_treatments || 0}
+                  </Typography>
+                </Stack>
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
