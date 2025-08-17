@@ -43,7 +43,7 @@ export const equipmentAPI = {
   },
 
   // Work Orders
-  createWorkOrder: async (payload: { equipment_id: number; plan_id?: number; title: string; description?: string }) => {
+  createWorkOrder: async (payload: { equipment_id: number; plan_id?: number; title: string; description?: string; priority?: 'LOW'|'MEDIUM'|'HIGH'; assigned_to?: number; due_date?: string }) => {
     const res = await api.post('/equipment/work-orders', payload);
     return res.data;
   },
@@ -55,7 +55,7 @@ export const equipmentAPI = {
     const res = await api.get(`/equipment/work-orders/${id}`);
     return res.data;
   },
-  updateWorkOrder: async (id: number, payload: { title?: string; description?: string; status?: 'pending' | 'completed' }) => {
+  updateWorkOrder: async (id: number, payload: { title?: string; description?: string; status?: 'PENDING' | 'COMPLETED'; priority?: 'LOW'|'MEDIUM'|'HIGH'; assigned_to?: number; due_date?: string }) => {
     const res = await api.put(`/equipment/work-orders/${id}`, payload);
     return res.data;
   },
@@ -74,11 +74,11 @@ export const equipmentAPI = {
     const res = await api.get('/equipment/calibration-plans', { params });
     return res.data;
   },
-  createCalibrationPlan: async (equipmentId: number, payload: { schedule_date: string; notes?: string }) => {
+  createCalibrationPlan: async (equipmentId: number, payload: { schedule_date: string; frequency_days: number; notes?: string }) => {
     const res = await api.post(`/equipment/${equipmentId}/calibration-plans`, payload);
     return res.data;
   },
-  updateCalibrationPlan: async (planId: number, payload: { schedule_date?: string; notes?: string }) => {
+  updateCalibrationPlan: async (planId: number, payload: { schedule_date?: string; frequency_days?: number; notes?: string }) => {
     const res = await api.put(`/equipment/calibration-plans/${planId}`, payload);
     return res.data;
   },

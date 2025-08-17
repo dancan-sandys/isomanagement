@@ -119,6 +119,7 @@ const EquipmentPage: React.FC = () => {
   const [calibrationForm, setCalibrationForm] = useState({
     equipment_id: 0,
     schedule_date: new Date(),
+    frequency_days: 365,
     notes: '',
   });
 
@@ -203,10 +204,11 @@ const EquipmentPage: React.FC = () => {
     try {
       await equipmentAPI.createCalibrationPlan(calibrationForm.equipment_id, {
         schedule_date: calibrationForm.schedule_date.toISOString().split('T')[0],
+        frequency_days: calibrationForm.frequency_days,
         notes: calibrationForm.notes,
       });
       setCalibrationDialog(false);
-      setCalibrationForm({ equipment_id: 0, schedule_date: new Date(), notes: '' });
+      setCalibrationForm({ equipment_id: 0, schedule_date: new Date(), frequency_days: 365, notes: '' });
       loadData();
     } catch (error) {
       console.error('Error creating calibration plan:', error);
@@ -795,6 +797,17 @@ const EquipmentPage: React.FC = () => {
                 value={calibrationForm.schedule_date}
                 onChange={(newValue) => setCalibrationForm({ ...calibrationForm, schedule_date: newValue || new Date() })}
                 slotProps={{ textField: { fullWidth: true } }}
+              />
+              <TextField
+                label="Frequency (Days)"
+                type="number"
+                value={calibrationForm.frequency_days}
+                onChange={(e) => setCalibrationForm({ ...calibrationForm, frequency_days: parseInt(e.target.value) })}
+                fullWidth
+                required
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">days</InputAdornment>,
+                }}
               />
               <TextField
                 label="Notes"
