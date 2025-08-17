@@ -374,3 +374,4 @@ class EscalationService:
         )
         
         return self.create_escalation_rule(rule_data, created_by)
+

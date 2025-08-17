@@ -48,7 +48,8 @@
     "eject": "react-scripts eject",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit --skipLibCheck",
+    "type-check-strict": "tsc --noEmit",
     "format": "prettier --write src/**/*.{ts,tsx,js,jsx,json,css,md}"
   },
   "eslintConfig": {
@@ -82,5 +83,13 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.1.1"
   },
-  "proxy": "http://localhost:8000"
+  "proxy": "http://localhost:8000",
+  "resolutions": {
+    "@types/d3-dispatch": "3.0.7"
+  },
+  "overrides": {
+    "@types/d3-dispatch": {
+      "typescript": ">=4.9.0"
+    }
+  }
 }

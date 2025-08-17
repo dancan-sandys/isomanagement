@@ -852,7 +852,7 @@ async def create_document(
             
             # Save via storage service (local filesystem)
             storage = StorageService(base_upload_dir="uploads")
-            file_path, file_size, file_type, original_filename = storage.save_upload(file, subdir="documents")
+            file_path, file_size, file_type, original_filename, checksum = storage.save_upload(file, subdir="documents")
         
         # Create document
         document = Document(
@@ -1060,7 +1060,7 @@ async def create_new_version(
         
         # Save new file via storage service (local filesystem)
         storage = StorageService(base_upload_dir="uploads")
-        file_path, file_size, file_type, original_filename = storage.save_upload(file, subdir="documents")
+        file_path, file_size, file_type, original_filename, checksum = storage.save_upload(file, subdir="documents")
         
         # Create new version record
         version = DocumentVersion(
@@ -1563,7 +1563,7 @@ async def upload_document_file(
         
         # Save file via storage service (local filesystem)
         storage = StorageService(base_upload_dir="uploads")
-        file_path, file_size, file_type, original_filename = storage.save_upload(file, subdir="documents")
+        file_path, file_size, file_type, original_filename, checksum = storage.save_upload(file, subdir="documents")
         
         # Create new version record
         version = DocumentVersion(

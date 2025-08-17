@@ -18,3 +18,4 @@ for field in new_fields:
 
 print("=" * 50)
 print(f"Total new fields added: {sum(1 for field in new_fields if field in column_names)}/{len(new_fields)}")
+
