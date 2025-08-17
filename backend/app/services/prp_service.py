@@ -1564,7 +1564,239 @@ class PRPService:
             ]
         }
     
-    def generate_prp_report(self, program_id: Optional[int] = None, 
+    def get_capa_dashboard_stats(self) -> Dict[str, Any]:
+        """Get CAPA dashboard statistics and analytics"""
+        
+        # Get corrective actions summary
+        total_corrective_actions = self.db.query(CorrectiveAction).count()
+        open_corrective_actions = self.db.query(CorrectiveAction).filter(
+            CorrectiveAction.status.in_([CorrectiveActionStatus.OPEN, CorrectiveActionStatus.IN_PROGRESS])
+        ).count()
+        
+        # Get preventive actions summary
+        total_preventive_actions = self.db.query(PRPPreventiveAction).count()
+        open_preventive_actions = self.db.query(PRPPreventiveAction).filter(
+            PRPPreventiveAction.status.in_([CorrectiveActionStatus.OPEN, CorrectiveActionStatus.IN_PROGRESS])
+        ).count()
+        
+        # Get overdue actions
+        overdue_corrective = self.db.query(CorrectiveAction).filter(
+            and_(
+                CorrectiveAction.target_completion_date < datetime.utcnow(),
+                CorrectiveAction.status != CorrectiveActionStatus.COMPLETED
+            )
+        ).count()
+        
+        overdue_preventive = self.db.query(PRPPreventiveAction).filter(
+            and_(
+                PRPPreventiveAction.planned_completion_date < datetime.utcnow(),
+                PRPPreventiveAction.status != CorrectiveActionStatus.COMPLETED
+            )
+        ).count()
+        
+        # Get effectiveness metrics
+        completed_corrective = self.db.query(CorrectiveAction).filter(
+            CorrectiveAction.status == CorrectiveActionStatus.COMPLETED
+        ).count()
+        
+        effective_corrective = self.db.query(CorrectiveAction).filter(
+            CorrectiveAction.effectiveness_verification == True
+        ).count()
+        
+        effectiveness_rate = (effective_corrective / completed_corrective * 100) if completed_corrective > 0 else 0.0
+        
+        # Get recent actions
+        recent_corrective = self.db.query(CorrectiveAction).order_by(
+            desc(CorrectiveAction.created_at)
+        ).limit(5).all()
+        
+        recent_preventive = self.db.query(PRPPreventiveAction).order_by(
+            desc(PRPPreventiveAction.created_at)
+        ).limit(5).all()
+        
+        return {
+            "corrective_actions": {
+                "total": total_corrective_actions,
+                "open": open_corrective_actions,
+                "overdue": overdue_corrective,
+                "completed": completed_corrective,
+                "effective": effective_corrective,
+                "effectiveness_rate": effectiveness_rate
+            },
+            "preventive_actions": {
+                "total": total_preventive_actions,
+                "open": open_preventive_actions,
+                "overdue": overdue_preventive
+            },
+            "recent_corrective_actions": [
+                {
+                    "id": action.id,
+                    "action_code": action.action_code,
+                    "description": action.action_description,
+                    "status": action.status.value if action.status else None,
+                    "target_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
+                    "created_at": action.created_at.isoformat() if action.created_at else None
+                } for action in recent_corrective
+            ],
+            "recent_preventive_actions": [
+                {
+                    "id": action.id,
+                    "action_code": action.action_code,
+                    "description": action.action_description,
+                    "status": action.status.value if action.status else None,
+                    "planned_date": action.planned_completion_date.isoformat() if action.planned_completion_date else None,
+                    "created_at": action.created_at.isoformat() if action.created_at else None
+                } for action in recent_preventive
+            ]
+        }
+    
+    def get_overdue_capa_actions(self, action_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get overdue CAPA actions"""
+        
+        overdue_actions = []
+        
+        if action_type is None or action_type == "corrective":
+            # Get overdue corrective actions
+            overdue_corrective = self.db.query(CorrectiveAction).filter(
+                and_(
+                    CorrectiveAction.target_completion_date < datetime.utcnow(),
+                    CorrectiveAction.status != CorrectiveActionStatus.COMPLETED
+                )
+            ).all()
+            
+            for action in overdue_corrective:
+                overdue_actions.append({
+                    "id": action.id,
+                    "action_code": action.action_code,
+                    "type": "corrective",
+                    "description": action.action_description,
+                    "status": action.status.value if action.status else None,
+                    "target_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
+                    "days_overdue": (datetime.utcnow() - action.target_completion_date).days if action.target_completion_date else 0,
+                    "responsible_person": action.responsible_person,
+                    "assigned_to": action.assigned_to
+                })
+        
+        if action_type is None or action_type == "preventive":
+            # Get overdue preventive actions
+            overdue_preventive = self.db.query(PRPPreventiveAction).filter(
+                and_(
+                    PRPPreventiveAction.planned_completion_date < datetime.utcnow(),
+                    PRPPreventiveAction.status != CorrectiveActionStatus.COMPLETED
+                )
+            ).all()
+            
+            for action in overdue_preventive:
+                overdue_actions.append({
+                    "id": action.id,
+                    "action_code": action.action_code,
+                    "type": "preventive",
+                    "description": action.action_description,
+                    "status": action.status.value if action.status else None,
+                    "target_date": action.planned_completion_date.isoformat() if action.planned_completion_date else None,
+                    "days_overdue": (datetime.utcnow() - action.planned_completion_date).days if action.planned_completion_date else 0,
+                    "responsible_person": action.responsible_person,
+                    "assigned_to": action.assigned_to
+                })
+        
+        # Sort by days overdue (most overdue first)
+        overdue_actions.sort(key=lambda x: x["days_overdue"], reverse=True)
+        
+        return overdue_actions
+    
+    def generate_capa_report(self, action_type: Optional[str] = None, 
+                           date_from: Optional[datetime] = None,
+                           date_to: Optional[datetime] = None,
+                           status: Optional[str] = None,
+                           severity: Optional[str] = None) -> Dict[str, Any]:
+        """Generate CAPA report with filtering options"""
+        
+        # Build query for corrective actions
+        corrective_query = self.db.query(CorrectiveAction)
+        if date_from:
+            corrective_query = corrective_query.filter(CorrectiveAction.created_at >= date_from)
+        if date_to:
+            corrective_query = corrective_query.filter(CorrectiveAction.created_at <= date_to)
+        if status:
+            corrective_query = corrective_query.filter(CorrectiveAction.status == status)
+        
+        # Build query for preventive actions
+        preventive_query = self.db.query(PRPPreventiveAction)
+        if date_from:
+            preventive_query = preventive_query.filter(PRPPreventiveAction.created_at >= date_from)
+        if date_to:
+            preventive_query = preventive_query.filter(PRPPreventiveAction.created_at <= date_to)
+        if status:
+            preventive_query = preventive_query.filter(PRPPreventiveAction.status == status)
+        
+        # Get data based on action type
+        corrective_actions = []
+        preventive_actions = []
+        
+        if action_type is None or action_type == "corrective":
+            corrective_actions = corrective_query.all()
+        
+        if action_type is None or action_type == "preventive":
+            preventive_actions = preventive_query.all()
+        
+        # Calculate summary statistics
+        total_actions = len(corrective_actions) + len(preventive_actions)
+        completed_actions = len([a for a in corrective_actions if a.status == CorrectiveActionStatus.COMPLETED]) + \
+                          len([a for a in preventive_actions if a.status == CorrectiveActionStatus.COMPLETED])
+        
+        # Calculate effectiveness
+        effective_corrective = len([a for a in corrective_actions if a.effectiveness_verification == True])
+        effectiveness_rate = (effective_corrective / len(corrective_actions) * 100) if corrective_actions else 0.0
+        
+        # Get status distribution
+        status_distribution = {}
+        for action in corrective_actions + preventive_actions:
+            status = action.status.value if action.status else "unknown"
+            status_distribution[status] = status_distribution.get(status, 0) + 1
+        
+        return {
+            "summary": {
+                "total_actions": total_actions,
+                "corrective_actions": len(corrective_actions),
+                "preventive_actions": len(preventive_actions),
+                "completed_actions": completed_actions,
+                "completion_rate": (completed_actions / total_actions * 100) if total_actions > 0 else 0.0,
+                "effectiveness_rate": effectiveness_rate
+            },
+            "status_distribution": status_distribution,
+            "corrective_actions": [
+                {
+                    "id": action.id,
+                    "action_code": action.action_code,
+                    "description": action.action_description,
+                    "status": action.status.value if action.status else None,
+                    "severity": action.severity,
+                    "target_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
+                    "created_at": action.created_at.isoformat() if action.created_at else None,
+                    "effectiveness_verification": action.effectiveness_verification
+                } for action in corrective_actions
+            ],
+            "preventive_actions": [
+                {
+                    "id": action.id,
+                    "action_code": action.action_code,
+                    "description": action.action_description,
+                    "status": action.status.value if action.status else None,
+                    "planned_date": action.planned_completion_date.isoformat() if action.planned_completion_date else None,
+                    "created_at": action.created_at.isoformat() if action.created_at else None
+                } for action in preventive_actions
+            ],
+            "report_generated_at": datetime.utcnow().isoformat(),
+            "filters_applied": {
+                "action_type": action_type,
+                "date_from": date_from.isoformat() if date_from else None,
+                "date_to": date_to.isoformat() if date_to else None,
+                "status": status,
+                "severity": severity
+            }
+        }
+    
+    def generate_prp_report(self, program_id: Optional[int] = None,
                           category: Optional[PRPCategory] = None,
                           date_from: Optional[datetime] = None,
                           date_to: Optional[datetime] = None) -> Dict[str, Any]:

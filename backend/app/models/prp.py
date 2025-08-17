@@ -16,7 +16,7 @@ class PRPCategory(str, enum.Enum):
     SUITABILITY_CLEANING_MAINTENANCE = "suitability_cleaning_maintenance"
     MANAGEMENT_OF_PURCHASED_MATERIALS = "management_of_purchased_materials"
     PREVENTION_OF_CROSS_CONTAMINATION = "prevention_of_cross_contamination"
-    CLEANING_AND_SANITIZING = "cleaning_and_sanitizing"
+    CLEANING_AND_SANITIZING = "cleaning_sanitation"
     PEST_CONTROL = "pest_control"
     PERSONNEL_HYGIENE_FACILITIES = "personnel_hygiene_facilities"
     PERSONNEL_HYGIENE_PRACTICES = "personnel_hygiene_practices"
@@ -27,6 +27,15 @@ class PRPCategory(str, enum.Enum):
     FOOD_DEFENSE_BIOVIGILANCE_BIOTERRORISM = "food_defense_biovigilance_bioterrorism"
     CONTROL_OF_NONCONFORMING_PRODUCT = "control_of_nonconforming_product"
     PRODUCT_RELEASE = "product_release"
+    # Additional categories used in test data
+    STAFF_HYGIENE = "staff_hygiene"
+    WASTE_MANAGEMENT = "waste_management"
+    EQUIPMENT_CALIBRATION = "equipment_calibration"
+    MAINTENANCE = "maintenance"
+    PERSONNEL_TRAINING = "personnel_training"
+    SUPPLIER_CONTROL = "supplier_control"
+    WATER_QUALITY = "water_quality"
+    AIR_QUALITY = "air_quality"
 
 
 class PRPFrequency(str, enum.Enum):
