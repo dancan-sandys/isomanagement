@@ -9,6 +9,8 @@ class EquipmentCreate(BaseModel):
     serial_number: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    is_active: Optional[bool] = True
+    critical_to_food_safety: Optional[bool] = False
 
 
 class EquipmentResponse(EquipmentCreate):
@@ -36,6 +38,12 @@ class MaintenancePlanResponse(BaseModel):
     next_due_at: Optional[datetime] = None
     active: bool
     notes: Optional[str] = None
+    # Enriched fields for UI
+    equipment_name: Optional[str] = None
+    last_maintenance_date: Optional[datetime] = None
+    next_due_date: Optional[datetime] = None
+    status: Optional[str] = None
+    prp_document_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -46,6 +54,9 @@ class MaintenanceWorkOrderCreate(BaseModel):
     plan_id: Optional[int] = None
     title: str
     description: Optional[str] = None
+    priority: Optional[str] = 'MEDIUM'
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
 
 
 class MaintenanceWorkOrderResponse(BaseModel):
@@ -57,6 +68,15 @@ class MaintenanceWorkOrderResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
     completed_by: Optional[int] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    created_by: Optional[int] = None
+    verified_by: Optional[int] = None
+    verified_at: Optional[datetime] = None
+    # Enriched
+    equipment_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -64,6 +84,7 @@ class MaintenanceWorkOrderResponse(BaseModel):
 
 class CalibrationPlanCreate(BaseModel):
     schedule_date: datetime
+    frequency_days: int
     notes: Optional[str] = None
 
 
@@ -71,10 +92,16 @@ class CalibrationPlanResponse(BaseModel):
     id: int
     equipment_id: int
     schedule_date: datetime
+    frequency_days: int
     last_calibrated_at: Optional[datetime] = None
     next_due_at: Optional[datetime] = None
     active: bool
     notes: Optional[str] = None
+    # Enriched
+    equipment_name: Optional[str] = None
+    last_calibration_date: Optional[datetime] = None
+    status: Optional[str] = None
+    certificate_file: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -89,8 +116,47 @@ class CalibrationRecordResponse(BaseModel):
     file_path: str
     file_type: Optional[str] = None
     uploaded_by: int
+    # ISO metadata
+    certificate_number: Optional[str] = None
+    calibrated_by: Optional[str] = None
+    result: Optional[str] = None
+    comments: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+# Updates
+class EquipmentUpdate(BaseModel):
+    name: Optional[str] = None
+    equipment_type: Optional[str] = None
+    serial_number: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+    critical_to_food_safety: Optional[bool] = None
+
+
+class MaintenancePlanUpdate(BaseModel):
+    frequency_days: Optional[int] = None
+    maintenance_type: Optional[str] = None
+    notes: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class MaintenanceWorkOrderUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+
+
+class CalibrationPlanUpdate(BaseModel):
+    schedule_date: Optional[datetime] = None
+    frequency_days: Optional[int] = None
+    notes: Optional[str] = None
+    active: Optional[bool] = None
 
 

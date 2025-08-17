@@ -34,6 +34,7 @@ import {
   LinearProgress,
   InputAdornment,
   FormHelperText,
+  Link,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,6 +52,7 @@ import {
   CalendarToday as CalendarIcon,
   LocationOn as LocationIcon,
   Settings as SettingsIcon,
+  Verified as VerifiedIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -119,6 +121,7 @@ const EquipmentPage: React.FC = () => {
   const [calibrationForm, setCalibrationForm] = useState({
     equipment_id: 0,
     schedule_date: new Date(),
+    frequency_days: 365,
     notes: '',
   });
 
@@ -132,12 +135,16 @@ const EquipmentPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [equipmentData, workOrdersData] = await Promise.all([
+      const [equipmentData, workOrdersData, maintenancePlansData, calibrationPlansData] = await Promise.all([
         equipmentAPI.list(),
         equipmentAPI.listWorkOrders(),
+        equipmentAPI.listMaintenancePlans(),
+        equipmentAPI.listCalibrationPlans(),
       ]);
       setEquipment(equipmentData || []);
       setWorkOrders(workOrdersData || []);
+      setMaintenancePlans(maintenancePlansData || []);
+      setCalibrationPlans(calibrationPlansData || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -199,10 +206,11 @@ const EquipmentPage: React.FC = () => {
     try {
       await equipmentAPI.createCalibrationPlan(calibrationForm.equipment_id, {
         schedule_date: calibrationForm.schedule_date.toISOString().split('T')[0],
+        frequency_days: calibrationForm.frequency_days,
         notes: calibrationForm.notes,
       });
       setCalibrationDialog(false);
-      setCalibrationForm({ equipment_id: 0, schedule_date: new Date(), notes: '' });
+      setCalibrationForm({ equipment_id: 0, schedule_date: new Date(), frequency_days: 365, notes: '' });
       loadData();
     } catch (error) {
       console.error('Error creating calibration plan:', error);
@@ -242,7 +250,8 @@ const EquipmentPage: React.FC = () => {
   };
 
   const getMaintenanceTypeColor = (type: string) => {
-    return type === 'preventive' ? 'success' : 'warning';
+    const t = (type || '').toLowerCase();
+    return t === 'preventive' ? 'success' : 'warning';
   };
 
   const getWorkOrderStatusColor = (completed: boolean) => {
@@ -389,6 +398,7 @@ const EquipmentPage: React.FC = () => {
                   <TableCell>Frequency (Days)</TableCell>
                   <TableCell>Last Maintenance</TableCell>
                   <TableCell>Next Due</TableCell>
+                  <TableCell>PRP</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -407,6 +417,13 @@ const EquipmentPage: React.FC = () => {
                     <TableCell>{plan.frequency_days}</TableCell>
                     <TableCell>{plan.last_maintenance_date || 'Never'}</TableCell>
                     <TableCell>{plan.next_due_date || 'Not scheduled'}</TableCell>
+                    <TableCell>
+                      {plan.prp_document_id ? (
+                        <Link href={`/documents/${plan.prp_document_id}`} underline="hover">Doc #{plan.prp_document_id}</Link>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={plan.status || 'Active'}
@@ -455,6 +472,7 @@ const EquipmentPage: React.FC = () => {
               <TableCell>Created</TableCell>
               <TableCell>Completed</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Verification</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -474,6 +492,13 @@ const EquipmentPage: React.FC = () => {
                         color={getWorkOrderStatusColor(!!wo.completed_at)}
                         size="small"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {wo.verified_at ? (
+                        <Chip icon={<VerifiedIcon />} label={`Verified ${new Date(wo.verified_at).toLocaleDateString()}`} color="success" size="small" />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
                     </TableCell>
                 <TableCell align="right">
                       {!wo.completed_at && (
@@ -790,6 +815,17 @@ const EquipmentPage: React.FC = () => {
                 value={calibrationForm.schedule_date}
                 onChange={(newValue) => setCalibrationForm({ ...calibrationForm, schedule_date: newValue || new Date() })}
                 slotProps={{ textField: { fullWidth: true } }}
+              />
+              <TextField
+                label="Frequency (Days)"
+                type="number"
+                value={calibrationForm.frequency_days}
+                onChange={(e) => setCalibrationForm({ ...calibrationForm, frequency_days: parseInt(e.target.value) })}
+                fullWidth
+                required
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">days</InputAdornment>,
+                }}
               />
               <TextField
                 label="Notes"

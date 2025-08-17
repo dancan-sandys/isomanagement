@@ -13,6 +13,7 @@ from app.models.equipment import Equipment, CalibrationPlan, CalibrationRecord
 from app.models.haccp import CCP, CCPMonitoringLog
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
+from app.models.rbac import Role
 from app.services.haccp_service import HACCPValidationError, HACCPBusinessError
 
 logger = logging.getLogger(__name__)
@@ -47,10 +48,14 @@ class EquipmentCalibrationService:
             if not equipment:
                 raise HACCPValidationError(f"Equipment with ID {equipment_id} not found")
             
-            # Get latest calibration record
-            latest_calibration = self.db.query(CalibrationRecord).filter(
-                CalibrationRecord.equipment_id == equipment_id
-            ).order_by(desc(CalibrationRecord.calibration_date)).first()
+            # Get latest calibration record via plan join
+            latest_calibration = (
+                self.db.query(CalibrationRecord)
+                .join(CalibrationPlan, CalibrationPlan.id == CalibrationRecord.plan_id)
+                .filter(CalibrationPlan.equipment_id == equipment_id)
+                .order_by(desc(CalibrationRecord.performed_at))
+                .first()
+            )
             
             if not latest_calibration:
                 return {
@@ -68,7 +73,7 @@ class EquipmentCalibrationService:
             # Get calibration plan
             calibration_plan = self.db.query(CalibrationPlan).filter(
                 CalibrationPlan.equipment_id == equipment_id
-            ).first()
+            ).order_by(desc(CalibrationPlan.next_due_at)).first()
             
             if not calibration_plan:
                 return {
@@ -79,19 +84,21 @@ class EquipmentCalibrationService:
                     "message": "No calibration plan found for equipment",
                     "requires_calibration": True,
                     "days_until_expiry": None,
-                    "last_calibration_date": latest_calibration.calibration_date,
+                    "last_calibration_date": latest_calibration.performed_at,
                     "next_calibration_date": None
                 }
             
-            # Calculate next calibration date
-            next_calibration_date = latest_calibration.calibration_date + timedelta(days=calibration_plan.frequency_days)
+            # Calculate next calibration date based on performed_at and plan frequency
+            base_date = latest_calibration.performed_at
+            next_calibration_date = base_date + timedelta(days=getattr(calibration_plan, 'frequency_days', 365))
             days_until_expiry = (next_calibration_date - datetime.utcnow()).days
             
             # Determine status
             if days_until_expiry < 0:
-                status = CalibrationStatus.EXPIRED
+                # Overdue or expired depending on how far past due
+                status = CalibrationStatus.OVERDUE if abs(days_until_expiry) <= 30 else CalibrationStatus.EXPIRED
                 is_valid = False
-                message = f"Calibration expired {abs(days_until_expiry)} days ago"
+                message = f"Calibration {status.value} by {abs(days_until_expiry)} days"
                 requires_calibration = True
             elif days_until_expiry <= 30:
                 status = CalibrationStatus.EXPIRING_SOON
@@ -112,9 +119,9 @@ class EquipmentCalibrationService:
                 "message": message,
                 "requires_calibration": requires_calibration,
                 "days_until_expiry": days_until_expiry,
-                "last_calibration_date": latest_calibration.calibration_date,
+                "last_calibration_date": latest_calibration.performed_at,
                 "next_calibration_date": next_calibration_date,
-                "calibration_frequency_days": calibration_plan.frequency_days
+                "calibration_frequency_days": getattr(calibration_plan, 'frequency_days', 365)
             }
             
         except Exception as e:
@@ -388,7 +395,7 @@ class EquipmentCalibrationService:
             
             # Find users responsible for equipment maintenance
             responsible_users = self.db.query(User).filter(
-                User.role.has(name__in=["Equipment Manager", "Maintenance", "HACCP Team"])
+                User.role.has(Role.name.in_(["Equipment Manager", "Maintenance", "HACCP Team"]))
             ).all()
             
             for user in responsible_users:
@@ -424,7 +431,7 @@ class EquipmentCalibrationService:
         """
         try:
             # Get HACCP team members
-            haccp_users = self.db.query(User).filter(User.role.has(name="HACCP Team")).all()
+            haccp_users = self.db.query(User).filter(User.role.has(Role.name == "HACCP Team")).all()
             
             for user in haccp_users:
                 notification = Notification(
