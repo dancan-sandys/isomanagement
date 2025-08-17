@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class HazardType(str, enum.Enum):
@@ -101,6 +101,13 @@ class Product(Base):
     haccp_plan_approved_by = Column(Integer, ForeignKey("users.id"))
     haccp_plan_approved_at = Column(DateTime(timezone=True))
     
+    # Risk assessment fields
+    risk_assessment_required = Column(Boolean, default=True)
+    risk_assessment_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    last_risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    next_risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -132,6 +139,13 @@ class ProcessFlow(Base):
     
     # Process parameters
     parameters = Column(JSON)  # JSON object for additional parameters
+    
+    # Risk assessment fields
+    risk_assessment_required = Column(Boolean, default=True)
+    risk_assessment_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    last_risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    next_risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -180,6 +194,20 @@ class Hazard(Base):
     decision_tree_run_at = Column(DateTime(timezone=True))
     decision_tree_by = Column(Integer, ForeignKey("users.id"))
     
+    # Risk integration fields
+    risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
+    risk_assessment_method = Column(String(100), nullable=True)
+    risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    risk_assessor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    risk_treatment_plan = Column(Text, nullable=True)
+    risk_monitoring_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    risk_control_effectiveness = Column(Integer, nullable=True)
+    risk_residual_score = Column(Integer, nullable=True)
+    risk_residual_level = Column(String(50), nullable=True)
+    risk_acceptable = Column(Boolean, nullable=True)
+    risk_justification = Column(Text, nullable=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -191,6 +219,9 @@ class Hazard(Base):
     ccp = relationship("CCP", back_populates="hazard", uselist=False)
     reviews = relationship("HazardReview", back_populates="hazard", cascade="all, delete-orphan")
     decision_tree = relationship("DecisionTree", back_populates="hazard", uselist=False, cascade="all, delete-orphan")
+    risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
+    risk_assessments = relationship("HACCPRiskAssessment", foreign_keys="HACCPRiskAssessment.hazard_id", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Hazard(id={self.id}, hazard_name='{self.hazard_name}', type='{self.hazard_type}')>"
@@ -315,6 +346,18 @@ class CCP(Base):
     monitoring_records = Column(Text)  # JSON array of record types
     verification_records = Column(Text)  # JSON array of record types
     
+    # Risk integration fields
+    risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
+    risk_assessment_method = Column(String(100), nullable=True)
+    risk_assessment_date = Column(DateTime(timezone=True), nullable=True)
+    risk_assessor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    risk_treatment_plan = Column(Text, nullable=True)
+    risk_monitoring_frequency = Column(String(100), nullable=True)
+    risk_review_frequency = Column(String(100), nullable=True)
+    risk_control_effectiveness = Column(Integer, nullable=True)
+    risk_residual_score = Column(Integer, nullable=True)
+    risk_residual_level = Column(String(50), nullable=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -325,6 +368,12 @@ class CCP(Base):
     hazard = relationship("Hazard", back_populates="ccp")
     monitoring_logs = relationship("CCPMonitoringLog", back_populates="ccp")
     verification_logs = relationship("CCPVerificationLog", back_populates="ccp")
+    monitoring_schedule = relationship("CCPMonitoringSchedule", back_populates="ccp", uselist=False, cascade="all, delete-orphan")
+    verification_programs = relationship("CCPVerificationProgram", back_populates="ccp", cascade="all, delete-orphan")
+    validations = relationship("CCPValidation", back_populates="ccp", cascade="all, delete-orphan")
+    risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
+    risk_assessments = relationship("HACCPRiskAssessment", foreign_keys="HACCPRiskAssessment.ccp_id", cascade="all, delete-orphan")
     
     def validate_limits(self, measured_values: dict) -> dict:
         """
@@ -403,31 +452,29 @@ class CCPMonitoringLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     ccp_id = Column(Integer, ForeignKey("ccps.id"), nullable=False)
     batch_id = Column(Integer, ForeignKey("batches.id"), nullable=True)
-    batch_number = Column(String(50), nullable=False)
-    monitoring_time = Column(DateTime(timezone=True), nullable=False)
+    batch_number = Column(String(50), nullable=True)
+    monitoring_time = Column(DateTime, default=datetime.utcnow)
     measured_value = Column(Float, nullable=False)
-    unit = Column(String(20))
-    is_within_limits = Column(Boolean, nullable=False)
-    
-    # Additional monitoring data
-    additional_parameters = Column(JSON)  # JSON object for additional readings
+    unit = Column(String(20), nullable=True)
+    is_within_limits = Column(Boolean, default=True)
+    additional_parameters = Column(JSON)
     observations = Column(Text)
-    
-    # Evidence
-    evidence_files = Column(Text)  # JSON array of file paths
-    
-    # Corrective action if needed
+    evidence_files = Column(Text)  # JSON array of file references
     corrective_action_taken = Column(Boolean, default=False)
     corrective_action_description = Column(Text)
     corrective_action_by = Column(Integer, ForeignKey("users.id"))
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=True)  # Equipment used for monitoring
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    log_metadata = Column(JSON)  # Additional metadata like device calibration status, etc.
+
     # Relationships
     ccp = relationship("CCP", back_populates="monitoring_logs")
-    
+    batch = relationship("Batch")
+    creator = relationship("User", foreign_keys=[created_by])
+    corrective_action_user = relationship("User", foreign_keys=[corrective_action_by])
+    equipment = relationship("Equipment")
+
     def __repr__(self):
         return f"<CCPMonitoringLog(id={self.id}, ccp_id={self.ccp_id}, batch='{self.batch_number}')>"
 
@@ -437,6 +484,7 @@ class CCPVerificationLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     ccp_id = Column(Integer, ForeignKey("ccps.id"), nullable=False)
+    verification_program_id = Column(Integer, ForeignKey("ccp_verification_programs.id"), nullable=True)
     verification_date = Column(DateTime(timezone=True), nullable=False)
     verification_method = Column(Text)
     verification_result = Column(Text)
@@ -448,6 +496,10 @@ class CCPVerificationLog(Base):
     equipment_calibration = Column(Boolean)
     calibration_date = Column(DateTime(timezone=True))
     
+    # Role segregation tracking
+    verifier_role = Column(String(50), nullable=True)  # Role of the verifier
+    verification_notes = Column(Text)  # Additional verification notes
+    
     # Evidence
     evidence_files = Column(Text)  # JSON array of file paths
     
@@ -457,6 +509,8 @@ class CCPVerificationLog(Base):
     
     # Relationships
     ccp = relationship("CCP", back_populates="verification_logs")
+    verification_program = relationship("CCPVerificationProgram", back_populates="verification_logs")
+    verifier = relationship("User", foreign_keys=[created_by])
     
     def __repr__(self):
         return f"<CCPVerificationLog(id={self.id}, ccp_id={self.ccp_id}, date='{self.verification_date}')>" 
@@ -685,3 +739,209 @@ class DecisionTree(Base):
         
         # If we reach here, it's a CCP
         return True, "All questions answered affirmatively - this is a Critical Control Point"
+
+
+class CCPMonitoringSchedule(Base):
+    __tablename__ = "ccp_monitoring_schedules"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    ccp_id = Column(Integer, ForeignKey("ccps.id", ondelete="CASCADE"), nullable=False)
+    
+    # Schedule configuration
+    schedule_type = Column(String(20), default="interval")  # interval, cron, manual
+    interval_minutes = Column(Integer, nullable=True)  # For interval-based schedules
+    cron_expression = Column(String(100), nullable=True)  # For cron-based schedules
+    
+    # Tolerance window
+    tolerance_window_minutes = Column(Integer, default=15)  # Minutes before/after scheduled time
+    
+    # Schedule status
+    is_active = Column(Boolean, default=True)
+    last_scheduled_time = Column(DateTime, nullable=True)
+    next_due_time = Column(DateTime, nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ccp = relationship("CCP", back_populates="monitoring_schedule")
+    creator = relationship("User")
+    
+    def calculate_next_due(self, from_time: datetime = None) -> datetime:
+        """Calculate the next due time based on schedule configuration"""
+        if not from_time:
+            from_time = datetime.utcnow()
+        
+        if self.schedule_type == "interval" and self.interval_minutes:
+            # Simple interval-based scheduling
+            if self.last_scheduled_time:
+                return self.last_scheduled_time + timedelta(minutes=self.interval_minutes)
+            else:
+                return from_time + timedelta(minutes=self.interval_minutes)
+        
+        elif self.schedule_type == "cron" and self.cron_expression:
+            # Cron-based scheduling (simplified implementation)
+            # In production, you'd use a proper cron parser like croniter
+            try:
+                from croniter import croniter
+                cron = croniter(self.cron_expression, from_time)
+                return cron.get_next(datetime)
+            except ImportError:
+                # Fallback to interval if croniter not available
+                return from_time + timedelta(hours=1)
+        
+        return None
+    
+    def is_overdue(self, current_time: datetime = None) -> bool:
+        """Check if the schedule is overdue"""
+        if not current_time:
+            current_time = datetime.utcnow()
+        
+        if not self.next_due_time:
+            return False
+        
+        tolerance_end = self.next_due_time + timedelta(minutes=self.tolerance_window_minutes)
+        return current_time > tolerance_end
+    
+    def is_due(self, current_time: datetime = None) -> bool:
+        """Check if monitoring is currently due"""
+        if not current_time:
+            current_time = datetime.utcnow()
+        
+        if not self.next_due_time:
+            return False
+        
+        tolerance_start = self.next_due_time - timedelta(minutes=self.tolerance_window_minutes)
+        tolerance_end = self.next_due_time + timedelta(minutes=self.tolerance_window_minutes)
+        
+        return tolerance_start <= current_time <= tolerance_end
+
+
+class CCPVerificationProgram(Base):
+    __tablename__ = "ccp_verification_programs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    ccp_id = Column(Integer, ForeignKey("ccps.id", ondelete="CASCADE"), nullable=False)
+    
+    # Verification configuration
+    verification_type = Column(Enum("record_review", "direct_observation", "sampling_testing", "calibration_check", name="verification_type"), nullable=False)
+    frequency = Column(String(50), nullable=False)  # e.g., "daily", "weekly", "monthly", "quarterly"
+    frequency_value = Column(Integer, nullable=True)  # For specific intervals
+    
+    # Schedule configuration
+    last_verification_date = Column(DateTime, nullable=True)
+    next_verification_date = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # Verification requirements
+    required_verifier_role = Column(String(50), nullable=True)  # e.g., "qa_verifier", "qa_manager"
+    verification_criteria = Column(Text, nullable=True)  # JSON or text description
+    sampling_plan = Column(Text, nullable=True)  # For sampling/testing verifications
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ccp = relationship("CCP", back_populates="verification_programs")
+    creator = relationship("User")
+    verification_logs = relationship("CCPVerificationLog", back_populates="verification_program")
+    
+    def calculate_next_verification_date(self, from_date: datetime = None) -> datetime:
+        """Calculate the next verification date based on frequency"""
+        if not from_date:
+            from_date = datetime.utcnow()
+        
+        if self.frequency == "daily":
+            return from_date + timedelta(days=1)
+        elif self.frequency == "weekly":
+            return from_date + timedelta(weeks=1)
+        elif self.frequency == "monthly":
+            return from_date + timedelta(days=30)
+        elif self.frequency == "quarterly":
+            return from_date + timedelta(days=90)
+        elif self.frequency == "custom" and self.frequency_value:
+            return from_date + timedelta(days=self.frequency_value)
+        
+        return None
+    
+    def is_overdue(self, current_date: datetime = None) -> bool:
+        """Check if verification is overdue"""
+        if not current_date:
+            current_date = datetime.utcnow()
+        
+        if not self.next_verification_date:
+            return False
+        
+        return current_date > self.next_verification_date
+    
+    def is_due(self, current_date: datetime = None) -> bool:
+        """Check if verification is currently due"""
+        if not current_date:
+            current_date = datetime.utcnow()
+        
+        if not self.next_verification_date:
+            return False
+        
+        # Consider due if within 1 day of scheduled date
+        due_window_start = self.next_verification_date - timedelta(days=1)
+        return due_window_start <= current_date <= self.next_verification_date
+
+
+class CCPValidation(Base):
+    __tablename__ = "ccp_validations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    ccp_id = Column(Integer, ForeignKey("ccps.id", ondelete="CASCADE"), nullable=False)
+    
+    # Validation type and details
+    validation_type = Column(Enum("process_authority_letter", "scientific_study", "validation_test", "expert_opinion", name="validation_type"), nullable=False)
+    validation_title = Column(String(200), nullable=False)
+    validation_description = Column(Text)
+    
+    # Document references
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+    external_reference = Column(String(500), nullable=True)  # For external documents
+    
+    # Validation metadata
+    validation_date = Column(DateTime, nullable=True)
+    valid_until = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # Validation results
+    validation_result = Column(Text)  # JSON object with validation details
+    critical_limits_validated = Column(Text)  # JSON array of validated limits
+    
+    # Approval and review
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_status = Column(Enum("pending", "approved", "rejected", name="validation_review_status"), default="pending")
+    review_notes = Column(Text)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ccp = relationship("CCP", back_populates="validations")
+    document = relationship("Document")
+    creator = relationship("User", foreign_keys=[created_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    
+    def is_expired(self) -> bool:
+        """Check if validation has expired"""
+        if not self.valid_until:
+            return False
+        return datetime.utcnow() > self.valid_until
+    
+    def is_valid_for_approval(self) -> bool:
+        """Check if validation is valid for HACCP plan approval"""
+        return (
+            self.is_active and 
+            self.review_status == "approved" and 
+            not self.is_expired()
+        )

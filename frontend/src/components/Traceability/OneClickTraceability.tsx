@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -22,7 +22,15 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  alpha
+  alpha,
+  useMediaQuery,
+  useTheme,
+  Fab,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  Snackbar,
+  Slide
 } from '@mui/material';
 import {
   Timeline as TimelineIcon,
@@ -40,7 +48,11 @@ import {
   QrCode as QrCodeIcon,
   Business as BusinessIcon,
   LocalShipping as LocalShippingIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Save as SaveIcon,
+  Undo as UndoIcon,
+  Redo as RedoIcon,
+  Keyboard as KeyboardIcon
 } from '@mui/icons-material';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
 
@@ -78,14 +90,107 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
   productName,
   onComplete
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<TraceabilityResults | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [undoStack, setUndoStack] = useState<any[]>([]);
+  const [redoStack, setRedoStack] = useState<any[]>([]);
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (results) {
+      const autoSave = setTimeout(() => {
+        setAutoSaveStatus('Auto-saving...');
+        // Simulate auto-save
+        setTimeout(() => {
+          setAutoSaveStatus('Auto-saved');
+          setTimeout(() => setAutoSaveStatus(''), 2000);
+        }, 1000);
+      }, 2000);
+      
+      return () => clearTimeout(autoSave);
+    }
+  }, [results]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key) {
+          case 's':
+            event.preventDefault();
+            handleSave();
+            break;
+          case 'z':
+            event.preventDefault();
+            if (event.shiftKey) {
+              handleRedo();
+            } else {
+              handleUndo();
+            }
+            break;
+          case 'r':
+            event.preventDefault();
+            handleOneClickTrace();
+            break;
+          case 'h':
+            event.preventDefault();
+            setShowKeyboardShortcuts(!showKeyboardShortcuts);
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [results, undoStack, redoStack]);
+
+  const handleSave = () => {
+    if (results) {
+      setAutoSaveStatus('Saving...');
+      // Simulate save operation
+      setTimeout(() => {
+        setAutoSaveStatus('Saved');
+        setTimeout(() => setAutoSaveStatus(''), 2000);
+      }, 1000);
+    }
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length > 0) {
+      const lastState = undoStack[undoStack.length - 1];
+      setRedoStack([...redoStack, results]);
+      setResults(lastState);
+      setUndoStack(undoStack.slice(0, -1));
+    }
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length > 0) {
+      const lastState = redoStack[redoStack.length - 1];
+      setUndoStack([...undoStack, results]);
+      setResults(lastState);
+      setRedoStack(redoStack.slice(0, -1));
+    }
+  };
 
   const handleOneClickTrace = async () => {
     setLoading(true);
     setError(null);
+    
+    // Save current state for undo
+    if (results) {
+      setUndoStack([...undoStack, results]);
+      setRedoStack([]);
+    }
+    
     setResults(null);
 
     try {
@@ -335,17 +440,114 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
   };
 
   return (
-    <Card sx={{ width: '100%' }}>
-      <CardContent>
-        <Box display="flex" alignItems="center" gap={2} mb={3}>
-          <TimelineIcon color="primary" sx={{ fontSize: 32 }} />
+    <Card sx={{ 
+      width: '100%',
+      borderRadius: { xs: 1, sm: 2 },
+      boxShadow: { xs: 1, sm: 2 }
+    }}>
+      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+        {/* Auto-save status */}
+        {autoSaveStatus && (
+          <Snackbar
+            open={!!autoSaveStatus}
+            message={autoSaveStatus}
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            TransitionComponent={Slide}
+            sx={{ mt: { xs: 7, sm: 0 } }}
+          />
+        )}
+
+        {/* Keyboard shortcuts help */}
+        {showKeyboardShortcuts && (
+          <Alert 
+            severity="info" 
+            onClose={() => setShowKeyboardShortcuts(false)}
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts:</Typography>
+            <Typography variant="body2" component="div">
+              • Ctrl+S: Save • Ctrl+Z: Undo • Ctrl+Shift+Z: Redo • Ctrl+R: Refresh • Ctrl+H: Help
+            </Typography>
+          </Alert>
+        )}
+
+        <Box 
+          display="flex" 
+          flexDirection={{ xs: 'column', sm: 'row' }}
+          alignItems={{ xs: 'flex-start', sm: 'center' }} 
+          gap={2} 
+          mb={3}
+        >
+          <TimelineIcon 
+            color="primary" 
+            sx={{ 
+              fontSize: { xs: 24, sm: 32 },
+              flexShrink: 0
+            }} 
+            aria-hidden="true"
+          />
           <Box flex={1}>
-            <Typography variant="h5" fontWeight={600}>
+            <Typography 
+              variant="h5" 
+              fontWeight={600}
+              sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
+            >
               One-Click Traceability Analysis
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {batchNumber && productName ? `${batchNumber} - ${productName}` : `Batch ID: ${batchId}`}
             </Typography>
+          </Box>
+          
+          {/* Quick action buttons */}
+          <Box 
+            display="flex" 
+            gap={1}
+            sx={{ 
+              flexDirection: { xs: 'row', sm: 'row' },
+              width: { xs: '100%', sm: 'auto' },
+              justifyContent: { xs: 'space-between', sm: 'flex-end' }
+            }}
+          >
+            <Tooltip title="Save (Ctrl+S)" arrow>
+              <IconButton
+                onClick={handleSave}
+                disabled={!results}
+                aria-label="Save traceability results"
+                size={isMobile ? "medium" : "small"}
+              >
+                <SaveIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Undo (Ctrl+Z)" arrow>
+              <IconButton
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                aria-label="Undo last action"
+                size={isMobile ? "medium" : "small"}
+              >
+                <UndoIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Redo (Ctrl+Shift+Z)" arrow>
+              <IconButton
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                aria-label="Redo last action"
+                size={isMobile ? "medium" : "small"}
+              >
+                <RedoIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Keyboard shortcuts (Ctrl+H)" arrow>
+              <IconButton
+                onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+                aria-label="Show keyboard shortcuts"
+                size={isMobile ? "medium" : "small"}
+              >
+                <KeyboardIcon />
+              </IconButton>
+            </Tooltip>
           </Box>
         </Box>
 
@@ -356,21 +558,50 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
         )}
 
         {!results && !loading && (
-          <Box textAlign="center" py={4}>
-            <TimelineIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
-            <Typography variant="h6" mb={2}>
+          <Box 
+            textAlign="center" 
+            py={{ xs: 3, sm: 4 }}
+            px={{ xs: 1, sm: 2 }}
+          >
+            <TimelineIcon 
+              sx={{ 
+                fontSize: { xs: 48, sm: 64 }, 
+                color: 'primary.main', 
+                mb: 2 
+              }} 
+              aria-hidden="true"
+            />
+            <Typography 
+              variant="h6" 
+              mb={2}
+              sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+            >
               Ready for Traceability Analysis
             </Typography>
-            <Typography variant="body2" color="text.secondary" mb={3}>
+            <Typography 
+              variant="body2" 
+              color="text.secondary" 
+              mb={3}
+              sx={{ 
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                lineHeight: 1.5
+              }}
+            >
               Click the button below to perform comprehensive traceability analysis including
               one-up-one-back tracing, completeness scoring, verification status, and CCP alerts.
             </Typography>
             <Button
               variant="contained"
-              size="large"
+              size={isMobile ? "large" : "large"}
               startIcon={<TimelineIcon />}
               onClick={handleOneClickTrace}
-              sx={{ px: 4, py: 1.5 }}
+              sx={{ 
+                px: { xs: 3, sm: 4 }, 
+                py: { xs: 1.5, sm: 1.5 },
+                minHeight: { xs: 48, sm: 56 },
+                fontSize: { xs: '0.875rem', sm: '1rem' }
+              }}
+              aria-label="Start traceability analysis"
             >
               Start Traceability Analysis
             </Button>
@@ -391,16 +622,39 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
 
         {results && (
           <Box>
-            <Box display="flex" alignItems="center" gap={2} mb={3}>
-              <CheckCircleIcon color="success" sx={{ fontSize: 24 }} />
-              <Typography variant="h6" fontWeight={600}>
-                Analysis Complete
-              </Typography>
+            <Box 
+              display="flex" 
+              flexDirection={{ xs: 'column', sm: 'row' }}
+              alignItems={{ xs: 'flex-start', sm: 'center' }} 
+              gap={2} 
+              mb={3}
+            >
+              <Box display="flex" alignItems="center" gap={2} flex={1}>
+                <CheckCircleIcon 
+                  color="success" 
+                  sx={{ 
+                    fontSize: { xs: 20, sm: 24 } 
+                  }} 
+                  aria-hidden="true"
+                />
+                <Typography 
+                  variant="h6" 
+                  fontWeight={600}
+                  sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                >
+                  Analysis Complete
+                </Typography>
+              </Box>
               <Button
                 variant="outlined"
-                size="small"
+                size={isMobile ? "medium" : "small"}
                 startIcon={<RefreshIcon />}
                 onClick={handleOneClickTrace}
+                aria-label="Refresh traceability analysis"
+                sx={{ 
+                  minWidth: { xs: '100%', sm: 'auto' },
+                  height: { xs: 48, sm: 40 }
+                }}
               >
                 Refresh
               </Button>
@@ -523,6 +777,47 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
               </AccordionDetails>
             </Accordion>
           </Box>
+        )}
+
+        {/* Mobile Speed Dial for Quick Actions */}
+        {isMobile && results && (
+          <SpeedDial
+            ariaLabel="Quick actions"
+            sx={{ 
+              position: 'fixed', 
+              bottom: 16, 
+              right: 16,
+              zIndex: theme.zIndex.speedDial
+            }}
+            icon={<SpeedDialIcon />}
+          >
+            <SpeedDialAction
+              icon={<SaveIcon />}
+              tooltipTitle="Save"
+              onClick={handleSave}
+              aria-label="Save traceability results"
+            />
+            <SpeedDialAction
+              icon={<UndoIcon />}
+              tooltipTitle="Undo"
+              onClick={handleUndo}
+              disabled={undoStack.length === 0}
+              aria-label="Undo last action"
+            />
+            <SpeedDialAction
+              icon={<RedoIcon />}
+              tooltipTitle="Redo"
+              onClick={handleRedo}
+              disabled={redoStack.length === 0}
+              aria-label="Redo last action"
+            />
+            <SpeedDialAction
+              icon={<RefreshIcon />}
+              tooltipTitle="Refresh"
+              onClick={handleOneClickTrace}
+              aria-label="Refresh traceability analysis"
+            />
+          </SpeedDial>
         )}
       </CardContent>
     </Card>

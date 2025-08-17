@@ -38,7 +38,17 @@ import {
   Autocomplete,
   Slider,
   Rating,
-  alpha
+  alpha,
+  useMediaQuery,
+  useTheme,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  Snackbar,
+  Slide,
+  Fab,
+  AppBar,
+  Toolbar
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -60,7 +70,12 @@ import {
   Inventory as InventoryIcon,
   People as PeopleIcon,
   Description as DescriptionIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  Undo as UndoIcon,
+  Redo as RedoIcon,
+  Keyboard as KeyboardIcon,
+  Close as CloseIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
 
@@ -130,6 +145,10 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
   onCancel,
   initialData
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
+  
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -958,15 +977,40 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
   );
 
   return (
-    <Card sx={{ width: '100%' }}>
-      <CardContent>
-        <Box display="flex" alignItems="center" gap={2} mb={3}>
-          <WarningIcon color="primary" sx={{ fontSize: 32 }} />
+    <Card sx={{ 
+      width: '100%',
+      borderRadius: { xs: 1, sm: 2 },
+      boxShadow: { xs: 1, sm: 2 }
+    }}>
+      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+        <Box 
+          display="flex" 
+          flexDirection={{ xs: 'column', sm: 'row' }}
+          alignItems={{ xs: 'flex-start', sm: 'center' }} 
+          gap={2} 
+          mb={3}
+        >
+          <WarningIcon 
+            color="primary" 
+            sx={{ 
+              fontSize: { xs: 24, sm: 32 },
+              flexShrink: 0
+            }} 
+            aria-hidden="true"
+          />
           <Box flex={1}>
-            <Typography variant="h5" fontWeight={600}>
+            <Typography 
+              variant="h5" 
+              fontWeight={600}
+              sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
+            >
               Smart Recall Wizard
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography 
+              variant="body2" 
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+            >
               Step-by-step recall creation with intelligent guidance
             </Typography>
           </Box>
@@ -978,40 +1022,72 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
           </Alert>
         )}
 
-        <Stepper activeStep={activeStep} orientation="vertical">
+        <Stepper 
+          activeStep={activeStep} 
+          orientation={isMobile ? "vertical" : "vertical"}
+          sx={{
+            '& .MuiStepLabel-root': {
+              padding: { xs: 1, sm: 2 }
+            }
+          }}
+        >
           {steps.map((step, index) => (
             <Step key={step.id}>
               <StepLabel
                 StepIconComponent={() => (
                   <Box
                     sx={{
-                      width: 32,
-                      height: 32,
+                      width: { xs: 28, sm: 32 },
+                      height: { xs: 28, sm: 32 },
                       borderRadius: '50%',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       bgcolor: step.completed ? 'success.main' : 'primary.main',
-                      color: 'white'
+                      color: 'white',
+                      fontSize: { xs: '0.875rem', sm: '1rem' }
                     }}
+                    aria-label={`Step ${index + 1}: ${step.title}`}
                   >
                     {step.completed ? <CheckCircleIcon /> : step.icon}
                   </Box>
                 )}
               >
-                <Typography variant="h6">{step.title}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography 
+                  variant="h6"
+                  sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
+                  {step.title}
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+                >
                   {step.description}
                 </Typography>
               </StepLabel>
               <StepContent>
                 {renderStepContent(index)}
                 
-                <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                <Box 
+                  sx={{ 
+                    mt: 3, 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    gap: 2 
+                  }}
+                >
                   <Button
                     disabled={index === 0}
                     onClick={handleBack}
                     startIcon={<ArrowBackIcon />}
+                    size={isMobile ? "large" : "medium"}
+                    sx={{ 
+                      minHeight: { xs: 48, sm: 40 },
+                      order: { xs: 2, sm: 1 }
+                    }}
+                    aria-label="Go to previous step"
                   >
                     Back
                   </Button>
@@ -1020,6 +1096,12 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
                     onClick={handleNext}
                     endIcon={index === steps.length - 1 ? <SaveIcon /> : <ArrowForwardIcon />}
                     disabled={!validateStep(index)}
+                    size={isMobile ? "large" : "medium"}
+                    sx={{ 
+                      minHeight: { xs: 48, sm: 40 },
+                      order: { xs: 1, sm: 2 }
+                    }}
+                    aria-label={index === steps.length - 1 ? "Review and create recall" : "Go to next step"}
                   >
                     {index === steps.length - 1 ? 'Review & Create' : 'Next'}
                   </Button>
@@ -1030,6 +1112,41 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
         </Stepper>
 
         {renderSummary()}
+
+        {/* Mobile Speed Dial for Quick Actions */}
+        {isMobile && (
+          <SpeedDial
+            ariaLabel="Quick actions"
+            sx={{ 
+              position: 'fixed', 
+              bottom: 16, 
+              right: 16,
+              zIndex: theme.zIndex.speedDial
+            }}
+            icon={<SpeedDialIcon />}
+          >
+            <SpeedDialAction
+              icon={<ArrowBackIcon />}
+              tooltipTitle="Previous Step"
+              onClick={handleBack}
+              disabled={activeStep === 0}
+              aria-label="Go to previous step"
+            />
+            <SpeedDialAction
+              icon={<ArrowForwardIcon />}
+              tooltipTitle="Next Step"
+              onClick={handleNext}
+              disabled={!validateStep(activeStep)}
+              aria-label="Go to next step"
+            />
+            <SpeedDialAction
+              icon={<SaveIcon />}
+              tooltipTitle="Save Progress"
+              onClick={() => {/* TODO: Implement save progress */}}
+              aria-label="Save progress"
+            />
+          </SpeedDial>
+        )}
       </CardContent>
     </Card>
   );

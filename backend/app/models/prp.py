@@ -109,6 +109,16 @@ class PRPProgram(Base):
         ),
     )
     
+    # Enhanced Risk Integration Fields
+    risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
+    risk_assessment_frequency = Column(String(100), nullable=True)
+    risk_monitoring_plan = Column(Text, nullable=True)
+    risk_review_plan = Column(Text, nullable=True)
+    risk_improvement_plan = Column(Text, nullable=True)
+    risk_control_effectiveness = Column(Integer, nullable=True)
+    risk_residual_score = Column(Integer, nullable=True)
+    risk_residual_level = Column(String(50), nullable=True)
+    
     # Frequency and scheduling
     frequency = Column(
         Enum(
@@ -154,6 +164,8 @@ class PRPProgram(Base):
     # Relationships
     checklists = relationship("PRPChecklist", back_populates="program")
     risk_assessments = relationship("RiskAssessment", back_populates="program")
+    risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_assessments_enhanced = relationship("HACCPRiskAssessment", foreign_keys="HACCPRiskAssessment.prp_program_id", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<PRPProgram(id={self.id}, program_code='{self.program_code}', name='{self.name}')>"

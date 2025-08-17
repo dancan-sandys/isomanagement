@@ -12,6 +12,8 @@ from app.models.notification import Notification, NotificationType, Notification
 from app.models.user import User
 from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.models.audit_mgmt import Audit, AuditPlan, AuditFinding, AuditStatus, FindingStatus
+from app.models.haccp import CCPMonitoringSchedule, CCP
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -497,6 +499,7 @@ class ScheduledTasksService:
             "audit_plan_reminders": 0,
             "findings_due_reminders": 0,
             "overdue_escalations": 0,
+            "missed_monitoring_alerts": 0,
             "errors": []
         }
         
@@ -559,6 +562,13 @@ class ScheduledTasksService:
                 self.db.rollback()
                 results["errors"].append(f"equipment alerts: {e}")
             
+            # Missed monitoring check
+            try:
+                check_missed_monitoring()
+                results["missed_monitoring_alerts"] = 1  # Count as 1 task executed
+            except Exception as e:
+                results["errors"].append(f"missed monitoring check: {e}")
+
         except Exception as e:
             error_msg = f"Error in maintenance tasks: {str(e)}"
             logger.error(error_msg)
@@ -627,3 +637,115 @@ def run_audit_reminders():
         return {"error": str(e)}
     finally:
         db.close() 
+
+
+def check_missed_monitoring():
+    """Check for missed monitoring and send alerts"""
+    from app.core.database import get_db
+    from app.services.haccp_service import HACCPService
+    from app.services.notification_service import NotificationService
+    from app.models.haccp import CCPMonitoringSchedule
+    from datetime import datetime, timedelta
+    
+    logger.info("Starting missed monitoring check...")
+    
+    try:
+        db = next(get_db())
+        haccp_service = HACCPService(db)
+        notification_service = NotificationService(db)
+        
+        # Get all overdue monitoring schedules
+        overdue_schedules = haccp_service.get_all_due_monitoring()
+        overdue_count = len([s for s in overdue_schedules if s.is_overdue])
+        
+        if overdue_count == 0:
+            logger.info("No overdue monitoring found")
+            return
+        
+        logger.info(f"Found {overdue_count} overdue monitoring schedules")
+        
+        # Group by responsible users
+        overdue_by_user = {}
+        for schedule in overdue_schedules:
+            if schedule.is_overdue:
+                # Get the CCP to find responsible users
+                ccp = db.query(CCP).filter(CCP.id == schedule.ccp_id).first()
+                if ccp:
+                    # Check monitoring responsible
+                    if ccp.monitoring_responsible:
+                        if ccp.monitoring_responsible not in overdue_by_user:
+                            overdue_by_user[ccp.monitoring_responsible] = []
+                        overdue_by_user[ccp.monitoring_responsible].append({
+                            "ccp_id": schedule.ccp_id,
+                            "ccp_name": schedule.ccp_name,
+                            "next_due_time": schedule.next_due_time,
+                            "tolerance_window_minutes": schedule.tolerance_window_minutes
+                        })
+        
+        # Send notifications to responsible users
+        for user_id, overdue_items in overdue_by_user.items():
+            if len(overdue_items) == 1:
+                item = overdue_items[0]
+                title = f"Monitoring Overdue: {item['ccp_name']}"
+                message = f"CCP monitoring is overdue. Next due time was {item['next_due_time'].strftime('%Y-%m-%d %H:%M')} (tolerance: {item['tolerance_window_minutes']} minutes)."
+            else:
+                title = f"Multiple Monitoring Tasks Overdue ({len(overdue_items)})"
+                message = f"You have {len(overdue_items)} overdue monitoring tasks:\n"
+                for item in overdue_items:
+                    message += f"• {item['ccp_name']} (due: {item['next_due_time'].strftime('%Y-%m-%d %H:%M')})\n"
+            
+            # Create notification
+            notification_data = {
+                "user_id": user_id,
+                "title": title,
+                "message": message,
+                "type": "haccp_monitoring_overdue",
+                "category": "food_safety",
+                "priority": "high",
+                "action_url": f"/haccp/monitoring/due"
+            }
+            
+            notification_service.create_notification(notification_data)
+            logger.info(f"Sent overdue notification to user {user_id}")
+        
+        # Also send to QA managers/verifiers if monitoring is severely overdue (>1 hour)
+        severely_overdue = []
+        for schedule in overdue_schedules:
+            if schedule.is_overdue and schedule.next_due_time:
+                overdue_minutes = (datetime.utcnow() - schedule.next_due_time).total_seconds() / 60
+                if overdue_minutes > 60:  # More than 1 hour overdue
+                    severely_overdue.append(schedule)
+        
+        if severely_overdue:
+            # Find QA managers/verifiers
+            qa_users = db.query(User).filter(
+                User.role_id.in_([2, 3])  # Assuming role_id 2=QA Verifier, 3=QA Manager
+            ).all()
+            
+            for user in qa_users:
+                title = f"Critical: {len(severely_overdue)} Monitoring Tasks Severely Overdue"
+                message = f"The following monitoring tasks are more than 1 hour overdue:\n"
+                for schedule in severely_overdue:
+                    overdue_minutes = int((datetime.utcnow() - schedule.next_due_time).total_seconds() / 60)
+                    message += f"• {schedule.ccp_name} ({overdue_minutes} minutes overdue)\n"
+                message += "\nImmediate attention required."
+                
+                notification_data = {
+                    "user_id": user.id,
+                    "title": title,
+                    "message": message,
+                    "type": "haccp_monitoring_critical",
+                    "category": "food_safety",
+                    "priority": "critical",
+                    "action_url": f"/haccp/monitoring/due"
+                }
+                
+                notification_service.create_notification(notification_data)
+                logger.info(f"Sent critical overdue notification to QA user {user.id}")
+        
+        logger.info(f"Missed monitoring check completed. Sent {len(overdue_by_user)} user notifications and {len(severely_overdue)} critical alerts.")
+        
+    except Exception as e:
+        logger.error(f"Error in missed monitoring check: {e}")
+        import traceback
+        logger.error(traceback.format_exc()) 

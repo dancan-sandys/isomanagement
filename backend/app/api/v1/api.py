@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, documents, haccp, prp, suppliers, traceability, settings, profile, notifications, dashboard, audits, risk, complaints, allergen_label, management_review, rbac
+from app.api.v1.endpoints import auth, users, documents, haccp, prp, suppliers, traceability, settings, profile, notifications, dashboard, audits, risk, risk_framework, haccp_risk, complaints, allergen_label, management_review, rbac
 
 api_router = APIRouter()
 
@@ -18,6 +18,8 @@ api_router.include_router(notifications.router, prefix="/notifications", tags=["
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(audits.router, prefix="/audits", tags=["audits"])
 api_router.include_router(risk.router, prefix="/risk", tags=["risk"])
+api_router.include_router(risk_framework.router, prefix="/risk", tags=["risk_framework"])
+api_router.include_router(haccp_risk.router, prefix="/haccp", tags=["haccp_risk"])
 api_router.include_router(management_review.router, prefix="/management-reviews", tags=["management_reviews"])
 api_router.include_router(complaints.router, prefix="/complaints", tags=["complaints"])
 api_router.include_router(allergen_label.router, prefix="/allergen-label", tags=["allergen_label"]) 

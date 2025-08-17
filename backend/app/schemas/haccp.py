@@ -607,6 +607,8 @@ class MonitoringLogCreate(BaseModel):
     evidence_files: Optional[str] = None
     corrective_action_taken: bool = False
     corrective_action_description: Optional[str] = None
+    corrective_action_by: Optional[int] = None
+    equipment_id: Optional[int] = None
 
 
 class MonitoringLogResponse(BaseModel):
@@ -896,3 +898,217 @@ class ProductRiskConfigResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Monitoring Schedule Schemas
+class MonitoringScheduleCreate(BaseModel):
+    ccp_id: int
+    schedule_type: str = Field(..., pattern="^(interval|cron|manual)$")
+    interval_minutes: Optional[int] = Field(None, ge=1)
+    cron_expression: Optional[str] = Field(None, max_length=100)
+    tolerance_window_minutes: int = Field(default=15, ge=1, le=1440)  # 1 minute to 24 hours
+    is_active: bool = True
+
+
+class MonitoringScheduleUpdate(BaseModel):
+    schedule_type: Optional[str] = Field(None, pattern="^(interval|cron|manual)$")
+    interval_minutes: Optional[int] = Field(None, ge=1)
+    cron_expression: Optional[str] = Field(None, max_length=100)
+    tolerance_window_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    is_active: Optional[bool] = None
+
+
+class MonitoringScheduleResponse(BaseModel):
+    id: int
+    ccp_id: int
+    schedule_type: str
+    interval_minutes: Optional[int] = None
+    cron_expression: Optional[str] = None
+    tolerance_window_minutes: int
+    is_active: bool
+    last_scheduled_time: Optional[datetime] = None
+    next_due_time: Optional[datetime] = None
+    created_at: datetime
+    created_by: int
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class MonitoringScheduleStatus(BaseModel):
+    """Status information for monitoring schedule"""
+    schedule_id: int
+    ccp_id: int
+    ccp_name: str
+    is_due: bool
+    is_overdue: bool
+    next_due_time: Optional[datetime] = None
+    last_monitoring_time: Optional[datetime] = None
+    tolerance_window_minutes: int
+    schedule_type: str
+    is_active: bool
+
+
+# Verification Program Schemas
+class VerificationProgramCreate(BaseModel):
+    ccp_id: int
+    verification_type: str = Field(..., pattern="^(record_review|direct_observation|sampling_testing|calibration_check)$")
+    frequency: str = Field(..., pattern="^(daily|weekly|monthly|quarterly|custom)$")
+    frequency_value: Optional[int] = Field(None, ge=1)
+    required_verifier_role: Optional[str] = None
+    verification_criteria: Optional[str] = None
+    sampling_plan: Optional[str] = None
+    is_active: bool = True
+
+
+class VerificationProgramResponse(BaseModel):
+    id: int
+    ccp_id: int
+    verification_type: str
+    frequency: str
+    frequency_value: Optional[int] = None
+    last_verification_date: Optional[datetime] = None
+    next_verification_date: Optional[datetime] = None
+    is_active: bool
+    required_verifier_role: Optional[str] = None
+    verification_criteria: Optional[str] = None
+    sampling_plan: Optional[str] = None
+    created_at: datetime
+    created_by: int
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+# Verification Program Schemas
+class VerificationProgramCreate(BaseModel):
+    ccp_id: int
+    verification_type: str = Field(..., pattern="^(record_review|direct_observation|sampling_testing|calibration_check)$")
+    frequency: str = Field(..., pattern="^(daily|weekly|monthly|quarterly|custom)$")
+    frequency_value: Optional[int] = Field(None, ge=1)
+    required_verifier_role: Optional[str] = None
+    verification_criteria: Optional[str] = None
+    sampling_plan: Optional[str] = None
+    is_active: bool = True
+
+
+class VerificationProgramUpdate(BaseModel):
+    verification_type: Optional[str] = Field(None, pattern="^(record_review|direct_observation|sampling_testing|calibration_check)$")
+    frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|custom)$")
+    frequency_value: Optional[int] = Field(None, ge=1)
+    required_verifier_role: Optional[str] = None
+    verification_criteria: Optional[str] = None
+    sampling_plan: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class VerificationProgramResponse(BaseModel):
+    id: int
+    ccp_id: int
+    verification_type: str
+    frequency: str
+    frequency_value: Optional[int] = None
+    last_verification_date: Optional[datetime] = None
+    next_verification_date: Optional[datetime] = None
+    is_active: bool
+    required_verifier_role: Optional[str] = None
+    verification_criteria: Optional[str] = None
+    sampling_plan: Optional[str] = None
+    created_at: datetime
+    created_by: int
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+# Validation Schemas
+class ValidationCreate(BaseModel):
+    ccp_id: int
+    validation_type: str = Field(..., pattern="^(process_authority_letter|scientific_study|validation_test|expert_opinion)$")
+    validation_title: str = Field(..., min_length=1, max_length=200)
+    validation_description: Optional[str] = None
+    document_id: Optional[int] = None
+    external_reference: Optional[str] = Field(None, max_length=500)
+    validation_date: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    validation_result: Optional[str] = None
+    critical_limits_validated: Optional[str] = None
+    is_active: bool = True
+
+
+class ValidationUpdate(BaseModel):
+    validation_type: Optional[str] = Field(None, pattern="^(process_authority_letter|scientific_study|validation_test|expert_opinion)$")
+    validation_title: Optional[str] = Field(None, min_length=1, max_length=200)
+    validation_description: Optional[str] = None
+    document_id: Optional[int] = None
+    external_reference: Optional[str] = Field(None, max_length=500)
+    validation_date: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    validation_result: Optional[str] = None
+    critical_limits_validated: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ValidationResponse(BaseModel):
+    id: int
+    ccp_id: int
+    validation_type: str
+    validation_title: str
+    validation_description: Optional[str] = None
+    document_id: Optional[int] = None
+    external_reference: Optional[str] = None
+    validation_date: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_active: bool
+    validation_result: Optional[str] = None
+    critical_limits_validated: Optional[str] = None
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    review_status: str
+    review_notes: Optional[str] = None
+    created_at: datetime
+    created_by: int
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class ValidationReviewRequest(BaseModel):
+    review_status: str = Field(..., pattern="^(pending|approved|rejected)$")
+    review_notes: Optional[str] = None
+
+# Validation Schemas
+class ValidationCreate(BaseModel):
+    ccp_id: int
+    validation_type: str = Field(..., pattern="^(process_authority_letter|scientific_study|validation_test|expert_opinion)$")
+    validation_title: str = Field(..., min_length=1, max_length=200)
+    validation_description: Optional[str] = None
+    document_id: Optional[int] = None
+    external_reference: Optional[str] = Field(None, max_length=500)
+    validation_date: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    validation_result: Optional[str] = None
+    critical_limits_validated: Optional[str] = None
+    is_active: bool = True
+
+
+class ValidationResponse(BaseModel):
+    id: int
+    ccp_id: int
+    validation_type: str
+    validation_title: str
+    validation_description: Optional[str] = None
+    document_id: Optional[int] = None
+    external_reference: Optional[str] = None
+    validation_date: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_active: bool
+    validation_result: Optional[str] = None
+    critical_limits_validated: Optional[str] = None
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    review_status: str
+    review_notes: Optional[str] = None
+    created_at: datetime
+    created_by: int
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}

@@ -31,7 +31,23 @@ import {
   CircularProgress,
   FormControlLabel,
   Checkbox,
-  Autocomplete
+  Autocomplete,
+  useMediaQuery,
+  useTheme,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  AppBar,
+  Toolbar,
+  Fab,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  SwipeableDrawer,
+  Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,7 +59,16 @@ import {
   Inventory as InventoryIcon,
   Report as ReportIcon,
   Assessment as SimulationIcon,
-  Search as SearchIcon2
+  Search as SearchIcon2,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+  Dashboard as DashboardIcon,
+  Inventory as BatchIcon,
+  Warning as RecallIcon,
+  Timeline as TimelineIcon,
+  QrCode as QrCodeIcon,
+  Settings as SettingsIcon,
+  CloudOff as CloudOffIcon
 } from '@mui/icons-material';
 import { traceabilityAPI } from '../services/traceabilityAPI';
 import { usersAPI } from '../services/api';
@@ -55,6 +80,9 @@ import RecallDetail from '../components/Traceability/RecallDetail';
 import TraceabilityChain from '../components/Traceability/TraceabilityChain';
 import RecallSimulationForm from '../components/Traceability/RecallSimulationForm';
 import EnhancedSearchForm from '../components/Traceability/EnhancedSearchForm';
+import QRCodeScanner from '../components/Traceability/QRCodeScanner';
+import OfflineCapabilities from '../components/Traceability/OfflineCapabilities';
+import MobileDataEntry from '../components/Traceability/MobileDataEntry';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 
@@ -96,8 +124,13 @@ interface DashboardData {
 
 const Traceability: React.FC = () => {
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
+  
   // State management
   const [activeTab, setActiveTab] = useState(0);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [recalls, setRecalls] = useState<Recall[]>([]);
   const [reports, setReports] = useState<TraceabilityReport[]>([]);
@@ -115,6 +148,9 @@ const Traceability: React.FC = () => {
   const [selectedRecall, setSelectedRecall] = useState<Recall | null>(null);
   const [recallSimulationOpen, setRecallSimulationOpen] = useState(false);
   const [enhancedSearchOpen, setEnhancedSearchOpen] = useState(false);
+  const [qrScannerOpen, setQrScannerOpen] = useState(false);
+  const [offlineCapabilitiesOpen, setOfflineCapabilitiesOpen] = useState(false);
+  const [mobileDataEntryOpen, setMobileDataEntryOpen] = useState(false);
 
   // Selected items
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
@@ -412,28 +448,158 @@ const Traceability: React.FC = () => {
     }
   };
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h3" gutterBottom>
-        Traceability & Recall Management
-      </Typography>
+  // Mobile navigation tabs
+  const mobileTabs = [
+    { label: 'Dashboard', icon: <DashboardIcon />, value: 0 },
+    { label: 'Batches', icon: <BatchIcon />, value: 1 },
+    { label: 'Recalls', icon: <RecallIcon />, value: 2 },
+    { label: 'Reports', icon: <TimelineIcon />, value: 3 },
+    { label: 'Search', icon: <SearchIcon2 />, value: 4 },
+    { label: 'Simulation', icon: <SimulationIcon />, value: 5 },
+    { label: 'Offline', icon: <CloudOffIcon />, value: 6 }
+  ];
 
-      {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
-          <Tab label="Dashboard" icon={<AssessmentIcon />} />
-          <Tab label="Batch Management" icon={<InventoryIcon />} />
-          <Tab label="Recall Management" icon={<WarningIcon />} />
-          <Tab label="Traceability Reports" icon={<ReportIcon />} />
-          <Tab label="Enhanced Search" icon={<SearchIcon2 />} />
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+    if (isMobile) {
+      setMobileDrawerOpen(false);
+    }
+  };
+
+  return (
+    <Box sx={{ 
+      p: { xs: 1, sm: 2, md: 3 },
+      minHeight: '100vh',
+      backgroundColor: theme.palette.background.default
+    }}>
+      {/* Mobile App Bar */}
+      {isMobile && (
+        <AppBar 
+          position="sticky" 
+          sx={{ 
+            top: 0, 
+            zIndex: theme.zIndex.drawer + 1,
+            backgroundColor: theme.palette.primary.main
+          }}
+        >
+          <Toolbar>
+            <IconButton
+              edge="start"
+              color="inherit"
+              aria-label="open navigation menu"
+              onClick={() => setMobileDrawerOpen(true)}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
+              Traceability & Recall
+            </Typography>
+            <IconButton
+              color="inherit"
+              aria-label="QR code scanner"
+              onClick={() => setQrScannerOpen(true)}
+            >
+              <QrCodeIcon />
+            </IconButton>
+          </Toolbar>
+        </AppBar>
+      )}
+
+      {/* Desktop Header */}
+      {!isMobile && (
+        <Typography 
+          variant="h3" 
+          gutterBottom 
+          sx={{ 
+            mb: 3,
+            fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
+          }}
+        >
+          Traceability & Recall Management
+        </Typography>
+      )}
+
+      {/* Mobile Navigation Drawer */}
+      <SwipeableDrawer
+        anchor="left"
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        onOpen={() => setMobileDrawerOpen(true)}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: 280,
+            boxSizing: 'border-box',
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+              Navigation
+            </Typography>
+            <IconButton onClick={() => setMobileDrawerOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <List>
+            {mobileTabs.map((tab) => (
+              <ListItem key={tab.value} disablePadding>
+                <ListItemButton
+                  selected={activeTab === tab.value}
+                  onClick={() => handleTabChange({} as React.SyntheticEvent, tab.value)}
+                  sx={{
+                    borderRadius: 1,
+                    mb: 0.5,
+                    '&.Mui-selected': {
+                      backgroundColor: theme.palette.primary.light,
+                      color: theme.palette.primary.contrastText,
+                    }
+                  }}
+                >
+                  <ListItemIcon sx={{ color: 'inherit' }}>
+                    {tab.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={tab.label} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </SwipeableDrawer>
+
+      {/* Desktop Tabs */}
+      {!isMobile && (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              '& .MuiTab-root': {
+                minHeight: 64,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+              }
+            }}
+          >
+            <Tab label="Dashboard" icon={<AssessmentIcon />} />
+            <Tab label="Batch Management" icon={<InventoryIcon />} />
+            <Tab label="Recall Management" icon={<WarningIcon />} />
+            <Tab label="Traceability Reports" icon={<ReportIcon />} />
+                      <Tab label="Enhanced Search" icon={<SearchIcon2 />} />
           <Tab label="Recall Simulation" icon={<SimulationIcon />} />
-        </Tabs>
-      </Box>
+          <Tab label="Offline Mode" icon={<CloudOffIcon />} />
+          </Tabs>
+        </Box>
+      )}
 
       {/* Tab Content */}
       {activeTab === 0 && (
         <Box>
-          <Typography variant="h4" gutterBottom>
+          <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}>
             Traceability Dashboard
           </Typography>
           {loading && <LinearProgress />}
@@ -443,9 +609,9 @@ const Traceability: React.FC = () => {
             </Alert>
           )}
           {dashboardData && (
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={3}>
-                <Card>
+            <Grid container spacing={{ xs: 1, sm: 2, md: 3 }}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
                   <CardContent>
                     <Typography color="textSecondary" gutterBottom>
                       Total Batches
@@ -456,8 +622,8 @@ const Traceability: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
                   <CardContent>
                     <Typography color="textSecondary" gutterBottom>
                       Active Recalls
@@ -468,8 +634,8 @@ const Traceability: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
                   <CardContent>
                     <Typography color="textSecondary" gutterBottom>
                       Recent Reports
@@ -480,8 +646,8 @@ const Traceability: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
                   <CardContent>
                     <Typography color="textSecondary" gutterBottom>
                       Recent Batches
@@ -506,8 +672,15 @@ const Traceability: React.FC = () => {
 
       {activeTab === 2 && (
         <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4">
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between', 
+            alignItems: { xs: 'stretch', sm: 'center' }, 
+            mb: 3,
+            gap: { xs: 2, sm: 0 }
+          }}>
+            <Typography variant="h4" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}>
               Recall Management
             </Typography>
             <Button
@@ -515,21 +688,31 @@ const Traceability: React.FC = () => {
               color="error"
               startIcon={<WarningIcon />}
               onClick={() => setRecallDialogOpen(true)}
+              sx={{ 
+                minWidth: { xs: '100%', sm: 'auto' },
+                height: { xs: 48, sm: 40 }
+              }}
             >
               Create Recall
             </Button>
           </Box>
 
-          <TableContainer component={Paper}>
-            <Table>
+          <TableContainer 
+            component={Paper} 
+            sx={{ 
+              maxHeight: { xs: 400, sm: 600 },
+              overflow: 'auto'
+            }}
+          >
+            <Table stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell>Recall Number</TableCell>
                   <TableCell>Title</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Status</TableCell>
-                  <TableCell>Issue Date</TableCell>
-                  <TableCell>Quantity Affected</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Issue Date</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Quantity Affected</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -556,12 +739,16 @@ const Traceability: React.FC = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                       {new Date(recall.issue_discovered_date).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{recall.total_quantity_affected}</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>{recall.total_quantity_affected}</TableCell>
                     <TableCell>
-                      <IconButton size="small" onClick={() => { setSelectedRecall(recall); setRecallDetailOpen(true); }}>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => { setSelectedRecall(recall); setRecallDetailOpen(true); }}
+                        aria-label={`View details for recall ${recall.recall_number}`}
+                      >
                         <VisibilityIcon />
                       </IconButton>
                     </TableCell>
@@ -575,28 +762,45 @@ const Traceability: React.FC = () => {
 
       {activeTab === 3 && (
         <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4">
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between', 
+            alignItems: { xs: 'stretch', sm: 'center' }, 
+            mb: 3,
+            gap: { xs: 2, sm: 0 }
+          }}>
+            <Typography variant="h4" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}>
               Traceability Reports
             </Typography>
             <Button
               variant="contained"
               startIcon={<AssessmentIcon />}
               onClick={() => setTraceDialogOpen(true)}
+              sx={{ 
+                minWidth: { xs: '100%', sm: 'auto' },
+                height: { xs: 48, sm: 40 }
+              }}
             >
               Create Trace Report
             </Button>
           </Box>
 
-          <TableContainer component={Paper}>
-            <Table>
+          <TableContainer 
+            component={Paper}
+            sx={{ 
+              maxHeight: { xs: 400, sm: 600 },
+              overflow: 'auto'
+            }}
+          >
+            <Table stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell>Report Number</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell>Starting Batch</TableCell>
-                  <TableCell>Trace Date</TableCell>
-                  <TableCell>Summary</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Starting Batch</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Trace Date</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', xl: 'table-cell' } }}>Summary</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -615,16 +819,22 @@ const Traceability: React.FC = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>Batch #{report.starting_batch_id}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Batch #{report.starting_batch_id}</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                       {new Date(report.trace_date).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{report.trace_summary}</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', xl: 'table-cell' } }}>{report.trace_summary}</TableCell>
                     <TableCell>
-                      <IconButton size="small">
+                      <IconButton 
+                        size="small"
+                        aria-label={`View report ${report.report_number}`}
+                      >
                         <VisibilityIcon />
                       </IconButton>
-                      <IconButton size="small">
+                      <IconButton 
+                        size="small"
+                        aria-label={`Download report ${report.report_number}`}
+                      >
                         <DownloadIcon />
                       </IconButton>
                     </TableCell>
@@ -646,7 +856,7 @@ const Traceability: React.FC = () => {
 
       {activeTab === 5 && (
         <Box>
-          <Typography variant="h4" gutterBottom>
+          <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}>
             Recall Simulation
           </Typography>
           <Typography variant="body1" color="text.secondary" paragraph>
@@ -656,10 +866,72 @@ const Traceability: React.FC = () => {
             variant="contained"
             startIcon={<SimulationIcon />}
             onClick={() => setRecallSimulationOpen(true)}
+            sx={{ 
+              minWidth: { xs: '100%', sm: 'auto' },
+              height: { xs: 48, sm: 40 }
+            }}
           >
             Start Recall Simulation
           </Button>
         </Box>
+      )}
+
+      {activeTab === 6 && (
+        <Box>
+          <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}>
+            Offline Mode
+          </Typography>
+          <Typography variant="body1" color="text.secondary" paragraph>
+            Manage offline data storage and synchronization for mobile field operations.
+          </Typography>
+          <OfflineCapabilities 
+            onSyncComplete={() => {
+              fetchBatches();
+              fetchRecalls();
+              fetchReports();
+            }}
+          />
+        </Box>
+      )}
+
+      {/* Mobile Speed Dial for Quick Actions */}
+      {isMobile && (
+        <SpeedDial
+          ariaLabel="Quick actions"
+          sx={{ position: 'fixed', bottom: 16, right: 16 }}
+          icon={<SpeedDialIcon />}
+        >
+          <SpeedDialAction
+            icon={<QrCodeIcon />}
+            tooltipTitle="QR Scanner"
+            onClick={() => setQrScannerOpen(true)}
+          />
+          <SpeedDialAction
+            icon={<AddIcon />}
+            tooltipTitle="Mobile Data Entry"
+            onClick={() => setMobileDataEntryOpen(true)}
+          />
+          <SpeedDialAction
+            icon={<AddIcon />}
+            tooltipTitle="Create Batch"
+            onClick={() => setBatchDialogOpen(true)}
+          />
+          <SpeedDialAction
+            icon={<WarningIcon />}
+            tooltipTitle="Create Recall"
+            onClick={() => setRecallDialogOpen(true)}
+          />
+          <SpeedDialAction
+            icon={<AssessmentIcon />}
+            tooltipTitle="Create Report"
+            onClick={() => setTraceDialogOpen(true)}
+          />
+          <SpeedDialAction
+            icon={<CloudOffIcon />}
+            tooltipTitle="Offline Mode"
+            onClick={() => setActiveTab(6)}
+          />
+        </SpeedDial>
       )}
 
       {/* Dialogs */}
@@ -681,6 +953,7 @@ const Traceability: React.FC = () => {
             onClose={() => setTraceabilityChainOpen(false)}
             maxWidth="lg"
             fullWidth
+            fullScreen={isMobile}
           >
             <DialogTitle>Traceability Chain - {selectedBatch.batch_number}</DialogTitle>
             <DialogContent>
@@ -713,7 +986,13 @@ const Traceability: React.FC = () => {
       )}
 
       {/* Create Recall Dialog */}
-      <Dialog open={recallDialogOpen} onClose={() => setRecallDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={recallDialogOpen} 
+        onClose={() => setRecallDialogOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>Create New Recall</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -801,7 +1080,13 @@ const Traceability: React.FC = () => {
       </Dialog>
 
       {/* Create Trace Report Dialog */}
-      <Dialog open={traceDialogOpen} onClose={() => setTraceDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={traceDialogOpen} 
+        onClose={() => setTraceDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>Create Traceability Report</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -856,6 +1141,29 @@ const Traceability: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* QR Code Scanner Dialog */}
+      <QRCodeScanner
+        open={qrScannerOpen}
+        onClose={() => setQrScannerOpen(false)}
+        onBatchFound={(batch) => {
+          setSelectedBatch(batch);
+          setBatchDetailOpen(true);
+          setQrScannerOpen(false);
+        }}
+      />
+
+      {/* Mobile Data Entry Dialog */}
+      <MobileDataEntry
+        open={mobileDataEntryOpen}
+        onClose={() => setMobileDataEntryOpen(false)}
+        onSave={(data) => {
+          console.log('Mobile data saved:', data);
+          setMobileDataEntryOpen(false);
+          // Refresh data after save
+          fetchBatches();
+        }}
+      />
     </Box>
   );
 };

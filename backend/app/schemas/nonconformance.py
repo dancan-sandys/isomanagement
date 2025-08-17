@@ -804,7 +804,7 @@ class ImmediateActionListResponse(BaseModel):
 
 
 class RiskAssessmentListResponse(BaseModel):
-    items: List[RiskAssessmentResponse]
+    items: List[NonConformanceRiskAssessmentResponse]
     total: int
     page: int
     size: int

@@ -2,7 +2,7 @@
 from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
-from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, RiskLevel
+from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, CCPMonitoringSchedule, CCPVerificationProgram, CCPValidation, RiskLevel
 from .prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
     RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
@@ -13,7 +13,17 @@ from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAc
 from .training import TrainingProgram, TrainingSession, TrainingAttendance, RoleRequiredTraining, TrainingCertificate, HACCPRequiredTraining
 from .equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
 from .settings import ApplicationSetting, UserPreference
-from .risk import RiskRegisterItem, RiskAction
+from .risk import (
+    RiskRegisterItem, RiskAction, RiskManagementFramework, RiskContext,
+    FSMSRiskIntegration, RiskCorrelation, RiskResourceAllocation,
+    RiskCommunication, RiskKPI
+)
+from .haccp_risk import (
+    HACCPRiskAssessment, HACCPRiskIntegration, HACCPRiskMonitoring, HACCPRiskReview,
+    HACCPRiskAssessmentType, HACCPRiskReviewStatus, HACCPRiskReviewType,
+    HACCPRiskMonitoringType, HACCPRiskMonitoringResult, HACCPRiskIntegrationType,
+    HACCPElementType, HACCPRiskReviewOutcome
+)
 from .notification import Notification, NotificationType, NotificationCategory, NotificationPriority
 from .management_review import ManagementReview, ReviewAgendaItem, ReviewAction, ManagementReviewStatus
 from .audit_mgmt import (
@@ -31,7 +41,7 @@ __all__ = [
     "Document", "DocumentVersion", "DocumentApproval", "DocumentChangeLog", "DocumentTemplate",
     
     # HACCP models
-    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig", "DecisionTree",
+    "Product", "ProcessFlow", "Hazard", "HazardReview", "CCP", "CCPMonitoringLog", "CCPVerificationLog", "ProductRiskConfig", "DecisionTree", "CCPMonitoringSchedule", "CCPVerificationProgram", "CCPValidation",
     
     # PRP models
     "PRPProgram", "PRPChecklist", "PRPChecklistItem", "PRPTemplate", "PRPSchedule",
@@ -51,7 +61,13 @@ __all__ = [
     # Settings models
     "ApplicationSetting", "UserPreference",
     # Risk & Opportunity register
-    "RiskRegisterItem", "RiskAction",
+    "RiskRegisterItem", "RiskAction", "RiskManagementFramework", "RiskContext",
+    "FSMSRiskIntegration", "RiskCorrelation", "RiskResourceAllocation",
+    "RiskCommunication", "RiskKPI",
+    "HACCPRiskAssessment", "HACCPRiskIntegration", "HACCPRiskMonitoring", "HACCPRiskReview",
+    "HACCPRiskAssessmentType", "HACCPRiskReviewStatus", "HACCPRiskReviewType",
+    "HACCPRiskMonitoringType", "HACCPRiskMonitoringResult", "HACCPRiskIntegrationType",
+    "HACCPElementType", "HACCPRiskReviewOutcome",
     # Notification models
     "Notification", "NotificationType", "NotificationCategory", "NotificationPriority",
     # Management Reviews

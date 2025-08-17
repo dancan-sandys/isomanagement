@@ -23,6 +23,10 @@ from app.schemas.haccp import (
 from app.models.training import RoleRequiredTraining, TrainingAttendance, TrainingSession, TrainingCertificate, HACCPRequiredTraining, TrainingAction
 from app.models.traceability import Batch
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from app.models.haccp import CCPMonitoringSchedule
+from app.schemas.haccp import MonitoringScheduleStatus
+from app.models.equipment import Equipment
+from app.models.haccp import CCPVerificationProgram, CCPValidation
 
 logger = logging.getLogger(__name__)
 
@@ -647,6 +651,24 @@ class HACCPService:
         if not ccp:
             raise ValueError("CCP not found")
         
+        # Validate user competency for monitoring
+        if not self.user_has_required_training(created_by, "monitor", ccp_id=ccp_id):
+            raise ValueError("User does not have required training for monitoring this CCP")
+        
+        # Validate equipment if provided
+        if log_data.equipment_id:
+            equipment = self.db.query(Equipment).filter(Equipment.id == log_data.equipment_id).first()
+            if not equipment:
+                raise ValueError("Equipment not found")
+            
+            # Check if equipment is calibrated
+            if not equipment.is_calibrated:
+                raise ValueError("Equipment is not calibrated and cannot be used for monitoring")
+            
+            # Check if equipment is active
+            if not equipment.is_active:
+                raise ValueError("Equipment is not active and cannot be used for monitoring")
+        
         # Check if within limits
         measured_value = log_data.measured_value
         is_within_limits = True
@@ -679,6 +701,7 @@ class HACCPService:
             corrective_action_taken=log_data.corrective_action_taken,
             corrective_action_description=log_data.corrective_action_description,
             corrective_action_by=log_data.corrective_action_by,
+            equipment_id=log_data.equipment_id,
             created_by=created_by
         )
         
@@ -686,66 +709,17 @@ class HACCPService:
         self.db.commit()
         self.db.refresh(monitoring_log)
         
+        # Update monitoring schedule after successful monitoring
+        self.update_schedule_after_monitoring(ccp_id)
+        
         # Create alert if out of spec and auto-create Non-Conformance
         alert_created = False
+        nc_created = False
         if not is_within_limits:
             alert_created = self._create_out_of_spec_alert(ccp, monitoring_log)
+            nc_created = self._create_mandatory_nc_for_out_of_spec(ccp, monitoring_log, created_by)
 
-            # Attempt to create a Non-Conformance when out-of-spec
-            try:
-                from app.schemas.nonconformance import (
-                    NonConformanceCreate as NCCreate,
-                    NonConformanceSource,
-                )
-                from app.services.nonconformance_service import NonConformanceService
-
-                # Determine severity heuristically
-                severity = "high"
-                try:
-                    if ccp.critical_limit_max is not None and monitoring_log.measured_value is not None:
-                        # If exceeds by >10% of max range, mark critical
-                        range_span = (
-                            (ccp.critical_limit_max - (ccp.critical_limit_min or 0))
-                            if ccp.critical_limit_min is not None
-                            else ccp.critical_limit_max or 1
-                        )
-                        if range_span:
-                            delta = abs(monitoring_log.measured_value - (ccp.critical_limit_max or 0))
-                            if delta > 0.1 * abs(range_span):
-                                severity = "critical"
-                except Exception:
-                    pass
-
-                nc_title = f"CCP Out-of-Spec: {ccp.ccp_name}"
-                nc_description = (
-                    f"Batch {monitoring_log.batch_number}: {monitoring_log.measured_value}"
-                    f"{(' ' + (monitoring_log.unit or '')) if monitoring_log.unit else ''} outside limits"
-                    f" ({ccp.critical_limit_min or 'N/A'} - {ccp.critical_limit_max or 'N/A'})."
-                )
-                process_ref = f"Product:{ccp.product_id}/CCP:{ccp.id}"
-
-                nc_data = NCCreate(
-                    title=nc_title,
-                    description=nc_description,
-                    source=NonConformanceSource.HACCP,
-                    batch_reference=monitoring_log.batch_number,
-                    product_reference=str(ccp.product_id),
-                    process_reference=process_ref,
-                    location=None,
-                    severity=severity,
-                    impact_area="food_safety",
-                    category="CCP_Out_of_Spec",
-                    target_resolution_date=datetime.utcnow() + timedelta(days=7),
-                )
-
-                nc_service = NonConformanceService(self.db)
-                reporter = created_by
-                nc_service.create_non_conformance(nc_data, reporter)
-            except Exception as _:
-                # Do not break monitoring log creation if NC creation fails
-                pass
-
-        return monitoring_log, alert_created
+        return monitoring_log, alert_created, nc_created
     
     def _create_out_of_spec_alert(self, ccp: CCP, monitoring_log: CCPMonitoringLog) -> bool:
         """Create an alert for out-of-spec readings"""
@@ -1153,3 +1127,562 @@ class HACCPService:
             "has_process_authority": any(e.get("type") == "process_authority_letter" for e in evidence),
             "validation_complete": len(evidence) > 0
         }
+
+    def create_monitoring_schedule(self, schedule_data: dict, created_by: int) -> CCPMonitoringSchedule:
+        """Create a monitoring schedule for a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == schedule_data["ccp_id"]).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        # Check if schedule already exists
+        existing_schedule = self.db.query(CCPMonitoringSchedule).filter(
+            CCPMonitoringSchedule.ccp_id == schedule_data["ccp_id"]
+        ).first()
+        
+        if existing_schedule:
+            raise ValueError("Monitoring schedule already exists for this CCP")
+        
+        # Validate schedule configuration
+        if schedule_data["schedule_type"] == "interval" and not schedule_data.get("interval_minutes"):
+            raise ValueError("Interval minutes required for interval-based schedules")
+        
+        if schedule_data["schedule_type"] == "cron" and not schedule_data.get("cron_expression"):
+            raise ValueError("Cron expression required for cron-based schedules")
+        
+        # Create schedule
+        schedule = CCPMonitoringSchedule(
+            ccp_id=schedule_data["ccp_id"],
+            schedule_type=schedule_data["schedule_type"],
+            interval_minutes=schedule_data.get("interval_minutes"),
+            cron_expression=schedule_data.get("cron_expression"),
+            tolerance_window_minutes=schedule_data.get("tolerance_window_minutes", 15),
+            is_active=schedule_data.get("is_active", True),
+            created_by=created_by
+        )
+        
+        # Calculate initial next due time
+        schedule.next_due_time = schedule.calculate_next_due()
+        
+        self.db.add(schedule)
+        self.db.commit()
+        self.db.refresh(schedule)
+        
+        return schedule
+    
+    def update_monitoring_schedule(self, schedule_id: int, update_data: dict, updated_by: int) -> CCPMonitoringSchedule:
+        """Update a monitoring schedule"""
+        schedule = self.db.query(CCPMonitoringSchedule).filter(CCPMonitoringSchedule.id == schedule_id).first()
+        if not schedule:
+            raise ValueError("Monitoring schedule not found")
+        
+        # Validate schedule configuration
+        if update_data.get("schedule_type") == "interval" and not update_data.get("interval_minutes"):
+            raise ValueError("Interval minutes required for interval-based schedules")
+        
+        if update_data.get("schedule_type") == "cron" and not update_data.get("cron_expression"):
+            raise ValueError("Cron expression required for cron-based schedules")
+        
+        # Update fields
+        for field, value in update_data.items():
+            if hasattr(schedule, field):
+                setattr(schedule, field, value)
+        
+        # Recalculate next due time if schedule type or timing changed
+        if any(field in update_data for field in ["schedule_type", "interval_minutes", "cron_expression"]):
+            schedule.next_due_time = schedule.calculate_next_due()
+        
+        schedule.updated_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(schedule)
+        
+        return schedule
+    
+    def get_monitoring_schedule_status(self, ccp_id: int) -> Optional[MonitoringScheduleStatus]:
+        """Get monitoring schedule status for a CCP"""
+        schedule = self.db.query(CCPMonitoringSchedule).filter(
+            CCPMonitoringSchedule.ccp_id == ccp_id,
+            CCPMonitoringSchedule.is_active == True
+        ).first()
+        
+        if not schedule:
+            return None
+        
+        # Get last monitoring time
+        last_monitoring = self.db.query(CCPMonitoringLog).filter(
+            CCPMonitoringLog.ccp_id == ccp_id
+        ).order_by(desc(CCPMonitoringLog.monitoring_time)).first()
+        
+        last_monitoring_time = last_monitoring.monitoring_time if last_monitoring else None
+        
+        return MonitoringScheduleStatus(
+            schedule_id=schedule.id,
+            ccp_id=schedule.ccp_id,
+            ccp_name=schedule.ccp.ccp_name,
+            is_due=schedule.is_due(),
+            is_overdue=schedule.is_overdue(),
+            next_due_time=schedule.next_due_time,
+            last_monitoring_time=last_monitoring_time,
+            tolerance_window_minutes=schedule.tolerance_window_minutes,
+            schedule_type=schedule.schedule_type,
+            is_active=schedule.is_active
+        )
+    
+    def get_all_due_monitoring(self) -> List[MonitoringScheduleStatus]:
+        """Get all CCPs that are due for monitoring"""
+        schedules = self.db.query(CCPMonitoringSchedule).filter(
+            CCPMonitoringSchedule.is_active == True
+        ).all()
+        
+        due_schedules = []
+        current_time = datetime.utcnow()
+        
+        for schedule in schedules:
+            if schedule.is_due(current_time) or schedule.is_overdue(current_time):
+                # Get last monitoring time
+                last_monitoring = self.db.query(CCPMonitoringLog).filter(
+                    CCPMonitoringLog.ccp_id == schedule.ccp_id
+                ).order_by(desc(CCPMonitoringLog.monitoring_time)).first()
+                
+                last_monitoring_time = last_monitoring.monitoring_time if last_monitoring else None
+                
+                due_schedules.append(MonitoringScheduleStatus(
+                    schedule_id=schedule.id,
+                    ccp_id=schedule.ccp_id,
+                    ccp_name=schedule.ccp.ccp_name,
+                    is_due=schedule.is_due(current_time),
+                    is_overdue=schedule.is_overdue(current_time),
+                    next_due_time=schedule.next_due_time,
+                    last_monitoring_time=last_monitoring_time,
+                    tolerance_window_minutes=schedule.tolerance_window_minutes,
+                    schedule_type=schedule.schedule_type,
+                    is_active=schedule.is_active
+                ))
+        
+        return due_schedules
+    
+    def update_schedule_after_monitoring(self, ccp_id: int) -> None:
+        """Update schedule after monitoring is completed"""
+        schedule = self.db.query(CCPMonitoringSchedule).filter(
+            CCPMonitoringSchedule.ccp_id == ccp_id,
+            CCPMonitoringSchedule.is_active == True
+        ).first()
+        
+        if schedule:
+            schedule.last_scheduled_time = datetime.utcnow()
+            schedule.next_due_time = schedule.calculate_next_due()
+            self.db.commit()
+
+    def _create_mandatory_nc_for_out_of_spec(self, ccp: CCP, monitoring_log: CCPMonitoringLog, created_by: int) -> bool:
+        """Create a mandatory Non-Conformance for out-of-spec monitoring"""
+        
+        try:
+            from app.schemas.nonconformance import (
+                NonConformanceCreate as NCCreate,
+                NonConformanceSource,
+            )
+            from app.services.nonconformance_service import NonConformanceService
+            from app.models.traceability import Batch, BatchStatus
+
+            # Determine severity heuristically
+            severity = "high"
+            try:
+                if ccp.critical_limit_max is not None and monitoring_log.measured_value is not None:
+                    # If exceeds by >10% of max range, mark critical
+                    range_span = (
+                        (ccp.critical_limit_max - (ccp.critical_limit_min or 0))
+                        if ccp.critical_limit_min is not None
+                        else ccp.critical_limit_max or 1
+                    )
+                    if range_span:
+                        delta = abs(monitoring_log.measured_value - (ccp.critical_limit_max or 0))
+                        if delta > 0.1 * abs(range_span):
+                            severity = "critical"
+            except Exception:
+                pass
+
+            nc_title = f"CCP Out-of-Spec: {ccp.ccp_name}"
+            nc_description = (
+                f"Batch {monitoring_log.batch_number}: {monitoring_log.measured_value}"
+                f"{(' ' + (monitoring_log.unit or '')) if monitoring_log.unit else ''} outside limits"
+                f" ({ccp.critical_limit_min or 'N/A'} - {ccp.critical_limit_max or 'N/A'})."
+                f"\n\nMonitoring Log ID: {monitoring_log.id}"
+                f"\nCCP: {ccp.ccp_number} - {ccp.ccp_name}"
+                f"\nProduct: {ccp.product_id}"
+            )
+            process_ref = f"Product:{ccp.product_id}/CCP:{ccp.id}"
+
+            nc_data = NCCreate(
+                title=nc_title,
+                description=nc_description,
+                source=NonConformanceSource.HACCP,
+                batch_reference=monitoring_log.batch_number,
+                product_reference=str(ccp.product_id),
+                process_reference=process_ref,
+                location=None,
+                severity=severity,
+                impact_area="food_safety",
+                category="CCP_Out_of_Spec",
+                target_resolution_date=datetime.utcnow() + timedelta(days=7),
+            )
+
+            nc_service = NonConformanceService(self.db)
+            reporter = created_by
+            nc = nc_service.create_non_conformance(nc_data, reporter)
+            
+            # Automatically quarantine the affected batch
+            if monitoring_log.batch_id:
+                self._quarantine_batch_for_out_of_spec(monitoring_log.batch_id, ccp, monitoring_log, nc.id)
+            
+            logger.warning(f"Mandatory NC created for out-of-spec CCP {ccp.ccp_number}: NC ID {nc.id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to create mandatory NC for out-of-spec: {str(e)}")
+            # Don't fail the monitoring log creation, but log the error
+            return False
+    
+    def _quarantine_batch_for_out_of_spec(self, batch_id: int, ccp: CCP, monitoring_log: CCPMonitoringLog, nc_id: int) -> bool:
+        """Automatically quarantine a batch due to out-of-spec CCP monitoring"""
+        
+        try:
+            from app.models.traceability import Batch, BatchStatus
+            
+            batch = self.db.query(Batch).filter(Batch.id == batch_id).first()
+            if not batch:
+                logger.warning(f"Batch {batch_id} not found for quarantine")
+                return False
+            
+            # Only quarantine if not already quarantined
+            if batch.status != BatchStatus.QUARANTINED:
+                batch.status = BatchStatus.QUARANTINED
+                
+                # Add quarantine metadata
+                if not batch.test_results:
+                    batch.test_results = {}
+                
+                batch.test_results["quarantine_info"] = {
+                    "quarantined_at": datetime.utcnow().isoformat(),
+                    "quarantine_reason": "CCP_Out_of_Spec",
+                    "ccp_id": ccp.id,
+                    "ccp_name": ccp.ccp_name,
+                    "monitoring_log_id": monitoring_log.id,
+                    "nc_id": nc_id,
+                    "measured_value": monitoring_log.measured_value,
+                    "unit": monitoring_log.unit,
+                    "critical_limit_min": ccp.critical_limit_min,
+                    "critical_limit_max": ccp.critical_limit_max
+                }
+                
+                self.db.commit()
+                logger.warning(f"Batch {batch.batch_number} quarantined due to out-of-spec CCP {ccp.ccp_number}")
+                return True
+            else:
+                logger.info(f"Batch {batch.batch_number} already quarantined")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to quarantine batch {batch_id}: {str(e)}")
+            return False
+
+    def release_batch_from_quarantine(self, batch_id: int, disposition_data: dict, approved_by: int) -> bool:
+        """Release a batch from quarantine with QA disposition approval"""
+        
+        try:
+            from app.models.traceability import Batch, BatchStatus
+            from app.models.user import User
+            
+            batch = self.db.query(Batch).filter(Batch.id == batch_id).first()
+            if not batch:
+                raise ValueError("Batch not found")
+            
+            if batch.status != BatchStatus.QUARANTINED:
+                raise ValueError("Batch is not quarantined")
+            
+            # Validate disposition data
+            disposition_type = disposition_data.get("disposition_type")
+            if disposition_type not in ["release", "dispose", "rework"]:
+                raise ValueError("Invalid disposition type")
+            
+            disposition_reason = disposition_data.get("disposition_reason")
+            if not disposition_reason:
+                raise ValueError("Disposition reason is required")
+            
+            # Get approver details
+            approver = self.db.query(User).filter(User.id == approved_by).first()
+            if not approver:
+                raise ValueError("Approver not found")
+            
+            # Update batch status based on disposition
+            if disposition_type == "release":
+                batch.status = BatchStatus.RELEASED
+            elif disposition_type == "dispose":
+                batch.status = BatchStatus.DISPOSED
+            elif disposition_type == "rework":
+                batch.status = BatchStatus.IN_PRODUCTION  # Back to production for rework
+            
+            # Add disposition metadata
+            if not batch.test_results:
+                batch.test_results = {}
+            
+            batch.test_results["disposition_info"] = {
+                "disposition_type": disposition_type,
+                "disposition_reason": disposition_reason,
+                "disposition_date": datetime.utcnow().isoformat(),
+                "approved_by": approved_by,
+                "approver_name": approver.full_name,
+                "approver_role": approver.role.name if approver.role else "Unknown",
+                "additional_notes": disposition_data.get("additional_notes", ""),
+                "corrective_actions_taken": disposition_data.get("corrective_actions_taken", ""),
+                "verification_tests": disposition_data.get("verification_tests", [])
+            }
+            
+            # If releasing, add release metadata
+            if disposition_type == "release":
+                batch.test_results["release_info"] = {
+                    "released_at": datetime.utcnow().isoformat(),
+                    "released_by": approved_by,
+                    "release_conditions": disposition_data.get("release_conditions", ""),
+                    "quality_checks_passed": disposition_data.get("quality_checks_passed", True)
+                }
+            
+            self.db.commit()
+            
+            logger.info(f"Batch {batch.batch_number} {disposition_type}d by {approver.full_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to release batch {batch_id} from quarantine: {str(e)}")
+            raise
+    
+    def get_quarantined_batches(self) -> List[dict]:
+        """Get all quarantined batches with their quarantine information"""
+        
+        try:
+            from app.models.traceability import Batch, BatchStatus
+            
+            quarantined_batches = self.db.query(Batch).filter(
+                Batch.status == BatchStatus.QUARANTINED
+            ).all()
+            
+            result = []
+            for batch in quarantined_batches:
+                quarantine_info = batch.test_results.get("quarantine_info", {}) if batch.test_results else {}
+                
+                result.append({
+                    "batch_id": batch.id,
+                    "batch_number": batch.batch_number,
+                    "product_name": batch.product_name,
+                    "quarantined_at": quarantine_info.get("quarantined_at"),
+                    "quarantine_reason": quarantine_info.get("quarantine_reason"),
+                    "ccp_name": quarantine_info.get("ccp_name"),
+                    "measured_value": quarantine_info.get("measured_value"),
+                    "unit": quarantine_info.get("unit"),
+                    "critical_limit_min": quarantine_info.get("critical_limit_min"),
+                    "critical_limit_max": quarantine_info.get("critical_limit_max"),
+                    "nc_id": quarantine_info.get("nc_id"),
+                    "monitoring_log_id": quarantine_info.get("monitoring_log_id")
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get quarantined batches: {str(e)}")
+            return []
+
+    def create_verification_program(self, program_data: dict, created_by: int) -> CCPVerificationProgram:
+        """Create a verification program for a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == program_data["ccp_id"]).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        # Validate frequency configuration
+        if program_data["frequency"] == "custom" and not program_data.get("frequency_value"):
+            raise ValueError("Frequency value required for custom frequency")
+        
+        # Create verification program
+        program = CCPVerificationProgram(
+            ccp_id=program_data["ccp_id"],
+            verification_type=program_data["verification_type"],
+            frequency=program_data["frequency"],
+            frequency_value=program_data.get("frequency_value"),
+            required_verifier_role=program_data.get("required_verifier_role"),
+            verification_criteria=program_data.get("verification_criteria"),
+            sampling_plan=program_data.get("sampling_plan"),
+            is_active=program_data.get("is_active", True),
+            created_by=created_by
+        )
+        
+        # Calculate initial next verification date
+        program.next_verification_date = program.calculate_next_verification_date()
+        
+        self.db.add(program)
+        self.db.commit()
+        self.db.refresh(program)
+        
+        return program
+    
+    def get_verification_programs_for_ccp(self, ccp_id: int) -> List[CCPVerificationProgram]:
+        """Get all verification programs for a CCP"""
+        return self.db.query(CCPVerificationProgram).filter(
+            CCPVerificationProgram.ccp_id == ccp_id,
+            CCPVerificationProgram.is_active == True
+        ).all()
+    
+    def get_due_verifications(self) -> List[dict]:
+        """Get all verification programs that are due"""
+        programs = self.db.query(CCPVerificationProgram).filter(
+            CCPVerificationProgram.is_active == True
+        ).all()
+        
+        due_programs = []
+        current_time = datetime.utcnow()
+        
+        for program in programs:
+            if program.is_due(current_time) or program.is_overdue(current_time):
+                due_programs.append({
+                    "program_id": program.id,
+                    "ccp_id": program.ccp_id,
+                    "ccp_name": program.ccp.ccp_name,
+                    "verification_type": program.verification_type,
+                    "frequency": program.frequency,
+                    "next_verification_date": program.next_verification_date,
+                    "is_overdue": program.is_overdue(current_time),
+                    "required_verifier_role": program.required_verifier_role,
+                    "verification_criteria": program.verification_criteria
+                })
+        
+        return due_programs
+    
+    def create_verification_log_with_role_check(self, ccp_id: int, log_data: dict, created_by: int) -> CCPVerificationLog:
+        """Create a verification log with role segregation enforcement"""
+        
+        # Get the CCP and its verification programs
+        ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        # Check if user is trying to verify their own monitoring logs
+        if ccp.monitoring_responsible == created_by:
+            raise ValueError("User cannot verify their own monitoring logs. Role segregation is required.")
+        
+        # Check if user has required role for verification
+        verification_program_id = log_data.get("verification_program_id")
+        if verification_program_id:
+            program = self.db.query(CCPVerificationProgram).filter(
+                CCPVerificationProgram.id == verification_program_id
+            ).first()
+            
+            if program and program.required_verifier_role:
+                # Get user's role
+                user = self.db.query(User).filter(User.id == created_by).first()
+                if not user or not user.role or user.role.name != program.required_verifier_role:
+                    raise ValueError(f"User must have role '{program.required_verifier_role}' to perform this verification")
+        
+        # Create verification log
+        verification_log = CCPVerificationLog(
+            ccp_id=ccp_id,
+            verification_program_id=verification_program_id,
+            verification_date=datetime.utcnow(),
+            verification_method=log_data.get("verification_method"),
+            verification_result=log_data.get("verification_result"),
+            is_compliant=log_data.get("is_compliant", True),
+            samples_tested=log_data.get("samples_tested"),
+            test_results=log_data.get("test_results"),
+            equipment_calibration=log_data.get("equipment_calibration"),
+            calibration_date=log_data.get("calibration_date"),
+            verifier_role=log_data.get("verifier_role"),
+            verification_notes=log_data.get("verification_notes"),
+            evidence_files=log_data.get("evidence_files"),
+            created_by=created_by
+        )
+        
+        self.db.add(verification_log)
+        self.db.commit()
+        self.db.refresh(verification_log)
+        
+        # Update verification program schedule
+        if verification_program_id:
+            program = self.db.query(CCPVerificationProgram).filter(
+                CCPVerificationProgram.id == verification_program_id
+            ).first()
+            if program:
+                program.last_verification_date = datetime.utcnow()
+                program.next_verification_date = program.calculate_next_verification_date()
+                self.db.commit()
+        
+        return verification_log
+    
+    def create_validation(self, validation_data: dict, created_by: int) -> CCPValidation:
+        """Create a validation for a CCP"""
+        ccp = self.db.query(CCP).filter(CCP.id == validation_data["ccp_id"]).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        # Create validation
+        validation = CCPValidation(
+            ccp_id=validation_data["ccp_id"],
+            validation_type=validation_data["validation_type"],
+            validation_title=validation_data["validation_title"],
+            validation_description=validation_data.get("validation_description"),
+            document_id=validation_data.get("document_id"),
+            external_reference=validation_data.get("external_reference"),
+            validation_date=validation_data.get("validation_date"),
+            valid_until=validation_data.get("valid_until"),
+            validation_result=validation_data.get("validation_result"),
+            critical_limits_validated=validation_data.get("critical_limits_validated"),
+            is_active=validation_data.get("is_active", True),
+            created_by=created_by
+        )
+        
+        self.db.add(validation)
+        self.db.commit()
+        self.db.refresh(validation)
+        
+        return validation
+    
+    def review_validation(self, validation_id: int, review_data: dict, reviewed_by: int) -> CCPValidation:
+        """Review a validation (approve/reject)"""
+        validation = self.db.query(CCPValidation).filter(CCPValidation.id == validation_id).first()
+        if not validation:
+            raise ValueError("Validation not found")
+        
+        validation.review_status = review_data["review_status"]
+        validation.review_notes = review_data.get("review_notes")
+        validation.reviewed_by = reviewed_by
+        validation.reviewed_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(validation)
+        
+        return validation
+    
+    def get_validations_for_ccp(self, ccp_id: int) -> List[CCPValidation]:
+        """Get all validations for a CCP"""
+        return self.db.query(CCPValidation).filter(
+            CCPValidation.ccp_id == ccp_id,
+            CCPValidation.is_active == True
+        ).all()
+    
+    def check_ccp_validation_status(self, ccp_id: int) -> dict:
+        """Check if a CCP has sufficient validation for approval"""
+        validations = self.get_validations_for_ccp(ccp_id)
+        
+        # Count valid validations by type
+        valid_validations = [v for v in validations if v.is_valid_for_approval()]
+        
+        validation_summary = {
+            "total_validations": len(validations),
+            "valid_validations": len(valid_validations),
+            "expired_validations": len([v for v in validations if v.is_expired()]),
+            "pending_reviews": len([v for v in validations if v.review_status == "pending"]),
+            "validation_types": {},
+            "can_approve": len(valid_validations) > 0
+        }
+        
+        for validation in valid_validations:
+            if validation.validation_type not in validation_summary["validation_types"]:
+                validation_summary["validation_types"][validation.validation_type] = 0
+            validation_summary["validation_types"][validation.validation_type] += 1
+        
+        return validation_summary

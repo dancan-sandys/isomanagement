@@ -1379,7 +1379,9 @@ async def create_enhanced_monitoring_log(
             observations=log_data.get("observations"),
             evidence_files=log_data.get("evidence_files"),
             corrective_action_taken=log_data.get("corrective_action_taken", False),
-            corrective_action_description=log_data.get("corrective_action_description")
+            corrective_action_description=log_data.get("corrective_action_description"),
+            corrective_action_by=log_data.get("corrective_action_by"),
+            equipment_id=log_data.get("equipment_id")
         )
         
         print(f"DEBUG: Clean log_data created: {clean_log_data}")
@@ -1389,17 +1391,21 @@ async def create_enhanced_monitoring_log(
         print(f"DEBUG: HACCPService created")
         
         print(f"DEBUG: About to call haccp_service.create_monitoring_log")
-        monitoring_log, alert_created = haccp_service.create_monitoring_log(ccp_id, clean_log_data, current_user.id)
+        monitoring_log, alert_created, nc_created = haccp_service.create_monitoring_log(ccp_id, clean_log_data, current_user.id)
         print(f"DEBUG: haccp_service.create_monitoring_log completed successfully")
         
         response_data = {
             "id": monitoring_log.id,
             "is_within_limits": monitoring_log.is_within_limits,
-            "alert_created": alert_created
+            "alert_created": alert_created,
+            "nc_created": nc_created
         }
         
         if alert_created:
             response_data["alert_message"] = "Out-of-spec alert has been generated and sent to responsible personnel"
+        
+        if nc_created:
+            response_data["nc_message"] = "Non-Conformance has been automatically created and batch quarantined"
         
         print(f"DEBUG: Returning successful response")
         return ResponseModel(
@@ -2807,4 +2813,500 @@ async def get_validation_evidence_summary(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get validation evidence summary: {str(e)}"
+        )
+
+# Monitoring Schedule Endpoints
+@router.post("/ccps/{ccp_id}/monitoring-schedule")
+async def create_monitoring_schedule(
+    ccp_id: int,
+    schedule_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a monitoring schedule for a CCP"""
+    try:
+        schedule_data["ccp_id"] = ccp_id
+        haccp_service = HACCPService(db)
+        schedule = haccp_service.create_monitoring_schedule(schedule_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Monitoring schedule created successfully",
+            data={
+                "id": schedule.id,
+                "ccp_id": schedule.ccp_id,
+                "schedule_type": schedule.schedule_type,
+                "next_due_time": schedule.next_due_time.isoformat() if schedule.next_due_time else None
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create monitoring schedule: {str(e)}"
+        )
+
+
+@router.get("/ccps/{ccp_id}/monitoring-schedule/status")
+async def get_monitoring_schedule_status(
+    ccp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get monitoring schedule status for a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        status = haccp_service.get_monitoring_schedule_status(ccp_id)
+        
+        if not status:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No monitoring schedule found for this CCP"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="Monitoring schedule status retrieved successfully",
+            data={
+                "schedule_id": status.schedule_id,
+                "ccp_id": status.ccp_id,
+                "ccp_name": status.ccp_name,
+                "is_due": status.is_due,
+                "is_overdue": status.is_overdue,
+                "next_due_time": status.next_due_time.isoformat() if status.next_due_time else None,
+                "last_monitoring_time": status.last_monitoring_time.isoformat() if status.last_monitoring_time else None,
+                "tolerance_window_minutes": status.tolerance_window_minutes,
+                "schedule_type": status.schedule_type,
+                "is_active": status.is_active
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get monitoring schedule status: {str(e)}"
+        )
+
+
+@router.get("/monitoring/due")
+async def get_due_monitoring(
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all CCPs that are due for monitoring"""
+    try:
+        haccp_service = HACCPService(db)
+        due_schedules = haccp_service.get_all_due_monitoring()
+        
+        items = []
+        for status in due_schedules:
+            items.append({
+                "schedule_id": status.schedule_id,
+                "ccp_id": status.ccp_id,
+                "ccp_name": status.ccp_name,
+                "is_due": status.is_due,
+                "is_overdue": status.is_overdue,
+                "next_due_time": status.next_due_time.isoformat() if status.next_due_time else None,
+                "last_monitoring_time": status.last_monitoring_time.isoformat() if status.last_monitoring_time else None,
+                "tolerance_window_minutes": status.tolerance_window_minutes,
+                "schedule_type": status.schedule_type,
+                "is_active": status.is_active
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Due monitoring schedules retrieved successfully",
+            data={"items": items, "total": len(items)}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get due monitoring schedules: {str(e)}"
+        )
+
+# Batch Disposition Endpoints
+@router.get("/batches/quarantined")
+async def get_quarantined_batches(
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all quarantined batches"""
+    try:
+        haccp_service = HACCPService(db)
+        quarantined_batches = haccp_service.get_quarantined_batches()
+        
+        return ResponseModel(
+            success=True,
+            message="Quarantined batches retrieved successfully",
+            data={"items": quarantined_batches, "total": len(quarantined_batches)}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get quarantined batches: {str(e)}"
+        )
+
+
+@router.post("/batches/{batch_id}/disposition")
+async def dispose_batch(
+    batch_id: int,
+    disposition_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:approve")),
+    db: Session = Depends(get_db)
+):
+    """Dispose of a quarantined batch (release, dispose, or rework)"""
+    try:
+        haccp_service = HACCPService(db)
+        success = haccp_service.release_batch_from_quarantine(batch_id, disposition_data, current_user.id)
+        
+        if success:
+            disposition_type = disposition_data.get("disposition_type", "unknown")
+            return ResponseModel(
+                success=True,
+                message=f"Batch {disposition_type}d successfully",
+                data={
+                    "batch_id": batch_id,
+                    "disposition_type": disposition_type,
+                    "approved_by": current_user.id,
+                    "approved_at": datetime.utcnow().isoformat()
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to dispose batch"
+            )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to dispose batch: {str(e)}"
+        )
+
+# Verification Program Endpoints
+@router.post("/ccps/{ccp_id}/verification-programs")
+async def create_verification_program(
+    ccp_id: int,
+    program_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a verification program for a CCP"""
+    try:
+        program_data["ccp_id"] = ccp_id
+        haccp_service = HACCPService(db)
+        program = haccp_service.create_verification_program(program_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Verification program created successfully",
+            data={
+                "id": program.id,
+                "ccp_id": program.ccp_id,
+                "verification_type": program.verification_type,
+                "frequency": program.frequency,
+                "next_verification_date": program.next_verification_date
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create verification program: {str(e)}"
+        )
+
+
+@router.get("/ccps/{ccp_id}/verification-programs")
+async def get_verification_programs(
+    ccp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all verification programs for a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        programs = haccp_service.get_verification_programs_for_ccp(ccp_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Verification programs retrieved successfully",
+            data={"items": programs, "total": len(programs)}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get verification programs: {str(e)}"
+        )
+
+
+@router.get("/verification/due")
+async def get_due_verifications(
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all verification programs that are due"""
+    try:
+        haccp_service = HACCPService(db)
+        due_verifications = haccp_service.get_due_verifications()
+        
+        return ResponseModel(
+            success=True,
+            message="Due verifications retrieved successfully",
+            data={"items": due_verifications, "total": len(due_verifications)}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get due verifications: {str(e)}"
+        )
+
+
+# Enhanced Verification Log Endpoints with Role Segregation
+@router.post("/ccps/{ccp_id}/verification-logs")
+async def create_verification_log(
+    ccp_id: int,
+    log_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:verify")),
+    db: Session = Depends(get_db)
+):
+    """Create a verification log with role segregation enforcement"""
+    try:
+        haccp_service = HACCPService(db)
+        verification_log = haccp_service.create_verification_log_with_role_check(ccp_id, log_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Verification log created successfully",
+            data={
+                "id": verification_log.id,
+                "ccp_id": verification_log.ccp_id,
+                "verification_date": verification_log.verification_date,
+                "is_compliant": verification_log.is_compliant
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create verification log: {str(e)}"
+        )
+
+
+@router.get("/ccps/{ccp_id}/verification-logs")
+async def get_verification_logs(
+    ccp_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get verification logs for a CCP with pagination"""
+    try:
+        logs = db.query(CCPVerificationLog).filter(
+            CCPVerificationLog.ccp_id == ccp_id
+        ).offset(skip).limit(limit).all()
+        
+        total = db.query(CCPVerificationLog).filter(
+            CCPVerificationLog.ccp_id == ccp_id
+        ).count()
+        
+        return ResponseModel(
+            success=True,
+            message="Verification logs retrieved successfully",
+            data={
+                "items": logs,
+                "total": total,
+                "skip": skip,
+                "limit": limit
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get verification logs: {str(e)}"
+        )
+
+
+# Validation Endpoints
+@router.post("/ccps/{ccp_id}/validations")
+async def create_validation(
+    ccp_id: int,
+    validation_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a validation for a CCP"""
+    try:
+        validation_data["ccp_id"] = ccp_id
+        haccp_service = HACCPService(db)
+        validation = haccp_service.create_validation(validation_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Validation created successfully",
+            data={
+                "id": validation.id,
+                "ccp_id": validation.ccp_id,
+                "validation_type": validation.validation_type,
+                "validation_title": validation.validation_title,
+                "review_status": validation.review_status
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create validation: {str(e)}"
+        )
+
+
+@router.get("/ccps/{ccp_id}/validations")
+async def get_validations(
+    ccp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all validations for a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        validations = haccp_service.get_validations_for_ccp(ccp_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Validations retrieved successfully",
+            data={"items": validations, "total": len(validations)}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get validations: {str(e)}"
+        )
+
+
+@router.post("/validations/{validation_id}/review")
+async def review_validation(
+    validation_id: int,
+    review_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:approve")),
+    db: Session = Depends(get_db)
+):
+    """Review a validation (approve/reject)"""
+    try:
+        haccp_service = HACCPService(db)
+        validation = haccp_service.review_validation(validation_id, review_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message=f"Validation {review_data['review_status']} successfully",
+            data={
+                "id": validation.id,
+                "review_status": validation.review_status,
+                "reviewed_by": validation.reviewed_by,
+                "reviewed_at": validation.reviewed_at
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to review validation: {str(e)}"
+        )
+
+
+@router.get("/ccps/{ccp_id}/validation-status")
+async def get_validation_status(
+    ccp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Check validation status for a CCP"""
+    try:
+        haccp_service = HACCPService(db)
+        status = haccp_service.check_ccp_validation_status(ccp_id)
+        
+        return ResponseModel(
+            success=True,
+            message="Validation status retrieved successfully",
+            data=status
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get validation status: {str(e)}"
+        )
+
+# Verification Program Endpoints
+@router.post("/ccps/{ccp_id}/verification-programs")
+async def create_verification_program(
+    ccp_id: int,
+    program_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a verification program for a CCP"""
+    try:
+        program_data["ccp_id"] = ccp_id
+        haccp_service = HACCPService(db)
+        program = haccp_service.create_verification_program(program_data, current_user.id)
+        
+        return ResponseModel(
+            success=True,
+            message="Verification program created successfully",
+            data={
+                "id": program.id,
+                "ccp_id": program.ccp_id,
+                "verification_type": program.verification_type,
+                "frequency": program.frequency,
+                "next_verification_date": program.next_verification_date
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create verification program: {str(e)}"
         )
