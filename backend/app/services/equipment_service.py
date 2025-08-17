@@ -47,13 +47,12 @@ class EquipmentService:
     def _normalize_maintenance_type(self, maintenance_type: Optional[str]) -> Optional[MaintenanceType]:
         if maintenance_type is None:
             return None
-        # Accept case-insensitive strings
-        mt = maintenance_type.strip().upper()
-        if mt in ("PREVENTIVE", "CORRECTIVE"):
-            return MaintenanceType(mt)
-        # Accept lowercase input from frontend
-        if mt == "PREVENTIVE" or mt == "CORRECTIVE":
-            return MaintenanceType(mt)
+        mt = maintenance_type.strip().lower()
+        if mt in ("preventive", "corrective"):
+            # cast back to Enum (defined with lowercase values)
+            if mt == "preventive":
+                return MaintenanceType.PREVENTIVE
+            return MaintenanceType.CORRECTIVE
         raise ValueError(f"Invalid maintenance_type: {maintenance_type}")
 
     def create_maintenance_plan(self, *, equipment_id: int, frequency_days: int, maintenance_type: str, notes: Optional[str]) -> MaintenancePlan:

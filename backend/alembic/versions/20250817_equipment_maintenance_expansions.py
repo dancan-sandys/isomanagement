@@ -47,6 +47,9 @@ def upgrade():
         batch_op.add_column(sa.Column('result', sa.String(length=50), nullable=True))
         batch_op.add_column(sa.Column('comments', sa.Text(), nullable=True))
 
+    # Normalize maintenance_type values to lowercase to align with enum change
+    op.execute("UPDATE maintenance_plans SET maintenance_type = LOWER(maintenance_type)")
+
     # Backfills
     # Set next_due_at for calibration plans if null
     op.execute("UPDATE calibration_plans SET next_due_at = COALESCE(next_due_at, schedule_date)")

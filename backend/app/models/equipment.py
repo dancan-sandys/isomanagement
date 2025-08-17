@@ -7,8 +7,8 @@ from app.core.database import Base
 
 
 class MaintenanceType(str, enum.Enum):
-    PREVENTIVE = "PREVENTIVE"
-    CORRECTIVE = "CORRECTIVE"
+    PREVENTIVE = "preventive"
+    CORRECTIVE = "corrective"
 
 
 # Added work order status/priority enums

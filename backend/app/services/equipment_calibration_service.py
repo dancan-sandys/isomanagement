@@ -95,9 +95,10 @@ class EquipmentCalibrationService:
             
             # Determine status
             if days_until_expiry < 0:
-                status = CalibrationStatus.EXPIRED
+                # Overdue or expired depending on how far past due
+                status = CalibrationStatus.OVERDUE if abs(days_until_expiry) <= 30 else CalibrationStatus.EXPIRED
                 is_valid = False
-                message = f"Calibration expired {abs(days_until_expiry)} days ago"
+                message = f"Calibration {status.value} by {abs(days_until_expiry)} days"
                 requires_calibration = True
             elif days_until_expiry <= 30:
                 status = CalibrationStatus.EXPIRING_SOON
