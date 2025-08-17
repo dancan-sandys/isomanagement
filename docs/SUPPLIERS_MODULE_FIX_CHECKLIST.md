@@ -39,7 +39,7 @@ This checklist tracks the end-to-end fixes to stabilize and align the Suppliers 
 - [x] Accept FE payloads and normalize values without 422s
   - [x] Accept `status: 'under_review'` and normalize to `pending` on inspection
   - [x] Support `quantity` alias for `quantity_received` in schemas (validation + serialization alias)
-- [ ] Ensure delivery endpoints return `ResponseModel<T>` consistently
+- [x] Ensure delivery endpoints return `ResponseModel<T>` consistently
 
 ## 5) Materials Serialization (Schema/Model Mismatch)
 - [x] Normalize `Material` JSON/text fields to prevent 422/500

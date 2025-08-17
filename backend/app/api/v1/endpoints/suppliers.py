@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi import Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 from typing import List, Optional, Dict, Any
 import os
 import shutil
@@ -1218,7 +1218,7 @@ async def update_delivery(
     return ResponseModel(success=True, message="Delivery updated successfully", data=delivery)
 
 
-@router.delete("/deliveries/{delivery_id}")
+@router.delete("/deliveries/{delivery_id}", response_model=ResponseModel[dict])
 async def delete_delivery(
     delivery_id: int,
     db: Session = Depends(get_db),
@@ -1238,7 +1238,7 @@ async def delete_delivery(
         audit_event(db, current_user.id, "delivery_deleted", "suppliers", str(delivery_id))
     except Exception:
         pass
-    return {"message": "Delivery deleted successfully"}
+    return ResponseModel(success=True, message="Delivery deleted successfully", data={"message": "Delivery deleted successfully"})
 
 
 # Document endpoints
