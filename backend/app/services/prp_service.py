@@ -10,7 +10,7 @@ import base64
 
 from app.models.prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
-    RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
+    RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PRPPreventiveAction,
     PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus, RiskLevel, CorrectiveActionStatus
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
@@ -449,7 +449,7 @@ class PRPService:
     # PREVENTIVE ACTION SYSTEM (Phase 3.3)
     # ============================================================================
     
-    def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PreventiveAction:
+    def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PRPPreventiveAction:
         """Create a preventive action with trigger identification and planning"""
         
         # Generate action code
@@ -459,7 +459,7 @@ class PRPService:
         trigger_analysis = self._identify_preventive_triggers(action_data.potential_issue)
         success_criteria = self._generate_success_criteria(action_data.objective)
         
-        action = PreventiveAction(
+        action = PRPPreventiveAction(
             action_code=action_code,
             trigger_type=action_data.trigger_type,
             trigger_description=action_data.trigger_description,
@@ -533,7 +533,7 @@ class PRPService:
         else:
             return "Achievement of stated objective with measurable outcomes"
     
-    def _create_preventive_action_notification(self, action: PreventiveAction) -> None:
+    def _create_preventive_action_notification(self, action: PRPPreventiveAction) -> None:
         """Create notification for preventive action assignment"""
         try:
             notification = Notification(
@@ -551,10 +551,10 @@ class PRPService:
         except Exception as e:
             logger.error(f"Failed to create preventive action notification: {e}")
     
-    def start_preventive_action(self, action_id: int, started_by: int) -> PreventiveAction:
+    def start_preventive_action(self, action_id: int, started_by: int) -> PRPPreventiveAction:
         """Start a preventive action with effectiveness measurement setup"""
         
-        action = self.db.query(PreventiveAction).filter(PreventiveAction.id == action_id).first()
+        action = self.db.query(PRPPreventiveAction).filter(PRPPreventiveAction.id == action_id).first()
         if not action:
             raise ValueError("Preventive action not found")
         
@@ -571,7 +571,7 @@ class PRPService:
         
         return action
     
-    def _setup_effectiveness_measurement(self, action: PreventiveAction) -> str:
+    def _setup_effectiveness_measurement(self, action: PRPPreventiveAction) -> str:
         """Set up effectiveness measurement framework for preventive action"""
         
         # Define measurement framework based on action type
@@ -588,7 +588,7 @@ class PRPService:
     def measure_action_effectiveness(self, action_id: int, measurement_data: Dict[str, Any]) -> Dict[str, Any]:
         """Measure preventive action effectiveness"""
         
-        action = self.db.query(PreventiveAction).filter(PreventiveAction.id == action_id).first()
+        action = self.db.query(PRPPreventiveAction).filter(PRPPreventiveAction.id == action_id).first()
         if not action:
             raise ValueError("Preventive action not found")
         
@@ -670,8 +670,8 @@ class PRPService:
         """Track continuous improvement metrics for PRP programs"""
         
         # Get all preventive actions for the program
-        preventive_actions = self.db.query(PreventiveAction).filter(
-            PreventiveAction.program_id == program_id
+        preventive_actions = self.db.query(PRPPreventiveAction).filter(
+            PRPPreventiveAction.program_id == program_id
         ).all()
         
         # Calculate improvement metrics
@@ -691,7 +691,7 @@ class PRPService:
             "recommendations": self._generate_continuous_improvement_recommendations(completed_actions, average_effectiveness)
         }
     
-    def _identify_improvement_trends(self, actions: List[PreventiveAction]) -> List[str]:
+    def _identify_improvement_trends(self, actions: List[PRPPreventiveAction]) -> List[str]:
         """Identify improvement trends from preventive actions"""
         
         trends = []
@@ -931,10 +931,10 @@ class PRPService:
         
         return action
     
-    def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PreventiveAction:
+    def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PRPPreventiveAction:
         """Create a new preventive action"""
         
-        action = PreventiveAction(
+        action = PRPPreventiveAction(
             action_code=action_data.action_code,
             trigger_type=action_data.trigger_type,
             trigger_description=action_data.trigger_description,
@@ -2195,10 +2195,10 @@ class PRPService:
                     )
                 ).all()
                 
-                preventive_actions = self.db.query(PreventiveAction).filter(
+                preventive_actions = self.db.query(PRPPreventiveAction).filter(
                     and_(
-                        PreventiveAction.program_id == program.id,
-                        PreventiveAction.created_at >= start_date
+                        PRPPreventiveAction.program_id == program.id,
+                        PRPPreventiveAction.created_at >= start_date
                     )
                 ).all()
                 

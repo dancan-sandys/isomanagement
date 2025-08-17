@@ -5,7 +5,7 @@ from .document import Document, DocumentVersion, DocumentApproval, DocumentChang
 from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, CCPMonitoringSchedule, CCPVerificationProgram, CCPValidation, HACCPEvidenceAttachment, HACCPAuditLog, RiskLevel
 from .prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
-    RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PreventiveAction,
+    RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PRPPreventiveAction,
     PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus, CorrectiveActionStatus
 )
 from .supplier import Supplier, Material, SupplierEvaluation, IncomingDelivery, SupplierDocument
@@ -51,7 +51,7 @@ __all__ = [
     
     # PRP models
     "PRPProgram", "PRPChecklist", "PRPChecklistItem", "PRPTemplate", "PRPSchedule",
-    "RiskMatrix", "RiskAssessment", "RiskControl", "CorrectiveAction", "PreventiveAction",
+    "RiskMatrix", "RiskAssessment", "RiskControl", "CorrectiveAction", "PRPPreventiveAction",
     "PRPCategory", "PRPFrequency", "PRPStatus", "ChecklistStatus", "RiskLevel", "CorrectiveActionStatus",
     
     # Supplier models

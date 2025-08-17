@@ -565,7 +565,7 @@ class CorrectiveAction(Base):
         return f"<CorrectiveAction(id={self.id}, action_code='{self.action_code}')>"
 
 
-class PreventiveAction(Base):
+class PRPPreventiveAction(Base):
     """Preventive actions for PRP programs"""
     __tablename__ = "prp_preventive_actions"
 
@@ -627,4 +627,4 @@ class PreventiveAction(Base):
     program = relationship("PRPProgram")
     
     def __repr__(self):
-        return f"<PreventiveAction(id={self.id}, action_code='{self.action_code}')>" 
+        return f"<PRPPreventiveAction(id={self.id}, action_code='{self.action_code}')>" 

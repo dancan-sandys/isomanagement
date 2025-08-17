@@ -11,7 +11,7 @@ from app.models.prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem,
     PRPCategory, PRPFrequency, PRPStatus, ChecklistStatus,
     RiskMatrix, RiskAssessment, RiskControl, RiskLevel,
-    CorrectiveAction, PreventiveAction, CorrectiveActionStatus
+    CorrectiveAction, PRPPreventiveAction, CorrectiveActionStatus
 )
 from app.schemas.common import ResponseModel
 from app.schemas.prp import (
@@ -1776,19 +1776,19 @@ async def get_preventive_actions(
 ):
     """Get all preventive actions with pagination and filters"""
     try:
-        query = db.query(PreventiveAction)
+        query = db.query(PRPPreventiveAction)
         
         # Apply filters
         if status:
-            query = query.filter(PreventiveAction.status == CorrectiveActionStatus(status))
+            query = query.filter(PRPPreventiveAction.status == CorrectiveActionStatus(status))
         if trigger_type:
-            query = query.filter(PreventiveAction.trigger_type == trigger_type)
+            query = query.filter(PRPPreventiveAction.trigger_type == trigger_type)
         
         # Get total count
         total = query.count()
         
         # Apply pagination
-        actions = query.order_by(desc(PreventiveAction.created_at)).offset((page - 1) * size).limit(size).all()
+        actions = query.order_by(desc(PRPPreventiveAction.created_at)).offset((page - 1) * size).limit(size).all()
         
         items = []
         for action in actions:
@@ -1894,7 +1894,7 @@ async def get_preventive_action(
 ):
     """Get a specific preventive action with full details"""
     try:
-        action = db.query(PreventiveAction).filter(PreventiveAction.id == action_id).first()
+        action = db.query(PRPPreventiveAction).filter(PRPPreventiveAction.id == action_id).first()
         if not action:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.prp import (
     PRPProgram, PRPCategory, RiskAssessment, RiskLevel, 
-    CorrectiveAction, PreventiveAction, PRPChecklist
+    CorrectiveAction, PRPPreventiveAction, PRPChecklist
 )
 from app.models.user import User
 from app.core.database import get_db

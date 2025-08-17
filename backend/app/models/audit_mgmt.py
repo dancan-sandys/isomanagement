@@ -66,7 +66,6 @@ class AuditProgram(Base):
     audits = relationship("Audit", back_populates="program", cascade="all, delete-orphan")
     manager = relationship("User", foreign_keys=[manager_id])
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
-    risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
     risks = relationship("AuditRisk", back_populates="program", cascade="all, delete-orphan")
 
 
