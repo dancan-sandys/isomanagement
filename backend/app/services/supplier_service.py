@@ -99,6 +99,14 @@ class SupplierService:
         offset = (filter_params.page - 1) * filter_params.size
         suppliers = query.offset(offset).limit(filter_params.size).all()
 
+        # Pre-compute materials count by supplier for this page set
+        material_counts_rows = (
+            self.db.query(Material.supplier_id, func.count(Material.id))
+            .group_by(Material.supplier_id)
+            .all()
+        )
+        supplier_id_to_material_count = {sid: int(cnt) for sid, cnt in material_counts_rows}
+
         def normalize_enum(val: Any) -> str:
             try:
                 return (val.value if hasattr(val, "value") else str(val)).lower()
@@ -135,7 +143,7 @@ class SupplierService:
                 "overall_score": float(s.overall_score or 0.0),
                 "last_evaluation_date": s.last_evaluation_date,
                 "next_evaluation_date": s.next_evaluation_date,
-                "materials_count": 0,
+                "materials_count": supplier_id_to_material_count.get(s.id, 0),
                 "created_at": s.created_at,
                 "updated_at": s.updated_at,
                 "created_by": s.created_by,
@@ -209,8 +217,18 @@ class SupplierService:
     # Material operations
     def create_material(self, material_data: MaterialCreate, created_by: int) -> Material:
         """Create a new material"""
+        # Normalize list-like fields destined for Text columns by JSON-encoding them
+        material_payload = material_data.dict()
+        try:
+            import json as _json
+            if isinstance(material_payload.get("allergens"), list):
+                material_payload["allergens"] = _json.dumps(material_payload["allergens"])  # Text column
+            if isinstance(material_payload.get("quality_parameters"), list):
+                material_payload["quality_parameters"] = _json.dumps(material_payload["quality_parameters"])  # Text column
+        except Exception:
+            pass
         material = Material(
-            **material_data.dict(),
+            **material_payload,
             created_by=created_by
         )
         self.db.add(material)
@@ -248,8 +266,11 @@ class SupplierService:
         offset = (filter_params.page - 1) * filter_params.size
         materials = query.offset(offset).limit(filter_params.size).all()
 
+        # Normalize list-like fields for response safety
+        normalized_items = [self._material_to_response_safe(m) for m in materials]
+
         return {
-            "items": materials,
+            "items": normalized_items,
             "total": total,
             "page": filter_params.page,
             "size": filter_params.size,
@@ -258,7 +279,8 @@ class SupplierService:
 
     def get_material(self, material_id: int) -> Optional[Material]:
         """Get material by ID"""
-        return self.db.query(Material).filter(Material.id == material_id).first()
+        material = self.db.query(Material).filter(Material.id == material_id).first()
+        return self._material_to_response_safe(material) if material else None
 
     def update_material(self, material_id: int, material_data: MaterialUpdate) -> Optional[Material]:
         """Update material"""
@@ -267,12 +289,21 @@ class SupplierService:
             return None
 
         update_data = material_data.dict(exclude_unset=True)
+        # Normalize list-like fields destined for Text columns by JSON-encoding them
+        try:
+            import json as _json
+            if isinstance(update_data.get("allergens"), list):
+                update_data["allergens"] = _json.dumps(update_data["allergens"])  # Text column
+            if isinstance(update_data.get("quality_parameters"), list):
+                update_data["quality_parameters"] = _json.dumps(update_data["quality_parameters"])  # Text column
+        except Exception:
+            pass
         for field, value in update_data.items():
             setattr(material, field, value)
 
         self.db.commit()
         self.db.refresh(material)
-        return material
+        return self._material_to_response_safe(material)
 
     def delete_material(self, material_id: int) -> bool:
         """Delete material"""
@@ -855,3 +886,89 @@ class SupplierService:
             }
             for supplier in overdue_suppliers
         ] 
+
+    # Material approval utilities
+    def approve_material(self, material_id: int, approved_by: int) -> Optional[Material]:
+        """Approve a material and return updated record."""
+        material = self.get_material(material_id)
+        if not material:
+            return None
+        material.approval_status = "approved"
+        # Touch updated_at via commit; optionally track approver via specifications meta
+        self.db.commit()
+        self.db.refresh(material)
+        return material
+
+    def reject_material(self, material_id: int, reason: str, rejected_by: int) -> Optional[Material]:
+        """Reject a material with reason and return updated record."""
+        material = self.get_material(material_id)
+        if not material:
+            return None
+        material.approval_status = "rejected"
+        # Persist reason into acceptable_limits metadata if possible
+        try:
+            limits = material.acceptable_limits or {}
+            if isinstance(limits, dict):
+                limits["rejection_reason"] = reason
+                material.acceptable_limits = limits
+        except Exception:
+            pass
+        self.db.commit()
+        self.db.refresh(material)
+        return material
+
+    def bulk_approve_materials(self, material_ids: List[int], approved_by: int) -> int:
+        """Bulk approve materials; returns count."""
+        q = self.db.query(Material).filter(Material.id.in_(material_ids))
+        count = 0
+        for m in q.all():
+            m.approval_status = "approved"
+            count += 1
+        self.db.commit()
+        return count
+
+    def bulk_reject_materials(self, material_ids: List[int], reason: str, rejected_by: int) -> int:
+        """Bulk reject materials; returns count."""
+        q = self.db.query(Material).filter(Material.id.in_(material_ids))
+        count = 0
+        for m in q.all():
+            m.approval_status = "rejected"
+            try:
+                limits = m.acceptable_limits or {}
+                if isinstance(limits, dict):
+                    limits["rejection_reason"] = reason
+                    m.acceptable_limits = limits
+            except Exception:
+                pass
+            count += 1
+        self.db.commit()
+        return count
+
+    # Lightweight normalization helpers for Material list-like fields stored as Text/JSON
+    def _ensure_list(self, value: Any) -> Optional[List[str]]:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                import json as _json
+                parsed = _json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+                return [value]
+            except Exception:
+                return [value]
+        return [str(value)]
+
+    def _material_to_response_safe(self, material: Material) -> Material:
+        """Normalize list-like fields to avoid Pydantic validation errors."""
+        try:
+            material.allergens = self._ensure_list(material.allergens)  # type: ignore
+        except Exception:
+            pass
+        try:
+            material.quality_parameters = self._ensure_list(material.quality_parameters)  # type: ignore
+        except Exception:
+            pass
+        return material 
