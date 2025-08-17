@@ -309,7 +309,7 @@ const HazardAnalysisTable: React.FC<HazardAnalysisTableProps> = ({
               variant="outlined"
               startIcon={<FilterAlt />}
               onClick={() => setShowFilters(!showFilters)}
-              color={showFilters ? 'primary' : 'default'}
+              color={showFilters ? 'primary' : 'inherit'}
             >
               Filters
             </Button>

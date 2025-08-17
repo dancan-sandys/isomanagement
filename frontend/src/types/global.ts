@@ -412,7 +412,7 @@ export const isDocument = (obj: any): obj is Document => {
   return obj && typeof obj === 'object' && 'id' in obj && 'title' in obj;
 };
 
-export const isSupplier = (obj: any): obj is Supplier => {
+export const isSupplier = (obj: any): obj is any => {
   return obj && typeof obj === 'object' && 'id' in obj && 'name' in obj;
 };
 

@@ -46,7 +46,7 @@ import {
   Close as CloseIcon,
   Settings as SettingsIcon,
   VoiceOverOff as VoiceOverOffIcon,
-  VoiceOver as VoiceOverIcon
+  RecordVoiceOver as VoiceOverIcon
 } from '@mui/icons-material';
 
 interface MobileDataEntryProps {

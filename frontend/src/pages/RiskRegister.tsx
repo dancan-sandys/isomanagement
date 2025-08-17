@@ -26,9 +26,9 @@ const RiskRegister: React.FC = () => {
 
   useEffect(() => {
     dispatch(setFilters({ item_type: 'risk' }));
-    dispatch(fetchRiskItems({ ...filters, item_type: 'risk' }));
+    dispatch(fetchRiskItems({ item_type: 'risk' }));
     dispatch(fetchRiskStats());
-  }, [dispatch, filters]);
+  }, [dispatch]);
 
   const onApply = () => {
     const itemTypeValue = type ? (type as 'risk' | 'opportunity') : undefined;

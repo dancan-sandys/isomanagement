@@ -104,7 +104,9 @@ const AuditPrograms: React.FC = () => {
       const params = {
         page: pagination.page - 1, // API uses 0-based pagination
         size: pagination.size,
-        ...filters,
+        status: filters.status || undefined,
+        year: filters.year ? parseInt(filters.year) : undefined,
+        manager_id: filters.manager_id ? parseInt(filters.manager_id) : undefined,
       };
       
       const response: AuditProgramListResponse = await auditsAPI.listPrograms(params);

@@ -63,8 +63,6 @@ import {
   Done,
   Pending,
   PriorityHigh,
-  PriorityMedium,
-  PriorityLow,
   AttachMoney,
   Timeline,
   Person,
@@ -247,8 +245,8 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
   const handleCompleteAction = async (actionId: number, actionType: 'corrective' | 'preventive') => {
     try {
       const response = actionType === 'corrective' 
-        ? await prpAPI.completeCorrectiveAction(actionId)
-        : await prpAPI.completePreventiveAction(actionId);
+        ? await prpAPI.completeCorrectiveAction(actionId, {})
+        : await prpAPI.completePreventiveAction(actionId, {});
       
       if (response.success) {
         setSuccess(`${actionType === 'corrective' ? 'Corrective' : 'Preventive'} action completed successfully`);
@@ -329,11 +327,11 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
       case 'critical':
         return <PriorityHigh />;
       case 'medium':
-        return <PriorityMedium />;
+        return <TrendingUp />;
       case 'low':
-        return <PriorityLow />;
+        return <TrendingDown />;
       default:
-        return <PriorityMedium />;
+        return <TrendingUp />;
     }
   };
 

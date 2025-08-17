@@ -800,15 +800,13 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
             <SpeedDialAction
               icon={<UndoIcon />}
               tooltipTitle="Undo"
-              onClick={handleUndo}
-              disabled={undoStack.length === 0}
+              onClick={undoStack.length === 0 ? undefined : handleUndo}
               aria-label="Undo last action"
             />
             <SpeedDialAction
               icon={<RedoIcon />}
               tooltipTitle="Redo"
-              onClick={handleRedo}
-              disabled={redoStack.length === 0}
+              onClick={redoStack.length === 0 ? undefined : handleRedo}
               aria-label="Redo last action"
             />
             <SpeedDialAction

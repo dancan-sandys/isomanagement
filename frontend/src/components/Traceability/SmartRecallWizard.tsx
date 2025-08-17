@@ -346,7 +346,7 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
     setFormData(prev => ({
       ...prev,
       [field]: {
-        ...prev[field],
+        ...(prev[field] as any),
         [nestedField]: value
       }
     }));
@@ -1128,15 +1128,13 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
             <SpeedDialAction
               icon={<ArrowBackIcon />}
               tooltipTitle="Previous Step"
-              onClick={handleBack}
-              disabled={activeStep === 0}
+              onClick={activeStep === 0 ? undefined : handleBack}
               aria-label="Go to previous step"
             />
             <SpeedDialAction
               icon={<ArrowForwardIcon />}
               tooltipTitle="Next Step"
-              onClick={handleNext}
-              disabled={!validateStep(activeStep)}
+              onClick={!validateStep(activeStep) ? undefined : handleNext}
               aria-label="Go to next step"
             />
             <SpeedDialAction

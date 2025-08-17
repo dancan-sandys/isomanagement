@@ -49,8 +49,6 @@ import {
   Error,
   Info,
   Refresh,
-  Escalation,
-  RiskAssessment,
 } from '@mui/icons-material';
 import { prpAPI } from '../../services/api';
 
@@ -230,7 +228,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
 
   const handleEscalateRisk = async (assessmentId: number) => {
     try {
-      const response = await prpAPI.escalateRiskToRegister(assessmentId);
+      const response = await prpAPI.escalateRiskAssessment(assessmentId);
       if (response.success) {
         setSuccess('Risk escalated to main risk register successfully');
         fetchData();
@@ -367,7 +365,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
                 <TableCell>
                   {assessment.escalated_to_risk_register ? (
                     <Chip
-                      icon={<Escalation />}
+                      icon={<TrendingUp />}
                       label="Escalated"
                       color="warning"
                       size="small"
@@ -403,7 +401,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
                           size="small"
                           onClick={() => handleEscalateRisk(assessment.id)}
                         >
-                          <Escalation />
+                          <TrendingUp />
                         </IconButton>
                       </Tooltip>
                     )}

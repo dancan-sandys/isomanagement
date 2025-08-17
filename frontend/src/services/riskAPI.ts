@@ -296,8 +296,8 @@ export const riskAPI = {
     return response.data;
   },
   
-  // Get FSMS Integrations
-  getFSMSIntegrations: async (riskId: number) => {
+  // Get FSMS Integrations by Risk ID
+  getFSMSIntegrationsByRisk: async (riskId: number) => {
     const response: AxiosResponse = await api.get(`/risk-framework/fsms-integration/${riskId}`);
     return response.data;
   },
@@ -352,8 +352,8 @@ export const riskAPI = {
     return response.data;
   },
   
-  // Plan Risk Treatment (ISO 31000:2018 compliant)
-  planTreatment: async (treatmentData: {
+  // Plan Risk Treatment Enhanced (ISO 31000:2018 compliant)
+  planTreatmentEnhanced: async (treatmentData: {
     risk_id: number;
     treatment_strategy: 'avoid' | 'transfer' | 'mitigate' | 'accept';
     treatment_plan: string;

@@ -22,6 +22,12 @@ class RiskCategory(str, Enum):
     COMPLIANCE = "compliance"
     CUSTOMER = "customer"
     OTHER = "other"
+    # Strategic Categories (new)
+    STRATEGIC = "strategic"
+    FINANCIAL = "financial"
+    REPUTATIONAL = "reputational"
+    BUSINESS_CONTINUITY = "business_continuity"
+    REGULATORY = "regulatory"
 
 
 class RiskStatus(str, Enum):
