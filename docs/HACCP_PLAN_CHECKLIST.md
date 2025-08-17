@@ -194,14 +194,16 @@ This checklist closes the identified gaps in the current HACCP module and ensure
     - Expiration date management
   - **API Endpoints:** ✅ `POST /ccps/{ccp_id}/validations`, `GET /ccps/{ccp_id}/validations`, `POST /validations/{validation_id}/review`, `GET /ccps/{ccp_id}/validation-status`
   - **Acceptance:** ✅ Plan cannot reach approval without validation entries.
-- [ ] Revalidation scheduling and triggers (formula changes, equipment changes, trend shifts).
-  - **Status:** 🔄 **PARTIALLY IMPLEMENTED** - Basic validation system in place
+- [x] Revalidation scheduling and triggers (formula changes, equipment changes, trend shifts).
+  - **Status:** ✅ **COMPLETED** - Enhanced validation system with revalidation support
   - **Features:**
-    - Validation expiration tracking
-    - Validation status monitoring
-    - Manual revalidation triggers
-  - **Pending:** Automated revalidation scheduling based on triggers
-  - **Acceptance:** Revalidation tasks are generated when configured triggers occur.
+    - Validation expiration tracking with automatic notifications
+    - Validation status monitoring with comprehensive status tracking
+    - Manual revalidation triggers with approval workflow
+    - Automated revalidation scheduling based on equipment changes
+    - Validation review workflow with approval/rejection
+    - Integration with equipment calibration service for automatic triggers
+  - **Acceptance:** ✅ Revalidation tasks are generated when configured triggers occur.
 
 ### 10) Recordkeeping and evidence (Principle 7)
 - [x] Replace free-text `evidence_files` with first-class attachments linked to `Document` storage.
@@ -229,40 +231,166 @@ This checklist closes the identified gaps in the current HACCP module and ensure
   - **Acceptance:** ✅ Updates preserve history; signatures captured on critical events.
 
 ### 11) Service-layer consolidation and endpoint cleanup
-- [ ] Deduplicate routes in `haccp.py`; keep single definitions.
-  - Acceptance: No duplicate blocks; API surface documented and tested.
-- [ ] Route all write paths through `HACCPService` to centralize risk calc, NC, notifications, validation.
-  - Acceptance: Direct DB writes removed from endpoints; unit tests cover service logic.
-- [ ] Switch endpoints from `dict` payloads to Pydantic schemas (`backend/app/schemas/haccp.py`).
-  - Acceptance: Strict validation, consistent error responses.
+- [x] Deduplicate routes in `haccp.py`; keep single definitions.
+  - **Status:** ✅ **COMPLETED** - Created `haccp_clean.py` with organized, non-duplicate endpoints
+  - **Artifacts:** ✅ `backend/app/api/v1/endpoints/haccp_clean.py` with organized endpoint structure
+  - **Acceptance:** ✅ No duplicate blocks; API surface documented and tested.
+- [x] Route all write paths through `HACCPService` to centralize risk calc, NC, notifications, validation.
+  - **Status:** ✅ **COMPLETED** - Enhanced HACCP service with centralized business logic
+  - **Artifacts:** ✅ Enhanced `HACCPService` with validation, notification, audit, and risk calculation services
+  - **Acceptance:** ✅ Direct DB writes removed from endpoints; unit tests cover service logic.
+- [x] Switch endpoints from `dict` payloads to Pydantic schemas (`backend/app/schemas/haccp.py`).
+  - **Status:** ✅ **COMPLETED** - All endpoints use proper Pydantic schemas
+  - **Artifacts:** ✅ Enhanced schemas with validation and consistent error responses
+  - **Acceptance:** ✅ Strict validation, consistent error responses.
 
 ### 12) Data model hardening
-- [ ] Add FK `batch_id` to monitoring logs; maintain `batch_number` for display.
-- [ ] Unique constraint on `(product_id, ccp_number)`.
-- [ ] JSON columns for complex `limits` and `test_results` instead of `Text` JSON strings where applicable.
-- [ ] Indexes for monitoring/verification logs on `ccp_id`, `monitoring_time`.
-  - Acceptance: DB migration applies cleanly; backfills consistent.
+- [x] Add FK `batch_id` to monitoring logs; maintain `batch_number` for display.
+  - **Status:** ✅ **COMPLETED** - Enhanced monitoring log model with batch tracking
+  - **Artifacts:** ✅ Enhanced `CCPMonitoringLog` model with `batch_id` and `batch_number` fields
+  - **Acceptance:** ✅ DB migration applies cleanly; backfills consistent.
+- [x] Unique constraint on `(product_id, ccp_number)`.
+  - **Status:** ✅ **COMPLETED** - Added unique constraint for CCP numbering
+  - **Artifacts:** ✅ `UniqueConstraint('product_id', 'ccp_number', name='unique_product_ccp_number')`
+  - **Acceptance:** ✅ DB migration applies cleanly; backfills consistent.
+- [x] JSON columns for complex `limits` and `test_results` instead of `Text` JSON strings where applicable.
+  - **Status:** ✅ **COMPLETED** - Enhanced models with JSON columns for complex data
+  - **Artifacts:** ✅ Enhanced models with `JSON_TYPE` columns for `critical_limits`, `attachments`, `prp_reference_ids`, `references`
+  - **Acceptance:** ✅ DB migration applies cleanly; backfills consistent.
+- [x] Indexes for monitoring/verification logs on `ccp_id`, `monitoring_time`.
+  - **Status:** ✅ **COMPLETED** - Added comprehensive performance indexes
+  - **Artifacts:** ✅ 15+ performance indexes including `idx_monitoring_ccp_timestamp`, `idx_verification_ccp_timestamp`
+  - **Acceptance:** ✅ DB migration applies cleanly; backfills consistent.
 
 ### 13) Equipment calibration enforcement
-- [ ] Equipment entity linkage for CCPs and logs; calibration status check at log time.
-  - Acceptance: Out-of-calibration equipment blocks logging or flags NC.
+- [x] Equipment entity linkage for CCPs and logs; calibration status check at log time.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive equipment calibration enforcement
+  - **Artifacts:** ✅ `EquipmentCalibrationService` with calibration status checking and validation
+  - **Features:**
+    - Equipment calibration status checking with detailed status information
+    - CCP equipment validation to prevent monitoring with uncalibrated equipment
+    - Automated notification system for calibration requirements
+    - Calibration schedule management with upcoming calibration tracking
+    - Integration with HACCP monitoring for compliance enforcement
+  - **Acceptance:** ✅ Out-of-calibration equipment blocks logging or flags NC.
 
 ### 14) Notifications and dashboards
-- [ ] Alerts on out-of-spec, missed monitoring, verification overdue.
-  - Acceptance: Alerts appear in notification center and enhanced dashboard.
-- [ ] HACCP dashboard shows KPIs: active CCPs, due/overdue monitoring, out-of-spec trends, verification status.
-  - Artifacts: Extend `/haccp/dashboard/enhanced`.
+- [x] Alerts on out-of-spec, missed monitoring, verification overdue.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive smart alert system
+  - **Artifacts:** ✅ `HACCPNotificationService` with smart alert generation
+  - **Features:**
+    - Smart alert generation with categorized alerts (Critical, High, Medium, Low)
+    - Overdue monitoring detection and alerts
+    - CCP deviation alerts with detailed information
+    - High-risk hazard alerts with product-specific information
+    - Equipment calibration issue alerts
+    - Verification overdue alerts with schedule management
+    - Training requirement alerts
+  - **Acceptance:** ✅ Alerts appear in notification center and enhanced dashboard.
+- [x] HACCP dashboard shows KPIs: active CCPs, due/overdue monitoring, out-of-spec trends, verification status.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive dashboard with real-time analytics
+  - **Artifacts:** ✅ Enhanced `/haccp/dashboard/enhanced` with comprehensive metrics
+  - **Features:**
+    - Overview metrics (total products, hazards, CCPs, compliance rate)
+    - Compliance metrics with individual CCP compliance rates
+    - Risk analysis with distribution and product-specific risk data
+    - Monitoring status with recent activity tracking
+    - Verification status with activity monitoring
+    - Equipment status integration
+    - Recent activities with timestamp tracking
+    - Upcoming tasks with priority management
+    - Real-time alerts and notifications
+  - **Acceptance:** ✅ Dashboard shows comprehensive KPIs and real-time status.
 
 ### 15) Frontend UX flows
-- [ ] HACCP workspace overview (products, plan status, alerts).
-- [ ] Flowchart builder integrated with process steps and hazards overlay.
-- [ ] Hazard analysis table with filters, risk calc, sign-offs.
-- [ ] Decision tree UI for each hazard, with stored step answers and justification.
-- [ ] CCP editor with complex limit builder (numeric, qualitative, multi-parameter), SOP links, unit selection.
-- [ ] Monitoring console: list of due CCP checks, quick entry, equipment selector, batch picker, evidence upload.
-- [ ] Verification console: scheduled tasks, sampling plans, role-restricted actions.
-- [ ] NC/CAPA linking from monitoring entries; batch hold/release view.
-  - Acceptance: UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] HACCP workspace overview (products, plan status, alerts).
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive HACCP workspace with overview dashboard
+  - **Artifacts:** ✅ `HACCPWorkspace` component with key metrics, alerts, recent products, and risk overview
+  - **Features:**
+    - Key metrics display (products, CCPs, compliance rate, overdue monitoring)
+    - Real-time alerts with categorization and action requirements
+    - Recent products with status indicators and quick access
+    - Risk overview with distribution charts
+    - Quick action buttons for common tasks
+    - Compliance progress tracking with visual indicators
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] Flowchart builder integrated with process steps and hazards overlay.
+  - **Status:** ✅ **COMPLETED** - Implemented enhanced flowchart builder with hazards overlay
+  - **Artifacts:** ✅ `EnhancedFlowchartBuilder` component with interactive features
+  - **Features:**
+    - Interactive process flow visualization with hazards overlay
+    - Zoom and pan controls for large flowcharts
+    - Fullscreen mode for detailed viewing
+    - Risk level indicators and CCP markers
+    - Edit mode for process step modifications
+    - Hazard details with type icons and control measures
+    - Comprehensive legend and status indicators
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] Hazard analysis table with filters, risk calc, sign-offs.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive hazard analysis table
+  - **Artifacts:** ✅ `HazardAnalysisTable` component with advanced filtering and risk calculation
+  - **Features:**
+    - Advanced filtering by type, risk level, review status, and CCP designation
+    - Sortable columns with risk score calculations
+    - Risk distribution summary with visual indicators
+    - Review workflow with approval/rejection status
+    - Hazard details with likelihood and severity tracking
+    - Pagination and search functionality
+    - Action buttons for edit, review, and delete operations
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] Decision tree UI for each hazard, with stored step answers and justification.
+  - **Status:** ✅ **COMPLETED** - Previously implemented interactive decision tree
+  - **Artifacts:** ✅ `DecisionTreeDialog` component with Codex Alimentarius compliance
+  - **Features:**
+    - Interactive Q&A flow for hazard analysis
+    - Stored answers and justifications
+    - CCP determination with reasoning
+    - Step-by-step guidance through decision process
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] CCP editor with complex limit builder (numeric, qualitative, multi-parameter), SOP links, unit selection.
+  - **Status:** ✅ **COMPLETED** - Implemented comprehensive CCP editor with advanced features
+  - **Artifacts:** ✅ `CCPEditor` component with complex limit builder
+  - **Features:**
+    - Multi-parameter critical limit builder with various types (numeric, qualitative, time, temperature, pH, pressure, flow rate)
+    - Unit selection with UCUM compliance
+    - Validation evidence management with multiple evidence types
+    - SOP references and equipment linking
+    - Training requirements tracking
+    - Comprehensive monitoring and verification configuration
+    - Accordion-based limit management with detailed views
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] Monitoring console: list of due CCP checks, quick entry, equipment selector, batch picker, evidence upload.
+  - **Status:** ✅ **COMPLETED** - Implemented monitoring console with task management
+  - **Artifacts:** ✅ `MonitoringConsole` component with due task tracking
+  - **Features:**
+    - Due and overdue monitoring task display
+    - Priority-based task organization
+    - Status indicators with visual cues
+    - Quick access to start monitoring
+    - Equipment and batch selection integration
+    - Evidence upload capabilities
+    - Task filtering and search functionality
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] Verification console: scheduled tasks, sampling plans, role-restricted actions.
+  - **Status:** ✅ **COMPLETED** - Integrated with monitoring console and backend services
+  - **Artifacts:** ✅ Enhanced verification workflow with role-based access
+  - **Features:**
+    - Scheduled verification tasks with role restrictions
+    - Sampling plan management
+    - Role-based action enforcement
+    - Verification status tracking
+    - Integration with equipment calibration service
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
+- [x] NC/CAPA linking from monitoring entries; batch hold/release view.
+  - **Status:** ✅ **COMPLETED** - Integrated with backend NC/CAPA system
+  - **Artifacts:** ✅ Enhanced monitoring with automatic NC creation and batch management
+  - **Features:**
+    - Automatic NC creation for out-of-spec monitoring
+    - Batch quarantine and release workflow
+    - CAPA integration for corrective actions
+    - E-signature tracking for approvals
+    - Disposition workflow with multiple options
+  - **Acceptance:** ✅ UX supports end-to-end workflow with minimal clicks and clear statuses.
 
 ### 16) Reporting and exports
 - [ ] HACCP plan report (hazard analysis table, CCP summaries) matching FSIS guidebook structure.

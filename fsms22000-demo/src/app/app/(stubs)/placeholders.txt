@@ -1,3 +1,0 @@
-Additional modules (traceability recall simulation, training matrix, PRP scheduler, CCP monitoring logs) can be added similarly via CRUD pages and custom visualizations.
-
-
