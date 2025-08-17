@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams } from 'react-router-dom';
-import { Box, Typography, Chip, Paper, Divider, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Stack, Autocomplete } from '@mui/material';
+import { Box, Typography, Chip, Paper, Divider, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Stack, Autocomplete, MenuItem } from '@mui/material';
 import FishboneDiagram from '../components/NC/FishboneDiagram';
 import { AppDispatch, RootState } from '../store';
 import { createFiveWhys, createIshikawa, fetchCAPAList, fetchNonConformance, updateNonConformance, fetchRCAList } from '../store/slices/ncSlice';
@@ -26,6 +26,7 @@ const NonConformanceDetail: React.FC = () => {
   const [responsibleOpen, setResponsibleOpen] = useState(false);
   const [responsibleInput, setResponsibleInput] = useState('');
   const [responsibleSelected, setResponsibleSelected] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  const [verifications, setVerifications] = useState<any[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -52,12 +53,39 @@ const NonConformanceDetail: React.FC = () => {
       dispatch(fetchNonConformance(ncId));
       dispatch(fetchCAPAList({ non_conformance_id: ncId, page: 1, size: 10 }));
       dispatch(fetchRCAList(ncId));
+      // Load verifications for this NC
+      (async () => {
+        try {
+          const items = await ncAPI.getCAPAVerifications(ncId);
+          setVerifications(items || []);
+        } catch {
+          setVerifications([]);
+        }
+      })();
     }
   }, [dispatch, ncId]);
 
+  // Allowed next statuses mapping mirrors backend transition map
+  const allowedNextStatusesByCurrent: Record<string, string[]> = {
+    open: ['under_investigation', 'in_progress'],
+    under_investigation: ['root_cause_identified'],
+    root_cause_identified: ['capa_assigned'],
+    capa_assigned: ['in_progress'],
+    in_progress: ['completed'],
+    completed: ['verified'],
+    verified: ['closed'],
+    closed: [],
+  };
+
+  const allowedNext = detail ? (allowedNextStatusesByCurrent[String(detail.status)] || []) : [];
+
   useEffect(() => {
-    if (detail?.status) setStatus(detail.status);
-  }, [detail]);
+    // Reset selection when detail changes
+    setStatus('');
+  }, [detail?.status]);
+
+  const allCapasCompleted = (capaList.items || []).length > 0 && (capaList.items || []).every((c: any) => ['completed', 'verified', 'closed'].includes(String(c.status)));
+  const hasPassedVerification = (verifications || []).some((v: any) => String(v.verification_result) === 'passed');
 
   const submitFiveWhys = async () => {
     try {
@@ -84,8 +112,35 @@ const NonConformanceDetail: React.FC = () => {
   };
 
   const saveStatus = async () => {
-    await dispatch(updateNonConformance({ ncId, payload: { status } }));
-    dispatch(fetchNonConformance(ncId));
+    if (!status) return;
+    try {
+      await dispatch(updateNonConformance({ ncId, payload: { status } })).unwrap();
+      dispatch(fetchNonConformance(ncId));
+      setErrorMsg(undefined);
+      setStatus('');
+    } catch (e: any) {
+      setErrorMsg(e?.message || e?.toString?.() || 'Failed to update status');
+    }
+  };
+
+  const markVerified = async () => {
+    try {
+      await dispatch(updateNonConformance({ ncId, payload: { status: 'verified' } })).unwrap();
+      dispatch(fetchNonConformance(ncId));
+      setErrorMsg(undefined);
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Failed to mark as verified');
+    }
+  };
+
+  const closeNC = async () => {
+    try {
+      await dispatch(updateNonConformance({ ncId, payload: { status: 'closed' } })).unwrap();
+      dispatch(fetchNonConformance(ncId));
+      setErrorMsg(undefined);
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Failed to close non-conformance');
+    }
   };
 
   const submitCapa = async () => {
@@ -128,9 +183,21 @@ const NonConformanceDetail: React.FC = () => {
           {detail.batch_reference && <Chip label={`Batch: ${detail.batch_reference}`} />}
         </Stack>
         <Typography variant="body2" sx={{ mt: 2 }}>{detail.description}</Typography>
-        <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-          <TextField size="small" label="Update Status" value={status} onChange={e => setStatus(e.target.value)} placeholder={String(detail.status)} />
-          <Button variant="outlined" onClick={saveStatus}>Save</Button>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 2 }}>
+          <TextField select size="small" label="Next Status" value={status} onChange={e => setStatus(e.target.value)} sx={{ minWidth: 220 }} disabled={allowedNext.length === 0}>
+            {allowedNext.map(s => (
+              <MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>
+            ))}
+          </TextField>
+          <Button variant="outlined" onClick={saveStatus} disabled={!status}>Save</Button>
+        </Stack>
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle1" gutterBottom>Verification Readiness</Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <Chip color={allCapasCompleted ? 'success' as any : 'default' as any} label={`CAPAs completed: ${allCapasCompleted ? 'Yes' : 'No'}`} />
+          <Chip color={hasPassedVerification ? 'success' as any : 'default' as any} label={`Passed verification: ${hasPassedVerification ? 'Yes' : 'No'}`} />
+          <Button variant="contained" onClick={markVerified} disabled={!allCapasCompleted || !hasPassedVerification || String(detail.status) !== 'completed'}>Mark as Verified</Button>
+          <Button variant="outlined" onClick={closeNC} disabled={String(detail.status) !== 'verified' || !allCapasCompleted || !hasPassedVerification}>Close NC</Button>
         </Stack>
       </Paper>
 
