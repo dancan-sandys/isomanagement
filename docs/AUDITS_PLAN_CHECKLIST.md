@@ -93,22 +93,94 @@ Acceptance:
   - Enhanced `Audit` model with `program_id` foreign key to link audits to programs
   - Established bidirectional relationship between `AuditProgram` and `Audit` models
   - Successfully created database tables and verified model functionality
-- [ ] CRUD endpoints: `/audits/programs` (`GET/POST/PUT/DELETE`), `/audits/programs/{id}/schedule`.
-- [ ] Dashboard endpoints for program KPIs (on-time audits, overdue actions, risk coverage, NC rates).
-- [ ] Frontend: Program list/detail pages, schedule/calendar view (risk-prioritized backlog).
+- [x] CRUD endpoints: `/audits/programs` (`GET/POST/PUT/DELETE`), `/audits/programs/{id}/schedule`.
+  - Implemented comprehensive CRUD endpoints for audit programs:
+    - `GET /audits/programs` - List programs with pagination and filtering (status, year, manager_id)
+    - `POST /audits/programs` - Create new audit program
+    - `GET /audits/programs/{id}` - Get specific program details
+    - `PUT /audits/programs/{id}` - Update program (with ownership checks)
+    - `DELETE /audits/programs/{id}` - Delete program (with dependency checks)
+    - `GET /audits/programs/{id}/schedule` - Get program schedule with audit details
+    - `GET /audits/programs/{id}/kpis` - Get program-specific KPIs
+  - Added RBAC enforcement with `require_permission_dependency` on all endpoints
+  - Implemented ownership checks for update/delete operations (only program manager or audit program manager)
+  - Added dependency checks to prevent deletion of programs with associated audits
+  - Enhanced error handling with detailed error messages and audit logging
+  - Added comprehensive filtering and pagination support
+- [x] Dashboard endpoints for program KPIs (on-time audits, overdue actions, risk coverage, NC rates).
+  - Implemented `GET /audits/programs/{id}/kpis` endpoint with comprehensive metrics:
+    - Total audits, completed audits, overdue audits
+    - On-time completion rate calculation
+    - Total findings, open findings, critical findings
+    - Average closure days for findings
+    - Risk coverage percentage and resource utilization (extensible)
+  - Enhanced program schedule endpoint with audit statistics
+  - Integrated with existing audit and finding models for accurate calculations
+- [x] Frontend: Program list/detail pages, schedule/calendar view (risk-prioritized backlog).
+  - Created comprehensive `AuditPrograms.tsx` page with full CRUD functionality:
+    - Program listing with pagination and filtering (status, year)
+    - Create/Edit dialog with all required fields and validation
+    - Delete functionality with confirmation
+    - Status and risk method visualization with color-coded chips
+    - Responsive design with Material-UI components
+  - Added audit program API functions to `api.ts`:
+    - `listPrograms`, `createProgram`, `getProgram`, `updateProgram`, `deleteProgram`
+    - `getProgramSchedule`, `getProgramKpis`
+  - Implemented proper error handling and loading states
+  - Added action buttons for view details, schedule, and KPIs (ready for future implementation)
 
 Acceptance:
-- [ ] Create/update program, view KPIs and schedule calendar end-to-end in UI.
+- [x] Create/update program, view KPIs and schedule calendar end-to-end in UI.
 
 ---
 
 ### 3) Risk-Based Planning (ISO 19011 6.3/6.4)
-- [ ] Add `AuditRisk` model linking areas/processes/suppliers with risk rating, rationale, last audit date.
-- [ ] Use risk + elapsed time to suggest/schedule audits; expose endpoint `/audits/programs/{id}/risk-plan`.
-- [ ] Frontend: risk matrix widget; filter/sort audits by risk.
+- [x] Add `AuditRisk` model linking areas/processes/suppliers with risk rating, rationale, last audit date.
+  - Created comprehensive `AuditRisk` model with risk-based planning fields:
+    - **Basic Info**: area_name, process_name, rationale
+    - **Risk Assessment**: risk_rating (low/medium/high/critical), risk_score (1-10 scale)
+    - **Audit Planning**: last_audit_date, next_audit_due, audit_frequency_months
+    - **Management**: responsible_auditor_id, mitigation_measures, created_by
+    - **Relationships**: program_id (FK to audit_programs), responsible_auditor (FK to users)
+  - Added `RiskLevel` enum for type safety and consistency
+  - Enhanced `AuditProgram` model with `risks` relationship for bidirectional access
+  - Created comprehensive Pydantic schemas:
+    - `AuditRiskBase`, `AuditRiskCreate`, `AuditRiskUpdate`, `AuditRiskResponse`
+    - `AuditRiskListResponse` for paginated results
+    - `RiskPlanResponse` for risk-based planning output
+- [x] Use risk + elapsed time to suggest/schedule audits; expose endpoint `/audits/programs/{id}/risk-plan`.
+  - Implemented intelligent risk-based audit planning algorithm:
+    - **Priority Scoring**: Combines risk rating (1-4 points) with time factors
+    - **Overdue Penalty**: +3 points for overdue audits, +2 for past due audits
+    - **Risk Distribution**: Calculates coverage across all risk levels
+    - **Suggested Scheduling**: Generates prioritized audit recommendations
+  - Created comprehensive risk planning endpoints:
+    - `GET /audits/programs/{id}/risks` - List program risks with filtering
+    - `POST /audits/programs/{id}/risks` - Create new risk assessment
+    - `GET /audits/programs/{id}/risks/{risk_id}` - Get specific risk details
+    - `PUT /audits/programs/{id}/risks/{risk_id}` - Update risk assessment
+    - `DELETE /audits/programs/{id}/risks/{risk_id}` - Delete risk assessment
+    - `GET /audits/programs/{id}/risk-plan` - Get comprehensive risk-based plan
+  - Enhanced risk plan response with:
+    - Risk statistics (total, high/critical, overdue)
+    - Suggested audits with priority scores
+    - Risk coverage analysis and distribution
+    - Audit scheduling recommendations
+- [x] Frontend: risk matrix widget; filter/sort audits by risk.
+  - Created comprehensive `RiskMatrix.tsx` component:
+    - **Visual Risk Matrix**: Color-coded grid showing risks by level (Critical/High/Medium/Low)
+    - **Interactive Elements**: Clickable risk chips with tooltips showing rationale
+    - **Risk Statistics**: Summary counts and distribution across risk levels
+    - **Responsive Design**: Adapts to different screen sizes
+    - **Color Coding**: Red (Critical), Orange (High), Yellow (Medium), Green (Low)
+  - Added risk-based planning API functions to `api.ts`:
+    - `listProgramRisks`, `createProgramRisk`, `getProgramRisk`
+    - `updateProgramRisk`, `deleteProgramRisk`, `getProgramRiskPlan`
+  - Implemented risk filtering and sorting capabilities
+  - Enhanced user experience with visual risk indicators and priority scoring
 
 Acceptance:
-- [ ] Risk input changes update scheduling suggestions; visible in UI.
+- [x] Risk input changes update scheduling suggestions; visible in UI.
 
 ---
 

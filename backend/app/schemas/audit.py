@@ -71,6 +71,238 @@ class AuditProgramKpisResponse(BaseModel):
     resource_utilization: Optional[float] = None
 
 
+# Audit Risk Schemas
+class AuditRiskBase(BaseModel):
+    area_name: str
+    process_name: Optional[str] = None
+    risk_rating: str = Field(default="medium", pattern="^(low|medium|high|critical)$")
+    risk_score: Optional[int] = Field(None, ge=1, le=10)
+    rationale: str
+    last_audit_date: Optional[datetime] = None
+    next_audit_due: Optional[datetime] = None
+    audit_frequency_months: Optional[int] = Field(None, ge=1, le=60)
+    responsible_auditor_id: Optional[int] = None
+    mitigation_measures: Optional[str] = None
+
+
+class AuditRiskCreate(AuditRiskBase):
+    pass
+
+
+class AuditRiskUpdate(BaseModel):
+    area_name: Optional[str] = None
+    process_name: Optional[str] = None
+    risk_rating: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    risk_score: Optional[int] = Field(None, ge=1, le=10)
+    rationale: Optional[str] = None
+    last_audit_date: Optional[datetime] = None
+    next_audit_due: Optional[datetime] = None
+    audit_frequency_months: Optional[int] = Field(None, ge=1, le=60)
+    responsible_auditor_id: Optional[int] = None
+    mitigation_measures: Optional[str] = None
+
+
+class AuditRiskResponse(AuditRiskBase):
+    id: int
+    program_id: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditRiskListResponse(BaseModel):
+    items: List[AuditRiskResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+class RiskPlanResponse(BaseModel):
+    program_id: int
+    program_name: str
+    risks: List[AuditRiskResponse]
+    suggested_audits: List[Dict[str, Any]]
+    risk_coverage: Dict[str, Any]
+    total_risks: int
+    high_critical_risks: int
+    overdue_audits: int
+
+
+# Team Member Schemas
+class AuditTeamMemberBase(BaseModel):
+    user_id: int
+    role: str = Field(pattern="^(lead_auditor|auditor|observer|technical_expert|trainee)$")
+    competence_tags: Optional[str] = None  # JSON string of competence areas
+    competence_status: str = Field(default="pending_assessment", pattern="^(competent|needs_training|incompetent|pending_assessment)$")
+    independence_confirmed: bool = False
+    impartiality_notes: Optional[str] = None
+
+
+class AuditTeamMemberCreate(AuditTeamMemberBase):
+    pass
+
+
+class AuditTeamMemberUpdate(BaseModel):
+    role: Optional[str] = Field(None, pattern="^(lead_auditor|auditor|observer|technical_expert|trainee)$")
+    competence_tags: Optional[str] = None
+    competence_status: Optional[str] = Field(None, pattern="^(competent|needs_training|incompetent|pending_assessment)$")
+    independence_confirmed: Optional[bool] = None
+    impartiality_notes: Optional[str] = None
+
+
+class AuditTeamMemberResponse(AuditTeamMemberBase):
+    id: int
+    audit_id: int
+    assigned_by: int
+    assigned_at: datetime
+    signed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditTeamMemberListResponse(BaseModel):
+    items: List[AuditTeamMemberResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+# Evidence Schemas
+class AuditEvidenceBase(BaseModel):
+    evidence_type: str = Field(pattern="^(observation|document|interview|test|sampling|measurement|other)$")
+    description: str
+    source: Optional[str] = None
+    location: Optional[str] = None
+    sample_size: Optional[int] = Field(None, ge=1)
+    sample_method: Optional[str] = None
+    reliability_score: Optional[int] = Field(None, ge=1, le=5)
+    notes: Optional[str] = None
+
+
+class AuditEvidenceCreate(AuditEvidenceBase):
+    checklist_item_id: Optional[int] = None
+    finding_id: Optional[int] = None
+
+
+class AuditEvidenceUpdate(BaseModel):
+    evidence_type: Optional[str] = Field(None, pattern="^(observation|document|interview|test|sampling|measurement|other)$")
+    description: Optional[str] = None
+    source: Optional[str] = None
+    location: Optional[str] = None
+    sample_size: Optional[int] = Field(None, ge=1)
+    sample_method: Optional[str] = None
+    reliability_score: Optional[int] = Field(None, ge=1, le=5)
+    notes: Optional[str] = None
+
+
+class AuditEvidenceResponse(AuditEvidenceBase):
+    id: int
+    audit_id: int
+    checklist_item_id: Optional[int] = None
+    finding_id: Optional[int] = None
+    collected_by: int
+    collected_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditEvidenceListResponse(BaseModel):
+    items: List[AuditEvidenceResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+# Activity Log Schemas
+class AuditActivityLogBase(BaseModel):
+    activity_type: str = Field(pattern="^(interview|walkthrough|observation|meeting|document_review|sampling|test|other)$")
+    title: str
+    description: str
+    participants: Optional[str] = None  # JSON string of participant user IDs
+    location: Optional[str] = None
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    outcomes: Optional[str] = None
+    attachments: Optional[str] = None  # JSON string of attachment file paths
+
+
+class AuditActivityLogCreate(AuditActivityLogBase):
+    pass
+
+
+class AuditActivityLogUpdate(BaseModel):
+    activity_type: Optional[str] = Field(None, pattern="^(interview|walkthrough|observation|meeting|document_review|sampling|test|other)$")
+    title: Optional[str] = None
+    description: Optional[str] = None
+    participants: Optional[str] = None
+    location: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    outcomes: Optional[str] = None
+    attachments: Optional[str] = None
+
+
+class AuditActivityLogResponse(AuditActivityLogBase):
+    id: int
+    audit_id: int
+    conducted_by: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditActivityLogListResponse(BaseModel):
+    items: List[AuditActivityLogResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+# Competence Assessment Schemas
+class CompetenceAssessmentRequest(BaseModel):
+    user_id: int
+    required_competencies: List[str]
+    audit_context: Optional[str] = None
+
+
+class CompetenceAssessmentResponse(BaseModel):
+    user_id: int
+    assessment_status: str
+    missing_competencies: List[str]
+    training_recommendations: List[str]
+    competence_score: Optional[float] = None
+    can_assign: bool
+    notes: Optional[str] = None
+
+
+# Impartiality Check Schemas
+class ImpartialityCheckRequest(BaseModel):
+    auditor_id: int
+    auditee_department: str
+    audit_scope: Optional[str] = None
+
+
+class ImpartialityCheckResponse(BaseModel):
+    auditor_id: int
+    is_impartial: bool
+    conflict_type: Optional[str] = None
+    requires_approval: bool
+    approval_level: Optional[str] = None
+    notes: Optional[str] = None
+
+
 # Audit Schemas
 class AuditBase(BaseModel):
   title: str

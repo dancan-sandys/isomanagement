@@ -15,7 +15,9 @@ from app.models.audit_mgmt import (
     AuditChecklistTemplate, AuditChecklistItem, ChecklistResponse,
     AuditFinding, FindingSeverity, FindingStatus,
     AuditAttachment, AuditItemAttachment, AuditFindingAttachment, AuditAuditee,
-	AuditPlan,
+	AuditPlan, AuditProgram, ProgramStatus, RiskMethod, AuditRisk, RiskLevel,
+    AuditTeamMember, TeamMemberRole, CompetenceStatus,
+    AuditEvidence, AuditActivityLog,
 )
 from app.schemas.audit import (
     AuditCreate, AuditUpdate, AuditResponse, AuditListResponse,
@@ -25,6 +27,13 @@ from app.schemas.audit import (
     AuditItemAttachmentResponse, AuditFindingAttachmentResponse,
     AuditAttachmentResponse, AuditStatsResponse, AuditeeResponse,
 	AuditKpisResponse, AuditPlanCreate, AuditPlanResponse,
+    AuditProgramCreate, AuditProgramUpdate, AuditProgramResponse, AuditProgramListResponse, AuditProgramKpisResponse,
+    AuditRiskCreate, AuditRiskUpdate, AuditRiskResponse, AuditRiskListResponse, RiskPlanResponse,
+    AuditTeamMemberCreate, AuditTeamMemberUpdate, AuditTeamMemberResponse, AuditTeamMemberListResponse,
+    AuditEvidenceCreate, AuditEvidenceUpdate, AuditEvidenceResponse, AuditEvidenceListResponse,
+    AuditActivityLogCreate, AuditActivityLogUpdate, AuditActivityLogResponse, AuditActivityLogListResponse,
+    CompetenceAssessmentRequest, CompetenceAssessmentResponse,
+    ImpartialityCheckRequest, ImpartialityCheckResponse,
 )
 from app.utils.audit import audit_event
 from app.schemas.nonconformance import NonConformanceCreate, NonConformanceResponse
@@ -1255,5 +1264,552 @@ async def get_plan(
 	if not plan:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit plan not found")
 	return plan
+
+
+# Audit Program CRUD endpoints
+@router.get("/programs", response_model=AuditProgramListResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def list_audit_programs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    status: Optional[str] = Query(None, description="Filter by program status"),
+    year: Optional[int] = Query(None, description="Filter by year"),
+    manager_id: Optional[int] = Query(None, description="Filter by program manager"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List audit programs with pagination and filtering"""
+    query = db.query(AuditProgram)
+    
+    # Apply filters
+    if status:
+        query = query.filter(AuditProgram.status == status)
+    if year:
+        query = query.filter(AuditProgram.year == year)
+    if manager_id:
+        query = query.filter(AuditProgram.manager_id == manager_id)
+    
+    # Get total count
+    total = query.count()
+    
+    # Apply pagination
+    programs = query.offset(skip).limit(limit).all()
+    
+    # Calculate pagination info
+    pages = (total + limit - 1) // limit
+    page = (skip // limit) + 1
+    
+    return AuditProgramListResponse(
+        items=programs,
+        total=total,
+        page=page,
+        size=limit,
+        pages=pages
+    )
+
+
+@router.post("/programs", response_model=AuditProgramResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
+async def create_audit_program(
+    payload: AuditProgramCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new audit program"""
+    program = AuditProgram(
+        **payload.model_dump(),
+        created_by=current_user.id
+    )
+    db.add(program)
+    db.commit()
+    db.refresh(program)
+    
+    try:
+        audit_event(db, current_user.id, "audit_program_created", "audit_programs", str(program.id), payload.model_dump())
+    except Exception:
+        pass
+    
+    return program
+
+
+@router.get("/programs/{program_id}", response_model=AuditProgramResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_audit_program(
+    program_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific audit program by ID"""
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    return program
+
+
+@router.put("/programs/{program_id}", response_model=AuditProgramResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def update_audit_program(
+    program_id: int,
+    payload: AuditProgramUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update an audit program"""
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    # Check if user is program manager or has manage_program permission
+    if program.manager_id != current_user.id and not check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the program manager or audit program manager can update this program"
+        )
+    
+    # Update fields
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(program, field, value)
+    
+    program.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(program)
+    
+    try:
+        audit_event(db, current_user.id, "audit_program_updated", "audit_programs", str(program_id), payload.model_dump(exclude_unset=True))
+    except Exception:
+        pass
+    
+    return program
+
+
+@router.delete("/programs/{program_id}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
+async def delete_audit_program(
+    program_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete an audit program"""
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    # Check if user is program manager or has manage_program permission
+    if program.manager_id != current_user.id and not check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the program manager or audit program manager can delete this program"
+        )
+    
+    # Check if program has associated audits
+    audit_count = db.query(AuditModel).filter(AuditModel.program_id == program_id).count()
+    if audit_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete program with {audit_count} associated audits. Remove or reassign audits first."
+        )
+    
+    db.delete(program)
+    db.commit()
+    
+    try:
+        audit_event(db, current_user.id, "audit_program_deleted", "audit_programs", str(program_id), {"program_name": program.name})
+    except Exception:
+        pass
+    
+    return {"message": "Audit program deleted successfully"}
+
+
+@router.get("/programs/{program_id}/schedule", dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_program_schedule(
+    program_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get the schedule for a specific audit program"""
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    # Get all audits in this program
+    audits = db.query(AuditModel).filter(AuditModel.program_id == program_id).all()
+    
+    # Get program schedule if available
+    schedule = program.schedule or {}
+    
+    return {
+        "program_id": program_id,
+        "program_name": program.name,
+        "schedule": schedule,
+        "audits": [
+            {
+                "id": audit.id,
+                "title": audit.title,
+                "start_date": audit.start_date,
+                "end_date": audit.end_date,
+                "status": audit.status,
+                "auditor_id": audit.auditor_id,
+                "lead_auditor_id": audit.lead_auditor_id
+            }
+            for audit in audits
+        ],
+        "total_audits": len(audits),
+        "completed_audits": len([a for a in audits if a.status == AuditStatus.COMPLETED]),
+        "planned_audits": len([a for a in audits if a.status == AuditStatus.PLANNED]),
+        "in_progress_audits": len([a for a in audits if a.status == AuditStatus.IN_PROGRESS])
+    }
+
+
+@router.get("/programs/{program_id}/kpis", response_model=AuditProgramKpisResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_program_kpis(
+    program_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get KPIs for a specific audit program"""
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    # Get all audits in this program
+    audits = db.query(AuditModel).filter(AuditModel.program_id == program_id).all()
+    
+    # Calculate KPIs
+    total_audits = len(audits)
+    completed_audits = len([a for a in audits if a.status == AuditStatus.COMPLETED])
+    overdue_audits = len([a for a in audits if a.end_date and a.end_date < datetime.utcnow() and a.status != AuditStatus.COMPLETED])
+    
+    # Calculate on-time rate
+    on_time_rate = None
+    if total_audits > 0:
+        on_time_rate = completed_audits / total_audits
+    
+    # Get all findings from audits in this program
+    audit_ids = [a.id for a in audits]
+    findings = db.query(AuditFinding).filter(AuditFinding.audit_id.in_(audit_ids)).all()
+    
+    total_findings = len(findings)
+    open_findings = len([f for f in findings if f.status != FindingStatus.CLOSED])
+    critical_findings = len([f for f in findings if f.severity == FindingSeverity.CRITICAL])
+    
+    # Calculate average closure days
+    closed_findings = [f for f in findings if f.closed_at and f.created_at]
+    average_closure_days = None
+    if closed_findings:
+        total_days = sum((f.closed_at - f.created_at).days for f in closed_findings)
+        average_closure_days = total_days / len(closed_findings)
+    
+    return AuditProgramKpisResponse(
+        program_id=program_id,
+        program_name=program.name,
+        total_audits=total_audits,
+        completed_audits=completed_audits,
+        overdue_audits=overdue_audits,
+        on_time_rate=on_time_rate,
+        total_findings=total_findings,
+        open_findings=open_findings,
+        critical_findings=critical_findings,
+        average_closure_days=average_closure_days
+    )
+
+
+# Risk-Based Planning endpoints
+@router.get("/programs/{program_id}/risks", response_model=AuditRiskListResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def list_program_risks(
+    program_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    risk_rating: Optional[str] = Query(None, description="Filter by risk rating"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List risks for a specific audit program"""
+    # Verify program exists
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    query = db.query(AuditRisk).filter(AuditRisk.program_id == program_id)
+    
+    # Apply filters
+    if risk_rating:
+        query = query.filter(AuditRisk.risk_rating == risk_rating)
+    
+    # Get total count
+    total = query.count()
+    
+    # Apply pagination
+    risks = query.offset(skip).limit(limit).all()
+    
+    # Calculate pagination info
+    pages = (total + limit - 1) // limit
+    page = (skip // limit) + 1
+    
+    return AuditRiskListResponse(
+        items=risks,
+        total=total,
+        page=page,
+        size=limit,
+        pages=pages
+    )
+
+
+@router.post("/programs/{program_id}/risks", response_model=AuditRiskResponse, dependencies=[Depends(require_permission_dependency("audits:create"))])
+async def create_program_risk(
+    program_id: int,
+    payload: AuditRiskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new risk for an audit program"""
+    # Verify program exists
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    risk = AuditRisk(
+        **payload.model_dump(),
+        program_id=program_id,
+        created_by=current_user.id
+    )
+    db.add(risk)
+    db.commit()
+    db.refresh(risk)
+    
+    try:
+        audit_event(db, current_user.id, "audit_risk_created", "audit_risks", str(risk.id), payload.model_dump())
+    except Exception:
+        pass
+    
+    return risk
+
+
+@router.get("/programs/{program_id}/risks/{risk_id}", response_model=AuditRiskResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_program_risk(
+    program_id: int,
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific risk for an audit program"""
+    risk = db.query(AuditRisk).filter(
+        AuditRisk.id == risk_id,
+        AuditRisk.program_id == program_id
+    ).first()
+    
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    
+    return risk
+
+
+@router.put("/programs/{program_id}/risks/{risk_id}", response_model=AuditRiskResponse, dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def update_program_risk(
+    program_id: int,
+    risk_id: int,
+    payload: AuditRiskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a risk for an audit program"""
+    risk = db.query(AuditRisk).filter(
+        AuditRisk.id == risk_id,
+        AuditRisk.program_id == program_id
+    ).first()
+    
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    
+    # Update fields
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(risk, field, value)
+    
+    risk.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(risk)
+    
+    try:
+        audit_event(db, current_user.id, "audit_risk_updated", "audit_risks", str(risk_id), payload.model_dump(exclude_unset=True))
+    except Exception:
+        pass
+    
+    return risk
+
+
+@router.delete("/programs/{program_id}/risks/{risk_id}", dependencies=[Depends(require_permission_dependency("audits:delete"))])
+async def delete_program_risk(
+    program_id: int,
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a risk from an audit program"""
+    risk = db.query(AuditRisk).filter(
+        AuditRisk.id == risk_id,
+        AuditRisk.program_id == program_id
+    ).first()
+    
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    
+    db.delete(risk)
+    db.commit()
+    
+    try:
+        audit_event(db, current_user.id, "audit_risk_deleted", "audit_risks", str(risk_id), {"area_name": risk.area_name})
+    except Exception:
+        pass
+    
+    return {"message": "Risk deleted successfully"}
+
+
+@router.get("/programs/{program_id}/risk-plan", response_model=RiskPlanResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_program_risk_plan(
+    program_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get risk-based audit plan for a program"""
+    program = db.query(AuditProgram).get(program_id)
+    if not program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit program not found")
+    
+    # Get all risks for this program
+    risks = db.query(AuditRisk).filter(AuditRisk.program_id == program_id).all()
+    
+    # Calculate risk statistics
+    total_risks = len(risks)
+    high_critical_risks = len([r for r in risks if r.risk_rating in [RiskLevel.HIGH, RiskLevel.CRITICAL]])
+    overdue_audits = len([r for r in risks if r.next_audit_due and r.next_audit_due < datetime.utcnow()])
+    
+    # Generate suggested audits based on risk and elapsed time
+    suggested_audits = []
+    for risk in risks:
+        # Calculate priority score based on risk rating and time since last audit
+        priority_score = 0
+        
+        # Risk rating score
+        risk_scores = {RiskLevel.LOW: 1, RiskLevel.MEDIUM: 2, RiskLevel.HIGH: 3, RiskLevel.CRITICAL: 4}
+        priority_score += risk_scores.get(risk.risk_rating, 2)
+        
+        # Time factor (if overdue, increase priority)
+        if risk.next_audit_due and risk.next_audit_due < datetime.utcnow():
+            priority_score += 3  # High priority for overdue audits
+        elif risk.last_audit_date:
+            # Calculate months since last audit
+            months_since = (datetime.utcnow() - risk.last_audit_date).days / 30
+            if risk.audit_frequency_months and months_since > risk.audit_frequency_months:
+                priority_score += 2  # Medium priority for past due audits
+        
+        suggested_audits.append({
+            "risk_id": risk.id,
+            "area_name": risk.area_name,
+            "process_name": risk.process_name,
+            "risk_rating": risk.risk_rating,
+            "priority_score": priority_score,
+            "last_audit_date": risk.last_audit_date,
+            "next_audit_due": risk.next_audit_due,
+            "suggested_audit_date": risk.next_audit_due or datetime.utcnow(),
+            "responsible_auditor_id": risk.responsible_auditor_id,
+            "rationale": risk.rationale
+        })
+    
+    # Sort by priority score (highest first)
+    suggested_audits.sort(key=lambda x: x["priority_score"], reverse=True)
+    
+    # Calculate risk coverage
+    risk_coverage = {
+        "total_areas": total_risks,
+        "high_critical_coverage": high_critical_risks,
+        "overdue_coverage": overdue_audits,
+        "risk_distribution": {
+            "low": len([r for r in risks if r.risk_rating == RiskLevel.LOW]),
+            "medium": len([r for r in risks if r.risk_rating == RiskLevel.MEDIUM]),
+            "high": len([r for r in risks if r.risk_rating == RiskLevel.HIGH]),
+            "critical": len([r for r in risks if r.risk_rating == RiskLevel.CRITICAL])
+        }
+    }
+    
+    return RiskPlanResponse(
+        program_id=program_id,
+        program_name=program.name,
+        risks=risks,
+        suggested_audits=suggested_audits,
+        risk_coverage=risk_coverage,
+        total_risks=total_risks,
+        high_critical_risks=high_critical_risks,
+        overdue_audits=overdue_audits
+    )
+
+
+def assess_competence(user_id: int, required_competencies: List[str], db: Session) -> CompetenceAssessmentResponse:
+    """
+    Assess user competence for audit assignment
+    This is a simplified implementation - in production, this would integrate with the Training module
+    """
+    # TODO: Integrate with actual Training module to check completed trainings
+    # For now, we'll simulate competence assessment
+    
+    # Simulate user having some competencies
+    user_competencies = ["HACCP", "ISO 22000", "Food Safety"]  # This would come from Training module
+    
+    missing_competencies = [comp for comp in required_competencies if comp not in user_competencies]
+    training_recommendations = missing_competencies.copy()
+    
+    # Calculate competence score (0-100)
+    competence_score = max(0, 100 - (len(missing_competencies) * 25))
+    
+    # Determine if user can be assigned
+    can_assign = len(missing_competencies) <= 1  # Allow assignment if missing 1 or fewer competencies
+    
+    assessment_status = "competent" if can_assign else "needs_training"
+    
+    return CompetenceAssessmentResponse(
+        user_id=user_id,
+        assessment_status=assessment_status,
+        missing_competencies=missing_competencies,
+        training_recommendations=training_recommendations,
+        competence_score=competence_score,
+        can_assign=can_assign,
+        notes=f"User has {len(user_competencies)} competencies, needs {len(missing_competencies)} more"
+    )
+
+
+def check_impartiality(auditor_id: int, auditee_department: str, db: Session) -> ImpartialityCheckResponse:
+    """
+    Check auditor impartiality for audit assignment
+    """
+    # Get auditor's department from user record
+    auditor = db.query(User).get(auditor_id)
+    if not auditor:
+        return ImpartialityCheckResponse(
+            auditor_id=auditor_id,
+            is_impartial=False,
+            conflict_type="auditor_not_found",
+            requires_approval=True,
+            approval_level="management",
+            notes="Auditor not found in system"
+        )
+    
+    auditor_department = getattr(auditor, 'department', None)
+    
+    # Check for department conflict
+    if auditor_department and auditor_department.lower() == auditee_department.lower():
+        return ImpartialityCheckResponse(
+            auditor_id=auditor_id,
+            is_impartial=False,
+            conflict_type="department_conflict",
+            requires_approval=True,
+            approval_level="management",
+            notes=f"Auditor and auditee are in same department: {auditor_department}"
+        )
+    
+    # Check for recent involvement (simplified - would check audit history)
+    # TODO: Check if auditor was recently involved with auditee department
+    
+    return ImpartialityCheckResponse(
+        auditor_id=auditor_id,
+        is_impartial=True,
+        conflict_type=None,
+        requires_approval=False,
+        approval_level=None,
+        notes="No conflicts detected"
+    )
 
 

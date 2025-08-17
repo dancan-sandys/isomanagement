@@ -1778,6 +1778,96 @@ export const auditsAPI = {
     const response: AxiosResponse = await api.post(`/audits/${auditId}/attachments`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
     return response.data;
   },
+
+  // Audit Programs
+  listPrograms: async (params?: { 
+    status?: string; 
+    year?: number; 
+    manager_id?: number; 
+    page?: number; 
+    size?: number 
+  }) => {
+    const response: AxiosResponse = await api.get('/audits/programs', { params });
+    return response.data;
+  },
+  createProgram: async (payload: {
+    name: string;
+    description?: string;
+    objectives: string;
+    scope: string;
+    year: number;
+    period?: string;
+    manager_id: number;
+    risk_method?: string;
+    resources?: string;
+    schedule?: any;
+    kpis?: any;
+    status?: string;
+  }) => {
+    const response: AxiosResponse = await api.post('/audits/programs', payload);
+    return response.data;
+  },
+  getProgram: async (programId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/programs/${programId}`);
+    return response.data;
+  },
+  updateProgram: async (programId: number, payload: any) => {
+    const response: AxiosResponse = await api.put(`/audits/programs/${programId}`, payload);
+    return response.data;
+  },
+  deleteProgram: async (programId: number) => {
+    const response: AxiosResponse = await api.delete(`/audits/programs/${programId}`);
+    return response.data;
+  },
+  getProgramSchedule: async (programId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/programs/${programId}/schedule`);
+    return response.data;
+  },
+  getProgramKpis: async (programId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/programs/${programId}/kpis`);
+    return response.data;
+  },
+
+  // Risk-Based Planning
+  listProgramRisks: async (programId: number, params?: { 
+    risk_rating?: string; 
+    page?: number; 
+    size?: number 
+  }) => {
+    const response: AxiosResponse = await api.get(`/audits/programs/${programId}/risks`, { params });
+    return response.data;
+  },
+  createProgramRisk: async (programId: number, payload: {
+    area_name: string;
+    process_name?: string;
+    risk_rating?: string;
+    risk_score?: number;
+    rationale: string;
+    last_audit_date?: string;
+    next_audit_due?: string;
+    audit_frequency_months?: number;
+    responsible_auditor_id?: number;
+    mitigation_measures?: string;
+  }) => {
+    const response: AxiosResponse = await api.post(`/audits/programs/${programId}/risks`, payload);
+    return response.data;
+  },
+  getProgramRisk: async (programId: number, riskId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/programs/${programId}/risks/${riskId}`);
+    return response.data;
+  },
+  updateProgramRisk: async (programId: number, riskId: number, payload: any) => {
+    const response: AxiosResponse = await api.put(`/audits/programs/${programId}/risks/${riskId}`, payload);
+    return response.data;
+  },
+  deleteProgramRisk: async (programId: number, riskId: number) => {
+    const response: AxiosResponse = await api.delete(`/audits/programs/${programId}/risks/${riskId}`);
+    return response.data;
+  },
+  getProgramRiskPlan: async (programId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/programs/${programId}/risk-plan`);
+    return response.data;
+  },
 };
 
 // Training API

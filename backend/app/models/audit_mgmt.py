@@ -67,6 +67,7 @@ class AuditProgram(Base):
     manager = relationship("User", foreign_keys=[manager_id])
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
     risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
+    risks = relationship("AuditRisk", back_populates="program", cascade="all, delete-orphan")
 
 
 class Audit(Base):
@@ -112,6 +113,9 @@ class Audit(Base):
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
     risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
     risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
+    team_members = relationship("AuditTeamMember", back_populates="audit", cascade="all, delete-orphan")
+    evidence = relationship("AuditEvidence", back_populates="audit", cascade="all, delete-orphan")
+    activity_logs = relationship("AuditActivityLog", back_populates="audit", cascade="all, delete-orphan")
 
 
 class AuditChecklistTemplate(Base):
@@ -153,6 +157,7 @@ class AuditChecklistItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     audit = relationship("Audit", back_populates="checklist_items")
+    evidence = relationship("AuditEvidence", back_populates="checklist_item", cascade="all, delete-orphan")
 
 
 class FindingSeverity(str, enum.Enum):
@@ -210,6 +215,7 @@ class AuditFinding(Base):
     risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
     risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_finding_id", cascade="all, delete-orphan")
     prp_integrations = relationship("PRPAuditIntegration", foreign_keys="PRPAuditIntegration.audit_finding_id", cascade="all, delete-orphan")
+    evidence = relationship("AuditEvidence", back_populates="finding", cascade="all, delete-orphan")
 
 
 class AuditAttachment(Base):
@@ -272,4 +278,120 @@ class AuditPlan(Base):
     approved_by = Column(Integer, nullable=True)
     approved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RiskLevel(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class AuditRisk(Base):
+    __tablename__ = "audit_risks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    program_id = Column(Integer, ForeignKey("audit_programs.id", ondelete="CASCADE"), nullable=False)
+    area_name = Column(String(255), nullable=False)  # e.g., "Production Line A", "Supplier X"
+    process_name = Column(String(255), nullable=True)  # e.g., "HACCP", "Document Control"
+    risk_rating = Column(Enum(RiskLevel), nullable=False, default=RiskLevel.MEDIUM)
+    risk_score = Column(Integer, nullable=True)  # 1-10 scale for quantitative assessment
+    rationale = Column(Text, nullable=False)  # Why this area/process is risky
+    last_audit_date = Column(DateTime, nullable=True)
+    next_audit_due = Column(DateTime, nullable=True)
+    audit_frequency_months = Column(Integer, nullable=True)  # How often to audit this area
+    responsible_auditor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    mitigation_measures = Column(Text, nullable=True)
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    program = relationship("AuditProgram", back_populates="risks")
+    responsible_auditor = relationship("User", foreign_keys=[responsible_auditor_id])
+
+
+class TeamMemberRole(str, enum.Enum):
+    LEAD_AUDITOR = "lead_auditor"
+    AUDITOR = "auditor"
+    OBSERVER = "observer"
+    TECHNICAL_EXPERT = "technical_expert"
+    TRAINEE = "trainee"
+
+
+class CompetenceStatus(str, enum.Enum):
+    COMPETENT = "competent"
+    NEEDS_TRAINING = "needs_training"
+    INCOMPETENT = "incompetent"
+    PENDING_ASSESSMENT = "pending_assessment"
+
+
+class AuditTeamMember(Base):
+    __tablename__ = "audit_team_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(Enum(TeamMemberRole), nullable=False, default=TeamMemberRole.AUDITOR)
+    competence_tags = Column(Text)  # JSON array of competence areas e.g., ["HACCP", "ISO 22000", "Food Safety"]
+    competence_status = Column(Enum(CompetenceStatus), nullable=False, default=CompetenceStatus.PENDING_ASSESSMENT)
+    independence_confirmed = Column(Boolean, default=False)  # Impartiality check
+    impartiality_notes = Column(Text)  # Notes about impartiality assessment
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    signed_at = Column(DateTime, nullable=True)  # When team member accepted assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    audit = relationship("Audit", back_populates="team_members")
+    user = relationship("User", foreign_keys=[user_id])
+    assigned_by_user = relationship("User", foreign_keys=[assigned_by])
+
+
+class AuditEvidence(Base):
+    __tablename__ = "audit_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False)
+    checklist_item_id = Column(Integer, ForeignKey("audit_checklist_items.id"), nullable=True)
+    finding_id = Column(Integer, ForeignKey("audit_findings.id"), nullable=True)
+    evidence_type = Column(String(50), nullable=False)  # observation, document, interview, test, etc.
+    description = Column(Text, nullable=False)
+    source = Column(String(255))  # Who/what provided the evidence
+    collected_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    collected_at = Column(DateTime, default=datetime.utcnow)
+    location = Column(String(255))  # Where evidence was collected
+    sample_size = Column(Integer, nullable=True)  # For sampling evidence
+    sample_method = Column(String(100), nullable=True)  # Sampling methodology
+    reliability_score = Column(Integer, nullable=True)  # 1-5 scale for evidence reliability
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    audit = relationship("Audit", back_populates="evidence")
+    checklist_item = relationship("AuditChecklistItem", back_populates="evidence")
+    finding = relationship("AuditFinding", back_populates="evidence")
+    collector = relationship("User", foreign_keys=[collected_by])
+
+
+class AuditActivityLog(Base):
+    __tablename__ = "audit_activity_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False)
+    activity_type = Column(String(50), nullable=False)  # interview, walkthrough, observation, meeting, etc.
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    participants = Column(Text)  # JSON array of participant user IDs
+    location = Column(String(255))
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=True)
+    conducted_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    outcomes = Column(Text)  # Key findings or outcomes from the activity
+    attachments = Column(Text)  # JSON array of attachment file paths
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    audit = relationship("Audit", back_populates="activity_logs")
+    conductor = relationship("User", foreign_keys=[conducted_by])
 
