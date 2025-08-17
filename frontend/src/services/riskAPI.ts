@@ -17,7 +17,63 @@ export interface RiskListParams {
   date_to?: string;
 }
 
+// ISO 31000:2018 Risk Management Framework Interface
+export interface RiskFramework {
+  id?: number;
+  policy_statement: string;
+  risk_appetite_statement: string;
+  risk_tolerance_levels: Record<string, any>;
+  risk_criteria: Record<string, any>;
+  risk_assessment_methodology: string;
+  risk_treatment_strategies: Record<string, any>;
+  monitoring_review_frequency: string;
+  communication_plan: string;
+  review_cycle: string;
+  next_review_date?: string;
+  approved_by?: number;
+  approved_at?: string;
+}
+
+// ISO 31000:2018 Risk Context Interface
+export interface RiskContext {
+  id?: number;
+  organizational_context: string;
+  external_context: string;
+  internal_context: string;
+  risk_management_context: string;
+  stakeholder_analysis: Record<string, any>;
+  risk_criteria: Record<string, any>;
+  review_frequency: string;
+  last_review_date?: string;
+  next_review_date?: string;
+}
+
+// Risk Assessment Data Interface
+export interface RiskAssessmentData {
+  risk_assessment_method: string;
+  severity?: string;
+  likelihood?: string;
+  detectability?: string;
+  impact_score?: number;
+  risk_treatment_strategy?: string;
+  risk_treatment_plan?: string;
+  monitoring_frequency?: string;
+  review_frequency?: string;
+}
+
+// Risk Treatment Data Interface
+export interface RiskTreatmentData {
+  risk_treatment_strategy: 'avoid' | 'transfer' | 'mitigate' | 'accept';
+  risk_treatment_plan: string;
+  risk_treatment_cost?: number;
+  risk_treatment_benefit?: number;
+  risk_treatment_timeline?: string;
+}
+
 export const riskAPI = {
+  // ============================================================================
+  // EXISTING BASIC RISK OPERATIONS
+  // ============================================================================
   list: async (params?: RiskListParams) => {
     const response: AxiosResponse = await api.get('/risk', { params });
     return response.data;
@@ -46,6 +102,148 @@ export const riskAPI = {
     const response: AxiosResponse = await api.get('/risk/stats/overview');
     return response.data;
   },
+
+  // ============================================================================
+  // ISO 31000:2018 RISK FRAMEWORK OPERATIONS
+  // ============================================================================
+  
+  // Risk Management Framework
+  getFramework: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/framework');
+    return response.data;
+  },
+  createFramework: async (frameworkData: Partial<RiskFramework>) => {
+    const response: AxiosResponse = await api.post('/risk-framework/framework', frameworkData);
+    return response.data;
+  },
+  getRiskAppetite: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/framework/appetite');
+    return response.data;
+  },
+  getRiskMatrix: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/framework/matrix');
+    return response.data;
+  },
+
+  // Risk Context Management
+  getContext: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/context');
+    return response.data;
+  },
+  createContext: async (contextData: Partial<RiskContext>) => {
+    const response: AxiosResponse = await api.post('/risk-framework/context', contextData);
+    return response.data;
+  },
+
+  // ============================================================================
+  // ISO 31000:2018 RISK ASSESSMENT & TREATMENT
+  // ============================================================================
+  
+  // Risk Assessment
+  assessRisk: async (riskId: number, assessmentData: RiskAssessmentData) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/assess`, assessmentData);
+    return response.data;
+  },
+  
+  // Risk Treatment
+  planTreatment: async (riskId: number, treatmentData: RiskTreatmentData) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/treat`, treatmentData);
+    return response.data;
+  },
+  approveTreatment: async (riskId: number, approvalNotes?: string) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/treat/approve`, {
+      approval_notes: approvalNotes
+    });
+    return response.data;
+  },
+  
+  // Monitoring & Review
+  scheduleMonitoring: async (riskId: number, monitoringData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/monitor`, monitoringData);
+    return response.data;
+  },
+  scheduleReview: async (riskId: number, reviewData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/review`, reviewData);
+    return response.data;
+  },
+  conductReview: async (riskId: number, reviewData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/review/conduct`, reviewData);
+    return response.data;
+  },
+
+  // ============================================================================
+  // ISO 22000:2018 FSMS INTEGRATION
+  // ============================================================================
+  
+  // FSMS Integration
+  integrateWithFSMS: async (riskId: number, fsmsData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/fsms/integrate`, fsmsData);
+    return response.data;
+  },
+  getFSMSIntegrations: async (riskId: number) => {
+    const response: AxiosResponse = await api.get(`/risk-framework/${riskId}/fsms/integrations`);
+    return response.data;
+  },
+
+  // ============================================================================
+  // ADVANCED RISK MANAGEMENT FEATURES
+  // ============================================================================
+  
+  // Risk Correlations
+  correlateRisks: async (riskId: number, correlationData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/correlate`, correlationData);
+    return response.data;
+  },
+  getCorrelations: async (riskId: number) => {
+    const response: AxiosResponse = await api.get(`/risk-framework/${riskId}/correlations`);
+    return response.data;
+  },
+  
+  // Resource Allocation
+  allocateResources: async (riskId: number, allocationData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/resources/allocate`, allocationData);
+    return response.data;
+  },
+  approveResourceAllocation: async (allocationId: number) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/resources/${allocationId}/approve`);
+    return response.data;
+  },
+  
+  // Risk Communication
+  createCommunication: async (riskId: number, communicationData: any) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/communicate`, communicationData);
+    return response.data;
+  },
+  sendCommunication: async (communicationId: number) => {
+    const response: AxiosResponse = await api.post(`/risk-framework/communications/${communicationId}/send`);
+    return response.data;
+  },
+  
+  // KPI Management
+  createKPI: async (kpiData: any) => {
+    const response: AxiosResponse = await api.post('/risk-framework/kpis', kpiData);
+    return response.data;
+  },
+  updateKPIValue: async (kpiId: number, value: number) => {
+    const response: AxiosResponse = await api.put(`/risk-framework/kpis/${kpiId}/value`, { value });
+    return response.data;
+  },
+  getKPIs: async (category?: string) => {
+    const response: AxiosResponse = await api.get('/risk-framework/kpis', { 
+      params: category ? { category } : {} 
+    });
+    return response.data;
+  },
+  
+  // Dashboard & Analytics
+  getDashboard: async () => {
+    const response: AxiosResponse = await api.get('/risk-framework/dashboard');
+    return response.data;
+  },
+
+  // ============================================================================
+  // EXISTING ACTION OPERATIONS (Enhanced)
+  // ============================================================================
   addAction: async (id: number, payload: { title: string; description?: string; assigned_to?: number; due_date?: string }) => {
     const response: AxiosResponse = await api.post(`/risk/${id}/actions`, payload);
     return response.data;
