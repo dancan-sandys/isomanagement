@@ -278,6 +278,11 @@ const SupplierList: React.FC<SupplierListProps> = ({
     return status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
   };
 
+  // Utility function to safely convert to uppercase
+  const safeToUpperCase = (value: string | null | undefined, fallback: string = 'N/A') => {
+    return value?.toUpperCase() || fallback;
+  };
+
   const renderTable = () => (
     <TableContainer component={Paper} elevation={2}>
       <Table>
@@ -351,7 +356,7 @@ const SupplierList: React.FC<SupplierListProps> = ({
                 </TableCell>
                 <TableCell>
                   <Chip
-                    label={supplier.risk_level.toUpperCase()}
+                    label={supplier.risk_level?.toUpperCase() || 'N/A'}
                     color={getRiskLevelColor(supplier.risk_level) as any}
                     size="small"
                     variant="outlined"
@@ -493,7 +498,7 @@ const SupplierList: React.FC<SupplierListProps> = ({
                     label={getStatusDisplayName(supplier.status)}
                   />
                   <Chip
-                    label={supplier.risk_level.toUpperCase()}
+                    label={supplier.risk_level?.toUpperCase() || 'N/A'}
                     color={getRiskLevelColor(supplier.risk_level) as any}
                     size="small"
                     variant="outlined"

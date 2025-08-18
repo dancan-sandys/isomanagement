@@ -342,7 +342,7 @@ const DocumentAnalyticsDialog: React.FC<DocumentAnalyticsDialogProps> = ({
                     <Category color="primary" />
                   </ListItemIcon>
                   <ListItemText
-                    primary={category.toUpperCase()}
+                    primary={category?.toUpperCase() || 'N/A'}
                     secondary={`${count} documents`}
                   />
                   <Typography variant="body2" fontWeight={600}>

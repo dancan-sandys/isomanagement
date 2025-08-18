@@ -342,7 +342,7 @@ const DocumentViewDialog: React.FC<DocumentViewDialogProps> = ({
                   </ListItemIcon>
                   <ListItemText
                     primary="Category"
-                    secondary={document.category.toUpperCase()}
+                    secondary={document.category?.toUpperCase() || 'N/A'}
                   />
                 </ListItem>
                 <ListItem>

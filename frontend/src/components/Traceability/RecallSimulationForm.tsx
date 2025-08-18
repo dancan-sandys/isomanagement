@@ -297,7 +297,7 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
               />
               <Box display="flex" justifyContent="center" mt={1}>
                 <Chip 
-                  label={simulationForm.risk_level.toUpperCase()} 
+                                      label={simulationForm.risk_level?.toUpperCase() || 'N/A'} 
                   color={getRiskLevelColor(simulationForm.risk_level)}
                   icon={<RiskIcon />}
                 />
@@ -364,7 +364,7 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
                     </Typography>
                     <Box mb={2}>
                       <Chip 
-                        label={simulation.results.risk_assessment.risk_level.toUpperCase()} 
+                        label={simulation.results.risk_assessment.risk_level?.toUpperCase() || 'N/A'} 
                         color={getRiskLevelColor(simulation.results.risk_assessment.risk_level)}
                         size="medium"
                       />

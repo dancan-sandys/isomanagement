@@ -233,7 +233,7 @@ const QuickSearch: React.FC<QuickSearchProps> = ({
                             {result.title}
                           </Typography>
                           <Chip
-                            label={result.type.toUpperCase()}
+                            label={result.type?.toUpperCase() || 'N/A'}
                             size="small"
                             color={getTypeColor(result.type)}
                             sx={{ fontSize: '0.625rem', height: 20 }}

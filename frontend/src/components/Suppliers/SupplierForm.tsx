@@ -796,7 +796,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
                 <Box display="flex" justifyContent="space-between">
                   <Typography variant="body2" color="text.secondary">Risk Level:</Typography>
                   <Chip
-                    label={formik.values.risk_level.toUpperCase()}
+                    label={formik.values.risk_level?.toUpperCase() || 'N/A'}
                     color={getRiskLevelColor(formik.values.risk_level) as any}
                     size="small"
                   />
