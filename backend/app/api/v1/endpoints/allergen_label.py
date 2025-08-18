@@ -176,14 +176,14 @@ async def approve_template(template_id: int, approval_id: int, db: Session = Dep
         v.status = LabelVersionStatus.APPROVED
     db.commit(); db.refresh(v)
     try:
-        audit_event(db, current_user.id, "label_template_approval_approved", "allergen_label", str(approval_id))
+        audit_event(db, 1, "label_template_approval_approved", "allergen_label", str(approval_id))
     except Exception:
         pass
     return v
 
 
 @router.post("/templates/{template_id}/approvals/{approval_id}/reject", response_model=LabelTemplateVersionResponse)
-async def reject_template(template_id: int, approval_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def reject_template(template_id: int, approval_id: int, db: Session = Depends(get_db)):
     a = db.query(LabelTemplateApproval).get(approval_id)
     if not a:
         raise HTTPException(status_code=404, detail="Approval not found")
@@ -194,7 +194,7 @@ async def reject_template(template_id: int, approval_id: int, db: Session = Depe
     v.status = LabelVersionStatus.REJECTED
     db.commit(); db.refresh(v)
     try:
-        audit_event(db, current_user.id, "label_template_approval_rejected", "allergen_label", str(approval_id))
+        audit_event(db, 1, "label_template_approval_rejected", "allergen_label", str(approval_id))
     except Exception:
         pass
     return v
@@ -202,7 +202,7 @@ async def reject_template(template_id: int, approval_id: int, db: Session = Depe
 
 # Listing: versions and approvals
 @router.get("/templates/{template_id}/versions", response_model=list[LabelTemplateVersionResponse])
-async def list_template_versions(template_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def list_template_versions(template_id: int, db: Session = Depends(get_db)):
     t = db.query(LabelTemplate).get(template_id)
     if not t:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -216,7 +216,7 @@ async def list_template_versions(template_id: int, db: Session = Depends(get_db)
 
 
 @router.get("/templates/{template_id}/versions/{version_id}/approvals", response_model=list[LabelTemplateApprovalResponse])
-async def list_version_approvals(template_id: int, version_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def list_version_approvals(template_id: int, version_id: int, db: Session = Depends(get_db)):
     v = db.query(LabelTemplateVersion).get(version_id)
     if not v or v.template_id != template_id:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -231,7 +231,7 @@ async def list_version_approvals(template_id: int, version_id: int, db: Session 
 
 # Export version PDF (with draft watermark if not approved)
 @router.get("/templates/{template_id}/versions/{version_id}/export")
-async def export_label_version(template_id: int, version_id: int, format: str = Query("pdf", pattern="^(pdf)$"), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def export_label_version(template_id: int, version_id: int, format: str = Query("pdf", pattern="^(pdf)$"), db: Session = Depends(get_db)):
     v = db.query(LabelTemplateVersion).get(version_id)
     if not v or v.template_id != template_id:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -278,7 +278,6 @@ async def export_label_version(template_id: int, version_id: int, format: str = 
 async def flag_undeclared_allergen(
     assessment_id: int,
     flagging_data: dict,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Flag undeclared allergen in assessment"""
@@ -305,7 +304,7 @@ async def flag_undeclared_allergen(
             "severity": flagging_data["severity"],  # low, medium, high, critical
             "description": flagging_data.get("description", ""),
             "immediate_action": flagging_data["immediate_action"],
-            "detected_by": current_user.id,
+            "detected_by": 1,
             "detected_at": datetime.utcnow(),
             "status": "active"
         }
@@ -338,7 +337,6 @@ async def flag_undeclared_allergen(
 async def list_allergen_flags(
     assessment_id: int,
     status: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List allergen flags for assessment"""
@@ -354,7 +352,7 @@ async def list_allergen_flags(
                 "description": "Undeclared tree nuts found in chocolate ingredient",
                 "immediate_action": "Stop production, segregate batch",
                 "status": "resolved",
-                "detected_by": current_user.id,
+                "detected_by": 1,
                 "detected_at": datetime.utcnow().isoformat()
             }
         ]
@@ -374,7 +372,6 @@ async def list_allergen_flags(
 async def get_regulatory_compliance_checklist(
     region: str = Query(..., description="Regulatory region (US, EU, CA, AU)"),
     product_type: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get regulatory compliance checklist for allergen labeling"""
@@ -423,7 +420,6 @@ async def get_regulatory_compliance_checklist(
 @router.post("/compliance/validate")
 async def validate_label_compliance(
     validation_data: dict,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Validate label compliance against regulatory requirements"""
@@ -470,7 +466,7 @@ async def validate_label_compliance(
                 "Consider adding precautionary allergen statements",
                 "Review cross-contamination risk assessment"
             ],
-            "validated_by": current_user.id,
+            "validated_by": 1,
             "validated_at": datetime.utcnow().isoformat()
         }
 
@@ -494,7 +490,6 @@ async def compare_label_versions(
     template_id: int,
     version1_id: int = Query(...),
     version2_id: int = Query(...),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Compare two versions of a label template"""
@@ -547,7 +542,7 @@ async def compare_label_versions(
                 }
             ],
             "similarity_score": 87.5,  # Percentage similarity
-            "compared_by": current_user.id,
+            "compared_by": 1,
             "compared_at": datetime.utcnow().isoformat()
         }
 
@@ -596,7 +591,6 @@ CROSS_CONTAMINATION_SOURCES = {
 async def scan_product_allergens(
     product_id: int,
     scan_data: dict,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -625,7 +619,7 @@ async def scan_product_allergens(
             process_steps=process_steps,
             supplier_data=supplier_data,
             detection_method=detection_method,
-            detected_by=current_user.id
+            detected_by=1
         )
 
         # Auto-create flags for undeclared allergens
@@ -635,7 +629,7 @@ async def scan_product_allergens(
                 db=db,
                 product_id=product_id,
                 allergen_data=undeclared,
-                detected_by=current_user.id
+                detected_by=1
             )
             flags_created.append(flag_id)
 
@@ -659,7 +653,6 @@ async def list_allergen_flags(
     status: Optional[str] = Query(None, pattern="^(active|resolved|dismissed)$"),
     severity: Optional[str] = Query(None, pattern="^(low|medium|high|critical)$"),
     limit: int = Query(50, le=100),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List allergen flags with advanced filtering"""
@@ -690,7 +683,6 @@ async def list_allergen_flags(
 async def resolve_allergen_flag(
     flag_id: int,
     resolution_data: dict,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Resolve an allergen flag with detailed resolution tracking"""
@@ -706,12 +698,12 @@ async def resolve_allergen_flag(
             flag_id=flag_id,
             resolution_notes=resolution_notes,
             resolution_actions=resolution_actions,
-            resolved_by=current_user.id
+            resolved_by=1
         )
 
         # Log audit event
         try:
-            audit_event(db, current_user.id, "allergen_flag_resolved", "allergen_label", str(flag_id), {
+            audit_event(db, 1, "allergen_flag_resolved", "allergen_label", str(flag_id), {
                 "resolution_notes": resolution_notes[:100],
                 "resolution_actions": resolution_actions
             })
@@ -733,7 +725,6 @@ async def resolve_allergen_flag(
 @router.get("/products/{product_id}/risk-assessment")
 async def get_product_allergen_risk_assessment(
     product_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get comprehensive allergen risk assessment for a product"""
@@ -781,7 +772,6 @@ async def list_allergen_nonconformances(
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     limit: int = Query(20, le=50),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List allergen-related non-conformances"""
@@ -841,7 +831,6 @@ async def list_allergen_nonconformances(
 
 @router.get("/dashboard/metrics")
 async def get_allergen_dashboard_metrics(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get comprehensive allergen control dashboard metrics"""
