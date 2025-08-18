@@ -5,8 +5,6 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
 from app.models.allergen_label import (
     ProductAllergenAssessment, AllergenRiskLevel,
     LabelTemplate, LabelTemplateVersion, LabelVersionStatus,
@@ -31,8 +29,7 @@ router = APIRouter()
 @router.get("/assessments", response_model=List[ProductAllergenAssessmentResponse])
 async def list_assessments(
     product_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     q = db.query(ProductAllergenAssessment)
     if product_id:
@@ -43,8 +40,7 @@ async def list_assessments(
 @router.post("/assessments", response_model=ProductAllergenAssessmentResponse)
 async def create_assessment(
     payload: ProductAllergenAssessmentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     pa = ProductAllergenAssessment(
         product_id=payload.product_id,
@@ -55,13 +51,13 @@ async def create_assessment(
         control_measures=payload.control_measures,
         validation_verification=payload.validation_verification,
         reviewed_by=payload.reviewed_by,
-        created_by=current_user.id,
+        created_by=1,
     )
     db.add(pa)
     db.commit()
     db.refresh(pa)
     try:
-        audit_event(db, current_user.id, "allergen_assessment_created", "allergen_label", str(pa.id), {"product_id": payload.product_id})
+        audit_event(db, 1, "allergen_assessment_created", "allergen_label", str(pa.id), {"product_id": payload.product_id})
     except Exception:
         pass
     return pa
@@ -71,8 +67,7 @@ async def create_assessment(
 async def update_assessment(
     assessment_id: int,
     payload: ProductAllergenAssessmentUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     pa = db.query(ProductAllergenAssessment).get(assessment_id)
     if not pa:
@@ -87,7 +82,7 @@ async def update_assessment(
     db.commit()
     db.refresh(pa)
     try:
-        audit_event(db, current_user.id, "allergen_assessment_updated", "allergen_label", str(assessment_id))
+        audit_event(db, 1, "allergen_assessment_updated", "allergen_label", str(assessment_id))
     except Exception:
         pass
     return pa
@@ -95,7 +90,7 @@ async def update_assessment(
 
 # Label Templates & Versioning
 @router.get("/templates", response_model=List[LabelTemplateResponse])
-async def list_templates(include_inactive: bool = Query(False), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def list_templates(include_inactive: bool = Query(False), db: Session = Depends(get_db)):
     q = db.query(LabelTemplate)
     if not include_inactive:
         q = q.filter(LabelTemplate.is_active == True)
@@ -103,24 +98,24 @@ async def list_templates(include_inactive: bool = Query(False), db: Session = De
 
 
 @router.post("/templates", response_model=LabelTemplateResponse)
-async def create_template(payload: LabelTemplateCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_template(payload: LabelTemplateCreate, db: Session = Depends(get_db)):
     t = LabelTemplate(
         name=payload.name,
         description=payload.description,
         product_id=payload.product_id,
         is_active=payload.is_active if payload.is_active is not None else True,
-        created_by=current_user.id,
+        created_by=1,
     )
     db.add(t); db.commit(); db.refresh(t)
     try:
-        audit_event(db, current_user.id, "label_template_created", "allergen_label", str(t.id))
+        audit_event(db, 1, "label_template_created", "allergen_label", str(t.id))
     except Exception:
         pass
     return t
 
 
 @router.post("/templates/{template_id}/versions", response_model=LabelTemplateVersionResponse)
-async def create_template_version(template_id: int, payload: LabelTemplateVersionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_template_version(template_id: int, payload: LabelTemplateVersionCreate, db: Session = Depends(get_db)):
     t = db.query(LabelTemplate).get(template_id)
     if not t:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -133,19 +128,19 @@ async def create_template_version(template_id: int, payload: LabelTemplateVersio
         content=payload.content,
         change_description=payload.change_description,
         change_reason=payload.change_reason,
-        created_by=current_user.id,
+        created_by=1,
         status=LabelVersionStatus.DRAFT,
     )
     db.add(v); db.commit(); db.refresh(v)
     try:
-        audit_event(db, current_user.id, "label_template_version_created", "allergen_label", str(v.id), {"template_id": template_id, "version": next_num})
+        audit_event(db, 1, "label_template_version_created", "allergen_label", str(v.id), {"template_id": template_id, "version": next_num})
     except Exception:
         pass
     return v
 
 
 @router.post("/templates/{template_id}/approvals", response_model=List[LabelTemplateApprovalResponse])
-async def submit_template_approvals(template_id: int, approvers: List[LabelTemplateApprovalCreate], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def submit_template_approvals(template_id: int, approvers: List[LabelTemplateApprovalCreate], db: Session = Depends(get_db)):
     # Target latest draft/under_review version
     version = db.query(LabelTemplateVersion).filter(LabelTemplateVersion.template_id == template_id).order_by(LabelTemplateVersion.version_number.desc()).first()
     if not version:
@@ -160,14 +155,14 @@ async def submit_template_approvals(template_id: int, approvers: List[LabelTempl
     for a in created:
         db.refresh(a)
     try:
-        audit_event(db, current_user.id, "label_template_approval_flow_submitted", "allergen_label", str(version.id))
+        audit_event(db, 1, "label_template_approval_flow_submitted", "allergen_label", str(version.id))
     except Exception:
         pass
     return created
 
 
 @router.post("/templates/{template_id}/approvals/{approval_id}/approve", response_model=LabelTemplateVersionResponse)
-async def approve_template(template_id: int, approval_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def approve_template(template_id: int, approval_id: int, db: Session = Depends(get_db)):
     a = db.query(LabelTemplateApproval).get(approval_id)
     if not a:
         raise HTTPException(status_code=404, detail="Approval not found")

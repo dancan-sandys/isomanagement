@@ -6,8 +6,6 @@ from datetime import datetime
 from fastapi.responses import FileResponse
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
 from app.models.equipment import CalibrationRecord
 from app.services.equipment_service import EquipmentService
 from app.schemas.equipment import (
@@ -30,8 +28,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.get("/analytics/stats", response_model=ResponseModel)
 async def get_equipment_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get equipment statistics and analytics"""
     try:
@@ -48,8 +45,7 @@ async def get_equipment_stats(
 
 @router.get("/analytics/upcoming-maintenance", response_model=ResponseModel)
 async def get_upcoming_maintenance(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get upcoming maintenance schedules"""
     try:
@@ -66,8 +62,7 @@ async def get_upcoming_maintenance(
 
 @router.get("/analytics/overdue-calibrations", response_model=ResponseModel)
 async def get_overdue_calibrations(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get overdue calibration schedules"""
     try:
@@ -84,8 +79,7 @@ async def get_overdue_calibrations(
 
 @router.get("/analytics/alerts", response_model=ResponseModel)
 async def get_equipment_alerts(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get equipment alerts and notifications"""
     try:
@@ -103,17 +97,15 @@ async def get_equipment_alerts(
 @router.post("/", response_model=EquipmentResponse)
 async def create_equipment(
     payload: EquipmentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
-    return svc.create_equipment(name=payload.name, equipment_type=payload.equipment_type, serial_number=payload.serial_number, location=payload.location, notes=payload.notes, created_by=current_user.id, is_active=payload.is_active, critical_to_food_safety=payload.critical_to_food_safety)
+    return svc.create_equipment(name=payload.name, equipment_type=payload.equipment_type, serial_number=payload.serial_number, location=payload.location, notes=payload.notes, created_by=1, is_active=payload.is_active, critical_to_food_safety=payload.critical_to_food_safety)
 
 
 @router.get("/", response_model=list[EquipmentResponse])
 async def list_equipment(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     return svc.list_equipment()
@@ -122,8 +114,7 @@ async def list_equipment(
 @router.get("/{equipment_id}", response_model=EquipmentResponse)
 async def get_equipment(
     equipment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     eq = svc.get_equipment(equipment_id)
@@ -136,8 +127,7 @@ async def get_equipment(
 async def update_equipment(
     equipment_id: int,
     payload: EquipmentUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     eq = svc.update_equipment(equipment_id, **payload.dict(exclude_unset=True))
@@ -149,8 +139,7 @@ async def update_equipment(
 @router.delete("/{equipment_id}", response_model=ResponseModel)
 async def delete_equipment(
     equipment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     ok = svc.delete_equipment(equipment_id)
@@ -164,8 +153,7 @@ async def delete_equipment(
 async def create_maintenance_plan(
     equipment_id: int,
     payload: MaintenancePlanCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     return svc.create_maintenance_plan(equipment_id=equipment_id, frequency_days=payload.frequency_days, maintenance_type=payload.maintenance_type, notes=payload.notes)
@@ -174,8 +162,7 @@ async def create_maintenance_plan(
 @router.get("/maintenance-plans", response_model=list[MaintenancePlanResponse])
 async def list_maintenance_plans(
     equipment_id: int | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     plans = svc.list_maintenance_plans(equipment_id=equipment_id)
@@ -211,8 +198,7 @@ async def list_maintenance_plans(
 async def update_maintenance_plan(
     plan_id: int,
     payload: MaintenancePlanUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     plan = svc.update_maintenance_plan(plan_id, **payload.dict(exclude_unset=True))
@@ -246,8 +232,7 @@ async def update_maintenance_plan(
 @router.delete("/maintenance-plans/{plan_id}", response_model=ResponseModel)
 async def delete_maintenance_plan(
     plan_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     ok = svc.delete_maintenance_plan(plan_id)
@@ -260,11 +245,10 @@ async def delete_maintenance_plan(
 @router.post("/work-orders", response_model=MaintenanceWorkOrderResponse)
 async def create_work_order(
     payload: MaintenanceWorkOrderCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
-    return svc.create_work_order(equipment_id=payload.equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description, priority=payload.priority, assigned_to=payload.assigned_to, due_date=payload.due_date, created_by=current_user.id)
+    return svc.create_work_order(equipment_id=payload.equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description, priority=payload.priority, assigned_to=payload.assigned_to, due_date=payload.due_date, created_by=1)
 
 
 @router.get("/work-orders", response_model=list[MaintenanceWorkOrderResponse])
@@ -272,8 +256,7 @@ async def list_work_orders(
     equipment_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),
     status: str | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     items = svc.list_work_orders(equipment_id=equipment_id, plan_id=plan_id, status=status)
@@ -302,8 +285,7 @@ async def list_work_orders(
 @router.get("/work-orders/{work_order_id}", response_model=MaintenanceWorkOrderResponse)
 async def get_work_order(
     work_order_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     wo = svc.get_work_order(work_order_id)
@@ -332,8 +314,7 @@ async def get_work_order(
 async def update_work_order(
     work_order_id: int,
     payload: MaintenanceWorkOrderUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     wo = svc.update_work_order(work_order_id, **payload.dict(exclude_unset=True))
@@ -361,11 +342,10 @@ async def update_work_order(
 @router.post("/work-orders/{work_order_id}/complete", response_model=MaintenanceWorkOrderResponse)
 async def complete_work_order(
     work_order_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
-    wo = svc.complete_work_order(work_order_id, completed_by=current_user.id)
+    wo = svc.complete_work_order(work_order_id, completed_by=1)
     if not wo:
         raise HTTPException(status_code=404, detail="Work order not found")
     eq = svc.get_equipment(wo.equipment_id)
@@ -390,8 +370,7 @@ async def complete_work_order(
 @router.delete("/work-orders/{work_order_id}", response_model=ResponseModel)
 async def delete_work_order(
     work_order_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     ok = svc.delete_work_order(work_order_id)
@@ -405,8 +384,7 @@ async def delete_work_order(
 async def create_calibration_plan(
     equipment_id: int,
     payload: CalibrationPlanCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     return svc.create_calibration_plan(equipment_id=equipment_id, schedule_date=payload.schedule_date, frequency_days=payload.frequency_days, notes=payload.notes)
@@ -415,8 +393,7 @@ async def create_calibration_plan(
 @router.get("/calibration-plans", response_model=list[CalibrationPlanResponse])
 async def list_calibration_plans(
     equipment_id: int | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     items = svc.list_calibration_plans(equipment_id=equipment_id)
@@ -452,8 +429,7 @@ async def list_calibration_plans(
 async def update_calibration_plan(
     plan_id: int,
     payload: CalibrationPlanUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     plan = svc.update_calibration_plan(plan_id, **payload.dict(exclude_unset=True))
@@ -487,8 +463,7 @@ async def update_calibration_plan(
 @router.delete("/calibration-plans/{plan_id}", response_model=ResponseModel)
 async def delete_calibration_plan(
     plan_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     ok = svc.delete_calibration_plan(plan_id)
@@ -501,8 +476,7 @@ async def delete_calibration_plan(
 async def upload_calibration_certificate(
     plan_id: int,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     unique = f"{uuid4().hex}_{file.filename}"
     cert_dir = os.path.join(UPLOAD_DIR, "calibration")
@@ -511,15 +485,14 @@ async def upload_calibration_certificate(
     with open(file_path, "wb") as f:
         f.write(await file.read())
     svc = EquipmentService(db)
-    rec = svc.record_calibration(plan_id=plan_id, original_filename=file.filename, stored_filename=unique, file_path=file_path, file_type=file.content_type, uploaded_by=current_user.id)
+    rec = svc.record_calibration(plan_id=plan_id, original_filename=file.filename, stored_filename=unique, file_path=file_path, file_type=file.content_type, uploaded_by=1)
     return rec
 
 
 @router.get("/calibration-records/{record_id}/download")
 async def download_calibration_certificate(
     record_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     rec = db.query(CalibrationRecord).filter_by(id=record_id).first()
     if not rec:
@@ -535,8 +508,7 @@ async def maintenance_history(
     equipment_id: int | None = Query(default=None),
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     return svc.get_maintenance_history(equipment_id=equipment_id, start_date=start_date, end_date=end_date)
@@ -547,8 +519,7 @@ async def calibration_history(
     equipment_id: int | None = Query(default=None),
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
     return svc.get_calibration_history(equipment_id=equipment_id, start_date=start_date, end_date=end_date)

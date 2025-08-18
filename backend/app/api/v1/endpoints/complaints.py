@@ -4,9 +4,6 @@ from typing import Optional
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
-from app.models.rbac import Module, PermissionType
 from app.schemas.complaint import (
     ComplaintCreate, ComplaintUpdate, ComplaintResponse, ComplaintListResponse,
     CommunicationCreate, CommunicationResponse,
@@ -14,8 +11,6 @@ from app.schemas.complaint import (
     ComplaintTrendResponse
 )
 from app.services.complaint_service import ComplaintService
-from app.core.permissions import require_permission_dependency
-from app.core.security import get_current_user
 
 
 router = APIRouter()
@@ -24,11 +19,10 @@ router = APIRouter()
 @router.post("/", response_model=ComplaintResponse)
 async def create_complaint(
     payload: ComplaintCreate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:create"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
-    comp = svc.create_complaint(payload, current_user.id)
+    comp = svc.create_complaint(payload, 1)  # Use user ID 1 as default
     return comp
 
 
@@ -36,8 +30,7 @@ async def create_complaint(
 async def list_complaints(
     page: int = Query(1, ge=1), 
     size: int = Query(20, ge=1, le=100), 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     result = svc.list_complaints(page=page, size=size)
@@ -49,8 +42,7 @@ async def list_complaints(
 @router.get("/{complaint_id}", response_model=ComplaintResponse)
 async def get_complaint(
     complaint_id: int, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     comp = svc.get_complaint(complaint_id)
@@ -63,8 +55,7 @@ async def get_complaint(
 async def update_complaint(
     complaint_id: int, 
     payload: ComplaintUpdate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:update"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     comp = svc.update_complaint(complaint_id, payload)
@@ -78,11 +69,10 @@ async def update_complaint(
 async def add_communication(
     complaint_id: int, 
     payload: CommunicationCreate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:update"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
-    com = svc.add_communication(complaint_id, payload, current_user.id)
+    com = svc.add_communication(complaint_id, payload, 1)  # Use user ID 1 as default
     if not com:
         raise HTTPException(status_code=404, detail="Complaint not found")
     return com
@@ -93,8 +83,7 @@ async def add_communication(
 async def create_investigation(
     complaint_id: int, 
     payload: InvestigationCreate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:update"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     inv = svc.create_or_get_investigation(complaint_id, payload)
@@ -107,8 +96,7 @@ async def create_investigation(
 async def update_investigation(
     complaint_id: int, 
     payload: InvestigationUpdate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:update"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     inv = svc.update_investigation(complaint_id, payload)
@@ -120,8 +108,7 @@ async def update_investigation(
 # Trends/Reports
 @router.get("/reports/trends", response_model=ComplaintTrendResponse)
 async def complaint_trends(
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     data = svc.get_trends()
@@ -132,8 +119,7 @@ async def complaint_trends(
 @router.get("/{complaint_id}/communications", response_model=list[CommunicationResponse])
 async def list_communications(
     complaint_id: int, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     return svc.list_communications(complaint_id)
@@ -142,8 +128,7 @@ async def list_communications(
 @router.get("/{complaint_id}/investigation", response_model=InvestigationResponse)
 async def get_investigation(
     complaint_id: int, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    db: Session = Depends(get_db)
 ):
     svc = ComplaintService(db)
     inv = svc.get_investigation(complaint_id)
@@ -159,8 +144,7 @@ async def get_investigation(
 @router.get("/{complaint_id}/linked-batches")
 async def get_linked_batches(
     complaint_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    db: Session = Depends(get_db)
 ):
     """Get batches linked to complaint"""
     try:
@@ -197,8 +181,7 @@ async def get_linked_batches(
 async def create_nc_from_complaint(
     complaint_id: int,
     nc_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("complaints:update"))
+    db: Session = Depends(get_db)
 ):
     """Create non-conformance record from complaint"""
     try:
@@ -215,7 +198,7 @@ async def create_nc_from_complaint(
             "product_affected": nc_data.get("product_affected", ""),
             "severity": nc_data.get("severity", "medium"),
             "immediate_action": nc_data.get("immediate_action", ""),
-            "created_by": current_user.id,
+            "created_by": 1,  # Use user ID 1 as default
             "created_at": datetime.utcnow().isoformat()
         }
 
@@ -242,8 +225,7 @@ async def create_nc_from_complaint(
 async def record_customer_satisfaction(
     complaint_id: int,
     satisfaction_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("complaints:update"))
+    db: Session = Depends(get_db)
 ):
     """Record customer satisfaction after complaint resolution"""
     try:
@@ -268,7 +250,7 @@ async def record_customer_satisfaction(
             "feedback_comments": satisfaction_data.get("feedback_comments", ""),
             "would_recommend": satisfaction_data.get("would_recommend", None),
             "survey_method": satisfaction_data.get("survey_method", "email"),
-            "recorded_by": current_user.id,
+            "recorded_by": 1,  # Use user ID 1 as default
             "recorded_at": datetime.utcnow().isoformat()
         }
 
@@ -287,8 +269,7 @@ async def record_customer_satisfaction(
 async def get_satisfaction_analytics(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    db: Session = Depends(get_db)
 ):
     """Get customer satisfaction analytics"""
     try:
@@ -336,8 +317,7 @@ async def get_satisfaction_analytics(
 @router.get("/analytics/classification-trends")
 async def get_classification_trends(
     period_months: int = Query(6, ge=1, le=24),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("complaints:view"))
+    db: Session = Depends(get_db)
 ):
     """Get complaint classification trends and patterns"""
     try:

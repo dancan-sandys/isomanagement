@@ -42,19 +42,31 @@ const EnhancedStatusChip: React.FC<EnhancedStatusChipProps> = ({
   ...props 
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const statusProps = getStatusChipProps(status);
+  
+  // Ensure status is a valid string and provide fallback
+  const validStatus = status && typeof status === 'string' ? status : 'info';
+  const statusProps = getStatusChipProps(validStatus as any);
+  
+  // Ensure all required properties exist with fallbacks
+  const safeStatusProps = {
+    color: statusProps?.color || 'default',
+    backgroundColor: statusProps?.backgroundColor || '#F8FAFC',
+    borderColor: statusProps?.borderColor || '#E2E8F0',
+    textColor: statusProps?.textColor || '#1F2937',
+    iconColor: statusProps?.iconColor || '#6B7280',
+  };
 
   const chipContent = (
     <Chip
       label={label}
-      color={statusProps.color}
+      color={safeStatusProps.color}
       size={size}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       sx={{
-        backgroundColor: statusProps.backgroundColor,
-        border: `2px solid ${statusProps.borderColor}`,
+        backgroundColor: safeStatusProps.backgroundColor,
+        border: `2px solid ${safeStatusProps.borderColor}`,
         fontWeight: 700,
         fontSize: '0.75rem',
         textTransform: 'uppercase',
@@ -75,13 +87,13 @@ const EnhancedStatusChip: React.FC<EnhancedStatusChipProps> = ({
         animation: pulse ? 'pulse 2s infinite' : 'none',
         '@keyframes pulse': {
           '0%': {
-            boxShadow: `0 0 0 0 ${statusProps.borderColor}`,
+            boxShadow: `0 0 0 0 ${safeStatusProps.borderColor}`,
           },
           '70%': {
-            boxShadow: `0 0 0 6px ${statusProps.borderColor}40`,
+            boxShadow: `0 0 0 6px ${safeStatusProps.borderColor}40`,
           },
           '100%': {
-            boxShadow: `0 0 0 0 ${statusProps.borderColor}00`,
+            boxShadow: `0 0 0 0 ${safeStatusProps.borderColor}00`,
           },
         },
         '&::before': animated ? {
@@ -98,7 +110,7 @@ const EnhancedStatusChip: React.FC<EnhancedStatusChipProps> = ({
           left: '100%',
         } : {},
         '& .MuiChip-label': {
-          color: statusProps.textColor,
+          color: safeStatusProps.textColor,
           fontWeight: 700,
           transition: 'color 0.2s',
         },

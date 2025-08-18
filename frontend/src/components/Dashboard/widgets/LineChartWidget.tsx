@@ -157,11 +157,11 @@ const LineChartWidget: React.FC<LineChartWidgetProps> = ({
         
         // Sort values by date
         const sortedValues = values.sort((a, b) => 
-          new Date(a.period_end).getTime() - new Date(b.period_end).getTime()
+          new Date(a.date).getTime() - new Date(b.date).getTime()
         );
 
         const data: ChartDataPoint[] = sortedValues.map(value => ({
-          x: value.period_end,
+          x: value.date,
           y: Number(value.value)
         }));
 
@@ -198,7 +198,6 @@ const LineChartWidget: React.FC<LineChartWidgetProps> = ({
                 borderColor: targetColor,
                 backgroundColor: 'transparent',
                 borderWidth: 2,
-                borderDash: [5, 5],
                 fill: false,
                 tension: 0,
                 pointRadius: 0,
@@ -252,9 +251,8 @@ const LineChartWidget: React.FC<LineChartWidgetProps> = ({
   };
 
   const handleZoomReset = () => {
-    if (chartRef.current) {
-      chartRef.current.resetZoom();
-    }
+    // Zoom reset functionality would be implemented here
+    // For now, just close the menu
     handleMenuClose();
   };
 

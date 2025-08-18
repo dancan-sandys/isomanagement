@@ -59,7 +59,7 @@ interface TableColumn {
   id: string;
   label: string;
   sortable?: boolean;
-  format?: (value: any) => string;
+  format?: (value: any, row?: TableRow) => string;
   align?: 'left' | 'center' | 'right';
 }
 
@@ -144,7 +144,7 @@ const TableWidget: React.FC<TableWidgetProps> = ({
         target_value: kpi.target_value ? Number(kpi.target_value) : null,
         unit: kpi.unit || '',
         status: latestValue ? getKPIStatus(Number(latestValue.value), kpi.target_value ? Number(kpi.target_value) : null, kpi.target_operator) : 'No Data',
-        last_updated: latestValue ? new Date(latestValue.calculated_at).toLocaleString() : 'Never'
+        last_updated: latestValue ? new Date(latestValue.date).toLocaleString() : 'Never'
       };
     });
 

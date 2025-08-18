@@ -598,7 +598,18 @@ export const getStatusChipProps = (
     },
   };
 
-  return statusConfig[status];
+  const config = statusConfig[status];
+  if (!config) {
+    // Return default configuration for unknown status
+    return {
+      color: 'default' as const,
+      backgroundColor: '#F8FAFC',
+      borderColor: '#E2E8F0',
+      textColor: '#1F2937',
+      iconColor: '#6B7280',
+    };
+  }
+  return config;
 };
 
 // Enhanced role-based dashboard configurations

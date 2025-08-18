@@ -425,7 +425,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
                   />
                 </TableCell>
                 <TableCell>
-                  {material.allergens.length > 0 ? (
+                  {material.allergens && material.allergens.length > 0 ? (
                     <Box display="flex" gap={0.5} flexWrap="wrap">
                       {material.allergens.slice(0, 2).map((allergen, index) => (
                         <Chip
@@ -592,7 +592,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
                   />
                 </Box>
 
-                {material.allergens.length > 0 && (
+                {material.allergens && material.allergens.length > 0 && (
                   <Box mb={2}>
                     <Typography variant="body2" fontWeight="bold" gutterBottom>
                       Allergens:

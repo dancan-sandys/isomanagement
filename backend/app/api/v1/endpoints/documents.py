@@ -27,7 +27,7 @@ from app.models.document import (
 )
 from app.schemas.common import ResponseModel, PaginatedResponse
 from app.schemas.document import (
-    DocumentCreate, DocumentUpdate, DocumentFilter, DocumentResponse,
+    DocumentCreate, DocumentUpdate, DocumentFilter, DocumentResponse, 
     DocumentStatusChangeRequest, DocumentVersionCreateRequest, 
     DocumentVersionResponse, DocumentChangeLogResponse, DocumentApprovalResponse,
     DocumentTemplateCreate, DocumentTemplateResponse, BulkDocumentAction, DocumentStats,
