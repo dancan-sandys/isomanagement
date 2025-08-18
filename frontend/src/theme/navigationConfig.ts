@@ -88,7 +88,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
       { text: 'Suppliers', path: '/suppliers' },
       // Evaluation and Approved remain accessible via redirects but hidden from the menu
       // Supplier Audits hidden until implemented
-      { text: 'Performance Metrics', path: '/suppliers/metrics' },
     ],
   },
   

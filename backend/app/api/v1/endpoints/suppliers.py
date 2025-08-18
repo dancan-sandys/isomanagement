@@ -50,7 +50,117 @@ class BulkRejectMaterialsPayload(BaseModel):
 
 router = APIRouter()
 
-# Material endpoints (must come before path parameter endpoints)
+# Material endpoints - specific routes MUST come before parameterized routes
+@router.get("/materials/stats", response_model=ResponseModel[dict])
+async def get_material_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get material statistics"""
+    service = SupplierService(db)
+    stats = service.get_material_stats()
+    
+    return ResponseModel(
+        success=True,
+        message="Material statistics retrieved successfully",
+        data=stats
+    )
+
+
+@router.get("/materials/export", response_model=ResponseModel[dict])
+async def export_materials(
+    format: str = Query("excel", description="Export format (excel, csv)"),
+    search: Optional[str] = Query(None, description="Search by name or code"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Export materials to file"""
+    filter_params = MaterialFilter(
+        search=search,
+        category=category,
+        supplier_id=supplier_id,
+        approval_status=approval_status,
+        page=1,
+        size=10000  # Large size for export
+    )
+    
+    service = SupplierService(db)
+    result = service.get_materials(filter_params)
+    
+    # Generate export file (simplified for now)
+    export_data = {
+        "export_format": format,
+        "generated_at": datetime.now().isoformat(),
+        "record_count": result["total"],
+        "download_url": f"/api/v1/suppliers/materials/export/download?format={format}"
+    }
+    
+    return ResponseModel(
+        success=True,
+        message=f"Materials exported to {format} format",
+        data=export_data
+    )
+
+
+@router.get("/materials/search", response_model=ResponseModel[dict])
+async def search_materials(
+    q: str = Query(..., description="Search query"),
+    limit: int = Query(10, ge=1, le=50, description="Number of results"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Search materials by name, code, or description"""
+    service = SupplierService(db)
+    results = service.search_materials(q, limit)
+    
+    return ResponseModel(
+        success=True,
+        message="Search completed successfully",
+        data={
+            "query": q,
+            "results": results,
+            "count": len(results)
+        }
+    )
+
+
+@router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
+async def bulk_approve_materials(
+    payload: BulkApproveMaterialsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk approve materials"""
+    service = SupplierService(db)
+    results = service.bulk_approve_materials(payload.material_ids, current_user.id)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk approval completed for {len(payload.material_ids)} materials",
+        data=results
+    )
+
+
+@router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
+async def bulk_reject_materials(
+    payload: BulkRejectMaterialsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk reject materials"""
+    service = SupplierService(db)
+    results = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, current_user.id)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk rejection completed for {len(payload.material_ids)} materials",
+        data=results
+    )
+
+
 @router.get("/materials/", response_model=ResponseModel)
 @router.get("/materials", response_model=ResponseModel)
 async def get_materials(
@@ -302,93 +412,13 @@ async def bulk_reject_materials(
     )
 
 
-@router.get("/materials/stats", response_model=ResponseModel[dict])
-async def get_material_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get material statistics"""
-    service = SupplierService(db)
-    
-    # Mock material stats for now
-    material_stats = {
-        "total_materials": 15,
-        "approved_materials": 12,
-        "pending_materials": 2,
-        "rejected_materials": 1,
-        "materials_by_category": [
-            {"category": "raw_milk", "count": 8},
-            {"category": "additives", "count": 4},
-            {"category": "packaging", "count": 3}
-        ],
-        "materials_by_supplier": [
-            {"supplier_name": "Dairy Farm A", "count": 5},
-            {"supplier_name": "Packaging Co", "count": 3},
-            {"supplier_name": "Additives Inc", "count": 2}
-        ]
-    }
-    
-    return ResponseModel(
-        success=True,
-        message="Material statistics retrieved successfully",
-        data=material_stats
-    )
 
 
-@router.get("/materials/export", response_model=ResponseModel[dict])
-async def export_materials(
-    format: str = Query("excel", description="Export format (excel, csv)"),
-    search: Optional[str] = Query(None, description="Search by name or code"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
-    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Export materials data"""
-    filter_params = MaterialFilter(
-        search=search,
-        category=category,
-        supplier_id=supplier_id,
-        approval_status=approval_status,
-        page=1,
-        size=1000  # Export all matching records
-    )
-    
-    service = SupplierService(db)
-    result = service.get_materials(filter_params)
-    
-    # Mock export data for now
-    export_data = {
-        "format": format,
-        "filename": f"materials_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}",
-        "record_count": result["total"],
-        "download_url": f"/api/v1/suppliers/materials/export/download?format={format}"
-    }
-    
-    return ResponseModel(
-        success=True,
-        message="Materials export generated successfully",
-        data=export_data
-    )
 
 
-@router.get("/materials/search", response_model=ResponseModel[dict])
-async def search_materials(
-    q: str = Query(..., description="Search query"),
-    limit: int = Query(10, ge=1, le=50, description="Number of results"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Search materials"""
-    service = SupplierService(db)
-    results = service.search_materials(q, limit)
-    
-    return ResponseModel(
-        success=True,
-        message="Materials search completed successfully",
-        data=results
-    )
+
+
+
 
 @router.get("/search", response_model=ResponseModel[dict])
 async def search_suppliers(
@@ -584,29 +614,7 @@ async def get_supplier_stats(
     }
     return ResponseModel(success=True, message="Supplier statistics retrieved successfully", data=data)
 
-@router.get("/materials/stats", response_model=ResponseModel[dict])
-async def get_material_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    total = int(db.query(Material).count())
-    approved = int(db.query(Material).filter(Material.approval_status == "approved").count())
-    pending = int(db.query(Material).filter(Material.approval_status == "pending").count())
-    rejected = int(db.query(Material).filter(Material.approval_status == "rejected").count())
-    by_category = db.query(Material.category, func.count(Material.id)).group_by(Material.category).all()
-    by_supplier = db.query(Supplier.name, func.count(Material.id)).join(Supplier, Supplier.id == Material.supplier_id).group_by(Supplier.name).all()
-    return ResponseModel(
-        success=True,
-        message="Material statistics retrieved successfully",
-        data={
-            "total_materials": total,
-            "approved_materials": approved,
-            "pending_materials": pending,
-            "rejected_materials": rejected,
-            "materials_by_category": [{"category": str(cat or "unknown"), "count": int(cnt)} for cat, cnt in by_category],
-            "materials_by_supplier": [{"supplier_name": name, "count": int(cnt)} for name, cnt in by_supplier],
-        }
-    )
+
 
 @router.get("/evaluations/stats", response_model=Dict[str, Any])
 async def get_evaluation_stats(

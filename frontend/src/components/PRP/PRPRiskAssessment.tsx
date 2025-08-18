@@ -148,10 +148,17 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
   });
 
   const [matrixForm, setMatrixForm] = useState({
-    matrix_name: '',
-    matrix_description: '',
+    name: '',
+    description: '',
     likelihood_levels: ['Very Low', 'Low', 'Medium', 'High', 'Very High'],
-    severity_levels: ['Very Low', 'Low', 'Medium', 'High', 'Very High'],
+    severity_levels: ['Negligible', 'Minor', 'Moderate', 'Major', 'Catastrophic'],
+    risk_levels: {
+      'Very Low_Negligible': 'very_low',
+      'Low_Minor': 'low',
+      'Medium_Moderate': 'medium',
+      'High_Major': 'high',
+      'Very High_Catastrophic': 'critical'
+    }
   });
 
   useEffect(() => {
@@ -270,10 +277,17 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
 
   const resetMatrixForm = () => {
     setMatrixForm({
-      matrix_name: '',
-      matrix_description: '',
+      name: '',
+      description: '',
       likelihood_levels: ['Very Low', 'Low', 'Medium', 'High', 'Very High'],
-      severity_levels: ['Very Low', 'Low', 'Medium', 'High', 'Very High'],
+      severity_levels: ['Negligible', 'Minor', 'Moderate', 'Major', 'Catastrophic'],
+      risk_levels: {
+        'Very Low_Negligible': 'very_low',
+        'Low_Minor': 'low',
+        'Medium_Moderate': 'medium',
+        'High_Major': 'high',
+        'Very High_Catastrophic': 'critical'
+      }
     });
   };
 
@@ -705,8 +719,8 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
             <TextField
               fullWidth
               label="Matrix Name"
-              value={matrixForm.matrix_name}
-              onChange={(e) => setMatrixForm({ ...matrixForm, matrix_name: e.target.value })}
+              value={matrixForm.name}
+              onChange={(e) => setMatrixForm({ ...matrixForm, name: e.target.value })}
               required
             />
           </Grid>
@@ -714,8 +728,8 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
             <TextField
               fullWidth
               label="Matrix Description"
-              value={matrixForm.matrix_description}
-              onChange={(e) => setMatrixForm({ ...matrixForm, matrix_description: e.target.value })}
+              value={matrixForm.description}
+              onChange={(e) => setMatrixForm({ ...matrixForm, description: e.target.value })}
               multiline
               rows={3}
             />

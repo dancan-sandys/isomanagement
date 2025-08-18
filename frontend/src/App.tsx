@@ -10,7 +10,6 @@ import HACCP from './pages/HACCP';
 import HACCPProductDetail from './pages/HACCPProductDetail';
 import PRP from './pages/PRP';
 import Suppliers from './pages/Suppliers';
-import SuppliersMetrics from './pages/SuppliersMetrics';
 import Traceability from './pages/Traceability';
 import NonConformance from './pages/NonConformance';
 import NonConformanceDetail from './pages/NonConformanceDetail';
@@ -88,7 +87,7 @@ function App() {
                       <Route path="/suppliers/evaluation" element={<Navigate to="/suppliers?tab=3" replace />} />
                       <Route path="/suppliers/approved" element={<Navigate to="/suppliers?tab=1" replace />} />
                       <Route path="/suppliers/audits" element={<Navigate to="/audits?type=supplier" replace />} />
-                      <Route path="/suppliers/metrics" element={<SuppliersMetrics />} />
+                      {/* Performance Metrics removed; consolidated into Dashboard */}
                       
                       {/* Traceability - Production and QA roles */}
                       <Route path="/traceability" element={<Traceability />} />

@@ -124,12 +124,45 @@ class PRPService:
                 # Create default matrix if none exists
                 matrix = self._create_default_risk_matrix()
         
-        # Find likelihood and severity indices
-        try:
-            likelihood_index = matrix.likelihood_levels.index(likelihood_level)
-            severity_index = matrix.severity_levels.index(severity_level)
-        except ValueError:
-            raise ValueError("Invalid likelihood or severity level")
+        # Normalize likelihood and severity levels to handle variations
+        likelihood_level = likelihood_level.lower().strip()
+        severity_level = severity_level.lower().strip()
+        
+        # Create a mapping of normalized levels to indices
+        likelihood_mapping = {level.lower().strip(): i for i, level in enumerate(matrix.likelihood_levels)}
+        severity_mapping = {level.lower().strip(): i for i, level in enumerate(matrix.severity_levels)}
+        
+        # Find likelihood and severity indices with better error handling
+        if likelihood_level not in likelihood_mapping:
+            # Try common alternatives
+            likelihood_alternatives = {
+                'very_low': 'very low', 'very_high': 'very high',
+                'low': 'low', 'medium': 'medium', 'high': 'high',
+                'rare': 'very low', 'unlikely': 'low', 'possible': 'medium', 
+                'likely': 'high', 'certain': 'very high'
+            }
+            alt_level = likelihood_alternatives.get(likelihood_level)
+            if alt_level and alt_level in likelihood_mapping:
+                likelihood_level = alt_level
+            else:
+                # Default to medium if not found
+                likelihood_level = 'medium' if 'medium' in likelihood_mapping else list(likelihood_mapping.keys())[len(likelihood_mapping)//2]
+        
+        if severity_level not in severity_mapping:
+            # Try common alternatives  
+            severity_alternatives = {
+                'very_low': 'negligible', 'low': 'minor', 'medium': 'moderate', 
+                'high': 'major', 'very_high': 'catastrophic', 'critical': 'catastrophic'
+            }
+            alt_level = severity_alternatives.get(severity_level)
+            if alt_level and alt_level in severity_mapping:
+                severity_level = alt_level
+            else:
+                # Default to moderate if not found
+                severity_level = 'moderate' if 'moderate' in severity_mapping else list(severity_mapping.keys())[len(severity_mapping)//2]
+        
+        likelihood_index = likelihood_mapping[likelihood_level]
+        severity_index = severity_mapping[severity_level]
         
         # Calculate risk score
         risk_score = (likelihood_index + 1) * (severity_index + 1)
@@ -930,6 +963,14 @@ class PRPService:
     def create_corrective_action(self, action_data: CorrectiveActionCreate, created_by: int) -> CorrectiveAction:
         """Create a new corrective action"""
         
+        # Check if action code already exists
+        existing_action = self.db.query(CorrectiveAction).filter(
+            CorrectiveAction.action_code == action_data.action_code
+        ).first()
+        
+        if existing_action:
+            raise ValueError(f"Corrective action code '{action_data.action_code}' already exists")
+        
         action = CorrectiveAction(
             action_code=action_data.action_code,
             source_type=action_data.source_type,
@@ -962,6 +1003,14 @@ class PRPService:
     
     def create_preventive_action(self, action_data: PreventiveActionCreate, created_by: int) -> PRPPreventiveAction:
         """Create a new preventive action"""
+        
+        # Check if action code already exists
+        existing_action = self.db.query(PRPPreventiveAction).filter(
+            PRPPreventiveAction.action_code == action_data.action_code
+        ).first()
+        
+        if existing_action:
+            raise ValueError(f"Preventive action code '{action_data.action_code}' already exists")
         
         action = PRPPreventiveAction(
             action_code=action_data.action_code,

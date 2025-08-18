@@ -240,7 +240,7 @@ async def get_program_checklists(
     db: Session = Depends(get_db),
     page: int = 1,
     size: int = 10,
-    status: Optional[str] = None
+    status_filter: Optional[str] = None
 ):
     """Get checklists for a specific PRP program"""
     try:
@@ -255,8 +255,8 @@ async def get_program_checklists(
         query = db.query(PRPChecklist).filter(PRPChecklist.program_id == program_id)
         
         # Apply status filter
-        if status:
-            query = query.filter(PRPChecklist.status == ChecklistStatus(status))
+        if status_filter:
+            query = query.filter(PRPChecklist.status == ChecklistStatus(status_filter))
         
         # Get total count
         total = query.count()
@@ -1009,7 +1009,7 @@ async def get_risk_matrices(
                 "severity_levels": matrix.severity_levels,
                 "risk_levels": matrix.risk_levels,
                 "is_default": getattr(matrix, 'is_default', False),
-                "created_by": creator.name if creator else "Unknown",
+                "created_by": creator.full_name if creator else "Unknown",
                 "created_at": matrix.created_at.isoformat() if matrix.created_at else None,
                 "updated_at": matrix.updated_at.isoformat() if matrix.updated_at else None
             })
@@ -1130,7 +1130,7 @@ async def get_program_risk_assessments(
                 "escalated_to_risk_register": assessment.escalated_to_risk_register,
                 "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
                 "risk_register_entry_id": getattr(assessment, 'risk_register_entry_id', None),
-                "created_by": creator.name if creator else "Unknown",
+                "created_by": creator.full_name if creator else "Unknown",
                 "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
                 "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None
             })
@@ -1267,7 +1267,7 @@ async def get_risk_controls(
     db: Session = Depends(get_db),
     page: int = 1,
     size: int = 10,
-    status: Optional[str] = None
+    status_filter: Optional[str] = None
 ):
     """Get risk controls for a specific risk assessment"""
     try:
@@ -1282,8 +1282,8 @@ async def get_risk_controls(
         query = db.query(RiskControl).filter(RiskControl.risk_assessment_id == assessment_id)
         
         # Apply status filter
-        if status:
-            query = query.filter(RiskControl.implementation_status == status)
+        if status_filter:
+            query = query.filter(RiskControl.implementation_status == status_filter)
         
         # Get total count
         total = query.count()
@@ -1302,7 +1302,7 @@ async def get_risk_controls(
                 "control_type": control.control_type,
                 "control_description": control.control_description,
                 "control_procedure": control.control_procedure,
-                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person": responsible_person.full_name if responsible_person else "Unknown",
                 "responsible_person_id": control.responsible_person,
                 "implementation_date": control.implementation_date.isoformat() if control.implementation_date else None,
                 "frequency": control.frequency.value if control.frequency else None,
@@ -1444,7 +1444,7 @@ async def get_risk_assessment(
         escalated_by = None
         if assessment.escalated_by:
             escalated_by_user = db.query(User).filter(User.id == assessment.escalated_by).first()
-            escalated_by = escalated_by_user.name if escalated_by_user else "Unknown"
+            escalated_by = escalated_by_user.full_name if escalated_by_user else "Unknown"
         
         # Get risk controls
         controls = db.query(RiskControl).filter(RiskControl.risk_assessment_id == assessment_id).all()
@@ -1457,7 +1457,7 @@ async def get_risk_assessment(
                 "control_type": control.control_type,
                 "control_description": control.control_description,
                 "control_procedure": control.control_procedure,
-                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person": responsible_person.full_name if responsible_person else "Unknown",
                 "responsible_person_id": control.responsible_person,
                 "implementation_date": control.implementation_date.isoformat() if control.implementation_date else None,
                 "frequency": control.frequency.value if control.frequency else None,
@@ -1499,7 +1499,7 @@ async def get_risk_assessment(
                 "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
                 "escalated_by": escalated_by,
                 "risk_register_entry_id": getattr(assessment, 'risk_register_entry_id', None),
-                "created_by": creator.name if creator else "Unknown",
+                "created_by": creator.full_name if creator else "Unknown",
                 "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
                 "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None,
                 "controls": control_items
@@ -1519,7 +1519,7 @@ async def get_corrective_actions(
     db: Session = Depends(get_db),
     page: int = 1,
     size: int = 10,
-    status: Optional[str] = None,
+    status_filter: Optional[str] = None,
     severity: Optional[str] = None,
     source_type: Optional[str] = None
 ):
@@ -1528,8 +1528,8 @@ async def get_corrective_actions(
         query = db.query(CorrectiveAction)
         
         # Apply filters
-        if status:
-            query = query.filter(CorrectiveAction.status == CorrectiveActionStatus(status))
+        if status_filter:
+            query = query.filter(CorrectiveAction.status == CorrectiveActionStatus(status_filter))
         if severity:
             query = query.filter(CorrectiveAction.severity == severity)
         if source_type:
@@ -1561,14 +1561,14 @@ async def get_corrective_actions(
                 "root_cause_category": action.root_cause_category,
                 "action_description": action.action_description,
                 "action_type": action.action_type,
-                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person": responsible_person.full_name if responsible_person else "Unknown",
                 "responsible_person_id": action.responsible_person,
-                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to": assigned_person.full_name if assigned_person else "Unknown",
                 "assigned_to_id": action.assigned_to,
                 "target_completion_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
                 "effectiveness_criteria": action.effectiveness_criteria,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "status": action.status.value if action.status else None,
                 "created_at": action.created_at.isoformat() if action.created_at else None,
                 "updated_at": action.updated_at.isoformat() if action.updated_at else None
@@ -1688,16 +1688,16 @@ async def get_corrective_action(
                 "root_cause_category": action.root_cause_category,
                 "action_description": action.action_description,
                 "action_type": action.action_type,
-                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person": responsible_person.full_name if responsible_person else "Unknown",
                 "responsible_person_id": action.responsible_person,
-                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to": assigned_person.full_name if assigned_person else "Unknown",
                 "assigned_to_id": action.assigned_to,
                 "target_completion_date": action.target_completion_date.isoformat() if action.target_completion_date else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
                 "effectiveness_criteria": action.effectiveness_criteria,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "status": action.status.value if action.status else None,
-                "created_by": creator.name if creator else "Unknown",
+                "created_by": creator.full_name if creator else "Unknown",
                 "created_at": action.created_at.isoformat() if action.created_at else None,
                 "updated_at": action.updated_at.isoformat() if action.updated_at else None
             }
@@ -1730,7 +1730,7 @@ async def update_corrective_action(
                 "action_code": action.action_code,
                 "status": action.status.value if action.status else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "updated_at": action.updated_at.isoformat() if action.updated_at else None
             }
         )
@@ -1772,7 +1772,7 @@ async def complete_corrective_action(
                 "action_code": action.action_code,
                 "status": action.status.value if action.status else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "completed_by": current_user.id,
                 "completed_at": action.updated_at.isoformat() if action.updated_at else None
             }
@@ -1797,7 +1797,7 @@ async def get_preventive_actions(
     db: Session = Depends(get_db),
     page: int = 1,
     size: int = 10,
-    status: Optional[str] = None,
+    status_filter: Optional[str] = None,
     trigger_type: Optional[str] = None
 ):
     """Get all preventive actions with pagination and filters"""
@@ -1805,8 +1805,8 @@ async def get_preventive_actions(
         query = db.query(PRPPreventiveAction)
         
         # Apply filters
-        if status:
-            query = query.filter(PRPPreventiveAction.status == CorrectiveActionStatus(status))
+        if status_filter:
+            query = query.filter(PRPPreventiveAction.status == CorrectiveActionStatus(status_filter))
         if trigger_type:
             query = query.filter(PRPPreventiveAction.trigger_type == trigger_type)
         
@@ -1829,9 +1829,9 @@ async def get_preventive_actions(
                 "trigger_description": action.trigger_description,
                 "action_description": action.action_description,
                 "objective": action.objective,
-                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person": responsible_person.full_name if responsible_person else "Unknown",
                 "responsible_person_id": action.responsible_person,
-                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to": assigned_person.full_name if assigned_person else "Unknown",
                 "assigned_to_id": action.assigned_to,
                 "implementation_plan": action.implementation_plan,
                 "resources_required": action.resources_required,
@@ -1841,7 +1841,7 @@ async def get_preventive_actions(
                 "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
                 "success_criteria": action.success_criteria,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "status": action.status.value if action.status else None,
                 "created_at": action.created_at.isoformat() if action.created_at else None,
                 "updated_at": action.updated_at.isoformat() if action.updated_at else None
@@ -1942,9 +1942,9 @@ async def get_preventive_action(
                 "trigger_description": action.trigger_description,
                 "action_description": action.action_description,
                 "objective": action.objective,
-                "responsible_person": responsible_person.name if responsible_person else "Unknown",
+                "responsible_person": responsible_person.full_name if responsible_person else "Unknown",
                 "responsible_person_id": action.responsible_person,
-                "assigned_to": assigned_person.name if assigned_person else "Unknown",
+                "assigned_to": assigned_person.full_name if assigned_person else "Unknown",
                 "assigned_to_id": action.assigned_to,
                 "implementation_plan": action.implementation_plan,
                 "resources_required": action.resources_required,
@@ -1954,9 +1954,9 @@ async def get_preventive_action(
                 "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
                 "success_criteria": action.success_criteria,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "status": action.status.value if action.status else None,
-                "created_by": creator.name if creator else "Unknown",
+                "created_by": creator.full_name if creator else "Unknown",
                 "created_at": action.created_at.isoformat() if action.created_at else None,
                 "updated_at": action.updated_at.isoformat() if action.updated_at else None
             }
@@ -1990,7 +1990,7 @@ async def update_preventive_action(
                 "status": action.status.value if action.status else None,
                 "actual_start_date": action.actual_start_date.isoformat() if action.actual_start_date else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "updated_at": action.updated_at.isoformat() if action.updated_at else None
             }
         )
@@ -2068,7 +2068,7 @@ async def complete_preventive_action(
                 "action_code": action.action_code,
                 "status": action.status.value if action.status else None,
                 "actual_completion_date": action.actual_completion_date.isoformat() if action.actual_completion_date else None,
-                "effectiveness_evaluation": action.effectiveness_evaluation,
+                "effectiveness_evaluation": getattr(action, 'effectiveness_evaluation', None),
                 "completed_by": current_user.id,
                 "completed_at": action.updated_at.isoformat() if action.updated_at else None
             }

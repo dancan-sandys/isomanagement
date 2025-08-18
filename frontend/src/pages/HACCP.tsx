@@ -633,21 +633,51 @@ const HACCP: React.FC = () => {
           <Card>
             <CardHeader title="Recent Activity" />
             <CardContent>
-              <List>
-                {dashboardStats?.recent_logs?.slice(0, 5).map((log: any, index: number) => (
-                  <ListItem key={index}>
-                    <ListItemIcon>
-                      <CheckCircle color="success" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={log.description}
-                      secondary={(log.created_at && !isNaN(Date.parse(log.created_at)))
-                        ? new Date(log.created_at).toLocaleString()
-                        : ''}
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              {Array.isArray(dashboardStats?.recent_logs) && dashboardStats!.recent_logs!.length > 0 ? (
+                <List>
+                  {dashboardStats!.recent_logs!.slice(0, 6).map((log: any, index: number) => {
+                    const createdAt = (log.created_at && !isNaN(Date.parse(log.created_at)))
+                      ? new Date(log.created_at).toLocaleString()
+                      : '';
+                    const type = (log.type || log.category || '').toString().toLowerCase();
+                    const severity = (log.severity || log.level || '').toString().toLowerCase();
+                    const StatusIcon =
+                      type.includes('ccp') || type.includes('monitor') ? Warning :
+                      type.includes('hazard') ? Security :
+                      type.includes('product') ? Add :
+                      CheckCircle;
+                    const chipColor: any =
+                      severity === 'high' || severity === 'critical' ? 'error' :
+                      severity === 'medium' ? 'warning' :
+                      severity === 'low' ? 'info' : 'default';
+                    return (
+                      <ListItem key={index} alignItems="flex-start" sx={{ py: 1 }}>
+                        <ListItemIcon>
+                          <StatusIcon color={chipColor === 'error' ? 'error' : chipColor === 'warning' ? 'warning' : chipColor === 'info' ? 'info' : 'success'} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography variant="body1" fontWeight={600}>{log.description || 'Activity'}</Typography>
+                              {type && <Chip size="small" label={(type || 'update').toString().toUpperCase()} />}
+                              {severity && <Chip size="small" color={chipColor} label={(severity || '').toString().toUpperCase()} />}
+                            </Stack>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="textSecondary">
+                              {createdAt}
+                              {log.user ? ` • by ${log.user}` : ''}
+                              {log.product_name ? ` • ${log.product_name}` : ''}
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              ) : (
+                <Typography variant="body2" color="textSecondary">No recent activity</Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -764,21 +794,7 @@ const HACCP: React.FC = () => {
                     </Box>
                   )}
                 </Box>
-                {canManageHACCP && (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    startIcon={<Science />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenFlowchartBuilder(product);
-                    }}
-                    sx={{ mt: 1 }}
-                  >
-                    Build HACCP Flowchart
-                  </Button>
-                )}
+                {/* Build HACCP Flowchart button removed as per UX guidance */}
               </CardContent>
             </Card>
           </Grid>
