@@ -573,21 +573,21 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                 <TableCell>{action.action_code}</TableCell>
                 <TableCell>
                   <Typography variant="body2" fontWeight="bold">
-                    {action.action_description || 'No description'}
+                    {action.description || 'No description'}
                   </Typography>
                   <Typography variant="caption" color="textSecondary">
-                    {action.non_conformance_description ? 
-                      (action.non_conformance_description.length > 50 ? 
-                        `${action.non_conformance_description.substring(0, 50)}...` : 
-                        action.non_conformance_description) : 
-                      'No non-conformance description'}
+                    {action.root_cause ? 
+                      (action.root_cause.length > 50 ? 
+                        `${action.root_cause.substring(0, 50)}...` : 
+                        action.root_cause) : 
+                      'No root cause'}
                   </Typography>
                 </TableCell>
                 <TableCell>
                   <Chip
-                    icon={getPriorityIcon(action.severity || 'medium')}
-                    label={action.severity || 'medium'}
-                    color={getPriorityColor(action.severity || 'medium') as any}
+                    icon={getPriorityIcon(action.priority || 'medium')}
+                    label={action.priority || 'medium'}
+                    color={getPriorityColor(action.priority || 'medium') as any}
                     size="small"
                   />
                 </TableCell>

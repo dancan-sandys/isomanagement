@@ -116,7 +116,10 @@ const ManagementReviewDetail: React.FC = () => {
 
   const addAction = async () => {
     try {
-      await managementReviewAPI.addAction(Number(id), actionForm);
+      await managementReviewAPI.addAction(Number(id), {
+        ...actionForm,
+        priority: actionForm.priority as 'low' | 'medium' | 'high' | 'critical'
+      });
       setActionForm({
         title: '',
         description: '',

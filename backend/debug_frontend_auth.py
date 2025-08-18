@@ -1,78 +1,78 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Debug script to help identify frontend authentication issues
 """
 import requests
 import json
 
-def debug_frontend_auth():
-    """Debug frontend authentication issues"""
-    print("=== Frontend Authentication Debug ===\n")
+def test_frontend_auth():
+    """Test the authentication flow that the frontend would use"""
     
-    print("🔍 To debug the frontend authentication issue:")
-    print("\n1. Open your browser's Developer Tools (F12)")
-    print("2. Go to the Application/Storage tab")
-    print("3. Check Local Storage for your domain")
-    print("4. Look for these keys:")
-    print("   - access_token")
-    print("   - refresh_token")
-    print("\n5. If tokens exist, copy the access_token value")
-    print("6. Run this script with the token to test it")
-    
-    print("\n=== Manual Token Test ===")
-    print("If you have a token, you can test it manually:")
-    print("1. Copy your access_token from browser localStorage")
-    print("2. Run: python debug_frontend_auth.py <your_token>")
-    print("3. This will test if the token is valid")
-
-def test_token(token):
-    """Test a specific token"""
+    # Base URL
     base_url = "http://localhost:8000/api/v1"
     
-    print(f"\n=== Testing Token: {token[:50]}... ===")
+    print("🔍 Testing Frontend Authentication Flow...")
+    print("=" * 50)
     
-    headers = {"Authorization": f"Bearer {token}"}
+    # Step 1: Login
+    print("\n1. Testing Login...")
+    login_data = {
+        'username': 'admin',
+        'password': 'admin123'
+    }
     
-    # Test GET /auth/me
     try:
-        response = requests.get(f"{base_url}/auth/me", headers=headers)
-        print(f"GET /auth/me status: {response.status_code}")
+        login_response = requests.post(
+            f"{base_url}/auth/login",
+            data=login_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
         
-        if response.status_code == 200:
-            user_data = response.json()
-            print("✅ Token is valid!")
-            print(f"User: {user_data.get('data', {}).get('username', 'Unknown')}")
+        if login_response.status_code == 200:
+            login_result = login_response.json()
+            print("✅ Login successful!")
+            print(f"   User: {login_result['data']['user']['username']}")
+            print(f"   Role: {login_result['data']['user']['role_name']}")
             
-            # Test POST /risk/ with correct data
-            risk_data = {
-                "title": "Test Risk",
-                "description": "Test risk description",
-                "item_type": "risk",
-                "category": "process",  # Correct enum value
-                "severity": "medium",
-                "likelihood": "possible",  # Correct enum value
-                "classification": "food_safety"  # Correct enum value
+            # Extract token
+            token = login_result['data']['access_token']
+            print(f"   Token: {token[:50]}...")
+            
+            # Step 2: Test Risk API with token
+            print("\n2. Testing Risk API with token...")
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json'
             }
             
-            response = requests.post(f"{base_url}/risk/", json=risk_data, headers=headers)
-            print(f"POST /risk/ status: {response.status_code}")
+            risk_response = requests.get(f"{base_url}/risk/", headers=headers)
             
-            if response.status_code == 200:
-                print("✅ POST /risk/ successful!")
+            if risk_response.status_code == 200:
+                print("✅ Risk API call successful!")
+                risk_data = risk_response.json()
+                print(f"   Response: {json.dumps(risk_data, indent=2)}")
             else:
-                print(f"❌ POST /risk/ failed: {response.text}")
+                print(f"❌ Risk API call failed: {risk_response.status_code}")
+                print(f"   Response: {risk_response.text}")
+                
+            # Step 3: Test Risk Stats
+            print("\n3. Testing Risk Stats...")
+            stats_response = requests.get(f"{base_url}/risk/stats/overview", headers=headers)
+            
+            if stats_response.status_code == 200:
+                print("✅ Risk Stats call successful!")
+                stats_data = stats_response.json()
+                print(f"   Response: {json.dumps(stats_data, indent=2)}")
+            else:
+                print(f"❌ Risk Stats call failed: {stats_response.status_code}")
+                print(f"   Response: {stats_response.text}")
+                
         else:
-            print(f"❌ Token is invalid: {response.text}")
+            print(f"❌ Login failed: {login_response.status_code}")
+            print(f"   Response: {login_response.text}")
             
     except Exception as e:
-        print(f"❌ Error testing token: {e}")
+        print(f"❌ Error during testing: {str(e)}")
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1:
-        token = sys.argv[1]
-        test_token(token)
-    else:
-        debug_frontend_auth()
+    test_frontend_auth()

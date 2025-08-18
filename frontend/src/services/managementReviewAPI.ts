@@ -142,7 +142,7 @@ const managementReviewAPI = {
     return resp.data;
   },
   updateOutputProgress: async (outputId: number, progress: number, notes?: string) => {
-    const params = { progress_percentage: progress };
+    const params: any = { progress_percentage: progress };
     if (notes) params.progress_notes = notes;
     const resp: AxiosResponse = await api.put(`/management-reviews/outputs/${outputId}/progress`, null, { params });
     return resp.data;

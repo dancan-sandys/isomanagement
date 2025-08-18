@@ -8,7 +8,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
 import {
-  Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Copy as CopyIcon,
+  Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ContentCopy as CopyIcon,
   Star as StarIcon, StarBorder as StarBorderIcon, Visibility as ViewIcon,
   ExpandMore as ExpandMoreIcon, PlayArrow as UseIcon, Settings as SettingsIcon,
   Description as DescriptionIcon, CheckCircle as CheckCircleIcon,

@@ -381,7 +381,7 @@ const ManagementReviewAnalytics: React.FC = () => {
                     <Box key={input}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography variant="body2">{input.replace('_', ' ')}</Typography>
-                        <Typography variant="body2" fontWeight="bold">{rate}%</Typography>
+                        <Typography variant="body2" fontWeight="bold">{String(rate)}%</Typography>
                       </Stack>
                       <LinearProgress 
                         variant="determinate" 
@@ -405,7 +405,7 @@ const ManagementReviewAnalytics: React.FC = () => {
                     <Box key={output}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography variant="body2">{output.replace('_', ' ')}</Typography>
-                        <Typography variant="body2" fontWeight="bold">{rate}%</Typography>
+                        <Typography variant="body2" fontWeight="bold">{String(rate)}%</Typography>
                       </Stack>
                       <LinearProgress 
                         variant="determinate" 
@@ -550,7 +550,7 @@ const ManagementReviewAnalytics: React.FC = () => {
                           priority === 'medium' ? 'info' : 'default'
                         }
                       />
-                      <Typography variant="h6">{count}</Typography>
+                      <Typography variant="h6">{String(count)}</Typography>
                     </Stack>
                   ))}
                 </Stack>
