@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '../../../utils/test-utils';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../../utils/test-utils';
 import OfflineCapabilities from '../OfflineCapabilities';
 import { mockLocalStorage, mockGeolocation } from '../../../utils/test-utils';
 
@@ -31,7 +32,7 @@ describe('OfflineCapabilities', () => {
 
   describe('Rendering', () => {
     it('renders the offline capabilities component', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByText('Offline Data')).toBeInTheDocument();
       expect(screen.getByText('Sync Controls')).toBeInTheDocument();
@@ -40,7 +41,7 @@ describe('OfflineCapabilities', () => {
     });
 
     it('shows online status when connected', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByText('Online - All features available')).toBeInTheDocument();
     });
@@ -52,7 +53,7 @@ describe('OfflineCapabilities', () => {
         writable: true,
       });
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByText('Offline - Limited functionality available')).toBeInTheDocument();
     });
@@ -70,7 +71,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByText('2 Batches')).toBeInTheDocument();
       expect(screen.getByText('1 Recalls')).toBeInTheDocument();
@@ -89,7 +90,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByText(/Last sync:/)).toBeInTheDocument();
     });
@@ -104,7 +105,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByText(/Storage used:/)).toBeInTheDocument();
     });
@@ -112,7 +113,7 @@ describe('OfflineCapabilities', () => {
 
   describe('Download Functionality', () => {
     it('downloads offline data when button is clicked', async () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       fireEvent.click(downloadButton);
@@ -137,14 +138,14 @@ describe('OfflineCapabilities', () => {
         writable: true,
       });
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       expect(downloadButton).toBeDisabled();
     });
 
     it('disables download button while syncing', async () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       fireEvent.click(downloadButton);
@@ -166,7 +167,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const uploadButton = screen.getByText('Upload Pending Changes (2)');
       fireEvent.click(uploadButton);
@@ -181,7 +182,7 @@ describe('OfflineCapabilities', () => {
     });
 
     it('disables upload button when no pending changes', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const uploadButton = screen.getByText('Upload Pending Changes (0)');
       expect(uploadButton).toBeDisabled();
@@ -203,7 +204,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const uploadButton = screen.getByText('Upload Pending Changes (1)');
       expect(uploadButton).toBeDisabled();
@@ -212,7 +213,7 @@ describe('OfflineCapabilities', () => {
 
   describe('Settings Dialog', () => {
     it('opens settings dialog when button is clicked', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const settingsButton = screen.getByText('Offline Settings');
       fireEvent.click(settingsButton);
@@ -231,7 +232,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const settingsButton = screen.getByText('Offline Settings');
       fireEvent.click(settingsButton);
@@ -241,7 +242,7 @@ describe('OfflineCapabilities', () => {
     });
 
     it('clears all data when clear button is clicked', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const settingsButton = screen.getByText('Offline Settings');
       fireEvent.click(settingsButton);
@@ -259,7 +260,7 @@ describe('OfflineCapabilities', () => {
       const originalError = console.error;
       console.error = jest.fn();
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       fireEvent.click(downloadButton);
@@ -281,7 +282,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const uploadButton = screen.getByText('Upload Pending Changes (1)');
       fireEvent.click(uploadButton);
@@ -292,7 +293,7 @@ describe('OfflineCapabilities', () => {
     });
 
     it('clears error when refresh button is clicked', async () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       fireEvent.click(downloadButton);
@@ -312,7 +313,7 @@ describe('OfflineCapabilities', () => {
 
   describe('Progress Tracking', () => {
     it('shows progress during download', async () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       fireEvent.click(downloadButton);
@@ -344,7 +345,7 @@ describe('OfflineCapabilities', () => {
 
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockOfflineData));
 
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const uploadButton = screen.getByText('Upload Pending Changes (2)');
       fireEvent.click(uploadButton);
@@ -365,7 +366,7 @@ describe('OfflineCapabilities', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels and roles', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       expect(screen.getByRole('alert')).toBeInTheDocument();
       expect(screen.getByText('Offline Data')).toBeInTheDocument();
@@ -373,7 +374,7 @@ describe('OfflineCapabilities', () => {
     });
 
     it('supports keyboard navigation', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       const downloadButton = screen.getByText('Download Latest Data');
       expect(downloadButton).toHaveAttribute('tabIndex', '0');
@@ -382,7 +383,7 @@ describe('OfflineCapabilities', () => {
 
   describe('Mobile Responsiveness', () => {
     it('renders with mobile-specific styling', () => {
-      render(<OfflineCapabilities {...defaultProps} />);
+      renderWithProviders(<OfflineCapabilities {...defaultProps} />);
       
       // Check that the grid layout is responsive
       const gridContainer = screen.getByText('Offline Data').closest('.MuiGrid-container');

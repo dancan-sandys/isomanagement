@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '../../../utils/test-utils';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../../utils/test-utils';
 import QRCodeScanner from '../QRCodeScanner';
 import { mockBatch } from '../../../utils/test-utils';
 
@@ -25,7 +26,7 @@ describe('QRCodeScanner', () => {
 
   describe('Rendering', () => {
     it('renders the scanner dialog when open', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       expect(screen.getByText('QR Code & Barcode Scanner')).toBeInTheDocument();
       expect(screen.getByText('Scanner')).toBeInTheDocument();
@@ -39,14 +40,14 @@ describe('QRCodeScanner', () => {
     });
 
     it('displays the scanner placeholder when not scanning', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       expect(screen.getByText('Camera scanner will be implemented here')).toBeInTheDocument();
       expect(screen.getByText('Test Search')).toBeInTheDocument();
     });
 
     it('shows empty scan results initially', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       expect(screen.getByText('Scan a QR code or barcode to find batch information')).toBeInTheDocument();
     });
@@ -60,7 +61,7 @@ describe('QRCodeScanner', () => {
         total: 1,
       });
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -83,7 +84,7 @@ describe('QRCodeScanner', () => {
         total: 0,
       });
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -97,7 +98,7 @@ describe('QRCodeScanner', () => {
       const mockGetBatches = require('../../../services/traceabilityAPI').traceabilityAPI.getBatches;
       mockGetBatches.mockRejectedValue(new Error('API Error'));
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -116,7 +117,7 @@ describe('QRCodeScanner', () => {
         total: 1,
       });
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -135,7 +136,7 @@ describe('QRCodeScanner', () => {
         total: 1,
       });
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -150,7 +151,7 @@ describe('QRCodeScanner', () => {
 
   describe('Dialog Controls', () => {
     it('calls onClose when close button is clicked', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const closeButton = screen.getByLabelText('Close scanner');
       fireEvent.click(closeButton);
@@ -159,7 +160,7 @@ describe('QRCodeScanner', () => {
     });
 
     it('calls onClose when cancel button is clicked', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const cancelButton = screen.getByText('Close');
       fireEvent.click(cancelButton);
@@ -177,7 +178,7 @@ describe('QRCodeScanner', () => {
       });
       mockGetBatches.mockReturnValue(promise);
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -200,7 +201,7 @@ describe('QRCodeScanner', () => {
       const mockGetBatches = require('../../../services/traceabilityAPI').traceabilityAPI.getBatches;
       mockGetBatches.mockRejectedValue(new Error('Network error'));
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -216,7 +217,7 @@ describe('QRCodeScanner', () => {
       // First call fails
       mockGetBatches.mockRejectedValueOnce(new Error('Network error'));
       
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
@@ -242,14 +243,14 @@ describe('QRCodeScanner', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       expect(screen.getByLabelText('Close scanner')).toBeInTheDocument();
       expect(screen.getByLabelText('QR code scanner')).toBeInTheDocument();
     });
 
     it('supports keyboard navigation', () => {
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       const closeButton = screen.getByLabelText('Close scanner');
       expect(closeButton).toHaveAttribute('tabIndex', '0');
@@ -264,7 +265,7 @@ describe('QRCodeScanner', () => {
         useMediaQuery: jest.fn(() => true),
       }));
 
-      render(<QRCodeScanner {...defaultProps} />);
+      renderWithProviders(<QRCodeScanner {...defaultProps} />);
       
       // The dialog should have fullScreen prop when on mobile
       const dialog = screen.getByRole('dialog');

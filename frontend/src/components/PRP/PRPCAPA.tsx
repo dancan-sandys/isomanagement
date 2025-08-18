@@ -585,21 +585,21 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                 </TableCell>
                 <TableCell>
                   <Chip
-                    icon={getPriorityIcon(action.priority)}
-                    label={action.priority}
-                    color={getPriorityColor(action.priority) as any}
+                    icon={getPriorityIcon(action.severity || 'medium')}
+                    label={action.severity || 'medium'}
+                    color={getPriorityColor(action.severity || 'medium') as any}
                     size="small"
                   />
                 </TableCell>
                 <TableCell>
                   <Chip
                     icon={getStatusIcon(action.status)}
-                    label={action.status.replace('_', ' ')}
+                    label={action.status ? action.status.replace('_', ' ') : 'unknown'}
                     color={getStatusColor(action.status) as any}
                     size="small"
                   />
                 </TableCell>
-                <TableCell>{action.assigned_to}</TableCell>
+                <TableCell>{action.assigned_to || 'Unassigned'}</TableCell>
                 <TableCell>
                   {new Date(action.due_date).toLocaleDateString()}
                 </TableCell>
@@ -691,12 +691,12 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                 <TableCell>
                   <Chip
                     icon={getStatusIcon(action.status)}
-                    label={action.status.replace('_', ' ')}
+                    label={action.status ? action.status.replace('_', ' ') : 'unknown'}
                     color={getStatusColor(action.status) as any}
                     size="small"
                   />
                 </TableCell>
-                <TableCell>{action.assigned_to}</TableCell>
+                <TableCell>{action.assigned_to || 'Unassigned'}</TableCell>
                 <TableCell>
                   {new Date(action.due_date).toLocaleDateString()}
                 </TableCell>
