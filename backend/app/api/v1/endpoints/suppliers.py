@@ -9,8 +9,6 @@ import shutil
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
 from app.services.supplier_service import SupplierService
 from app.models.supplier import Supplier, Material, SupplierEvaluation, EvaluationStatus, SupplierStatus
 from app.schemas.supplier import (
@@ -53,8 +51,7 @@ router = APIRouter()
 # Material endpoints - specific routes MUST come before parameterized routes
 @router.get("/materials/stats", response_model=ResponseModel[dict])
 async def get_material_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get material statistics"""
     service = SupplierService(db)
@@ -74,8 +71,7 @@ async def export_materials(
     category: Optional[str] = Query(None, description="Filter by category"),
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
     approval_status: Optional[str] = Query(None, description="Filter by approval status"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Export materials to file"""
     filter_params = MaterialFilter(
@@ -130,12 +126,11 @@ async def search_materials(
 @router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
 async def bulk_approve_materials(
     payload: BulkApproveMaterialsPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Bulk approve materials"""
     service = SupplierService(db)
-    results = service.bulk_approve_materials(payload.material_ids, current_user.id)
+    results = service.bulk_approve_materials(payload.material_ids, 1)
     
     return ResponseModel(
         success=True,
@@ -147,12 +142,11 @@ async def bulk_approve_materials(
 @router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
 async def bulk_reject_materials(
     payload: BulkRejectMaterialsPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Bulk reject materials"""
     service = SupplierService(db)
-    results = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, current_user.id)
+    results = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, 1)
     
     return ResponseModel(
         success=True,
@@ -239,22 +233,7 @@ async def create_material(
         Material.supplier_id == material_data.supplier_id
     ).exists()).scalar()
     
-    if existing_material:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Material code already exists for this supplier"
-        )
     
-    material = service.create_material(material_data, current_user.id)
-    try:
-        audit_event(db, current_user.id, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
-    except Exception:
-        pass
-    return ResponseModel(
-        success=True,
-        message="Material created successfully",
-        data=material
-    )
 
 
 @router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
@@ -274,10 +253,10 @@ async def update_material(
             detail="Material not found"
         )
     
-    try:
-        audit_event(db, current_user.id, "material_updated", "suppliers", str(material.id))
-    except Exception:
-        pass
+        try:
+            audit_event(db, 1, "material_updated", "suppliers", str(material.id))
+        except Exception:
+            pass
     return ResponseModel(
         success=True,
         message="Material updated successfully",

@@ -17,6 +17,7 @@ from app.schemas.allergen_label import (
     LabelTemplateApprovalCreate, LabelTemplateApprovalResponse,
 )
 from app.utils.audit import audit_event
+from app.schemas.common import ResponseModel
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas

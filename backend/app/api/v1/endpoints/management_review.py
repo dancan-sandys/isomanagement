@@ -3,8 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
 from app.models.management_review import ManagementReviewStatus, ManagementReviewType, ActionStatus
 from app.schemas.common import ResponseModel
 from app.schemas.management_review import (
@@ -22,22 +20,22 @@ router = APIRouter()
 # ==================== CORE REVIEW MANAGEMENT ====================
 
 @router.post("/", response_model=ResponseModel)
-async def create_review(payload: ManagementReviewCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_review(payload: ManagementReviewCreate, db: Session = Depends(get_db)):
     """Create a new management review with ISO compliance features"""
     try:
         service = ManagementReviewService(db)
-        review = service.create(payload, current_user.id)
+        review = service.create(payload, 1)
         return ResponseModel(success=True, message="Management review created", data=ManagementReviewResponse.model_validate(review))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create management review: {str(e)}")
 
 
 @router.post("/from-template/{template_id}", response_model=ResponseModel)
-async def create_review_from_template(template_id: int, payload: ManagementReviewCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_review_from_template(template_id: int, payload: ManagementReviewCreate, db: Session = Depends(get_db)):
     """Create a review from a template"""
     try:
         service = ManagementReviewService(db)
-        review = service.create_from_template(template_id, payload, current_user.id)
+        review = service.create_from_template(template_id, payload, 1)
         return ResponseModel(success=True, message="Management review created from template", data=ManagementReviewResponse.model_validate(review))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -51,7 +49,6 @@ async def list_reviews(
     size: int = Query(20, ge=1, le=100),
     status: Optional[ManagementReviewStatus] = Query(None),
     review_type: Optional[ManagementReviewType] = Query(None),
-    current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
     """List management reviews with enhanced filtering"""
@@ -67,7 +64,7 @@ async def list_reviews(
 
 
 @router.get("/{review_id}", response_model=ResponseModel)
-async def get_review(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_review(review_id: int, db: Session = Depends(get_db)):
     """Get a management review by ID"""
     review = ManagementReviewService(db).get(review_id)
     if not review:
@@ -76,7 +73,7 @@ async def get_review(review_id: int, current_user: User = Depends(get_current_us
 
 
 @router.put("/{review_id}", response_model=ResponseModel)
-async def update_review(review_id: int, payload: ManagementReviewUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def update_review(review_id: int, payload: ManagementReviewUpdate, db: Session = Depends(get_db)):
     """Update a management review"""
     try:
         service = ManagementReviewService(db)
@@ -89,11 +86,11 @@ async def update_review(review_id: int, payload: ManagementReviewUpdate, current
 
 
 @router.post("/{review_id}/complete", response_model=ResponseModel)
-async def complete_review(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def complete_review(review_id: int, db: Session = Depends(get_db)):
     """Mark a review as completed and calculate effectiveness"""
     try:
         service = ManagementReviewService(db)
-        review = service.complete_review(review_id, current_user.id)
+        review = service.complete_review(review_id, 1)
         return ResponseModel(success=True, message="Management review completed", data=ManagementReviewResponse.model_validate(review))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -102,7 +99,7 @@ async def complete_review(review_id: int, current_user: User = Depends(get_curre
 
 
 @router.delete("/{review_id}", response_model=ResponseModel)
-async def delete_review(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def delete_review(review_id: int, db: Session = Depends(get_db)):
     """Delete a management review"""
     try:
         ok = ManagementReviewService(db).delete(review_id)
@@ -118,7 +115,7 @@ async def delete_review(review_id: int, current_user: User = Depends(get_current
 # ==================== DATA COLLECTION AND INPUTS ====================
 
 @router.post("/{review_id}/collect-inputs", response_model=ResponseModel)
-async def collect_review_inputs(review_id: int, request: DataCollectionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def collect_review_inputs(review_id: int, request: DataCollectionRequest, db: Session = Depends(get_db)):
     """Collect all required inputs for a management review"""
     try:
         service = ManagementReviewService(db)
@@ -131,7 +128,7 @@ async def collect_review_inputs(review_id: int, request: DataCollectionRequest, 
 
 
 @router.post("/{review_id}/inputs", response_model=ResponseModel)
-async def add_manual_input(review_id: int, payload: ManagementReviewInputCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def add_manual_input(review_id: int, payload: ManagementReviewInputCreate, db: Session = Depends(get_db)):
     """Add manual input to a review"""
     try:
         service = ManagementReviewService(db)
@@ -144,7 +141,7 @@ async def add_manual_input(review_id: int, payload: ManagementReviewInputCreate,
 
 
 @router.get("/{review_id}/inputs", response_model=ResponseModel)
-async def get_review_inputs(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_review_inputs(review_id: int, db: Session = Depends(get_db)):
     """Get all inputs for a review"""
     try:
         service = ManagementReviewService(db)
@@ -157,7 +154,7 @@ async def get_review_inputs(review_id: int, current_user: User = Depends(get_cur
 # ==================== OUTPUTS AND DECISIONS ====================
 
 @router.post("/{review_id}/outputs", response_model=ResponseModel)
-async def add_review_output(review_id: int, payload: ManagementReviewOutputCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def add_review_output(review_id: int, payload: ManagementReviewOutputCreate, db: Session = Depends(get_db)):
     """Add a structured output/decision to a review"""
     try:
         service = ManagementReviewService(db)
@@ -170,7 +167,7 @@ async def add_review_output(review_id: int, payload: ManagementReviewOutputCreat
 
 
 @router.get("/{review_id}/outputs", response_model=ResponseModel)
-async def get_review_outputs(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_review_outputs(review_id: int, db: Session = Depends(get_db)):
     """Get all outputs for a review"""
     try:
         service = ManagementReviewService(db)
@@ -181,7 +178,7 @@ async def get_review_outputs(review_id: int, current_user: User = Depends(get_cu
 
 
 @router.put("/outputs/{output_id}/progress", response_model=ResponseModel)
-async def update_output_progress(output_id: int, progress_percentage: float = Query(..., ge=0, le=100), progress_notes: Optional[str] = Query(None), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def update_output_progress(output_id: int, progress_percentage: float = Query(..., ge=0, le=100), progress_notes: Optional[str] = Query(None), db: Session = Depends(get_db)):
     """Update progress on a review output"""
     try:
         service = ManagementReviewService(db)
@@ -196,7 +193,7 @@ async def update_output_progress(output_id: int, progress_percentage: float = Qu
 # ==================== ENHANCED ACTION MANAGEMENT ====================
 
 @router.post("/{review_id}/actions", response_model=ResponseModel)
-async def add_review_action(review_id: int, payload: ReviewActionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def add_review_action(review_id: int, payload: ReviewActionCreate, db: Session = Depends(get_db)):
     """Add an enhanced action to a review"""
     try:
         service = ManagementReviewService(db)
@@ -209,7 +206,7 @@ async def add_review_action(review_id: int, payload: ReviewActionCreate, current
 
 
 @router.get("/{review_id}/actions", response_model=ResponseModel)
-async def list_review_actions(review_id: int, status: Optional[ActionStatus] = Query(None), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_review_actions(review_id: int, status: Optional[ActionStatus] = Query(None), db: Session = Depends(get_db)):
     """List actions with filtering"""
     try:
         service = ManagementReviewService(db)
@@ -220,7 +217,7 @@ async def list_review_actions(review_id: int, status: Optional[ActionStatus] = Q
 
 
 @router.put("/actions/{action_id}", response_model=ResponseModel)
-async def update_action(action_id: int, payload: ReviewActionUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def update_action(action_id: int, payload: ReviewActionUpdate, db: Session = Depends(get_db)):
     """Update an action with enhanced tracking"""
     try:
         service = ManagementReviewService(db)
@@ -233,11 +230,11 @@ async def update_action(action_id: int, payload: ReviewActionUpdate, current_use
 
 
 @router.post("/actions/{action_id}/complete", response_model=ResponseModel)
-async def complete_review_action(action_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def complete_review_action(action_id: int, db: Session = Depends(get_db)):
     """Complete an action with enhanced tracking"""
     try:
         service = ManagementReviewService(db)
-        action = service.complete_action(action_id, current_user.id)
+        action = service.complete_action(action_id, 1)
         return ResponseModel(success=True, message="Action completed", data=ReviewActionResponse.model_validate(action))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -246,7 +243,7 @@ async def complete_review_action(action_id: int, current_user: User = Depends(ge
 
 
 @router.get("/actions/overdue", response_model=ResponseModel)
-async def get_overdue_actions(review_id: Optional[int] = Query(None), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_overdue_actions(review_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """Get overdue actions"""
     try:
         service = ManagementReviewService(db)
@@ -259,7 +256,7 @@ async def get_overdue_actions(review_id: Optional[int] = Query(None), current_us
 # ==================== ANALYTICS AND REPORTING ====================
 
 @router.get("/{review_id}/analytics", response_model=ResponseModel)
-async def get_review_analytics(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_review_analytics(review_id: int, db: Session = Depends(get_db)):
     """Get comprehensive analytics for a review"""
     try:
         service = ManagementReviewService(db)
@@ -272,7 +269,7 @@ async def get_review_analytics(review_id: int, current_user: User = Depends(get_
 
 
 @router.get("/{review_id}/compliance-check", response_model=ResponseModel)
-async def check_iso_compliance(review_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def check_iso_compliance(review_id: int, db: Session = Depends(get_db)):
     """Check ISO 22000:2018 compliance for a review"""
     try:
         service = ManagementReviewService(db)
@@ -287,7 +284,7 @@ async def check_iso_compliance(review_id: int, current_user: User = Depends(get_
 # ==================== TEMPLATE MANAGEMENT ====================
 
 @router.get("/templates", response_model=ResponseModel)
-async def list_templates(active_only: bool = Query(True), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_templates(active_only: bool = Query(True), db: Session = Depends(get_db)):
     """List available templates"""
     try:
         service = ManagementReviewService(db)
@@ -298,7 +295,7 @@ async def list_templates(active_only: bool = Query(True), current_user: User = D
 
 
 @router.get("/templates/default", response_model=ResponseModel)
-async def get_default_template(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_default_template(db: Session = Depends(get_db)):
     """Get the default template"""
     try:
         service = ManagementReviewService(db)
@@ -313,7 +310,7 @@ async def get_default_template(current_user: User = Depends(get_current_user), d
 
 
 @router.get("/templates/{template_id}", response_model=ResponseModel)
-async def get_template(template_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_template(template_id: int, db: Session = Depends(get_db)):
     """Get a template by ID"""
     try:
         service = ManagementReviewService(db)
@@ -328,14 +325,14 @@ async def get_template(template_id: int, current_user: User = Depends(get_curren
 
 
 @router.post("/templates", response_model=ResponseModel)
-async def create_template(payload: ManagementReviewTemplateCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_template(payload: ManagementReviewTemplateCreate, db: Session = Depends(get_db)):
     """Create a review template"""
     try:
         service = ManagementReviewService(db)
         template = service.create_template(
             name=payload.name,
             description=payload.description,
-            created_by=current_user.id,
+            created_by=1,
             agenda_template=payload.agenda_template,
             input_checklist=payload.input_checklist
         )

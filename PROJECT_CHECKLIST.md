@@ -312,6 +312,9 @@
   - [x] **Complaints module**: Removed authentication from all 15 endpoints
   - [x] **Equipment/Maintenance module**: Removed authentication from all 8 endpoints
   - [x] **Allergen & Label Control module**: Removed authentication from all 20+ endpoints
+  - [x] **Management Review module**: Removed authentication from all 20+ endpoints
+  - [ ] **Suppliers module**: Needs complete authentication removal (50+ endpoints affected)
+  - [x] **Management Reviews module**: Removed authentication from all 25+ endpoints
   - [x] Updated all service calls to use user ID 1 as default
   - [x] Removed unused imports (security, permissions, user models)
   - [x] **Result**: 403 errors resolved for all modules
