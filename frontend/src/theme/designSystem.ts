@@ -1,6 +1,6 @@
 import { createTheme, Theme } from '@mui/material/styles';
 
-// Enhanced ISO 22000 Status Colors with better contrast
+// Enhanced Compli FSMS Status Colors with better contrast
 export const ISO_STATUS_COLORS = {
   compliant: '#059669', // Enhanced Green - Compliant/Completed
   nonConformance: '#DC2626', // Enhanced Red - Non-conformance/Urgent
@@ -652,7 +652,7 @@ export const ROLE_DASHBOARDS = {
   },
 } as const;
 
-// Navigation structure aligned with ISO 22000:2018 - PRIORITIZED FUNCTIONAL FEATURES
+// Navigation structure aligned with Compli FSMS - PRIORITIZED FUNCTIONAL FEATURES
 export const ISO_NAVIGATION = {
   dashboard: {
     title: 'Dashboard',

@@ -983,7 +983,7 @@ const Documents: React.FC = () => {
     <Box>
       <PageHeader
         title="Document Control"
-        subtitle="ISO 22000 Document Management System"
+                      subtitle="Compli FSMS Document Management System"
         breadcrumbs={[
           { label: 'Dashboard', path: '/' },
           { label: 'Document Control', path: '/documents' }

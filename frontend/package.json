@@ -1,7 +1,7 @@
 {
-  "name": "iso22000-fsms-frontend",
+  "name": "compli-fsms-frontend",
   "version": "1.0.0",
-  "description": "ISO 22000 Food Safety Management System Frontend",
+  "description": "Compli FSMS Food Safety Management System Frontend",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.11.1",

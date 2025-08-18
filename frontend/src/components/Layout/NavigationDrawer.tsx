@@ -60,12 +60,12 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
             color: 'white'
           }}>
             <Typography variant="h6" fontWeight={700}>
-              ISO
+              C
             </Typography>
           </Box>
           <Box>
             <Typography variant="h6" fontWeight={700} noWrap>
-              ISO 22000 FSMS
+              Compli FSMS
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Food Safety Management System

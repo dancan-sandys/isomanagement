@@ -177,7 +177,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     textShadow: '0 1px 2px rgba(0,0,0,0.1)',
                   }}
                 >
-                  ISO 22000 Food Safety Management System
+                  Compli FSMS Food Safety Management System
                 </Typography>
                 <Typography 
                   variant="caption" 

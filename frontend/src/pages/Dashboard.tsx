@@ -42,6 +42,7 @@ import DashboardCard from '../components/Dashboard/DashboardCard';
 import StatusChip from '../components/UI/StatusChip';
 import SmartDashboard from '../components/Dashboard/SmartDashboard';
 import SmartOnboarding from '../components/Onboarding/SmartOnboarding';
+import RealDataDashboard from '../components/Dashboard/RealDataDashboard';
 import { RootState } from '../store';
 import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
 import { dashboardAPI } from '../services/api';
@@ -605,8 +606,27 @@ const Dashboard: React.FC = () => {
         onComplete={handleOnboardingComplete}
         isFirstTime={isFirstTime}
       />
-      {/* Modern Smart Dashboard */}
-      <SmartDashboard />
+      {/* Enhanced Real Data Dashboard */}
+      <RealDataDashboard />
+
+      {/* Optional: Legacy Dashboard Toggle for comparison */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ position: 'fixed', top: 100, right: 20, zIndex: 1000 }}>
+          <Tooltip title="Show onboarding again">
+            <IconButton
+              onClick={() => setShowOnboarding(true)}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': { bgcolor: 'primary.dark' },
+                boxShadow: 3,
+              }}
+            >
+              <AutoAwesome />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
 
       {/* Optional: Legacy Dashboard Toggle for comparison */}
       {process.env.NODE_ENV === 'development' && (

@@ -162,7 +162,7 @@ const Signup: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Security sx={{ fontSize: 40, color: 'primary.main', mr: 1 }} />
             <Typography component="h1" variant="h4">
-              ISO 22000 FSMS System Setup
+                              Compli FSMS System Setup
             </Typography>
           </Box>
 
@@ -175,7 +175,7 @@ const Signup: React.FC = () => {
                 </Typography>
               </Box>
               <Typography variant="body2" color="warning.dark">
-                This registration will create the first System Administrator account for the ISO 22000 FSMS. 
+                This registration will create the first System Administrator account for the Compli FSMS. 
                 Only System Administrators can create additional user accounts. Please ensure you have the 
                 authority to set up the system.
               </Typography>

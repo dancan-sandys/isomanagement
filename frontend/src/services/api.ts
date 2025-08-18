@@ -1106,6 +1106,41 @@ export const dashboardAPI = {
     return response.data;
   },
 
+  // New Enhanced Dashboard Methods
+  getKPIs: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/kpis');
+    return response.data;
+  },
+
+  getChartData: async (chartType: string, period: string = '6m') => {
+    const response: AxiosResponse = await api.get(`/dashboard/charts/${chartType}`, {
+      params: { period }
+    });
+    return response.data;
+  },
+
+  getDepartmentCompliance: async () => {
+    const response: AxiosResponse = await api.get('/dashboard/department-compliance');
+    return response.data;
+  },
+
+  exportData: async (exportType: string, format: string = 'excel', period: string = '6m') => {
+    const response: AxiosResponse = await api.get(`/dashboard/export/${exportType}`, {
+      params: { format, period },
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  scheduleReport: async (reportType: string, frequency: string, recipients: string[]) => {
+    const response: AxiosResponse = await api.post('/dashboard/schedule-report', {
+      report_type: reportType,
+      frequency,
+      recipients
+    });
+    return response.data;
+  },
+
   // Enhanced UX Methods (fallback to existing data if new endpoints not available)
   getUserMetrics: async (userId: string) => {
     try {

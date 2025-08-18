@@ -1,11 +1,11 @@
 {
-  "name": "ISO 22000 FSMS",
+  "name": "Compli FSMS",
   "short_name": "FSMS",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1976d2",
-  "description": "ISO 22000 Food Safety Management System",
+  "description": "Compli FSMS Food Safety Management System",
   "icons": []
 }
 

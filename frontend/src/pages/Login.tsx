@@ -167,7 +167,7 @@ const Login: React.FC = () => {
           </Avatar>
           
           <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-            ISO 22000 FSMS Login
+                          Compli FSMS Login
           </Typography>
 
           {(error || errorHint) && (

@@ -524,7 +524,7 @@ const Settings: React.FC = () => {
                 <ListItem>
                     <ListItemText 
                      primary="Application Name" 
-                     secondary={systemInfo?.app?.name || 'ISO 22000 FSMS'} 
+                     secondary={systemInfo?.app?.name || 'Compli FSMS'} 
                    />
                 </ListItem>
                 <ListItem>
@@ -677,7 +677,7 @@ const Settings: React.FC = () => {
             Application Settings
           </Typography>
           <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-            Configure system-wide settings for the ISO 22000 FSMS application.
+            Configure system-wide settings for the Compli FSMS application.
           </Typography>
 
           {settings.length === 0 ? (

@@ -127,7 +127,7 @@ const SmartOnboarding: React.FC<SmartOnboardingProps> = ({
             <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 3 }}>
               <Chip 
                 icon={<Security />} 
-                label="ISO 22000 Compliant" 
+                label="Compli FSMS Compliant" 
                 color="success" 
                 variant="outlined" 
               />

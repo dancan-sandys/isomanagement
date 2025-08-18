@@ -92,7 +92,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         
         // Show browser notification if permitted
         if (Notification.permission === 'granted') {
-          new Notification('ISO 22000 Alert', {
+          new Notification('Compli FSMS Alert', {
             body: message.data.message,
             icon: '/favicon.ico',
             tag: `alert-${message.data.alert_id}`

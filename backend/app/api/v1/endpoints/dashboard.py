@@ -992,3 +992,490 @@ async def cancel_scheduled_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cancel scheduled report: {str(e)}"
         ) 
+
+@router.get("/kpis")
+async def get_dashboard_kpis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get comprehensive KPIs for dashboard with real data calculations
+    """
+    try:
+        from sqlalchemy import cast, String
+        now = datetime.utcnow()
+        last_30_days = now - timedelta(days=30)
+        last_90_days = now - timedelta(days=90)
+        
+        # Document Control KPIs
+        total_docs = db.query(func.count(Document.id)).scalar() or 0
+        approved_docs = db.query(func.count(Document.id)).filter(cast(Document.status, String) == "approved").scalar() or 0
+        doc_compliance = round((approved_docs / total_docs) * 100, 2) if total_docs else 0.0
+        
+        # HACCP KPIs
+        total_hazards = db.query(func.count(Hazard.id)).scalar() or 0
+        controlled_hazards = db.query(func.count(Hazard.id)).filter(Hazard.is_controlled == True).scalar() or 0
+        ccp_compliance = round((controlled_hazards / total_hazards) * 100, 2) if total_hazards else 0.0
+        
+        # PRP KPIs
+        total_prp = db.query(func.count(PRPChecklist.id)).scalar() or 0
+        completed_prp = db.query(func.count(PRPChecklist.id)).filter(cast(PRPChecklist.status, String) == "completed").scalar() or 0
+        prp_completion = round((completed_prp / total_prp) * 100, 2) if total_prp else 0.0
+        
+        # Supplier KPIs
+        total_suppliers = db.query(func.count(Supplier.id)).scalar() or 0
+        avg_supplier_score = db.query(func.avg(SupplierEvaluation.overall_score)).scalar() or 0.0
+        supplier_score = round((avg_supplier_score / 5.0) * 100, 2) if avg_supplier_score else 0.0
+        
+        # Training KPIs
+        total_users = db.query(func.count(User.id)).scalar() or 0
+        trained_users = db.query(func.count(func.distinct(TrainingAttendance.user_id))).filter(TrainingAttendance.attended == True).scalar() or 0
+        training_completion = round((trained_users / total_users) * 100, 2) if total_users else 0.0
+        
+        # NC/CAPA KPIs
+        nc_last_30 = db.query(func.count(NonConformance.id)).filter(NonConformance.reported_date >= last_30_days).scalar() or 0
+        capa_last_30 = db.query(func.count(CAPAAction.id)).filter(CAPAAction.created_at >= last_30_days).scalar() or 0
+        open_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.status.in_(["open", "in_progress"])).scalar() or 0
+        open_capa = db.query(func.count(CAPAAction.id)).filter(CAPAAction.status.in_(["open", "in_progress"])).scalar() or 0
+        
+        # Audit KPIs
+        total_audits = db.query(func.count(Audit.id)).scalar() or 0
+        completed_audits = db.query(func.count(Audit.id)).filter(cast(Audit.status, String) == "completed").scalar() or 0
+        audit_completion = round((completed_audits / total_audits) * 100, 2) if total_audits else 0.0
+        
+        # Overall FSMS Compliance Score
+        overall_compliance = round((doc_compliance + ccp_compliance + prp_completion + supplier_score + training_completion) / 5.0, 2)
+        
+        kpis = {
+            "overallCompliance": overall_compliance,
+            "documentControl": {
+                "compliance": doc_compliance,
+                "totalDocuments": total_docs,
+                "approvedDocuments": approved_docs
+            },
+            "haccp": {
+                "ccpCompliance": ccp_compliance,
+                "totalHazards": total_hazards,
+                "controlledHazards": controlled_hazards
+            },
+            "prp": {
+                "completion": prp_completion,
+                "totalChecklists": total_prp,
+                "completedChecklists": completed_prp
+            },
+            "suppliers": {
+                "performance": supplier_score,
+                "totalSuppliers": total_suppliers,
+                "avgScore": avg_supplier_score
+            },
+            "training": {
+                "completion": training_completion,
+                "totalUsers": total_users,
+                "trainedUsers": trained_users
+            },
+            "nonConformance": {
+                "last30Days": nc_last_30,
+                "openNC": open_nc,
+                "openCAPA": open_capa
+            },
+            "audits": {
+                "completion": audit_completion,
+                "totalAudits": total_audits,
+                "completedAudits": completed_audits
+            }
+        }
+        
+        return ResponseModel(success=True, message="KPIs retrieved successfully", data=kpis)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get KPIs: {str(e)}")
+
+
+@router.get("/charts/{chart_type}")
+async def get_dashboard_charts(
+    chart_type: str,
+    period: str = Query("6m", description="Time period: 1m, 3m, 6m, 1y"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get chart data for different dashboard visualizations
+    """
+    try:
+        from sqlalchemy import cast, String
+        now = datetime.utcnow()
+        
+        # Calculate date range based on period
+        if period == "1m":
+            start_date = now - timedelta(days=30)
+            group_by = "%Y-%m-%d"
+        elif period == "3m":
+            start_date = now - timedelta(days=90)
+            group_by = "%Y-%m"
+        elif period == "6m":
+            start_date = now - timedelta(days=180)
+            group_by = "%Y-%m"
+        elif period == "1y":
+            start_date = now - timedelta(days=365)
+            group_by = "%Y-%m"
+        else:
+            start_date = now - timedelta(days=180)
+            group_by = "%Y-%m"
+        
+        if chart_type == "nc_trend":
+            # Non-conformance trend over time
+            data = db.query(
+                func.strftime(group_by, NonConformance.reported_date).label("period"),
+                func.count(NonConformance.id).label("count")
+            ).filter(
+                NonConformance.reported_date >= start_date
+            ).group_by(
+                func.strftime(group_by, NonConformance.reported_date)
+            ).order_by("period").all()
+            
+            chart_data = [{"period": row.period, "count": row.count} for row in data]
+            
+        elif chart_type == "compliance_by_department":
+            # Compliance scores by department (using document categories as proxy)
+            data = db.query(
+                cast(Document.category, String).label("department"),
+                func.count(Document.id).label("total"),
+                func.sum(func.case((cast(Document.status, String) == "approved", 1), else_=0)).label("approved")
+            ).filter(
+                Document.created_at >= start_date
+            ).group_by(
+                cast(Document.category, String)
+            ).all()
+            
+            chart_data = []
+            for row in data:
+                if row.total > 0:
+                    compliance = round((row.approved / row.total) * 100, 2)
+                    chart_data.append({
+                        "department": row.department or "Unknown",
+                        "compliance": compliance,
+                        "total": row.total,
+                        "approved": row.approved
+                    })
+                    
+        elif chart_type == "supplier_performance":
+            # Supplier performance distribution
+            data = db.query(
+                func.round(SupplierEvaluation.overall_score, 1).label("score"),
+                func.count(SupplierEvaluation.id).label("count")
+            ).group_by(
+                func.round(SupplierEvaluation.overall_score, 1)
+            ).order_by("score").all()
+            
+            chart_data = [{"score": row.score, "count": row.count} for row in data]
+            
+        elif chart_type == "training_completion":
+            # Training completion over time
+            data = db.query(
+                func.strftime(group_by, TrainingAttendance.created_at).label("period"),
+                func.count(TrainingAttendance.id).label("total"),
+                func.sum(func.case((TrainingAttendance.attended == True, 1), else_=0)).label("attended")
+            ).filter(
+                TrainingAttendance.created_at >= start_date
+            ).group_by(
+                func.strftime(group_by, TrainingAttendance.created_at)
+            ).order_by("period").all()
+            
+            chart_data = []
+            for row in data:
+                if row.total > 0:
+                    completion_rate = round((row.attended / row.total) * 100, 2)
+                    chart_data.append({
+                        "period": row.period,
+                        "completion_rate": completion_rate,
+                        "total": row.total,
+                        "attended": row.attended
+                    })
+                    
+        elif chart_type == "audit_findings":
+            # Audit findings by severity
+            data = db.query(
+                cast(AuditFinding.severity, String).label("severity"),
+                func.count(AuditFinding.id).label("count")
+            ).group_by(
+                cast(AuditFinding.severity, String)
+            ).all()
+            
+            chart_data = [{"severity": row.severity or "Unknown", "count": row.count} for row in data]
+            
+        elif chart_type == "document_status":
+            # Document status distribution
+            data = db.query(
+                cast(Document.status, String).label("status"),
+                func.count(Document.id).label("count")
+            ).group_by(
+                cast(Document.status, String)
+            ).all()
+            
+            chart_data = [{"status": row.status or "Unknown", "count": row.count} for row in data]
+            
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown chart type: {chart_type}")
+        
+        return ResponseModel(
+            success=True, 
+            message=f"{chart_type} chart data retrieved", 
+            data={
+                "chart_type": chart_type,
+                "period": period,
+                "data": chart_data
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get chart data: {str(e)}")
+
+
+@router.get("/department-compliance")
+async def get_department_compliance(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get FSMS compliance score per department
+    """
+    try:
+        from sqlalchemy import cast, String
+        
+        # Get document compliance by category (department proxy)
+        doc_compliance = db.query(
+            cast(Document.category, String).label("department"),
+            func.count(Document.id).label("total"),
+            func.sum(func.case((cast(Document.status, String) == "approved", 1), else_=0)).label("approved")
+        ).group_by(
+            cast(Document.category, String)
+        ).all()
+        
+        # Get training completion by department (using user roles as proxy)
+        training_compliance = db.query(
+            cast(User.role, String).label("department"),
+            func.count(func.distinct(User.id)).label("total_users"),
+            func.count(func.distinct(TrainingAttendance.user_id)).label("trained_users")
+        ).outerjoin(
+            TrainingAttendance, User.id == TrainingAttendance.user_id
+        ).filter(
+            TrainingAttendance.attended == True
+        ).group_by(
+            cast(User.role, String)
+        ).all()
+        
+        # Calculate compliance scores
+        department_scores = {}
+        
+        # Document compliance
+        for row in doc_compliance:
+            dept = row.department or "Unknown"
+            if row.total > 0:
+                score = round((row.approved / row.total) * 100, 2)
+                department_scores[dept] = {
+                    "document_compliance": score,
+                    "total_documents": row.total,
+                    "approved_documents": row.approved
+                }
+        
+        # Training compliance
+        for row in training_compliance:
+            dept = row.department or "Unknown"
+            if row.total_users > 0:
+                score = round((row.trained_users / row.total_users) * 100, 2)
+                if dept in department_scores:
+                    department_scores[dept]["training_compliance"] = score
+                    department_scores[dept]["total_users"] = row.total_users
+                    department_scores[dept]["trained_users"] = row.trained_users
+                else:
+                    department_scores[dept] = {
+                        "training_compliance": score,
+                        "total_users": row.total_users,
+                        "trained_users": row.trained_users
+                    }
+        
+        # Calculate overall department compliance
+        for dept, data in department_scores.items():
+            scores = []
+            if "document_compliance" in data:
+                scores.append(data["document_compliance"])
+            if "training_compliance" in data:
+                scores.append(data["training_compliance"])
+            
+            if scores:
+                data["overall_compliance"] = round(sum(scores) / len(scores), 2)
+        
+        return ResponseModel(
+            success=True,
+            message="Department compliance scores retrieved",
+            data=department_scores
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get department compliance: {str(e)}")
+
+
+@router.get("/export/{export_type}")
+async def export_dashboard_data(
+    export_type: str,
+    format: str = Query("excel", description="Export format: excel, pdf, csv"),
+    period: str = Query("6m", description="Time period: 1m, 3m, 6m, 1y"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Export dashboard data in various formats
+    """
+    try:
+        from sqlalchemy import cast, String
+        import pandas as pd
+        from io import BytesIO
+        
+        now = datetime.utcnow()
+        
+        # Calculate date range
+        if period == "1m":
+            start_date = now - timedelta(days=30)
+        elif period == "3m":
+            start_date = now - timedelta(days=90)
+        elif period == "6m":
+            start_date = now - timedelta(days=180)
+        elif period == "1y":
+            start_date = now - timedelta(days=365)
+        else:
+            start_date = now - timedelta(days=180)
+        
+        if export_type == "compliance_report":
+            # Export compliance data
+            data = []
+            
+            # Document compliance
+            docs = db.query(
+                Document.title,
+                cast(Document.category, String).label("category"),
+                cast(Document.status, String).label("status"),
+                Document.created_at,
+                Document.review_date
+            ).filter(
+                Document.created_at >= start_date
+            ).all()
+            
+            for doc in docs:
+                data.append({
+                    "Type": "Document",
+                    "Title": doc.title,
+                    "Category": doc.category,
+                    "Status": doc.status,
+                    "Created": doc.created_at,
+                    "Review_Date": doc.review_date
+                })
+            
+            # NC/CAPA data
+            ncs = db.query(
+                NonConformance.title,
+                NonConformance.severity,
+                cast(NonConformance.status, String).label("status"),
+                NonConformance.reported_date,
+                NonConformance.resolution_date
+            ).filter(
+                NonConformance.reported_date >= start_date
+            ).all()
+            
+            for nc in ncs:
+                data.append({
+                    "Type": "Non-Conformance",
+                    "Title": nc.title,
+                    "Severity": nc.severity,
+                    "Status": nc.status,
+                    "Reported": nc.reported_date,
+                    "Resolved": nc.resolution_date
+                })
+            
+            df = pd.DataFrame(data)
+            
+        elif export_type == "kpi_summary":
+            # Export KPI summary
+            kpis = await get_dashboard_kpis(current_user, db)
+            kpi_data = kpis.data
+            
+            data = [
+                {"KPI": "Overall Compliance", "Value": f"{kpi_data['overallCompliance']}%"},
+                {"KPI": "Document Compliance", "Value": f"{kpi_data['documentControl']['compliance']}%"},
+                {"KPI": "CCP Compliance", "Value": f"{kpi_data['haccp']['ccpCompliance']}%"},
+                {"KPI": "PRP Completion", "Value": f"{kpi_data['prp']['completion']}%"},
+                {"KPI": "Supplier Performance", "Value": f"{kpi_data['suppliers']['performance']}%"},
+                {"KPI": "Training Completion", "Value": f"{kpi_data['training']['completion']}%"},
+                {"KPI": "NC Last 30 Days", "Value": kpi_data['nonConformance']['last30Days']},
+                {"KPI": "Open NC", "Value": kpi_data['nonConformance']['openNC']},
+                {"KPI": "Open CAPA", "Value": kpi_data['nonConformance']['openCAPA']},
+                {"KPI": "Audit Completion", "Value": f"{kpi_data['audits']['completion']}%"}
+            ]
+            
+            df = pd.DataFrame(data)
+            
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown export type: {export_type}")
+        
+        # Create export file
+        output = BytesIO()
+        
+        if format == "excel":
+            df.to_excel(output, index=False, engine='openpyxl')
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filename = f"{export_type}_{period}_{now.strftime('%Y%m%d')}.xlsx"
+        elif format == "csv":
+            df.to_csv(output, index=False)
+            media_type = "text/csv"
+            filename = f"{export_type}_{period}_{now.strftime('%Y%m%d')}.csv"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
+        
+        output.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export data: {str(e)}")
+
+
+@router.post("/schedule-report")
+async def schedule_report(
+    report_type: str,
+    frequency: str = Query("weekly", description="Frequency: daily, weekly, monthly"),
+    recipients: List[str] = Query(..., description="List of recipient emails"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Schedule automated reports
+    """
+    try:
+        # This would integrate with a task scheduler like Celery
+        # For now, we'll just return a success message
+        schedule_data = {
+            "report_type": report_type,
+            "frequency": frequency,
+            "recipients": recipients,
+            "created_by": current_user.id,
+            "created_at": datetime.utcnow(),
+            "status": "scheduled"
+        }
+        
+        # TODO: Implement actual scheduling logic
+        # This could involve:
+        # 1. Creating a scheduled task in Celery
+        # 2. Storing schedule in database
+        # 3. Setting up email notifications
+        
+        return ResponseModel(
+            success=True,
+            message=f"Report scheduled successfully: {report_type} - {frequency}",
+            data=schedule_data
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to schedule report: {str(e)}") 

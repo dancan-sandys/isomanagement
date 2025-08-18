@@ -161,10 +161,10 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({ children 
               fontSize: '0.875rem',
               fontWeight: 700,
             }}>
-              ISO
+              C
             </Avatar>
             <Typography variant="h6" fontWeight={700} noWrap>
-              FSMS Mobile
+              Compli FSMS Mobile
             </Typography>
           </Box>
           
