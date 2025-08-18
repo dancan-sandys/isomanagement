@@ -200,6 +200,10 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['QA Manager', 'Compliance Officer', 'System Administrator'],
     items: [
       { text: 'Reviews', path: '/management-reviews' },
+      { text: 'Calendar', path: '/management-reviews/calendar' },
+      { text: 'Action Items', path: '/management-reviews/actions' },
+      { text: 'Templates', path: '/management-reviews/templates' },
+      { text: 'Analytics', path: '/management-reviews/analytics' },
     ],
   },
   
