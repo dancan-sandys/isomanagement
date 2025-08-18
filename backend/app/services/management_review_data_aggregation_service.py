@@ -10,7 +10,7 @@ from sqlalchemy import func, desc, and_, or_
 from app.models.audit_mgmt import Audit, AuditFinding, FindingSeverity
 from app.models.nonconformance import NonConformance, CAPAAction, NonConformanceStatus, CAPAStatus
 from app.models.supplier import Supplier, SupplierEvaluation
-from app.models.risk import RiskItem, RiskStatus, RiskKPI
+from app.models.risk import RiskRegisterItem, RiskStatus, RiskKPI
 from app.models.haccp import Product, CCP, CCPMonitoringLog
 from app.models.prp import PRPProgram, PRPChecklist
 from app.models.training import TrainingProgram, TrainingAttendance
@@ -365,10 +365,10 @@ class ManagementReviewDataAggregationService:
         """Collect risk assessment updates"""
         try:
             # Get risk items updated in date range
-            risks = self.db.query(RiskItem).filter(
+            risks = self.db.query(RiskRegisterItem).filter(
                 and_(
-                    RiskItem.updated_at >= start_date,
-                    RiskItem.updated_at <= end_date
+                    RiskRegisterItem.updated_at >= start_date,
+                    RiskRegisterItem.updated_at <= end_date
                 )
             ).all()
             
