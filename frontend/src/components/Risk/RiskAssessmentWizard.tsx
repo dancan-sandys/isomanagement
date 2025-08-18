@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -62,6 +62,7 @@ import {
   Send,
   Help,
   AutorenewOutlined,
+  Add,
 } from '@mui/icons-material';
 import riskAPI, { RiskAssessmentData, RiskTreatmentData } from '../../services/riskAPI';
 import { ISO_STATUS_COLORS, PROFESSIONAL_COLORS } from '../../theme/designSystem';
@@ -271,17 +272,21 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
     }
   }, [open, riskId]);
 
-  useEffect(() => {
-    // Calculate risk score when analysis values change
+  // Calculate risk score using useMemo to avoid infinite loops
+  const calculatedRiskScore = useMemo(() => {
     const riskScore = assessmentData.severity * assessmentData.likelihood * (assessmentData.detectability / 5);
     const riskLevel = getRiskLevel(riskScore);
-    
+    return { risk_score: Math.round(riskScore), risk_level: riskLevel };
+  }, [assessmentData.severity, assessmentData.likelihood, assessmentData.detectability]);
+
+  // Update assessment data when calculated values change
+  useEffect(() => {
     setAssessmentData(prev => ({
       ...prev,
-      risk_score: Math.round(riskScore),
-      risk_level: riskLevel,
+      risk_score: calculatedRiskScore.risk_score,
+      risk_level: calculatedRiskScore.risk_level,
     }));
-  }, [assessmentData.severity, assessmentData.likelihood, assessmentData.detectability]);
+  }, [calculatedRiskScore]);
 
   // ============================================================================
   // HELPER FUNCTIONS
@@ -598,10 +603,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add external factor (e.g., regulatory changes, market conditions)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('external_factors', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('external_factors', target.value);
+                target.value = '';
               }
             }}
           />
@@ -624,10 +630,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add internal factor (e.g., capabilities, resources, culture)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('internal_factors', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('internal_factors', target.value);
+                target.value = '';
               }
             }}
           />
@@ -650,10 +657,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add stakeholder (e.g., customers, regulators, suppliers)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('stakeholders', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('stakeholders', target.value);
+                target.value = '';
               }
             }}
           />
@@ -739,10 +747,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add potential cause (what could trigger this risk?)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('potential_causes', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('potential_causes', target.value);
+                target.value = '';
               }
             }}
           />
@@ -766,10 +775,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add potential consequence (what could happen if risk occurs?)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('potential_consequences', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('potential_consequences', target.value);
+                target.value = '';
               }
             }}
           />
@@ -809,7 +819,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
                 <Box sx={{ px: 2 }}>
                   <Slider
                     value={assessmentData.severity}
-                    onChange={(_, value) => updateAssessmentData('severity', value)}
+                    onChange={(_, value) => updateAssessmentData('severity', value as number)}
                     step={1}
                     marks={RISK_MATRIX.severity.map((item, index) => ({
                       value: index + 1,
@@ -841,7 +851,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
                 <Box sx={{ px: 2 }}>
                   <Slider
                     value={assessmentData.likelihood}
-                    onChange={(_, value) => updateAssessmentData('likelihood', value)}
+                    onChange={(_, value) => updateAssessmentData('likelihood', value as number)}
                     step={1}
                     marks={RISK_MATRIX.likelihood.map((item, index) => ({
                       value: index + 1,
@@ -873,7 +883,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
                 <Box sx={{ px: 2 }}>
                   <Slider
                     value={assessmentData.detectability}
-                    onChange={(_, value) => updateAssessmentData('detectability', value)}
+                    onChange={(_, value) => updateAssessmentData('detectability', value as number)}
                     step={1}
                     marks={RISK_MATRIX.detectability.map((item, index) => ({
                       value: index + 1,
@@ -928,10 +938,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add impact area (e.g., financial, operational, reputational)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('impact_areas', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('impact_areas', target.value);
+                target.value = '';
               }
             }}
           />
@@ -1358,10 +1369,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add monitoring method (e.g., audits, KPIs, reports)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('monitoring_methods', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('monitoring_methods', target.value);
+                target.value = '';
               }
             }}
           />
@@ -1385,10 +1397,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add key indicator (metrics to track risk status)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('key_indicators', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('key_indicators', target.value);
+                target.value = '';
               }
             }}
           />
@@ -1423,10 +1436,11 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add responsible party (who will monitor and review?)"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value) {
-                addToArray('responsible_parties', e.currentTarget.value);
-                e.currentTarget.value = '';
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value) {
+                addToArray('responsible_parties', target.value);
+                target.value = '';
               }
             }}
           />

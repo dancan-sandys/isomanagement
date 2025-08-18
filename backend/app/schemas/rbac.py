@@ -78,8 +78,9 @@ class UserPermission(UserPermissionBase):
     granted_at: datetime
     permission: Permission
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 # Role Management schemas

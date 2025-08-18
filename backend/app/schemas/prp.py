@@ -204,6 +204,7 @@ class CorrectiveActionCreate(BaseModel):
     source_type: str = Field(..., min_length=1, max_length=50)
     source_id: int = Field(..., gt=0)
     checklist_id: Optional[int] = Field(None, gt=0)
+    program_id: Optional[int] = Field(None, gt=0)
     non_conformance_description: str = Field(..., min_length=1)
     non_conformance_date: datetime
     severity: str = Field(..., min_length=1, max_length=50)
@@ -226,6 +227,7 @@ class PreventiveActionCreate(BaseModel):
     objective: str = Field(..., min_length=1)
     responsible_person: int = Field(..., gt=0)
     assigned_to: int = Field(..., gt=0)
+    program_id: Optional[int] = Field(None, gt=0)
     implementation_plan: Optional[str] = None
     resources_required: Optional[str] = None
     budget_estimate: Optional[float] = Field(None, ge=0)

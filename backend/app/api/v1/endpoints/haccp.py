@@ -9,7 +9,7 @@ from app.core.security import get_current_user
 from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
-    Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
+    Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
     HazardType, RiskLevel, CCPStatus, RiskThreshold
 )
 from app.schemas.common import ResponseModel
@@ -408,34 +408,26 @@ async def delete_product(
     current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
-    """Delete a product"""
+    """Delete a product and its dependent HACCP records safely."""
     try:
-        # Check if product exists
+        # Ensure product exists
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-        
-        # Check permissions (only QA Manager or System Administrator can delete)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+        # Permission check
         if current_user.role and current_user.role.name not in ["QA Manager", "System Administrator"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to delete products"
-            )
-        
-        db.delete(product)
-        db.commit()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to delete products")
+
+        service = HACCPService(db)
+        service.delete_product(product_id, deleted_by=current_user.id)
+
         try:
             audit_event(db, current_user.id, "haccp_product_deleted", "haccp", str(product_id))
         except Exception:
             pass
-        return ResponseModel(
-            success=True,
-            message="Product deleted successfully",
-            data={"id": product_id}
-        )
+
+        return ResponseModel(success=True, message="Product deleted successfully", data={"id": product_id})
     except HTTPException:
         raise
     except Exception as e:
@@ -756,11 +748,24 @@ async def create_ccp(
                 detail="Product not found"
             )
         
+        # Ensure hazard_id is provided or find a default hazard for this product
+        hazard_id = ccp_data.get("hazard_id")
+        if not hazard_id:
+            # Find the first hazard for this product as a default
+            hazard = db.query(Hazard).filter(Hazard.product_id == product_id).first()
+            if hazard:
+                hazard_id = hazard.id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No hazards found for this product. Please create a hazard first or specify hazard_id."
+                )
+        
         ccp = CCP(
             product_id=product_id,
-            hazard_id=ccp_data["hazard_id"],
+            hazard_id=hazard_id,
             ccp_number=ccp_data["ccp_number"],
-            ccp_name=ccp_data["ccp_name"],
+            ccp_name=ccp_data.get("step_name", ccp_data.get("ccp_name", "Unnamed CCP")),  # Handle different field names
             description=ccp_data.get("description"),
             status=CCPStatus.ACTIVE,
             critical_limit_min=ccp_data.get("critical_limit_min"),
@@ -1786,11 +1791,24 @@ async def create_ccp(
                 detail="Product not found"
             )
         
+        # Ensure hazard_id is provided or find a default hazard for this product
+        hazard_id = ccp_data.get("hazard_id")
+        if not hazard_id:
+            # Find the first hazard for this product as a default
+            hazard = db.query(Hazard).filter(Hazard.product_id == product_id).first()
+            if hazard:
+                hazard_id = hazard.id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No hazards found for this product. Please create a hazard first or specify hazard_id."
+                )
+        
         ccp = CCP(
             product_id=product_id,
-            hazard_id=ccp_data["hazard_id"],
+            hazard_id=hazard_id,
             ccp_number=ccp_data["ccp_number"],
-            ccp_name=ccp_data["ccp_name"],
+            ccp_name=ccp_data.get("step_name", ccp_data.get("ccp_name", "Unnamed CCP")),  # Handle different field names
             description=ccp_data.get("description"),
             status=CCPStatus.ACTIVE,
             critical_limit_min=ccp_data.get("critical_limit_min"),

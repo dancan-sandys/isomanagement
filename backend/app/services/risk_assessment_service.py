@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc
 from typing import List, Optional, Dict, Any
@@ -8,8 +10,10 @@ from app.models.nonconformance import (
     NonConformanceRiskAssessment, NonConformance, EscalationRule
 )
 from app.schemas.nonconformance import (
-    NonConformanceRiskAssessmentCreate, NonConformanceRiskAssessmentUpdate, NonConformanceRiskAssessmentFilter,
-    NonConformanceRiskAssessmentCalculationRequest
+    NonConformanceRiskAssessmentCreate,
+    NonConformanceRiskAssessmentUpdate,
+    NonConformanceRiskAssessmentFilter,
+    NonConformanceRiskAssessmentCalculationRequest,
 )
 
 
@@ -228,7 +232,7 @@ class RiskAssessmentService:
             return "low"
 
     # Escalation Trigger Logic
-    def _trigger_escalation(self, risk_assessment: RiskAssessment) -> None:
+    def _trigger_escalation(self, risk_assessment: NonConformanceRiskAssessment) -> None:
         """Trigger escalation based on risk assessment"""
         # Get active escalation rules
         escalation_rules = self.db.query(EscalationRule).filter(
@@ -245,33 +249,39 @@ class RiskAssessmentService:
                 print(f"Escalation triggered: Rule '{rule.rule_name}' for risk score {risk_assessment.overall_risk_score}")
 
     # Business Logic Methods
-    def get_high_risk_assessments(self, threshold: float = 3.0) -> List[RiskAssessment]:
+    def get_high_risk_assessments(self, threshold: float = 3.0) -> List[NonConformanceRiskAssessment]:
         """Get all risk assessments above a certain threshold"""
-        return self.db.query(RiskAssessment).filter(
-            RiskAssessment.overall_risk_score >= threshold
-        ).order_by(RiskAssessment.overall_risk_score.desc()).all()
+        return (
+            self.db.query(NonConformanceRiskAssessment)
+            .filter(NonConformanceRiskAssessment.overall_risk_score >= threshold)
+            .order_by(NonConformanceRiskAssessment.overall_risk_score.desc())
+            .all()
+        )
 
-    def get_assessments_requiring_escalation(self) -> List[RiskAssessment]:
+    def get_assessments_requiring_escalation(self) -> List[NonConformanceRiskAssessment]:
         """Get all risk assessments that require escalation"""
-        return self.db.query(RiskAssessment).filter(
-            RiskAssessment.requires_escalation == True
-        ).order_by(RiskAssessment.created_at.desc()).all()
+        return (
+            self.db.query(NonConformanceRiskAssessment)
+            .filter(NonConformanceRiskAssessment.requires_escalation == True)
+            .order_by(NonConformanceRiskAssessment.created_at.desc())
+            .all()
+        )
 
     def get_risk_statistics(self, nc_id: Optional[int] = None) -> Dict[str, Any]:
         """Get risk assessment statistics"""
-        query = self.db.query(RiskAssessment)
+        query = self.db.query(NonConformanceRiskAssessment)
         
         if nc_id:
-            query = query.filter(RiskAssessment.non_conformance_id == nc_id)
+            query = query.filter(NonConformanceRiskAssessment.non_conformance_id == nc_id)
         
         total_assessments = query.count()
         
         # Risk level distribution
         risk_levels = {
-            'critical': query.filter(RiskAssessment.overall_risk_score >= 3.5).count(),
-            'high': query.filter(and_(RiskAssessment.overall_risk_score >= 2.5, RiskAssessment.overall_risk_score < 3.5)).count(),
-            'medium': query.filter(and_(RiskAssessment.overall_risk_score >= 1.5, RiskAssessment.overall_risk_score < 2.5)).count(),
-            'low': query.filter(RiskAssessment.overall_risk_score < 1.5).count()
+            'critical': query.filter(NonConformanceRiskAssessment.overall_risk_score >= 3.5).count(),
+            'high': query.filter(and_(NonConformanceRiskAssessment.overall_risk_score >= 2.5, NonConformanceRiskAssessment.overall_risk_score < 3.5)).count(),
+            'medium': query.filter(and_(NonConformanceRiskAssessment.overall_risk_score >= 1.5, NonConformanceRiskAssessment.overall_risk_score < 2.5)).count(),
+            'low': query.filter(NonConformanceRiskAssessment.overall_risk_score < 1.5).count()
         }
         
         # Escalation statistics
@@ -279,7 +289,7 @@ class RiskAssessmentService:
         escalation_rate = (requiring_escalation / total_assessments * 100) if total_assessments > 0 else 0
         
         # Average risk score
-        avg_risk_score = query.with_entities(func.avg(RiskAssessment.overall_risk_score)).scalar() or 0
+        avg_risk_score = query.with_entities(func.avg(NonConformanceRiskAssessment.overall_risk_score)).scalar() or 0
         
         return {
             "total_assessments": total_assessments,
@@ -293,9 +303,12 @@ class RiskAssessmentService:
         """Get risk assessment trends over time"""
         start_date = datetime.now() - timedelta(days=days)
         
-        assessments = self.db.query(RiskAssessment).filter(
-            RiskAssessment.created_at >= start_date
-        ).order_by(RiskAssessment.created_at.asc()).all()
+        assessments = (
+            self.db.query(NonConformanceRiskAssessment)
+            .filter(NonConformanceRiskAssessment.created_at >= start_date)
+            .order_by(NonConformanceRiskAssessment.created_at.asc())
+            .all()
+        )
         
         trends = []
         for assessment in assessments:
@@ -315,25 +328,32 @@ class RiskAssessmentService:
         
         summary = {}
         for position in matrix_positions:
-            count = self.db.query(RiskAssessment).filter(
-                RiskAssessment.risk_matrix_position == position
-            ).count()
+            count = (
+                self.db.query(NonConformanceRiskAssessment)
+                .filter(NonConformanceRiskAssessment.risk_matrix_position == position)
+                .count()
+            )
             summary[position] = count
         
         return summary
 
-    def get_recent_high_risk_assessments(self, days: int = 7, threshold: float = 3.0) -> List[RiskAssessment]:
+    def get_recent_high_risk_assessments(self, days: int = 7, threshold: float = 3.0) -> List[NonConformanceRiskAssessment]:
         """Get recent high-risk assessments"""
         start_date = datetime.now() - timedelta(days=days)
         
-        return self.db.query(RiskAssessment).filter(
-            and_(
-                RiskAssessment.overall_risk_score >= threshold,
-                RiskAssessment.created_at >= start_date
+        return (
+            self.db.query(NonConformanceRiskAssessment)
+            .filter(
+                and_(
+                    NonConformanceRiskAssessment.overall_risk_score >= threshold,
+                    NonConformanceRiskAssessment.created_at >= start_date,
+                )
             )
-        ).order_by(RiskAssessment.created_at.desc()).all()
+            .order_by(NonConformanceRiskAssessment.created_at.desc())
+            .all()
+        )
 
-    def validate_risk_assessment(self, assessment_data: RiskAssessmentCreate) -> Dict[str, Any]:
+    def validate_risk_assessment(self, assessment_data: NonConformanceRiskAssessmentCalculationRequest) -> Dict[str, Any]:
         """Validate risk assessment data and provide recommendations"""
         risk_score = self._calculate_risk_score(
             assessment_data.food_safety_impact,

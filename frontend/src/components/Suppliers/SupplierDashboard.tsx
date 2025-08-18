@@ -378,12 +378,12 @@ const SupplierDashboard: React.FC = () => {
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
-                      primary={evaluation.supplier_name}
-                      secondary={`Score: ${evaluation.overall_score.toFixed(1)} | ${format(parseISO(evaluation.evaluation_date), 'MMM dd, yyyy')}`}
+                      primary={evaluation.supplier_name || 'Unknown Supplier'}
+                      secondary={`Score: ${(evaluation.overall_score || 0).toFixed(1)} | ${evaluation.evaluation_date && !isNaN(Date.parse(evaluation.evaluation_date)) ? format(parseISO(evaluation.evaluation_date), 'MMM dd, yyyy') : 'No date'}`}
                     />
                     <Chip
-                      label={`${evaluation.overall_score.toFixed(1)}`}
-                      color={evaluation.overall_score >= 8 ? 'success' : evaluation.overall_score >= 6 ? 'warning' : 'error'}
+                      label={`${(evaluation.overall_score || 0).toFixed(1)}`}
+                      color={(evaluation.overall_score || 0) >= 8 ? 'success' : (evaluation.overall_score || 0) >= 6 ? 'warning' : 'error'}
                       size="small"
                     />
                   </ListItem>
@@ -411,12 +411,12 @@ const SupplierDashboard: React.FC = () => {
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
-                      primary={delivery.supplier_name}
-                      secondary={`${delivery.material_name} | ${format(parseISO(delivery.delivery_date), 'MMM dd, yyyy')}`}
+                      primary={delivery.supplier_name || 'Unknown Supplier'}
+                      secondary={`${delivery.material_name || 'Unknown Material'} | ${delivery.delivery_date && !isNaN(Date.parse(delivery.delivery_date)) ? format(parseISO(delivery.delivery_date), 'MMM dd, yyyy') : 'No date'}`}
                     />
                       <EnhancedStatusChip
                         status={delivery.inspection_status as any}
-                        label={delivery.inspection_status.replace('_', ' ')}
+                        label={delivery.inspection_status ? delivery.inspection_status.replace('_', ' ') : 'Unknown'}
                       />
                   </ListItem>
                   {index < 4 && <Divider />}
@@ -457,11 +457,11 @@ const SupplierDashboard: React.FC = () => {
                         </Avatar>
                       </ListItemIcon>
                       <ListItemText
-                        primary={alert.title}
-                        secondary={`${alert.description} | ${format(parseISO(alert.created_at), 'MMM dd, yyyy HH:mm')}`}
+                        primary={alert.title || 'No Title'}
+                        secondary={`${alert.description || 'No description'} | ${alert.created_at && !isNaN(Date.parse(alert.created_at)) ? format(parseISO(alert.created_at), 'MMM dd, yyyy HH:mm') : 'No date'}`}
                       />
                       <Chip
-                        label={alert.severity.toUpperCase()}
+                        label={alert.severity ? alert.severity.toUpperCase() : 'UNKNOWN'}
                         color={getAlertColor(alert.severity) as any}
                         size="small"
                       />

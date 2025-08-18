@@ -144,6 +144,8 @@ const Traceability: React.FC = () => {
   const [traceDialogOpen, setTraceDialogOpen] = useState(false);
   const [batchDetailOpen, setBatchDetailOpen] = useState(false);
   const [traceabilityChainOpen, setTraceabilityChainOpen] = useState(false);
+  const [reportDetailOpen, setReportDetailOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<TraceabilityReport | null>(null);
   const [recallDetailOpen, setRecallDetailOpen] = useState(false);
   const [selectedRecall, setSelectedRecall] = useState<Recall | null>(null);
   const [recallSimulationOpen, setRecallSimulationOpen] = useState(false);
@@ -401,6 +403,42 @@ const Traceability: React.FC = () => {
   const handleTraceabilityChain = (batch: Batch) => {
     setSelectedBatch(batch);
     setTraceabilityChainOpen(true);
+  };
+
+  const handleViewReport = async (report: TraceabilityReport) => {
+    setSelectedReport(report);
+    setReportDetailOpen(true);
+  };
+
+  const handleDownloadReport = async (report: TraceabilityReport) => {
+    try {
+      // Try backend export first (if supported)
+      const blob: any = await traceabilityAPI.exportTraceabilityReport(report.id, 'pdf');
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${report.report_number}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      return;
+    } catch (e) {
+      // Fallback: client-side JSON export including trace data
+      try {
+        const details = await traceabilityAPI.getTraceabilityReport(report.id).catch(() => null);
+        let trace: any = null;
+        try {
+          trace = await traceabilityAPI.getFullTrace(Number(report.starting_batch_id), report.trace_depth || 5);
+        } catch {}
+        const exportObj = { report, details, trace } as any;
+        const jsonBlob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(jsonBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${report.report_number}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } catch {}
+    }
   };
 
   // Utility functions
@@ -828,12 +866,14 @@ const Traceability: React.FC = () => {
                       <IconButton 
                         size="small"
                         aria-label={`View report ${report.report_number}`}
+                        onClick={() => handleViewReport(report)}
                       >
                         <VisibilityIcon />
                       </IconButton>
                       <IconButton 
                         size="small"
                         aria-label={`Download report ${report.report_number}`}
+                        onClick={() => handleDownloadReport(report)}
                       >
                         <DownloadIcon />
                       </IconButton>
@@ -966,6 +1006,47 @@ const Traceability: React.FC = () => {
             </DialogActions>
           </Dialog>
         </>
+      )}
+
+      {/* Report Detail Dialog */}
+      {selectedReport && (
+        <Dialog 
+          open={reportDetailOpen} 
+          onClose={() => { setReportDetailOpen(false); setSelectedReport(null); }}
+          maxWidth="lg"
+          fullWidth
+          fullScreen={isMobile}
+        >
+          <DialogTitle>
+            Traceability Report — {selectedReport.report_number}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mb: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">Type</Typography>
+                  <Chip size="small" color="primary" label={selectedReport.report_type.replace('_', ' ').toUpperCase()} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">Trace Date</Typography>
+                  <Typography variant="body1">{new Date(selectedReport.trace_date).toLocaleString()}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">Summary</Typography>
+                  <Typography variant="body1">{selectedReport.trace_summary || 'No summary available'}</Typography>
+                </Grid>
+              </Grid>
+            </Box>
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Traceability Chain (Starting Batch #{selectedReport.starting_batch_id})</Typography>
+              <TraceabilityChain batchId={Number(selectedReport.starting_batch_id)} />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => handleDownloadReport(selectedReport)} startIcon={<DownloadIcon />}>Download</Button>
+            <Button onClick={() => { setReportDetailOpen(false); setSelectedReport(null); }}>Close</Button>
+          </DialogActions>
+        </Dialog>
       )}
 
       <RecallSimulationForm

@@ -21,7 +21,7 @@ const TrainingPrograms: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [requiredList, setRequiredList] = useState<any[]>([]);
 
-  useEffect(() => { dispatch(fetchPrograms()); }, [dispatch]);
+  useEffect(() => { dispatch(fetchPrograms(undefined)); }, [dispatch]);
   useEffect(() => { (async () => { const r = await rbacAPI.getRoles(); setRoles(r || []); })(); }, []);
 
   const onCreate = async () => {

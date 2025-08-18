@@ -123,13 +123,11 @@ const SupplierList: React.FC<SupplierListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== (filters.suppliers as any)?.search) {
-        dispatch(setSupplierFilters({ ...filters.suppliers, search: searchTerm } as any));
-      }
+      dispatch(setSupplierFilters({ ...filters.suppliers, search: searchTerm } as any));
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch, filters.suppliers]);
+  }, [searchTerm, dispatch]);
 
   const loadSuppliers = () => {
     dispatch(fetchSuppliers({
@@ -362,11 +360,11 @@ const SupplierList: React.FC<SupplierListProps> = ({
                 <TableCell>
                   <Box display="flex" alignItems="center" gap={1}>
                     <Typography variant="body2" fontWeight="bold">
-                      {supplier.overall_score.toFixed(1)}
+                      {(supplier.overall_score || 0).toFixed(1)}
                     </Typography>
-                    {supplier.overall_score >= 8 ? (
+                    {(supplier.overall_score || 0) >= 8 ? (
                       <Star sx={{ color: 'gold', fontSize: 16 }} />
-                    ) : supplier.overall_score >= 6 ? (
+                    ) : (supplier.overall_score || 0) >= 6 ? (
                       <StarBorder sx={{ color: 'gold', fontSize: 16 }} />
                     ) : null}
                   </Box>
@@ -379,7 +377,7 @@ const SupplierList: React.FC<SupplierListProps> = ({
                   />
                 </TableCell>
                 <TableCell>
-                  {supplier.last_evaluation_date ? (
+                  {supplier.last_evaluation_date && !isNaN(Date.parse(supplier.last_evaluation_date)) ? (
                     <Typography variant="body2">
                       {format(parseISO(supplier.last_evaluation_date), 'MMM dd, yyyy')}
                     </Typography>
@@ -390,7 +388,7 @@ const SupplierList: React.FC<SupplierListProps> = ({
                   )}
                 </TableCell>
                 <TableCell>
-                  {supplier.next_evaluation_date ? (
+                  {supplier.next_evaluation_date && !isNaN(Date.parse(supplier.next_evaluation_date)) ? (
                     <Typography variant="body2">
                       {format(parseISO(supplier.next_evaluation_date), 'MMM dd, yyyy')}
                     </Typography>
@@ -506,11 +504,11 @@ const SupplierList: React.FC<SupplierListProps> = ({
                   <Typography variant="body2">Score:</Typography>
                   <Box display="flex" alignItems="center" gap={0.5}>
                     <Typography variant="body2" fontWeight="bold">
-                      {supplier.overall_score.toFixed(1)}
+                      {(supplier.overall_score || 0).toFixed(1)}
                     </Typography>
-                    {supplier.overall_score >= 8 ? (
+                    {(supplier.overall_score || 0) >= 8 ? (
                       <Star sx={{ color: 'gold', fontSize: 16 }} />
-                    ) : supplier.overall_score >= 6 ? (
+                    ) : (supplier.overall_score || 0) >= 6 ? (
                       <StarBorder sx={{ color: 'gold', fontSize: 16 }} />
                     ) : null}
                   </Box>

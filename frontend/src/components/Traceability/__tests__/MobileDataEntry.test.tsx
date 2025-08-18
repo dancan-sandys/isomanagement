@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '../../../utils/test-utils';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../../utils/test-utils';
 import MobileDataEntry from '../MobileDataEntry';
 import { mockLocalStorage, mockGeolocation } from '../../../utils/test-utils';
 
@@ -45,7 +46,7 @@ describe('MobileDataEntry', () => {
 
   describe('Rendering', () => {
     it('renders the mobile data entry dialog when open', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       expect(screen.getByText('Mobile Data Entry')).toBeInTheDocument();
       expect(screen.getByText('Batch Number')).toBeInTheDocument();
@@ -62,7 +63,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('shows online status when connected', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       expect(screen.getByText('Online - Data will sync immediately')).toBeInTheDocument();
     });
@@ -74,7 +75,7 @@ describe('MobileDataEntry', () => {
         writable: true,
       });
 
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       expect(screen.getByText('Offline - Data will sync when online')).toBeInTheDocument();
     });
@@ -82,7 +83,7 @@ describe('MobileDataEntry', () => {
 
   describe('Form Input', () => {
     it('allows entering batch number', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const batchNumberInput = screen.getByLabelText('Batch Number');
       fireEvent.change(batchNumberInput, { target: { value: 'BATCH123' } });
@@ -91,7 +92,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows entering product name', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const productNameInput = screen.getByLabelText('Product Name');
       fireEvent.change(productNameInput, { target: { value: 'Test Product' } });
@@ -100,7 +101,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows entering quantity', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const quantityInput = screen.getByLabelText('Quantity');
       fireEvent.change(quantityInput, { target: { value: '100' } });
@@ -109,7 +110,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows selecting unit', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const unitSelect = screen.getByLabelText('Unit');
       fireEvent.mouseDown(unitSelect);
@@ -121,7 +122,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows entering location', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const locationInput = screen.getByLabelText('Location');
       fireEvent.change(locationInput, { target: { value: 'Warehouse A' } });
@@ -130,7 +131,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows entering notes', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const notesInput = screen.getByLabelText('Notes');
       fireEvent.change(notesInput, { target: { value: 'Test notes' } });
@@ -141,7 +142,7 @@ describe('MobileDataEntry', () => {
 
   describe('Batch Number Generation', () => {
     it('generates batch number when button is clicked', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const generateButton = screen.getByText('Generate Batch Number');
       fireEvent.click(generateButton);
@@ -153,7 +154,7 @@ describe('MobileDataEntry', () => {
 
   describe('GPS Location', () => {
     it('captures GPS location when auto-location is enabled', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       await waitFor(() => {
         expect(mockGeolocation.getCurrentPosition).toHaveBeenCalled();
@@ -161,7 +162,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('displays GPS coordinates when available', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByText(/GPS: 40\.7128, -74\.0060/)).toBeInTheDocument();
@@ -169,7 +170,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows manual location capture', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const locationInput = screen.getByLabelText('Location');
       fireEvent.change(locationInput, { target: { value: 'Manual Location' } });
@@ -180,7 +181,7 @@ describe('MobileDataEntry', () => {
 
   describe('Voice Input', () => {
     it('starts voice recording when voice input button is clicked', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const voiceButton = screen.getByText('Voice Input');
       fireEvent.click(voiceButton);
@@ -189,7 +190,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('stops voice recording when stop button is clicked', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const voiceButton = screen.getByText('Voice Input');
       fireEvent.click(voiceButton); // Start recording
@@ -205,7 +206,7 @@ describe('MobileDataEntry', () => {
         writable: true,
       });
 
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const voiceButton = screen.getByText('Voice Input');
       fireEvent.click(voiceButton);
@@ -216,7 +217,7 @@ describe('MobileDataEntry', () => {
 
   describe('Photo Capture', () => {
     it('adds photo when take photo button is clicked', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const photoButton = screen.getByText('Take Photo (0)');
       fireEvent.click(photoButton);
@@ -225,7 +226,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('displays photo list when photos are taken', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const photoButton = screen.getByText('Take Photo (0)');
       fireEvent.click(photoButton);
@@ -238,7 +239,7 @@ describe('MobileDataEntry', () => {
 
   describe('Form Validation', () => {
     it('requires batch number and product name', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const saveButton = screen.getByText('Save Data');
       fireEvent.click(saveButton);
@@ -249,7 +250,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('allows saving when required fields are filled', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Fill required fields
       const batchNumberInput = screen.getByLabelText('Batch Number');
@@ -269,7 +270,7 @@ describe('MobileDataEntry', () => {
 
   describe('Data Saving', () => {
     it('saves data to localStorage', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Fill required fields
       const batchNumberInput = screen.getByLabelText('Batch Number');
@@ -290,7 +291,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('calls onSave callback with form data', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Fill required fields
       const batchNumberInput = screen.getByLabelText('Batch Number');
@@ -313,7 +314,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('resets form after successful save', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Fill required fields
       const batchNumberInput = screen.getByLabelText('Batch Number');
@@ -334,7 +335,7 @@ describe('MobileDataEntry', () => {
 
   describe('Dialog Controls', () => {
     it('calls onClose when close button is clicked', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const closeButton = screen.getByLabelText('Close');
       fireEvent.click(closeButton);
@@ -343,7 +344,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('calls onClose when cancel button is clicked', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const cancelButton = screen.getByText('Cancel');
       fireEvent.click(cancelButton);
@@ -354,7 +355,7 @@ describe('MobileDataEntry', () => {
 
   describe('Loading States', () => {
     it('shows loading indicator during save', async () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Fill required fields
       const batchNumberInput = screen.getByLabelText('Batch Number');
@@ -376,7 +377,7 @@ describe('MobileDataEntry', () => {
       const originalError = console.error;
       console.error = jest.fn();
 
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Fill required fields
       const batchNumberInput = screen.getByLabelText('Batch Number');
@@ -398,7 +399,7 @@ describe('MobileDataEntry', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       expect(screen.getByLabelText('Close')).toBeInTheDocument();
       expect(screen.getByLabelText('Batch Number')).toBeInTheDocument();
@@ -406,7 +407,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('supports keyboard navigation', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const closeButton = screen.getByLabelText('Close');
       expect(closeButton).toHaveAttribute('tabIndex', '0');
@@ -415,7 +416,7 @@ describe('MobileDataEntry', () => {
 
   describe('Mobile Features', () => {
     it('renders with mobile-specific styling', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       // Check that the dialog has fullScreen prop when on mobile
       const dialog = screen.getByRole('dialog');
@@ -423,7 +424,7 @@ describe('MobileDataEntry', () => {
     });
 
     it('has touch-friendly button sizes', () => {
-      render(<MobileDataEntry {...defaultProps} />);
+      renderWithProviders(<MobileDataEntry {...defaultProps} />);
       
       const saveButton = screen.getByText('Save Data');
       expect(saveButton).toBeInTheDocument();

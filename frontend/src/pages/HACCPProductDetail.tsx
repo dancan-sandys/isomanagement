@@ -134,14 +134,22 @@ const HACCPProductDetail: React.FC = () => {
 
   useEffect(() => {
     if (selectedHazardItem) {
+      const rawPrp = (selectedHazardItem as any).prp_reference_ids;
+      const prpIds = Array.isArray(rawPrp)
+        ? rawPrp.map((v: any) => Number(v)).filter((n: number) => !isNaN(n))
+        : typeof rawPrp === 'string'
+          ? rawPrp.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n))
+          : typeof rawPrp === 'number'
+            ? [rawPrp]
+            : [];
       setHazardForm({ 
         process_step_id: String(selectedHazardItem.process_step_id ?? ''), 
         hazard_type: selectedHazardItem.hazard_type || 'biological', 
         hazard_name: selectedHazardItem.hazard_name || '', 
         description: selectedHazardItem.description || '', 
-        rationale: selectedHazardItem.rationale || '',  // New field
-        prp_reference_ids: selectedHazardItem.prp_reference_ids || [],  // New field
-        references: selectedHazardItem.references || [],  // New field
+        rationale: selectedHazardItem.rationale || '',
+        prp_reference_ids: prpIds,
+        references: selectedHazardItem.references || [], 
         likelihood: String(selectedHazardItem.likelihood ?? '1'), 
         severity: String(selectedHazardItem.severity ?? '1'), 
         control_measures: selectedHazardItem.control_measures || '', 
@@ -156,9 +164,9 @@ const HACCPProductDetail: React.FC = () => {
         hazard_type: 'biological', 
         hazard_name: '', 
         description: '', 
-        rationale: '',  // New field
-        prp_reference_ids: [],  // New field
-        references: [],  // New field
+        rationale: '',
+        prp_reference_ids: [],
+        references: [], 
         likelihood: '1', 
         severity: '1', 
         control_measures: '', 
@@ -214,9 +222,15 @@ const HACCPProductDetail: React.FC = () => {
       hazard_type: hazardForm.hazard_type, 
       hazard_name: hazardForm.hazard_name, 
       description: hazardForm.description, 
-      rationale: hazardForm.rationale,  // New field
-      prp_reference_ids: hazardForm.prp_reference_ids,  // New field
-      references: hazardForm.references,  // New field
+      rationale: hazardForm.rationale,
+      prp_reference_ids: (
+        Array.isArray((hazardForm as any).prp_reference_ids)
+          ? (hazardForm as any).prp_reference_ids
+          : String((hazardForm as any).prp_reference_ids || '').split(',')
+      )
+        .map((v: any) => Number(String(v).trim()))
+        .filter((n: number) => !isNaN(n)),
+      references: hazardForm.references, 
       likelihood: Number(hazardForm.likelihood), 
       severity: Number(hazardForm.severity), 
       control_measures: hazardForm.control_measures, 
@@ -636,11 +650,25 @@ const HACCPProductDetail: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}><TextField fullWidth type="number" label="Process Step ID" value={hazardForm.process_step_id} onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Type" value={hazardForm.hazard_type} onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Hazard Type</InputLabel>
+                <Select
+                  value={hazardForm.hazard_type}
+                  label="Hazard Type"
+                  onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })}
+                >
+                  <MenuItem value="biological">Biological</MenuItem>
+                  <MenuItem value="chemical">Chemical</MenuItem>
+                  <MenuItem value="physical">Physical</MenuItem>
+                  <MenuItem value="allergen">Allergen</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Rationale (Hazard Analysis)" value={hazardForm.rationale} onChange={(e) => setHazardForm({ ...hazardForm, rationale: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="PRP Reference IDs (comma-separated)" value={hazardForm.prp_reference_ids.join(', ')} onChange={(e) => setHazardForm({ ...hazardForm, prp_reference_ids: e.target.value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id)) })} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="PRP Reference IDs (comma-separated)" value={Array.isArray(hazardForm.prp_reference_ids) ? hazardForm.prp_reference_ids.join(', ') : String((hazardForm as any).prp_reference_ids ?? '')} onChange={(e) => setHazardForm({ ...hazardForm, prp_reference_ids: e.target.value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id)) })} /></Grid>
             <Grid item xs={12}>
               <Typography variant="subtitle2" gutterBottom>
                 References

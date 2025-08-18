@@ -100,6 +100,17 @@ const AllergenLabel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [complianceResults, setComplianceResults] = useState<any[]>([]);
   const [allergenFlags, setAllergenFlags] = useState<any[]>([]);
+  const [scanningProduct, setScanningProduct] = useState(false);
+  const [scanResults, setScanResults] = useState<any>(null);
+  const [scanDialog, setScanDialog] = useState(false);
+  const [scanForm, setScanForm] = useState({
+    product_id: '',
+    ingredient_list: [] as string[],
+    process_steps: [] as string[],
+    detection_method: 'automated'
+  });
+  const [nonConformances, setNonConformances] = useState<any[]>([]);
+  const [dashboardMetrics, setDashboardMetrics] = useState<any>(null);
 
   // Assessment Dialog
   const [assessmentDialog, setAssessmentDialog] = useState(false);
@@ -206,9 +217,59 @@ const AllergenLabel: React.FC = () => {
       } catch {}
 
       try {
-        const flags = (allergenLabelAPI as any).getAllergenFlags ? await (allergenLabelAPI as any).getAllergenFlags() : [];
-        setAllergenFlags(flags || []);
-      } catch {}
+        // Load allergen flags
+        const flagsResponse = await fetch('/api/v1/allergen-label/flags');
+        if (flagsResponse.ok) {
+          const flagsData = await flagsResponse.json();
+          setAllergenFlags(flagsData.data?.flags || []);
+        }
+        
+        // Load non-conformances
+        const ncResponse = await fetch('/api/v1/allergen-label/nonconformances');
+        if (ncResponse.ok) {
+          const ncData = await ncResponse.json();
+          setNonConformances(ncData.data?.nonconformances || []);
+        }
+        
+        // Load dashboard metrics
+        const metricsResponse = await fetch('/api/v1/allergen-label/dashboard/metrics');
+        if (metricsResponse.ok) {
+          const metricsData = await metricsResponse.json();
+          setDashboardMetrics(metricsData.data);
+        }
+      } catch {
+        // Fallback to mock data
+        setAllergenFlags([
+          {
+            id: 1,
+            product_id: 1,
+            allergen_type: "peanuts",
+            detected_in: "ingredient",
+            severity: "critical",
+            title: "Undeclared peanuts detected",
+            description: "Peanut allergen found in chocolate ingredient without declaration",
+            status: "active",
+            detected_at: new Date().toISOString(),
+            immediate_action: "Stop production, isolate batch, notify QA manager",
+            confidence: 0.95,
+            nc_created: true,
+            nc_id: 1
+          }
+        ]);
+        setNonConformances([
+          {
+            id: 1,
+            nc_number: "ALG-20250117-ABC12345",
+            title: "Critical Allergen Issue: Undeclared Peanuts in Chocolate Bar",
+            severity: "critical",
+            status: "open",
+            product_reference: "Chocolate Bar",
+            reported_date: new Date().toISOString(),
+            requires_immediate_action: true,
+            escalation_status: "pending"
+          }
+        ]);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -319,6 +380,70 @@ const AllergenLabel: React.FC = () => {
     }
   };
 
+  const handleProductScan = async () => {
+    if (!scanForm.product_id) return;
+    
+    setScanningProduct(true);
+    try {
+      const response = await fetch(`/api/v1/allergen-label/products/${scanForm.product_id}/scan-allergens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ingredient_list: scanForm.ingredient_list,
+          process_steps: scanForm.process_steps,
+          detection_method: scanForm.detection_method
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setScanResults(result.data);
+        
+        // Refresh allergen flags to show newly created ones
+        const flagsResponse = await fetch('/api/v1/allergen-label/flags');
+        if (flagsResponse.ok) {
+          const flagsData = await flagsResponse.json();
+          setAllergenFlags(flagsData.data?.flags || []);
+        }
+      } else {
+        console.error('Scan failed:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error scanning product:', error);
+    } finally {
+      setScanningProduct(false);
+      setScanDialog(false);
+    }
+  };
+
+  const handleResolveFlag = async (flagId: number, resolutionNotes: string) => {
+    try {
+      const response = await fetch(`/api/v1/allergen-label/flags/${flagId}/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resolution_notes: resolutionNotes,
+          resolution_actions: ['Updated allergen declarations', 'Verified supplier certificates']
+        })
+      });
+
+      if (response.ok) {
+        // Refresh flags
+        const flagsResponse = await fetch('/api/v1/allergen-label/flags');
+        if (flagsResponse.ok) {
+          const flagsData = await flagsResponse.json();
+          setAllergenFlags(flagsData.data?.flags || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error resolving flag:', error);
+    }
+  };
+
   const handleCompareVersions = async (templateId: number, version1Id: number, version2Id: number) => {
     try {
       if ((allergenLabelAPI as any).compareVersions) {
@@ -344,6 +469,14 @@ const AllergenLabel: React.FC = () => {
         <Stack direction="row" spacing={1}>
           <Button
             variant="outlined"
+            startIcon={<ScienceIcon />}
+            onClick={() => setScanDialog(true)}
+            color="secondary"
+          >
+            Scan Product
+          </Button>
+          <Button
+            variant="outlined"
             startIcon={<ComplianceIcon />}
             onClick={() => setComplianceDialog(true)}
           >
@@ -360,6 +493,80 @@ const AllergenLabel: React.FC = () => {
       </Stack>
 
       {loading && <LinearProgress sx={{ mb: 2 }} />}
+
+      {/* Dashboard Metrics */}
+      {dashboardMetrics && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="primary" fontWeight="bold">
+                  {dashboardMetrics.allergen_flags?.active || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Active Flags
+                </Typography>
+                {dashboardMetrics.allergen_flags?.critical > 0 && (
+                  <Chip 
+                    label={`${dashboardMetrics.allergen_flags.critical} Critical`} 
+                    color="error" 
+                     
+                    sx={{ mt: 1 }} 
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="error" fontWeight="bold">
+                  {dashboardMetrics.non_conformances?.open_critical || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Critical NCs
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {dashboardMetrics.non_conformances?.total_allergen_ncs || 0} Total
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="success.main" fontWeight="bold">
+                  {Math.round(dashboardMetrics.compliance_status?.compliance_score || 0)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Compliance Score
+                </Typography>
+                <Chip 
+                  label={dashboardMetrics.compliance_status?.iso_22000_compliant ? "ISO Compliant" : "Non-Compliant"} 
+                  color={dashboardMetrics.compliance_status?.iso_22000_compliant ? "success" : "error"} 
+                   
+                  sx={{ mt: 1 }} 
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="info.main" fontWeight="bold">
+                  {dashboardMetrics.scanning_activity?.products_scanned || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Products Scanned
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {Math.round(dashboardMetrics.scanning_activity?.detection_rate || 0)}% Detection Rate
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
 
       {/* Alerts Section */}
       {allergenFlags.length > 0 && (
@@ -422,6 +629,15 @@ const AllergenLabel: React.FC = () => {
               }
             />
             <Tab
+              icon={<SecurityIcon />}
+              label={
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <span>Non-Conformances</span>
+                  <Badge badgeContent={nonConformances.filter(nc => nc.status === 'open').length} color="error" />
+                </Stack>
+              }
+            />
+            <Tab
               icon={<HistoryIcon />}
               label="History"
             />
@@ -442,7 +658,7 @@ const AllergenLabel: React.FC = () => {
                       <Chip
                         label={assessment.risk_level}
                         color={getRiskLevelColor(assessment.risk_level)}
-                        size="small"
+                        
                       />
                     </Stack>
                     <Stack spacing={1}>
@@ -461,10 +677,10 @@ const AllergenLabel: React.FC = () => {
                     </Stack>
                   </CardContent>
                   <CardActions>
-                    <Button size="small" startIcon={<ViewIcon />}>
+                    <Button  startIcon={<ViewIcon />}>
                       View Details
                     </Button>
-                    <Button size="small" startIcon={<EditIcon />}>
+                    <Button  startIcon={<EditIcon />}>
                       Edit
                     </Button>
                   </CardActions>
@@ -516,13 +732,13 @@ const AllergenLabel: React.FC = () => {
                     <Chip
                       label={template.is_active ? 'Active' : 'Inactive'}
                       color={template.is_active ? 'success' : 'default'}
-                      size="small"
+                      
                     />
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5} flexWrap="wrap">
                       {(template.allergen_declarations || []).map((allergen: string) => (
-                        <Chip key={allergen} label={allergen} size="small" variant="outlined" />
+                        <Chip key={allergen} label={allergen}  variant="outlined" />
                       ))}
                     </Stack>
                   </TableCell>
@@ -534,7 +750,7 @@ const AllergenLabel: React.FC = () => {
                             <Stack direction="row" spacing={1}>
                             <Tooltip title="Export PDF">
                               <IconButton
-                                size="small"
+                                
                                 onClick={async () => {
                                   try {
                                     const blob = await allergenLabelAPI.exportVersionPDF(template.id, version.id);
@@ -554,7 +770,7 @@ const AllergenLabel: React.FC = () => {
                             </Tooltip>
                             <Tooltip title="View Approvals">
                               <IconButton
-                                size="small"
+                                
                                 onClick={async () => {
                                   try {
                                     const aps = await allergenLabelAPI.listVersionApprovals(template.id, version.id);
@@ -581,13 +797,13 @@ const AllergenLabel: React.FC = () => {
                   <TableCell align="right">
                     <Stack direction="row" spacing={1}>
                       <Tooltip title="Edit Template">
-                        <IconButton size="small">
+                        <IconButton >
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Compare Versions">
                         <IconButton
-                          size="small"
+                          
                           disabled={(versions[template.id] || []).length < 2}
                           onClick={() => {
                             const versionList = versions[template.id] || [];
@@ -670,7 +886,7 @@ const AllergenLabel: React.FC = () => {
                       <Chip
                         label={flag.severity}
                         color={flag.severity === 'high' ? 'error' : flag.severity === 'medium' ? 'warning' : 'info'}
-                        size="small"
+                        
                       />
                     </Stack>
                     <Typography variant="body2" sx={{ mb: 2 }}>
@@ -681,19 +897,44 @@ const AllergenLabel: React.FC = () => {
                         <strong>Product:</strong> {productName(flag.product_id)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        <strong>Allergen:</strong> {flag.allergen}
+                        <strong>Allergen:</strong> {flag.allergen_type || flag.allergen}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        <strong>Detected:</strong> {new Date(flag.detected_date).toLocaleDateString()}
+                        <strong>Detected In:</strong> {flag.detected_in}
                       </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Detected:</strong> {new Date(flag.detected_at || flag.detected_date).toLocaleDateString()}
+                      </Typography>
+                      {flag.confidence && (
+                        <Typography variant="body2" color="text.secondary">
+                          <strong>Confidence:</strong> {Math.round(flag.confidence * 100)}%
+                        </Typography>
+                      )}
+                      {flag.nc_created && (
+                        <Alert severity="warning"  sx={{ mt: 1 }}>
+                          <Typography variant="caption">
+                            <strong>NC Created:</strong> {flag.nc_id ? `NC-${flag.nc_id}` : 'Auto-generated'}
+                          </Typography>
+                        </Alert>
+                      )}
                     </Stack>
                   </CardContent>
                   <CardActions>
-                    <Button size="small" startIcon={<ViewIcon />}>
+                    <Button  startIcon={<ViewIcon />}>
                       View Details
                     </Button>
-                    <Button size="small" startIcon={<CheckIcon />}>
-                      Resolve
+                    <Button 
+                       
+                      startIcon={<CheckIcon />}
+                      onClick={() => {
+                        const resolution = prompt('Enter resolution notes:');
+                        if (resolution) {
+                          handleResolveFlag(flag.id, resolution);
+                        }
+                      }}
+                      disabled={flag.status !== 'active'}
+                    >
+                      {flag.status === 'active' ? 'Resolve' : 'Resolved'}
                     </Button>
                   </CardActions>
                 </Card>
@@ -702,8 +943,90 @@ const AllergenLabel: React.FC = () => {
           </Grid>
         </TabPanel>
 
-        {/* History Tab */}
+        {/* Non-Conformances Tab */}
         <TabPanel value={tabValue} index={4}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Allergen-Related Non-Conformances</Typography>
+          <Grid container spacing={3}>
+            {nonConformances.map((nc) => (
+              <Grid item xs={12} md={6} key={nc.id}>
+                <Card>
+                  <CardContent>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                      <Typography variant="h6" color={nc.severity === 'critical' ? 'error' : 'inherit'}>
+                        {nc.nc_number}
+                      </Typography>
+                      <Stack direction="row" spacing={1}>
+                        <Chip
+                          label={nc.severity}
+                          color={nc.severity === 'critical' ? 'error' : nc.severity === 'high' ? 'warning' : 'default'}
+                          
+                        />
+                        <Chip
+                          label={nc.status}
+                          color={nc.status === 'open' ? 'error' : nc.status === 'closed' ? 'success' : 'warning'}
+                          
+                        />
+                      </Stack>
+                    </Stack>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {nc.title}
+                    </Typography>
+                    <Stack spacing={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Product:</strong> {nc.product_reference}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Reported:</strong> {new Date(nc.reported_date).toLocaleDateString()}
+                      </Typography>
+                      {nc.target_resolution_date && (
+                        <Typography variant="body2" color="text.secondary">
+                          <strong>Target Resolution:</strong> {new Date(nc.target_resolution_date).toLocaleDateString()}
+                        </Typography>
+                      )}
+                      {nc.requires_immediate_action && (
+                        <Alert severity="error"  sx={{ mt: 1 }}>
+                          <Typography variant="caption">
+                            IMMEDIATE ACTION REQUIRED
+                          </Typography>
+                        </Alert>
+                      )}
+                      {nc.escalation_status === 'pending' && (
+                        <Alert severity="warning"  sx={{ mt: 1 }}>
+                          <Typography variant="caption">
+                            Escalation Pending - Management Review Required
+                          </Typography>
+                        </Alert>
+                      )}
+                    </Stack>
+                  </CardContent>
+                  <CardActions>
+                    <Button  startIcon={<ViewIcon />}>
+                      View Details
+                    </Button>
+                    <Button  startIcon={<EditIcon />}>
+                      Manage CAPA
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+            {nonConformances.length === 0 && (
+              <Grid item xs={12}>
+                <Alert severity="success" sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>
+                    No Allergen Non-Conformances
+                  </Typography>
+                  <Typography variant="body2">
+                    All allergen control processes are currently compliant with ISO 22000 standards.
+                  </Typography>
+                </Alert>
+              </Grid>
+            )}
+          </Grid>
+        </TabPanel>
+
+        {/* History Tab */}
+        <TabPanel value={tabValue} index={5}>
           <Typography variant="h6" sx={{ mb: 2 }}>Allergen & Label History</Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
@@ -1160,7 +1483,7 @@ const AllergenLabel: React.FC = () => {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Typography variant="body2">Approver #{a.approver_id}</Typography>
                   <Chip
-                    size="small"
+                    
                     label={a.status}
                     color={a.status === 'approved' ? 'success' : a.status === 'rejected' ? 'error' : 'default'}
                   />
@@ -1168,7 +1491,7 @@ const AllergenLabel: React.FC = () => {
                 {approvalsCtx && currentUser && a.approver_id === currentUser.id && a.status === 'pending' && (
                   <Stack direction="row" spacing={1}>
                     <Button
-                      size="small"
+                      
                       variant="contained"
                       onClick={async () => {
                       if (!approvalsCtx) return;
@@ -1182,7 +1505,7 @@ const AllergenLabel: React.FC = () => {
                       Approve
                     </Button>
                     <Button
-                      size="small"
+                      
                       color="error"
                       variant="outlined"
                       onClick={async () => {
@@ -1209,6 +1532,125 @@ const AllergenLabel: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setApprovalsOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Product Allergen Scan Dialog */}
+      <Dialog open={scanDialog} onClose={() => setScanDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <ScienceIcon color="secondary" />
+            <span>ISO 22000 Allergen Scan</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <FormControl fullWidth required>
+                <InputLabel>Product</InputLabel>
+                <Select
+                  label="Product"
+                  value={scanForm.product_id}
+                  onChange={(e) => setScanForm({ ...scanForm, product_id: e.target.value })}
+                >
+                  {products.map((p: any) => (
+                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Detection Method</InputLabel>
+                <Select
+                  label="Detection Method"
+                  value={scanForm.detection_method}
+                  onChange={(e) => setScanForm({ ...scanForm, detection_method: e.target.value })}
+                >
+                  <MenuItem value="automated">Automated Scan</MenuItem>
+                  <MenuItem value="manual">Manual Review</MenuItem>
+                  <MenuItem value="supplier_report">Supplier Report</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Ingredient List (one per line)"
+                value={scanForm.ingredient_list.join('\n')}
+                onChange={(e) => setScanForm({ 
+                  ...scanForm, 
+                  ingredient_list: e.target.value.split('\n').filter(i => i.trim()) 
+                })}
+                fullWidth
+                multiline
+                rows={4}
+                placeholder="Enter ingredients, one per line&#10;e.g. Wheat flour&#10;Chocolate chips&#10;Milk powder"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Process Steps (one per line)"
+                value={scanForm.process_steps.join('\n')}
+                onChange={(e) => setScanForm({ 
+                  ...scanForm, 
+                  process_steps: e.target.value.split('\n').filter(s => s.trim()) 
+                })}
+                fullWidth
+                multiline
+                rows={3}
+                placeholder="Enter process steps, one per line&#10;e.g. Mixing in shared equipment&#10;Packaging line A&#10;Storage in warehouse"
+              />
+            </Grid>
+            {scanResults && (
+              <Grid item xs={12}>
+                <Alert severity={scanResults.undeclared_allergens?.length > 0 ? "error" : "success"} sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Scan Results for {scanResults.product_name}
+                  </Typography>
+                  <Stack spacing={1}>
+                    <Typography variant="body2">
+                      • Detected Allergens: {scanResults.detected_allergens?.length || 0}
+                    </Typography>
+                    <Typography variant="body2">
+                      • Undeclared Allergens: {scanResults.undeclared_allergens?.length || 0}
+                    </Typography>
+                    <Typography variant="body2">
+                      • Risk Score: {scanResults.risk_score}/100
+                    </Typography>
+                    <Typography variant="body2">
+                      • Confidence: {Math.round((scanResults.confidence_score || 0) * 100)}%
+                    </Typography>
+                    {scanResults.flags_created?.length > 0 && (
+                      <Typography variant="body2" color="error">
+                        • {scanResults.flags_created.length} new flag(s) created
+                      </Typography>
+                    )}
+                    {scanResults.undeclared_allergens?.some((a: any) => a.severity === 'critical') && (
+                      <Typography variant="body2" color="error">
+                        • Critical allergen NC auto-generated
+                      </Typography>
+                    )}
+                    {scanResults.recommendations?.length > 0 && (
+                      <Typography variant="body2" color="info">
+                        • {scanResults.recommendations.length} ISO 22000 recommendations
+                      </Typography>
+                    )}
+                  </Stack>
+                </Alert>
+              </Grid>
+            )}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setScanDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={handleProductScan} 
+            variant="contained" 
+            disabled={!scanForm.product_id || scanningProduct}
+            startIcon={scanningProduct ? <CircularProgress size={20} /> : <ScienceIcon />}
+          >
+            {scanningProduct ? 'Scanning...' : 'Start Scan'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

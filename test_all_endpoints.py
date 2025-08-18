@@ -81,7 +81,10 @@ class APITester:
             if method.upper() == "GET":
                 response = self.session.get(url, params=params)
             elif method.upper() == "POST":
-                response = self.session.post(url, json=data, params=params)
+                if endpoint == "/auth/login":
+                    response = self.session.post(url, data=data, params=params, headers={"Content-Type": "application/x-www-form-urlencoded"})
+                else:
+                    response = self.session.post(url, json=data, params=params)
             elif method.upper() == "PUT":
                 response = self.session.put(url, json=data, params=params)
             elif method.upper() == "DELETE":
@@ -203,11 +206,15 @@ class APITester:
             ("GET", "/haccp/alerts/summary", {"days": 7}),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -234,11 +241,15 @@ class APITester:
             ("GET", "/suppliers/dashboard/stats"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -254,11 +265,15 @@ class APITester:
             ("GET", "/traceability/reports"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -273,11 +288,15 @@ class APITester:
             ("GET", "/audits/kpis/overview"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -291,11 +310,15 @@ class APITester:
             ("GET", "/risk/stats/overview"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -309,11 +332,15 @@ class APITester:
             ("GET", "/nonconformance/capas/"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -327,11 +354,15 @@ class APITester:
             ("GET", "/complaints/reports/trends"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -354,10 +385,10 @@ class APITester:
         
         endpoints = [
             ("GET", "/equipment"),
-            ("GET", "/equipment/stats"),
-            ("GET", "/equipment/upcoming-maintenance"),
-            ("GET", "/equipment/overdue-calibrations"),
-            ("GET", "/equipment/alerts"),
+            ("GET", "/equipment/analytics/stats"),
+            ("GET", "/equipment/analytics/upcoming-maintenance"),
+            ("GET", "/equipment/analytics/overdue-calibrations"),
+            ("GET", "/equipment/analytics/alerts"),
         ]
         
         for method, endpoint in endpoints:
@@ -373,11 +404,15 @@ class APITester:
             ("GET", "/management-reviews", {"page": 1, "size": 10}),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -392,11 +427,15 @@ class APITester:
             ("GET", "/notifications/summary"),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     
@@ -449,11 +488,15 @@ class APITester:
             ("GET", "/search/smart", {"q": "test", "limit": 10}),
         ]
         
-        for method, endpoint in endpoints:
-            if isinstance(endpoint, tuple):
-                endpoint, params = endpoint
+        for endpoint_data in endpoints:
+            if len(endpoint_data) == 2:
+                method, endpoint = endpoint_data
+                result = self.test_endpoint(method, endpoint)
+            elif len(endpoint_data) == 3:
+                method, endpoint, params = endpoint_data
                 result = self.test_endpoint(method, endpoint, params=params)
             else:
+                method, endpoint = endpoint_data[0], endpoint_data[1]
                 result = self.test_endpoint(method, endpoint)
             self.test_results.append(result)
     

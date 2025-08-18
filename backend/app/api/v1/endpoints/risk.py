@@ -5,7 +5,8 @@ from sqlalchemy import desc
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_permission
+from app.core.security import get_current_user
+from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.schemas.common import ResponseModel
 from app.schemas.risk import (
@@ -22,7 +23,7 @@ router = APIRouter()
 @router.post("/", response_model=ResponseModel)
 async def create_risk_item(
     payload: RiskItemCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -52,7 +53,7 @@ async def list_risk_items(
     assigned_to: Optional[int] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -92,7 +93,7 @@ async def list_risk_items(
 @router.get("/{item_id}", response_model=ResponseModel)
 async def get_risk_item(
     item_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     item = db.query(RiskRegisterItem).filter(RiskRegisterItem.id == item_id).first()
@@ -105,7 +106,7 @@ async def get_risk_item(
 async def update_risk_item(
     item_id: int,
     payload: RiskItemUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:update")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -125,7 +126,7 @@ async def update_risk_item(
 @router.delete("/{item_id}", response_model=ResponseModel)
 async def delete_risk_item(
     item_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:delete")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -149,7 +150,7 @@ async def delete_risk_item(
 
 @router.get("/stats/overview", response_model=ResponseModel)
 async def get_risk_stats(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -163,7 +164,7 @@ async def get_risk_stats(
 @router.get("/{item_id}/progress", response_model=ResponseModel)
 async def get_risk_progress(
     item_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -180,7 +181,7 @@ async def get_risk_progress(
 async def add_risk_action(
     item_id: int,
     payload: RiskActionCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -202,7 +203,7 @@ async def add_risk_action(
 @router.post("/actions/{action_id}/complete", response_model=ResponseModel)
 async def complete_risk_action(
     action_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:update")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -218,7 +219,7 @@ async def complete_risk_action(
 @router.get("/{item_id}/actions", response_model=ResponseModel)
 async def list_risk_actions(
     item_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -235,7 +236,7 @@ async def list_risk_actions(
 async def update_risk_action(
     action_id: int,
     payload: RiskActionUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:update")),
     db: Session = Depends(get_db),
 ):
     try:
@@ -251,7 +252,7 @@ async def update_risk_action(
 @router.delete("/actions/{action_id}", response_model=ResponseModel)
 async def delete_risk_action(
     action_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("risk_opportunity:delete")),
     db: Session = Depends(get_db),
 ):
     try:

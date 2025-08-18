@@ -88,7 +88,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
       { text: 'Suppliers', path: '/suppliers' },
       // Evaluation and Approved remain accessible via redirects but hidden from the menu
       // Supplier Audits hidden until implemented
-      { text: 'Performance Metrics', path: '/suppliers/metrics' },
     ],
   },
   
@@ -200,6 +199,10 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['QA Manager', 'Compliance Officer', 'System Administrator'],
     items: [
       { text: 'Reviews', path: '/management-reviews' },
+      { text: 'Calendar', path: '/management-reviews/calendar' },
+      { text: 'Action Items', path: '/management-reviews/actions' },
+      { text: 'Templates', path: '/management-reviews/templates' },
+      { text: 'Analytics', path: '/management-reviews/analytics' },
     ],
   },
   

@@ -107,8 +107,8 @@ const RBAC: React.FC = () => {
   const [selectedPermissions, setSelectedPermissions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    dispatch(fetchRoles());
-    dispatch(fetchPermissions());
+    dispatch(fetchRoles(undefined));
+    dispatch(fetchPermissions(undefined));
     dispatch(fetchRoleSummary());
     dispatch(fetchPermissionMatrix());
   }, [dispatch]);
@@ -165,7 +165,7 @@ const RBAC: React.FC = () => {
         await dispatch(cloneRole({ roleId: selectedRole.id, cloneData: formData }));
       }
       handleCloseDialog();
-      dispatch(fetchRoles());
+      dispatch(fetchRoles(undefined));
       dispatch(fetchRoleSummary());
     } catch (error) {
       console.error('Error saving role:', error);
@@ -176,7 +176,7 @@ const RBAC: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this role?')) {
       try {
         await dispatch(deleteRole(roleId));
-        dispatch(fetchRoles());
+        dispatch(fetchRoles(undefined));
         dispatch(fetchRoleSummary());
       } catch (error) {
         console.error('Error deleting role:', error);

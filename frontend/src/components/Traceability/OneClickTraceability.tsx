@@ -795,20 +795,21 @@ const OneClickTraceability: React.FC<OneClickTraceabilityProps> = ({
               icon={<SaveIcon />}
               tooltipTitle="Save"
               onClick={handleSave}
+              FabProps={{ disabled: !results }}
               aria-label="Save traceability results"
             />
             <SpeedDialAction
               icon={<UndoIcon />}
               tooltipTitle="Undo"
               onClick={handleUndo}
-              disabled={undoStack.length === 0}
+              FabProps={{ disabled: undoStack.length === 0 }}
               aria-label="Undo last action"
             />
             <SpeedDialAction
               icon={<RedoIcon />}
               tooltipTitle="Redo"
               onClick={handleRedo}
-              disabled={redoStack.length === 0}
+              FabProps={{ disabled: redoStack.length === 0 }}
               aria-label="Redo last action"
             />
             <SpeedDialAction

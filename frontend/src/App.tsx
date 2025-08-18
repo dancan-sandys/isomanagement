@@ -10,7 +10,6 @@ import HACCP from './pages/HACCP';
 import HACCPProductDetail from './pages/HACCPProductDetail';
 import PRP from './pages/PRP';
 import Suppliers from './pages/Suppliers';
-import SuppliersMetrics from './pages/SuppliersMetrics';
 import Traceability from './pages/Traceability';
 import NonConformance from './pages/NonConformance';
 import NonConformanceDetail from './pages/NonConformanceDetail';
@@ -39,6 +38,10 @@ import OpportunitiesRegister from './pages/OpportunitiesRegister';
 import OpportunityDetail from './pages/OpportunityDetail';
 import ManagementReviews from './pages/ManagementReviews';
 import ManagementReviewDetail from './pages/ManagementReviewDetail';
+import ManagementReviewAnalytics from './pages/ManagementReviewAnalytics';
+import ManagementReviewActions from './pages/ManagementReviewActions';
+import ManagementReviewCalendar from './pages/ManagementReviewCalendar';
+import ManagementReviewTemplates from './pages/ManagementReviewTemplates';
 import RiskDetail from './pages/RiskDetail';
 import AllergenLabel from './pages/AllergenLabel';
 import AdvancedReporting from './pages/AdvancedReporting';
@@ -88,7 +91,7 @@ function App() {
                       <Route path="/suppliers/evaluation" element={<Navigate to="/suppliers?tab=3" replace />} />
                       <Route path="/suppliers/approved" element={<Navigate to="/suppliers?tab=1" replace />} />
                       <Route path="/suppliers/audits" element={<Navigate to="/audits?type=supplier" replace />} />
-                      <Route path="/suppliers/metrics" element={<SuppliersMetrics />} />
+                      {/* Performance Metrics removed; consolidated into Dashboard */}
                       
                       {/* Traceability - Production and QA roles */}
                       <Route path="/traceability" element={<Traceability />} />
@@ -148,6 +151,10 @@ function App() {
                       <Route path="/compliance/opportunity/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={OpportunityDetail} />} />
                       <Route path="/management-reviews" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviews} />} />
                       <Route path="/management-reviews/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewDetail} />} />
+                      <Route path="/management-reviews/analytics" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewAnalytics} />} />
+                      <Route path="/management-reviews/actions" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewActions} />} />
+                      <Route path="/management-reviews/calendar" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewCalendar} />} />
+                      <Route path="/management-reviews/templates" element={<RoleBasedRoute allowedRoles={["QA Manager", "Compliance Officer", "System Administrator"]} component={ManagementReviewTemplates} />} />
                       <Route path="/compliance/risk/:id" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={RiskDetail} />} />
                       <Route path="/compliance/allergen-label" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Compliance Officer", "System Administrator"]} component={AllergenLabel} />} />
                       <Route path="/compliance/regulatory" element={<Navigate to="/compliance/risks" replace />} />

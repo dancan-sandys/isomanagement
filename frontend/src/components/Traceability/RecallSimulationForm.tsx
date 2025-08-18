@@ -21,7 +21,8 @@ import {
   Slider,
   FormHelperText,
   Tabs,
-  Tab
+  Tab,
+  Autocomplete
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -80,13 +81,35 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
     risk_level: 'medium'
   });
 
+  // Batch options
+  const [batches, setBatches] = useState<Array<{ id: number; batch_number: string; product_name?: string }>>([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+
+  useEffect(() => {
+    const loadBatches = async () => {
+      try {
+        setBatchesLoading(true);
+        const res: any = await traceabilityAPI.getBatches({ size: 100 });
+        const items = res?.items || res?.data?.items || [];
+        setBatches(items);
+      } catch {
+        setBatches([]);
+      } finally {
+        setBatchesLoading(false);
+      }
+    };
+    if (open) {
+      loadBatches();
+    }
+  }, [open]);
+
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
     if (!simulationForm.batch_id) {
-      errors.batch_id = 'Batch ID is required';
+      errors.batch_id = 'Batch is required';
     }
 
     if (!simulationForm.recall_type) {
@@ -206,14 +229,20 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
         <TabPanel value={activeTab} index={0}>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Batch ID *"
-                type="number"
-                value={simulationForm.batch_id}
-                onChange={(e) => handleInputChange('batch_id', e.target.value)}
-                error={!!validationErrors.batch_id}
-                helperText={validationErrors.batch_id}
+              <Autocomplete
+                options={batches}
+                loading={batchesLoading}
+                getOptionLabel={(option) => `${option.batch_number}${option.product_name ? ' - ' + option.product_name : ''}`}
+                value={batches.find(b => String(b.id) === simulationForm.batch_id) || null}
+                onChange={(_, newValue) => handleInputChange('batch_id', newValue ? String(newValue.id) : '')}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Batch *"
+                    error={!!validationErrors.batch_id}
+                    helperText={validationErrors.batch_id}
+                  />
+                )}
               />
             </Grid>
             <Grid item xs={12} md={6}>

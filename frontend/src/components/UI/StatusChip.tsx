@@ -2,7 +2,22 @@ import React from 'react';
 import { Chip, ChipProps } from '@mui/material';
 import { getStatusChipProps } from '../../theme/designSystem';
 
-export type StatusType = 'compliant' | 'nonConformance' | 'pending' | 'warning' | 'info' | 'active' | 'inactive' | 'suspended';
+export type StatusType =
+  | 'compliant'
+  | 'nonConformance'
+  | 'pending'
+  | 'warning'
+  | 'info'
+  | 'active'
+  | 'inactive'
+  | 'suspended'
+  | 'approved'
+  | 'rejected'
+  | 'under_review'
+  | 'passed'
+  | 'failed'
+  | 'pending_approval'
+  | 'blacklisted';
 
 interface StatusChipProps extends Omit<ChipProps, 'color'> {
   status: StatusType;

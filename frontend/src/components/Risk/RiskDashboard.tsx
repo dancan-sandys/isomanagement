@@ -542,8 +542,8 @@ const RiskDashboard: React.FC = () => {
           <Card sx={{ 
             height: 140, 
             background: dashboardData.compliance_status?.iso_31000_compliance 
-              ? `linear-gradient(135deg, ${ISO_STATUS_COLORS.effective} 0%, ${ISO_STATUS_COLORS.compliant} 100%)`
-              : `linear-gradient(135deg, ${ISO_STATUS_COLORS.nonConformance} 0%, ${ISO_STATUS_COLORS.atRisk} 100%)`,
+              ? `linear-gradient(135deg, ${ISO_STATUS_COLORS.compliant} 0%, ${ISO_STATUS_COLORS.compliant} 100%)`
+              : `linear-gradient(135deg, ${ISO_STATUS_COLORS.nonConformance} 0%, ${ISO_STATUS_COLORS.pending} 100%)`,
             color: 'white'
           }}>
             <CardContent sx={{ p: 2 }}>
@@ -587,16 +587,16 @@ const RiskDashboard: React.FC = () => {
                   <Stack direction="row" alignItems="center" spacing={0.5}>
                     <TrendingUp sx={{ 
                       fontSize: 16, 
-                      color: dashboardData.performance_metrics?.overall_performance >= 75 
-                        ? ISO_STATUS_COLORS.effective 
-                        : ISO_STATUS_COLORS.atRisk 
+                      color: (dashboardData.performance_metrics?.overall_performance || 0) >= 75 
+                        ? ISO_STATUS_COLORS.compliant 
+                        : ISO_STATUS_COLORS.pending 
                     }} />
                     <Typography variant="caption" color="text.secondary">
                       Treatment Efficiency: {dashboardData.performance_metrics?.treatment_efficiency?.toFixed(0) || 0}%
                     </Typography>
                   </Stack>
                 </Box>
-                <Analytics sx={{ fontSize: 40, color: PROFESSIONAL_COLORS.accent.main, opacity: 0.7 }} />
+                <Analytics sx={{ fontSize: 40, color: PROFESSIONAL_COLORS.secondary.main, opacity: 0.7 }} />
               </Stack>
             </CardContent>
           </Card>
@@ -621,8 +621,8 @@ const RiskDashboard: React.FC = () => {
                 <AccountBalance sx={{ 
                   fontSize: 40, 
                   color: dashboardData.compliance_status?.compliance_checks?.fsms_integration 
-                    ? ISO_STATUS_COLORS.effective 
-                    : ISO_STATUS_COLORS.atRisk,
+                    ? ISO_STATUS_COLORS.compliant 
+                    : ISO_STATUS_COLORS.pending,
                   opacity: 0.7 
                 }} />
               </Stack>
@@ -674,14 +674,14 @@ const RiskDashboard: React.FC = () => {
                   <Line 
                     type="monotone" 
                     dataKey="resolved_risks" 
-                    stroke={ISO_STATUS_COLORS.effective} 
+                    stroke={ISO_STATUS_COLORS.compliant} 
                     name="Resolved Risks"
                     strokeWidth={2}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="new_opportunities" 
-                    stroke={PROFESSIONAL_COLORS.accent.main} 
+                    stroke={PROFESSIONAL_COLORS.secondary.main} 
                     name="New Opportunities"
                     strokeWidth={2}
                   />

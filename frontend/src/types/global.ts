@@ -412,7 +412,8 @@ export const isDocument = (obj: any): obj is Document => {
   return obj && typeof obj === 'object' && 'id' in obj && 'title' in obj;
 };
 
-export const isSupplier = (obj: any): obj is Supplier => {
-  return obj && typeof obj === 'object' && 'id' in obj && 'name' in obj;
+// Narrow check to basic supplier shape without needing a full type here
+export const isSupplier = (obj: any): boolean => {
+  return obj && typeof obj === 'object' && 'id' in obj && ('name' in obj || 'supplier_name' in obj);
 };
 

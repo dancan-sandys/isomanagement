@@ -20,8 +20,14 @@ const db = {
       approved_plans: 2,
       total_ccps: 5,
       active_ccps: 4,
-      recent_logs: [] as any[],
+      recent_logs: [
+        { description: 'CCP monitoring completed', created_at: new Date(Date.now() - 3600 * 1000).toISOString() },
+        { description: 'Verification activity recorded', created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() },
+      ] as any[],
       out_of_spec_count: 1,
+      out_of_spec_ccps: [
+        { id: 1, ccp_number: 'CCP-1', ccp_name: 'Mix temp', process_step: 'Mixing', measured_value: 12, unit: 'C', limit_min: null, limit_max: 10, measured_at: new Date().toISOString() },
+      ],
     },
   },
   suppliers: {

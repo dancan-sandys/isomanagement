@@ -1,9 +1,10 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '../../../utils/test-utils';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../../utils/test-utils';
 import QRCodeScanner from '../QRCodeScanner';
 import OfflineCapabilities from '../OfflineCapabilities';
 import MobileDataEntry from '../MobileDataEntry';
-import Traceability from '../../pages/Traceability';
+import Traceability from '../../../pages/Traceability';
 
 // Performance thresholds
 const PERFORMANCE_THRESHOLDS = {
@@ -24,7 +25,7 @@ describe('Performance Tests', () => {
     it('renders QRCodeScanner within performance threshold', () => {
       const startTime = performance.now();
       
-      render(
+      renderWithProviders(
         <QRCodeScanner
           open={true}
           onClose={jest.fn()}
@@ -42,7 +43,7 @@ describe('Performance Tests', () => {
     it('renders OfflineCapabilities within performance threshold', () => {
       const startTime = performance.now();
       
-      render(<OfflineCapabilities onSyncComplete={jest.fn()} />);
+      renderWithProviders(<OfflineCapabilities onSyncComplete={jest.fn()} />);
       
       const endTime = performance.now();
       const renderTime = endTime - startTime;
@@ -72,7 +73,7 @@ describe('Performance Tests', () => {
     it('renders main Traceability page within performance threshold', () => {
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const endTime = performance.now();
       const renderTime = endTime - startTime;
@@ -104,7 +105,7 @@ describe('Performance Tests', () => {
     });
 
     it('handles tab switching quickly', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       
@@ -118,7 +119,7 @@ describe('Performance Tests', () => {
     });
 
     it('handles dialog opening quickly', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       fireEvent.click(recallTab);
@@ -139,7 +140,7 @@ describe('Performance Tests', () => {
     it('loads dashboard data efficiently', async () => {
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(screen.getByText('Traceability Dashboard')).toBeInTheDocument();
@@ -168,7 +169,7 @@ describe('Performance Tests', () => {
       
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
@@ -186,7 +187,7 @@ describe('Performance Tests', () => {
 
   describe('Memory Usage Performance', () => {
     it('maintains reasonable memory usage during component lifecycle', () => {
-      const initialMemory = performance.memory?.usedJSHeapSize || 0;
+      const initialMemory = (performance as any).memory?.usedJSHeapSize || 0;
       
       const { unmount } = render(
         <QRCodeScanner
@@ -200,12 +201,12 @@ describe('Performance Tests', () => {
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
       
-      const memoryAfterRender = performance.memory?.usedJSHeapSize || 0;
+      const memoryAfterRender = (performance as any).memory?.usedJSHeapSize || 0;
       const memoryIncrease = memoryAfterRender - initialMemory;
       
       unmount();
       
-      const memoryAfterUnmount = performance.memory?.usedJSHeapSize || 0;
+      const memoryAfterUnmount = (performance as any).memory?.usedJSHeapSize || 0;
       const memoryLeak = memoryAfterUnmount - initialMemory;
       
       // Memory increase should be reasonable
@@ -233,7 +234,7 @@ describe('Performance Tests', () => {
       
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const endTime = performance.now();
       const renderTime = endTime - startTime;
@@ -275,14 +276,14 @@ describe('Performance Tests', () => {
       
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
       
       await waitFor(() => {
         expect(mockGetBatches).toHaveBeenCalled();
-      }, { timeout: 5000 });
+      });
       
       const endTime = performance.now();
       const loadTime = endTime - startTime;
@@ -297,7 +298,7 @@ describe('Performance Tests', () => {
       
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
@@ -327,7 +328,7 @@ describe('Performance Tests', () => {
     it('maintains performance with screen readers', () => {
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       // Simulate screen reader navigation
       const tabs = screen.getAllByRole('tab');
@@ -346,7 +347,7 @@ describe('Performance Tests', () => {
     it('handles multiple concurrent operations', async () => {
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       // Simulate multiple concurrent operations
       const operations = [

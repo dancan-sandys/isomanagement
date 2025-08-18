@@ -111,6 +111,7 @@ const CAPADetail: React.FC = () => {
       <Paper sx={{ p: 2, mb: 2 }}>
         {errorMsg && <Typography color="error" variant="body2" sx={{ mb: 1 }}>{errorMsg}</Typography>}
         <Typography variant="subtitle1" gutterBottom>Verifications</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Note: Passed verifications contribute to moving the related Non-Conformance to Verified and allow closure per ISO workflow.</Typography>
         {verifications.length === 0 ? (
           <Typography variant="body2" color="text.secondary">No verifications yet.</Typography>
         ) : (

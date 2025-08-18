@@ -1,87 +1,78 @@
 #!/usr/bin/env python3
 """
-Debug script to test frontend authentication and template creation
+Debug script to help identify frontend authentication issues
 """
-
 import requests
 import json
 
-# Configuration
-BASE_URL = "http://localhost:8000/api/v1"
-LOGIN_URL = f"{BASE_URL}/auth/login"
-TEMPLATES_URL = f"{BASE_URL}/documents/templates"
-
 def test_frontend_auth():
-    """Test frontend authentication flow"""
+    """Test the authentication flow that the frontend would use"""
     
-    print("Testing Frontend Authentication Flow")
+    # Base URL
+    base_url = "http://localhost:8000/api/v1"
+    
+    print("🔍 Testing Frontend Authentication Flow...")
     print("=" * 50)
     
-    # Login as admin (simulating frontend login)
+    # Step 1: Login
+    print("\n1. Testing Login...")
     login_data = {
-        "username": "admin",
-        "password": "admin123456"
+        'username': 'admin',
+        'password': 'admin123'
     }
     
     try:
-        # Step 1: Login (simulating frontend login)
-        print("🔐 Step 1: Login")
-        login_response = requests.post(LOGIN_URL, data=login_data)
-        print(f"Login status: {login_response.status_code}")
+        login_response = requests.post(
+            f"{base_url}/auth/login",
+            data=login_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
         
-        if login_response.status_code != 200:
-            print(f"❌ Login failed: {login_response.text}")
-            return
+        if login_response.status_code == 200:
+            login_result = login_response.json()
+            print("✅ Login successful!")
+            print(f"   User: {login_result['data']['user']['username']}")
+            print(f"   Role: {login_result['data']['user']['role_name']}")
             
-        login_data = login_response.json()
-        print(f"Login response keys: {list(login_data.keys())}")
-        
-        if 'data' not in login_data:
-            print(f"❌ No 'data' in login response: {login_data}")
-            return
+            # Extract token
+            token = login_result['data']['access_token']
+            print(f"   Token: {token[:50]}...")
             
-        access_token = login_data['data']['access_token']
-        print(f"✅ Got access token: {access_token[:20]}...")
-        
-        # Step 2: Test GET templates with token
-        print("\n📄 Step 2: Test GET templates with token")
-        headers = {"Authorization": f"Bearer {access_token}"}
-        get_response = requests.get(TEMPLATES_URL, headers=headers)
-        print(f"GET status: {get_response.status_code}")
-        print(f"GET response: {get_response.text[:200]}")
-        
-        # Step 3: Test POST template creation with token
-        print("\n📝 Step 3: Test POST template creation with token")
-        template_data = {
-            "name": "Test Template",
-            "description": "A test template for testing",
-            "document_type": "procedure",
-            "category": "quality",
-            "template_content": "This is a test template content."
-        }
-        
-        print(f"POST data: {json.dumps(template_data, indent=2)}")
-        print(f"POST headers: {headers}")
-        
-        post_response = requests.post(TEMPLATES_URL, json=template_data, headers=headers)
-        print(f"POST status: {post_response.status_code}")
-        print(f"POST response: {post_response.text}")
-        
-        # Step 4: Test without token (should fail)
-        print("\n🚫 Step 4: Test POST without token (should fail)")
-        post_no_token = requests.post(TEMPLATES_URL, json=template_data)
-        print(f"POST without token status: {post_no_token.status_code}")
-        print(f"POST without token response: {post_no_token.text}")
-        
-        # Step 5: Test with invalid token
-        print("\n🚫 Step 5: Test POST with invalid token")
-        invalid_headers = {"Authorization": "Bearer invalid_token_123"}
-        post_invalid = requests.post(TEMPLATES_URL, json=template_data, headers=invalid_headers)
-        print(f"POST with invalid token status: {post_invalid.status_code}")
-        print(f"POST with invalid token response: {post_invalid.text}")
-        
+            # Step 2: Test Risk API with token
+            print("\n2. Testing Risk API with token...")
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json'
+            }
+            
+            risk_response = requests.get(f"{base_url}/risk/", headers=headers)
+            
+            if risk_response.status_code == 200:
+                print("✅ Risk API call successful!")
+                risk_data = risk_response.json()
+                print(f"   Response: {json.dumps(risk_data, indent=2)}")
+            else:
+                print(f"❌ Risk API call failed: {risk_response.status_code}")
+                print(f"   Response: {risk_response.text}")
+                
+            # Step 3: Test Risk Stats
+            print("\n3. Testing Risk Stats...")
+            stats_response = requests.get(f"{base_url}/risk/stats/overview", headers=headers)
+            
+            if stats_response.status_code == 200:
+                print("✅ Risk Stats call successful!")
+                stats_data = stats_response.json()
+                print(f"   Response: {json.dumps(stats_data, indent=2)}")
+            else:
+                print(f"❌ Risk Stats call failed: {stats_response.status_code}")
+                print(f"   Response: {stats_response.text}")
+                
+        else:
+            print(f"❌ Login failed: {login_response.status_code}")
+            print(f"   Response: {login_response.text}")
+            
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Error during testing: {str(e)}")
 
 if __name__ == "__main__":
     test_frontend_auth()

@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '../../utils/test-utils';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../utils/test-utils';
 import Traceability from '../Traceability';
 import { mockTraceabilityAPI, mockUsersAPI } from '../../utils/test-utils';
 
@@ -19,7 +20,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Page Rendering', () => {
     it('renders the main traceability page with all tabs', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       expect(screen.getByText('Traceability & Recall Management')).toBeInTheDocument();
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
@@ -32,7 +33,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('shows dashboard by default', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       expect(screen.getByText('Traceability Dashboard')).toBeInTheDocument();
       expect(screen.getByText('Total Batches')).toBeInTheDocument();
@@ -43,7 +44,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Tab Navigation', () => {
     it('switches to batch management tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
@@ -52,7 +53,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('switches to recall management tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       fireEvent.click(recallTab);
@@ -62,7 +63,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('switches to traceability reports tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const reportsTab = screen.getByText('Traceability Reports');
       fireEvent.click(reportsTab);
@@ -72,7 +73,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('switches to enhanced search tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const searchTab = screen.getByText('Enhanced Search');
       fireEvent.click(searchTab);
@@ -81,7 +82,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('switches to recall simulation tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const simulationTab = screen.getByText('Recall Simulation');
       fireEvent.click(simulationTab);
@@ -91,7 +92,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('switches to offline mode tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const offlineTab = screen.getByText('Offline Mode');
       fireEvent.click(offlineTab);
@@ -103,7 +104,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Batch Management Workflow', () => {
     it('opens batch creation dialog', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       // Switch to batch management tab
       const batchTab = screen.getByText('Batch Management');
@@ -115,7 +116,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('displays batch list with data', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
@@ -128,7 +129,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Recall Management Workflow', () => {
     it('opens recall creation dialog', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       fireEvent.click(recallTab);
@@ -140,7 +141,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('fills and submits recall form', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       fireEvent.click(recallTab);
@@ -173,7 +174,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('displays recall list with data', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       fireEvent.click(recallTab);
@@ -186,7 +187,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Traceability Reports Workflow', () => {
     it('opens trace report creation dialog', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const reportsTab = screen.getByText('Traceability Reports');
       fireEvent.click(reportsTab);
@@ -198,7 +199,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('fills and submits trace report form', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const reportsTab = screen.getByText('Traceability Reports');
       fireEvent.click(reportsTab);
@@ -228,13 +229,13 @@ describe('Traceability Integration Tests', () => {
         useMediaQuery: jest.fn(() => true),
       }));
 
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       expect(screen.getByText('Traceability & Recall')).toBeInTheDocument();
     });
 
     it('opens QR scanner from mobile app bar', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       // Look for QR scanner button in mobile app bar
       const qrButton = screen.getByLabelText('QR code scanner');
@@ -244,7 +245,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('opens mobile data entry from speed dial', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       // Look for mobile data entry button in speed dial
       // This might be in a different component or rendered conditionally
@@ -254,7 +255,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Offline Mode Integration', () => {
     it('shows offline capabilities in offline mode tab', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const offlineTab = screen.getByText('Offline Mode');
       fireEvent.click(offlineTab);
@@ -264,7 +265,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('downloads offline data when button is clicked', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const offlineTab = screen.getByText('Offline Mode');
       fireEvent.click(offlineTab);
@@ -283,7 +284,7 @@ describe('Traceability Integration Tests', () => {
       // Mock API to fail
       mockTraceabilityAPI.getDashboard.mockRejectedValueOnce(new Error('API Error'));
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(screen.getByText('Failed to load dashboard data')).toBeInTheDocument();
@@ -294,7 +295,7 @@ describe('Traceability Integration Tests', () => {
       // Mock API to fail
       mockTraceabilityAPI.getBatches.mockRejectedValueOnce(new Error('Network Error'));
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
@@ -307,7 +308,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Data Loading Integration', () => {
     it('loads dashboard data on mount', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(mockTraceabilityAPI.getDashboard).toHaveBeenCalled();
@@ -315,7 +316,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('loads batches data on mount', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(mockTraceabilityAPI.getBatches).toHaveBeenCalled();
@@ -323,7 +324,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('loads recalls data on mount', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(mockTraceabilityAPI.getRecalls).toHaveBeenCalled();
@@ -331,7 +332,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('loads reports data on mount', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(mockTraceabilityAPI.getTraceabilityReports).toHaveBeenCalled();
@@ -341,7 +342,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('User Interaction Integration', () => {
     it('handles batch selection', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const batchTab = screen.getByText('Batch Management');
       fireEvent.click(batchTab);
@@ -353,7 +354,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('handles recall selection', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const recallTab = screen.getByText('Recall Management');
       fireEvent.click(recallTab);
@@ -364,7 +365,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('handles report selection', async () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const reportsTab = screen.getByText('Traceability Reports');
       fireEvent.click(reportsTab);
@@ -377,7 +378,7 @@ describe('Traceability Integration Tests', () => {
 
   describe('Accessibility Integration', () => {
     it('supports keyboard navigation between tabs', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       const tabs = screen.getAllByRole('tab');
       expect(tabs.length).toBeGreaterThan(0);
@@ -389,7 +390,7 @@ describe('Traceability Integration Tests', () => {
     });
 
     it('has proper ARIA labels throughout the interface', () => {
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       // Check for common ARIA labels
       expect(screen.getByLabelText('QR code scanner')).toBeInTheDocument();
@@ -400,7 +401,7 @@ describe('Traceability Integration Tests', () => {
     it('loads data efficiently', async () => {
       const startTime = performance.now();
       
-      render(<Traceability />);
+      renderWithProviders(<Traceability />);
       
       await waitFor(() => {
         expect(mockTraceabilityAPI.getDashboard).toHaveBeenCalled();

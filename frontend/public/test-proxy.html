@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Proxy Test Tool</h1>
+    
+    <div id="status"></div>
+    
+    <h2>Tests</h2>
+    <button onclick="testDirectBackend()">Test Direct Backend (should fail)</button>
+    <button onclick="testProxyBackend()">Test Proxy Backend (should work)</button>
+    <button onclick="testAuthWithProxy()">Test Auth with Proxy</button>
+    
+    <h2>Results</h2>
+    <pre id="results">No tests run yet...</pre>
+
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function updateResults(data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function testDirectBackend() {
+            updateStatus('Testing direct backend connection...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/risk/', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                updateResults({
+                    test: 'Direct Backend',
+                    status: response.status,
+                    success: response.ok,
+                    data: data
+                });
+
+                if (response.status === 403) {
+                    updateStatus('✅ Direct backend test passed (correctly rejected without auth)', 'success');
+                } else {
+                    updateStatus(`❌ Direct backend test failed (unexpected status: ${response.status})`, 'error');
+                }
+            } catch (error) {
+                updateResults({
+                    test: 'Direct Backend',
+                    error: error.message
+                });
+                updateStatus(`❌ Direct backend test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testProxyBackend() {
+            updateStatus('Testing proxy backend connection...', 'info');
+            
+            try {
+                const response = await fetch('/api/v1/risk/', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                updateResults({
+                    test: 'Proxy Backend',
+                    status: response.status,
+                    success: response.ok,
+                    data: data
+                });
+
+                if (response.status === 403) {
+                    updateStatus('✅ Proxy backend test passed (correctly rejected without auth)', 'success');
+                } else {
+                    updateStatus(`❌ Proxy backend test failed (unexpected status: ${response.status})`, 'error');
+                }
+            } catch (error) {
+                updateResults({
+                    test: 'Proxy Backend',
+                    error: error.message
+                });
+                updateStatus(`❌ Proxy backend test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuthWithProxy() {
+            updateStatus('Testing authentication with proxy...', 'info');
+            
+            try {
+                // First, login
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData
+                });
+
+                const loginData = await loginResponse.json();
+                
+                if (!loginResponse.ok) {
+                    updateResults({
+                        test: 'Auth with Proxy',
+                        loginStatus: loginResponse.status,
+                        loginData: loginData
+                    });
+                    updateStatus(`❌ Login failed: ${loginResponse.status}`, 'error');
+                    return;
+                }
+
+                const accessToken = loginData.data.access_token;
+                
+                // Now test risk API with auth
+                const riskResponse = await fetch('/api/v1/risk/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const riskData = await riskResponse.json();
+                updateResults({
+                    test: 'Auth with Proxy',
+                    loginStatus: loginResponse.status,
+                    riskStatus: riskResponse.status,
+                    loginData: loginData,
+                    riskData: riskData
+                });
+
+                if (riskResponse.ok) {
+                    updateStatus('✅ Authentication with proxy test passed!', 'success');
+                } else {
+                    updateStatus(`❌ Risk API failed: ${riskResponse.status}`, 'error');
+                }
+            } catch (error) {
+                updateResults({
+                    test: 'Auth with Proxy',
+                    error: error.message
+                });
+                updateStatus(`❌ Auth test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize
+        updateStatus('Proxy test tool ready. Click a test button to start.', 'info');
+    </script>
+</body>
+</html>

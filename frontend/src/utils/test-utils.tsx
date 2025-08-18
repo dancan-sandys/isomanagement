@@ -23,12 +23,16 @@ const createTestStore = () => {
           username: 'testuser',
           email: 'test@example.com',
           full_name: 'Test User',
-          role: 'admin',
+          role_id: 1,
+          role_name: 'admin',
+          status: 'active',
           is_active: true,
+          is_verified: true,
         },
         token: 'test-token',
+        refreshToken: 'test-refresh-token',
         isAuthenticated: true,
-        loading: false,
+        isLoading: false,
         error: null,
       },
     },
@@ -251,4 +255,4 @@ export const mockNavigatorShare = jest.fn().mockResolvedValue(undefined);
 
 // Re-export everything from testing library
 export * from '@testing-library/react';
-export { customRender as render };
+export { customRender as render, customRender as renderWithProviders };
