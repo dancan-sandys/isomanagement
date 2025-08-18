@@ -125,6 +125,7 @@ export interface HACCPDashboardStats {
   active_ccps: number;
   out_of_spec_count: number;
   recent_logs: Array<Record<string, any>>;
+  out_of_spec_ccps?: Array<{ id: number; ccp_number?: string; ccp_name?: string; process_step?: string; measured_value?: number; unit?: string; limit_min?: number | null; limit_max?: number | null; measured_at?: string }>;
 }
 
 export interface HACCPState {

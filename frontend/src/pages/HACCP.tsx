@@ -37,6 +37,10 @@ import {
   TextField,
   FormControlLabel,
   Switch,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -637,7 +641,9 @@ const HACCP: React.FC = () => {
                     </ListItemIcon>
                     <ListItemText
                       primary={log.description}
-                      secondary={new Date(log.created_at).toLocaleDateString()}
+                      secondary={(log.created_at && !isNaN(Date.parse(log.created_at)))
+                        ? new Date(log.created_at).toLocaleString()
+                        : ''}
                     />
                   </ListItem>
                 ))}
@@ -651,9 +657,37 @@ const HACCP: React.FC = () => {
           <Card>
             <CardHeader title="Out of Specification" />
             <CardContent>
-              <Alert severity="warning">
-                {dashboardStats?.out_of_spec_count || 0} CCPs out of specification
-              </Alert>
+              {Array.isArray(dashboardStats?.out_of_spec_ccps) && dashboardStats!.out_of_spec_ccps!.length > 0 ? (
+                <List>
+                  {dashboardStats!.out_of_spec_ccps!.map((ccp) => (
+                    <ListItem key={ccp.id} alignItems="flex-start">
+                      <ListItemIcon>
+                        <Warning color="warning" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={`${ccp.ccp_number || ''} ${ccp.ccp_name || ''}`.trim() || `CCP #${ccp.id}`}
+                        secondary={
+                          <>
+                            <Typography variant="body2" color="textSecondary">
+                              {ccp.process_step ? `Step: ${ccp.process_step} • ` : ''}
+                              {ccp.measured_at && !isNaN(Date.parse(ccp.measured_at)) ? new Date(ccp.measured_at).toLocaleString() : ''}
+                            </Typography>
+                            <Typography variant="body2">
+                              Measured: {ccp.measured_value}{ccp.unit ? ` ${ccp.unit}` : ''}
+                              {typeof ccp.limit_min === 'number' || typeof ccp.limit_max === 'number' ?
+                                ` • Limits: ${ccp.limit_min ?? '-'} to ${ccp.limit_max ?? '-'}` : ''}
+                            </Typography>
+                          </>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Alert severity="warning">
+                  {dashboardStats?.out_of_spec_count || 0} CCPs out of specification
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -1214,7 +1248,19 @@ const HACCP: React.FC = () => {
               <TextField fullWidth type="number" label="Process Step ID" value={hazardForm.process_step_id} onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })} />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField fullWidth label="Hazard Type (biological/chemical/physical/allergen)" value={hazardForm.hazard_type} onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })} />
+              <FormControl fullWidth>
+                <InputLabel>Hazard Type</InputLabel>
+                <Select
+                  value={hazardForm.hazard_type}
+                  label="Hazard Type"
+                  onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })}
+                >
+                  <MenuItem value="biological">Biological</MenuItem>
+                  <MenuItem value="chemical">Chemical</MenuItem>
+                  <MenuItem value="physical">Physical</MenuItem>
+                  <MenuItem value="allergen">Allergen</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} />

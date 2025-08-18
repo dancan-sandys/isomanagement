@@ -650,7 +650,21 @@ const HACCPProductDetail: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}><TextField fullWidth type="number" label="Process Step ID" value={hazardForm.process_step_id} onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Type" value={hazardForm.hazard_type} onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Hazard Type</InputLabel>
+                <Select
+                  value={hazardForm.hazard_type}
+                  label="Hazard Type"
+                  onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })}
+                >
+                  <MenuItem value="biological">Biological</MenuItem>
+                  <MenuItem value="chemical">Chemical</MenuItem>
+                  <MenuItem value="physical">Physical</MenuItem>
+                  <MenuItem value="allergen">Allergen</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Rationale (Hazard Analysis)" value={hazardForm.rationale} onChange={(e) => setHazardForm({ ...hazardForm, rationale: e.target.value })} /></Grid>

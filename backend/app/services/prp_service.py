@@ -261,6 +261,35 @@ class PRPService:
         
         return assessment
     
+    def update_risk_assessment(self, assessment_id: int, assessment_data: dict, updated_by: int) -> RiskAssessment:
+        """Update an existing risk assessment"""
+        
+        assessment = self.db.query(RiskAssessment).filter(RiskAssessment.id == assessment_id).first()
+        if not assessment:
+            raise ValueError("Risk assessment not found")
+        
+        # Update fields that are provided
+        for field, value in assessment_data.items():
+            if hasattr(assessment, field) and value is not None:
+                setattr(assessment, field, value)
+        
+        # Recalculate risk score if likelihood or severity changed
+        if 'likelihood_level' in assessment_data or 'severity_level' in assessment_data:
+            risk_calculation = self.calculate_risk_score(
+                assessment.likelihood_level,
+                assessment.severity_level
+            )
+            assessment.risk_level = risk_calculation["risk_level"]
+            assessment.risk_score = risk_calculation["risk_score"]
+            assessment.acceptability = risk_calculation["acceptability"]
+        
+        assessment.updated_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(assessment)
+        
+        return assessment
+    
     # ============================================================================
     # CORRECTIVE ACTION WORKFLOW (Phase 3.2)
     # ============================================================================

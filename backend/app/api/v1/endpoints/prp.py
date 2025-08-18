@@ -1008,7 +1008,7 @@ async def get_risk_matrices(
                 "likelihood_levels": matrix.likelihood_levels,
                 "severity_levels": matrix.severity_levels,
                 "risk_levels": matrix.risk_levels,
-                "is_default": matrix.is_default,
+                "is_default": getattr(matrix, 'is_default', False),
                 "created_by": creator.name if creator else "Unknown",
                 "created_at": matrix.created_at.isoformat() if matrix.created_at else None,
                 "updated_at": matrix.updated_at.isoformat() if matrix.updated_at else None
@@ -1054,7 +1054,7 @@ async def create_risk_matrix(
                 "likelihood_levels": matrix.likelihood_levels,
                 "severity_levels": matrix.severity_levels,
                 "risk_levels": matrix.risk_levels,
-                "is_default": matrix.is_default,
+                "is_default": getattr(matrix, 'is_default', False),
                 "created_at": matrix.created_at.isoformat() if matrix.created_at else None
             }
         )
@@ -1129,7 +1129,7 @@ async def get_program_risk_assessments(
                 "next_review_date": assessment.next_review_date.isoformat() if assessment.next_review_date else None,
                 "escalated_to_risk_register": assessment.escalated_to_risk_register,
                 "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
-                "risk_register_entry_id": assessment.risk_register_entry_id,
+                "risk_register_entry_id": getattr(assessment, 'risk_register_entry_id', None),
                 "created_by": creator.name if creator else "Unknown",
                 "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
                 "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None
@@ -1498,7 +1498,7 @@ async def get_risk_assessment(
                 "escalated_to_risk_register": assessment.escalated_to_risk_register,
                 "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
                 "escalated_by": escalated_by,
-                "risk_register_entry_id": assessment.risk_register_entry_id,
+                "risk_register_entry_id": getattr(assessment, 'risk_register_entry_id', None),
                 "created_by": creator.name if creator else "Unknown",
                 "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
                 "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None,

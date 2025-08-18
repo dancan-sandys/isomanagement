@@ -748,9 +748,22 @@ async def create_ccp(
                 detail="Product not found"
             )
         
+        # Ensure hazard_id is provided or find a default hazard for this product
+        hazard_id = ccp_data.get("hazard_id")
+        if not hazard_id:
+            # Find the first hazard for this product as a default
+            hazard = db.query(Hazard).filter(Hazard.product_id == product_id).first()
+            if hazard:
+                hazard_id = hazard.id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No hazards found for this product. Please create a hazard first or specify hazard_id."
+                )
+        
         ccp = CCP(
             product_id=product_id,
-            hazard_id=ccp_data.get("hazard_id"),  # Make optional
+            hazard_id=hazard_id,
             ccp_number=ccp_data["ccp_number"],
             ccp_name=ccp_data.get("step_name", ccp_data.get("ccp_name", "Unnamed CCP")),  # Handle different field names
             description=ccp_data.get("description"),
@@ -1778,9 +1791,22 @@ async def create_ccp(
                 detail="Product not found"
             )
         
+        # Ensure hazard_id is provided or find a default hazard for this product
+        hazard_id = ccp_data.get("hazard_id")
+        if not hazard_id:
+            # Find the first hazard for this product as a default
+            hazard = db.query(Hazard).filter(Hazard.product_id == product_id).first()
+            if hazard:
+                hazard_id = hazard.id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No hazards found for this product. Please create a hazard first or specify hazard_id."
+                )
+        
         ccp = CCP(
             product_id=product_id,
-            hazard_id=ccp_data.get("hazard_id"),  # Make optional
+            hazard_id=hazard_id,
             ccp_number=ccp_data["ccp_number"],
             ccp_name=ccp_data.get("step_name", ccp_data.get("ccp_name", "Unnamed CCP")),  # Handle different field names
             description=ccp_data.get("description"),

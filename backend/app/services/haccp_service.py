@@ -2193,6 +2193,33 @@ class HACCPService:
         
         return attachment
 
+    def create_hazard_review(self, hazard_id: int, review_data, created_by: int) -> HazardReview:
+        """Create a hazard review"""
+        
+        # Verify hazard exists
+        hazard = self.db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise ValueError("Hazard not found")
+        
+        # Create hazard review
+        review = HazardReview(
+            hazard_id=hazard_id,
+            reviewer_id=review_data.reviewer_id,
+            review_status=review_data.review_status,
+            review_comments=review_data.review_comments,
+            hazard_identification_adequate=review_data.hazard_identification_adequate,
+            risk_assessment_appropriate=review_data.risk_assessment_appropriate,
+            control_measures_suitable=review_data.control_measures_suitable,
+            ccp_determination_correct=review_data.ccp_determination_correct,
+            created_by=created_by
+        )
+        
+        self.db.add(review)
+        self.db.commit()
+        self.db.refresh(review)
+        
+        return review
+
     def _log_audit_event(self, event_type: str, event_description: str, record_type: str, 
                         record_id: int, user_id: int, old_values: str = None, 
                         new_values: str = None, changed_fields: str = None,

@@ -111,7 +111,11 @@ async def update_non_conformance(
 ):
     """Update non-conformance"""
     service = NonConformanceService(db)
-    non_conformance = service.update_non_conformance(nc_id, nc_data)
+    try:
+        non_conformance = service.update_non_conformance(nc_id, nc_data)
+    except ValueError as ve:
+        # Invalid transition or unmet verification preconditions
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     
     if not non_conformance:
         raise HTTPException(

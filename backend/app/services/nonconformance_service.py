@@ -48,6 +48,46 @@ class NonConformanceService:
         unique_id = str(uuid.uuid4())[:8]
         return f"CAPA-{timestamp}-{unique_id}"
 
+    # Transition and verification helpers
+    def _get_allowed_transitions(self, current_status: NonConformanceStatus) -> List[NonConformanceStatus]:
+        mapping: Dict[NonConformanceStatus, List[NonConformanceStatus]] = {
+            NonConformanceStatus.OPEN: [NonConformanceStatus.UNDER_INVESTIGATION, NonConformanceStatus.IN_PROGRESS],
+            NonConformanceStatus.UNDER_INVESTIGATION: [NonConformanceStatus.ROOT_CAUSE_IDENTIFIED],
+            NonConformanceStatus.ROOT_CAUSE_IDENTIFIED: [NonConformanceStatus.CAPA_ASSIGNED],
+            NonConformanceStatus.CAPA_ASSIGNED: [NonConformanceStatus.IN_PROGRESS],
+            NonConformanceStatus.IN_PROGRESS: [NonConformanceStatus.COMPLETED],
+            NonConformanceStatus.COMPLETED: [NonConformanceStatus.VERIFIED],
+            NonConformanceStatus.VERIFIED: [NonConformanceStatus.CLOSED],
+            NonConformanceStatus.CLOSED: [],
+        }
+        return mapping.get(current_status, [])
+
+    def _has_passed_verification(self, non_conformance_id: int) -> bool:
+        count = self.db.query(CAPAVerification).filter(
+            and_(
+                CAPAVerification.non_conformance_id == non_conformance_id,
+                CAPAVerification.verification_result == 'passed'
+            )
+        ).count()
+        return count > 0
+
+    def _all_capas_completed(self, non_conformance_id: int) -> bool:
+        total = self.db.query(CAPAAction).filter(CAPAAction.non_conformance_id == non_conformance_id).count()
+        if total == 0:
+            return False
+        pending = self.db.query(CAPAAction).filter(
+            and_(
+                CAPAAction.non_conformance_id == non_conformance_id,
+                CAPAAction.status.in_([
+                    CAPAStatus.PENDING,
+                    CAPAStatus.ASSIGNED,
+                    CAPAStatus.IN_PROGRESS,
+                    CAPAStatus.OVERDUE,
+                ])
+            )
+        ).count()
+        return pending == 0
+
     # Non-Conformance operations
     def create_non_conformance(self, nc_data: NonConformanceCreate, reported_by: int) -> NonConformance:
         """Create a new non-conformance"""
@@ -123,14 +163,55 @@ class NonConformanceService:
         return self.db.query(NonConformance).filter(NonConformance.id == nc_id).first()
 
     def update_non_conformance(self, nc_id: int, nc_data: NonConformanceUpdate) -> Optional[NonConformance]:
-        """Update non-conformance"""
+        """Update non-conformance with controlled status transitions and verification before closure"""
         non_conformance = self.get_non_conformance(nc_id)
         if not non_conformance:
             return None
 
         update_data = nc_data.dict(exclude_unset=True)
+
+        # Handle status transition rules if status update is requested
+        if 'status' in update_data and update_data['status'] is not None:
+            target_status: NonConformanceStatus = update_data['status']
+            current_status: NonConformanceStatus = non_conformance.status
+
+            if target_status == current_status:
+                # No-op; remove to avoid unnecessary flush
+                update_data.pop('status')
+            else:
+                allowed = self._get_allowed_transitions(current_status)
+                if target_status not in allowed:
+                    raise ValueError(
+                        f"Invalid status transition from '{current_status.value}' to '{target_status.value}'."
+                    )
+
+                # Preconditions for VERIFIED
+                if target_status == NonConformanceStatus.VERIFIED:
+                    if not self._has_passed_verification(non_conformance.id):
+                        raise ValueError(
+                            "Cannot mark as 'verified' without at least one passed CAPA verification."
+                        )
+                    if not self._all_capas_completed(non_conformance.id):
+                        raise ValueError(
+                            "Cannot mark as 'verified' while some CAPA actions are not completed."
+                        )
+
+                # Preconditions for CLOSED
+                if target_status == NonConformanceStatus.CLOSED:
+                    if current_status != NonConformanceStatus.VERIFIED:
+                        raise ValueError("Non-conformance must be in 'verified' status before closure.")
+                    if not self._has_passed_verification(non_conformance.id):
+                        raise ValueError("Cannot close without a passed CAPA verification.")
+                    if not self._all_capas_completed(non_conformance.id):
+                        raise ValueError("Cannot close while CAPA actions are not completed.")
+
+        # Apply non-status fields and possibly the validated status
         for field, value in update_data.items():
             setattr(non_conformance, field, value)
+
+        # Set resolution date on closure
+        if 'status' in nc_data.dict(exclude_unset=True) and nc_data.status == NonConformanceStatus.CLOSED:
+            non_conformance.actual_resolution_date = datetime.now()
 
         self.db.commit()
         self.db.refresh(non_conformance)
@@ -161,9 +242,16 @@ class NonConformanceService:
                 # This would need additional data for status update
                 pass
             elif action_data.action == "close":
-                nc.status = NonConformanceStatus.CLOSED
-                nc.actual_resolution_date = datetime.now()
-                updated_count += 1
+                # Enforce verification preconditions before closure
+                if nc.status == NonConformanceStatus.VERIFIED and \
+                   self._has_passed_verification(nc.id) and \
+                   self._all_capas_completed(nc.id):
+                    nc.status = NonConformanceStatus.CLOSED
+                    nc.actual_resolution_date = datetime.now()
+                    updated_count += 1
+                else:
+                    # Skip if preconditions are not met
+                    continue
 
         self.db.commit()
         return {"updated_count": updated_count, "total_requested": len(action_data.non_conformance_ids)}
