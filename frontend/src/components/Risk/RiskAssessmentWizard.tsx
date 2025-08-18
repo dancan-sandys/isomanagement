@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -272,17 +272,21 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
     }
   }, [open, riskId]);
 
-  useEffect(() => {
-    // Calculate risk score when analysis values change
+  // Calculate risk score using useMemo to avoid infinite loops
+  const calculatedRiskScore = useMemo(() => {
     const riskScore = assessmentData.severity * assessmentData.likelihood * (assessmentData.detectability / 5);
     const riskLevel = getRiskLevel(riskScore);
-    
+    return { risk_score: Math.round(riskScore), risk_level: riskLevel };
+  }, [assessmentData.severity, assessmentData.likelihood, assessmentData.detectability]);
+
+  // Update assessment data when calculated values change
+  useEffect(() => {
     setAssessmentData(prev => ({
       ...prev,
-      risk_score: Math.round(riskScore),
-      risk_level: riskLevel,
+      risk_score: calculatedRiskScore.risk_score,
+      risk_level: calculatedRiskScore.risk_level,
     }));
-  }, [assessmentData.severity, assessmentData.likelihood, assessmentData.detectability]);
+  }, [calculatedRiskScore]);
 
   // ============================================================================
   // HELPER FUNCTIONS
@@ -934,7 +938,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add impact area (e.g., financial, operational, reputational)"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            onKeyDown={(e) => {
               const target = e.target as HTMLInputElement;
               if (e.key === 'Enter' && target.value) {
                 addToArray('impact_areas', target.value);
@@ -1365,7 +1369,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add monitoring method (e.g., audits, KPIs, reports)"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            onKeyDown={(e) => {
               const target = e.target as HTMLInputElement;
               if (e.key === 'Enter' && target.value) {
                 addToArray('monitoring_methods', target.value);
@@ -1393,7 +1397,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add key indicator (metrics to track risk status)"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            onKeyDown={(e) => {
               const target = e.target as HTMLInputElement;
               if (e.key === 'Enter' && target.value) {
                 addToArray('key_indicators', target.value);
@@ -1432,7 +1436,7 @@ const RiskAssessmentWizard: React.FC<RiskAssessmentWizardProps> = ({
           <TextField
             size="small"
             placeholder="Add responsible party (who will monitor and review?)"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            onKeyDown={(e) => {
               const target = e.target as HTMLInputElement;
               if (e.key === 'Enter' && target.value) {
                 addToArray('responsible_parties', target.value);

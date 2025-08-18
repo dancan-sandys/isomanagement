@@ -127,13 +127,11 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== (filters.materials as any)?.search) {
-        dispatch(setMaterialFilters({ ...(filters.materials || {}), search: searchTerm } as any));
-      }
+      dispatch(setMaterialFilters({ ...(filters.materials || {}), search: searchTerm } as any));
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch, filters.materials]);
+  }, [searchTerm, dispatch]);
 
   const loadMaterials = () => {
     dispatch(fetchMaterials({

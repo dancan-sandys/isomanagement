@@ -367,7 +367,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
                 <TableCell>
                   {assessment.escalated_to_risk_register ? (
                     <Chip
-                      icon={<Escalation />}
+                      icon={<TrendingUp />}
                       label="Escalated"
                       color="warning"
                       size="small"
@@ -403,7 +403,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
                           size="small"
                           onClick={() => handleEscalateRisk(assessment.id)}
                         >
-                          <Escalation />
+                          <TrendingUp />
                         </IconButton>
                       </Tooltip>
                     )}

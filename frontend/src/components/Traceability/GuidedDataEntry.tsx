@@ -500,7 +500,14 @@ const GuidedDataEntry: React.FC<GuidedDataEntryProps> = ({
           response = await traceabilityAPI.createBatch(formData);
           break;
         case 'traceability_link':
-          response = await traceabilityAPI.createTraceabilityLink(formData as any);
+          const linkData = {
+            source_batch_id: parseInt(formData.source_batch_id),
+            target_batch_id: parseInt(formData.target_batch_id),
+            link_type: formData.link_type,
+            quantity_used: parseFloat(formData.quantity_used),
+            process_step: formData.process_step
+          };
+          response = await traceabilityAPI.createTraceabilityLink(linkData);
           break;
         case 'recall':
           response = await traceabilityAPI.createRecall(formData);

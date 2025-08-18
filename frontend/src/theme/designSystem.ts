@@ -8,6 +8,8 @@ export const ISO_STATUS_COLORS = {
   warning: '#D97706', // Enhanced Yellow - Warning
   info: '#2563EB', // Enhanced Blue - Information
   neutral: '#374151', // Enhanced Dark Gray - Neutral
+  effective: '#059669', // Same as compliant for risk management
+  atRisk: '#DC2626', // Same as nonConformance for risk management
 } as const;
 
 // Enhanced Professional Color Palette
@@ -22,6 +24,12 @@ export const PROFESSIONAL_COLORS = {
     main: '#64748B', // Slate Gray
     light: '#94A3B8',
     dark: '#475569',
+    contrastText: '#FFFFFF',
+  },
+  accent: {
+    main: '#10B981', // Emerald Green for accents
+    light: '#34D399',
+    dark: '#059669',
     contrastText: '#FFFFFF',
   },
   background: {

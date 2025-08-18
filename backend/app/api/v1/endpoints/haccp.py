@@ -9,7 +9,7 @@ from app.core.security import get_current_user
 from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
-    Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
+    Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
     HazardType, RiskLevel, CCPStatus, RiskThreshold
 )
 from app.schemas.common import ResponseModel
@@ -750,9 +750,9 @@ async def create_ccp(
         
         ccp = CCP(
             product_id=product_id,
-            hazard_id=ccp_data["hazard_id"],
+            hazard_id=ccp_data.get("hazard_id"),  # Make optional
             ccp_number=ccp_data["ccp_number"],
-            ccp_name=ccp_data["ccp_name"],
+            ccp_name=ccp_data.get("step_name", ccp_data.get("ccp_name", "Unnamed CCP")),  # Handle different field names
             description=ccp_data.get("description"),
             status=CCPStatus.ACTIVE,
             critical_limit_min=ccp_data.get("critical_limit_min"),
@@ -1780,9 +1780,9 @@ async def create_ccp(
         
         ccp = CCP(
             product_id=product_id,
-            hazard_id=ccp_data["hazard_id"],
+            hazard_id=ccp_data.get("hazard_id"),  # Make optional
             ccp_number=ccp_data["ccp_number"],
-            ccp_name=ccp_data["ccp_name"],
+            ccp_name=ccp_data.get("step_name", ccp_data.get("ccp_name", "Unnamed CCP")),  # Handle different field names
             description=ccp_data.get("description"),
             status=CCPStatus.ACTIVE,
             critical_limit_min=ccp_data.get("critical_limit_min"),

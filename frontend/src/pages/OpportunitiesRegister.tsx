@@ -18,8 +18,8 @@ const OpportunitiesRegister: React.FC = () => {
 
   useEffect(() => {
     dispatch(setFilters({ item_type: 'opportunity' }));
-    dispatch(fetchRiskItems({ ...filters, item_type: 'opportunity' }));
-  }, [dispatch, filters]);
+    dispatch(fetchRiskItems({ item_type: 'opportunity' }));
+  }, [dispatch]);
 
   const onApply = () => {
     dispatch(setFilters({ search, item_type: 'opportunity', category: category || undefined, classification: classification || undefined }));

@@ -532,7 +532,7 @@ class HACCPService:
             medium_threshold = risk_config.medium_threshold
         
         # Use medium threshold as the cutoff for requiring control
-        control_threshold = threshold.medium_threshold if threshold else 8
+        control_threshold = risk_config.medium_threshold if risk_config else 8
         q1_answer = hazard.risk_score >= control_threshold
         steps.append(DecisionTreeStep(
             question=DecisionTreeQuestion.Q1,

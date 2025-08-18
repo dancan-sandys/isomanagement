@@ -123,13 +123,11 @@ const SupplierList: React.FC<SupplierListProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm !== (filters.suppliers as any)?.search) {
-        dispatch(setSupplierFilters({ ...filters.suppliers, search: searchTerm } as any));
-      }
+      dispatch(setSupplierFilters({ ...filters.suppliers, search: searchTerm } as any));
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, dispatch, filters.suppliers]);
+  }, [searchTerm, dispatch]);
 
   const loadSuppliers = () => {
     dispatch(fetchSuppliers({

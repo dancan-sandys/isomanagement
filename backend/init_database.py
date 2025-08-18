@@ -19,6 +19,7 @@ from app.models.rbac import Role, Permission, UserPermission
 from app.models.equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
 from app.models.management_review import ManagementReview, ReviewAgendaItem, ReviewAction
 from app.models.risk import RiskRegisterItem, RiskAction
+from app.models.food_safety_objectives import FoodSafetyObjective
 from app.models.complaint import Complaint, ComplaintCommunication, ComplaintInvestigation
 from app.models.allergen_label import ProductAllergenAssessment, LabelTemplate, LabelTemplateVersion, LabelTemplateApproval
 from app.models.nonconformance import NonConformance, RootCauseAnalysis, CAPAAction, CAPAVerification, NonConformanceAttachment

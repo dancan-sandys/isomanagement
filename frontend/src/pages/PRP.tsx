@@ -138,7 +138,7 @@ const PRP: React.FC = () => {
       }
     }, 300);
     return () => { active = false; clearTimeout(t); };
-  }, [userSearch, selectedResponsible, selectedAssignee]);
+  }, [userSearch]);
   const [activeTab, setActiveTab] = useState(0);
   const location = useLocation();
   const [programs, setPrograms] = useState<PRPProgram[]>([]);
