@@ -2,7 +2,7 @@ import os
 import shutil
 import json
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request, Body
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, cast, String, select, update as sa_update
@@ -27,7 +27,8 @@ from app.models.document import (
 )
 from app.schemas.common import ResponseModel, PaginatedResponse
 from app.schemas.document import (
-    DocumentCreate, DocumentUpdate, DocumentFilter, DocumentResponse, 
+    DocumentCreate, DocumentUpdate, DocumentFilter, DocumentResponse,
+    DocumentStatusChangeRequest, DocumentVersionCreateRequest, 
     DocumentVersionResponse, DocumentChangeLogResponse, DocumentApprovalResponse,
     DocumentTemplateCreate, DocumentTemplateResponse, BulkDocumentAction, DocumentStats,
     DocumentApprovalCreate, DocumentTemplateVersionCreate, DocumentTemplateVersionResponse, DocumentTemplateApprovalCreate
@@ -1122,6 +1123,101 @@ async def create_new_version(
         )
 
 
+@router.post("/{document_id}/versions/metadata")
+async def create_version_metadata_only(
+    document_id: int,
+    payload: DocumentVersionCreateRequest = Body(..., example={
+        "change_description": "Updated content based on feedback",
+        "change_reason": "Process improvement"
+    }),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new version record without file upload (for testing/metadata only)
+    """
+    try:
+        document = db.query(Document).filter(Document.id == document_id).first()
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        
+        # Calculate new version number
+        old_version = document.version
+        new_version = calculate_next_version(old_version)
+        
+        # Create new version record without file
+        # Use existing file path or create a placeholder if none exists
+        if document.file_path:
+            file_path = document.file_path
+            file_size = document.file_size
+            file_type = document.file_type
+            original_filename = document.original_filename
+        else:
+            # Create a placeholder file path for documents without files
+            file_path = f"metadata_only_v{new_version}_{document.document_number}.txt"
+            file_size = 0
+            file_type = "text/plain"
+            original_filename = f"{document.document_number}_v{new_version}.txt"
+        
+        version = DocumentVersion(
+            document_id=document.id,
+            version_number=new_version,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_type,
+            original_filename=original_filename,
+            change_description=payload.change_description,
+            change_reason=payload.change_reason,
+            created_by=current_user.id
+        )
+        db.add(version)
+        
+        # Update main document version
+        document.version = new_version
+        document.status = DocumentStatus.DRAFT  # Reset to draft for new version
+        document.updated_at = datetime.utcnow()
+        
+        db.commit()
+        
+        # Create change log
+        create_change_log(
+            db=db,
+            document_id=document.id,
+            change_type="version_created",
+            change_description=f"New version {new_version} created: {payload.change_description}",
+            old_version=old_version,
+            new_version=new_version,
+            changed_by=current_user.id
+        )
+        
+        resp = ResponseModel(
+            success=True,
+            message=f"New version {new_version} created successfully",
+            data={
+                "document_id": document.id,
+                "new_version": new_version,
+                "version_id": version.id
+            }
+        )
+        try:
+            audit_event(db, current_user.id, "document_version_created", "documents", str(document.id), {"new_version": new_version})
+        except Exception:
+            pass
+        return resp
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create new version: {str(e)}"
+        )
+
+
 @router.get("/{document_id}/versions")
 async def get_version_history(
     document_id: int,
@@ -1904,17 +2000,17 @@ def _set_status_with_reason(db: Session, doc: Document, new_status: DocumentStat
 @router.post("/{document_id}/status/obsolete")
 async def mark_obsolete(
     document_id: int,
-    payload: dict,
+    payload: DocumentStatusChangeRequest = Body(..., example={"reason": "Document is no longer current"}),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Mark document as obsolete"""
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    reason = payload.get("reason")
-    _set_status_with_reason(db, doc, DocumentStatus.OBSOLETE, reason, current_user.id)
+    _set_status_with_reason(db, doc, DocumentStatus.OBSOLETE, payload.reason, current_user.id)
     try:
-        audit_event(db, current_user.id, "document_marked_obsolete", "documents", str(document_id), {"reason": reason})
+        audit_event(db, current_user.id, "document_marked_obsolete", "documents", str(document_id), {"reason": payload.reason})
     except Exception:
         pass
     return ResponseModel(success=True, message="Document marked obsolete")
@@ -1923,17 +2019,17 @@ async def mark_obsolete(
 @router.post("/{document_id}/status/archive")
 async def mark_archived(
     document_id: int,
-    payload: dict,
+    payload: DocumentStatusChangeRequest = Body(..., example={"reason": "Document archived for records retention"}),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Mark document as archived"""
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    reason = payload.get("reason")
-    _set_status_with_reason(db, doc, DocumentStatus.ARCHIVED, reason, current_user.id)
+    _set_status_with_reason(db, doc, DocumentStatus.ARCHIVED, payload.reason, current_user.id)
     try:
-        audit_event(db, current_user.id, "document_archived", "documents", str(document_id), {"reason": reason})
+        audit_event(db, current_user.id, "document_archived", "documents", str(document_id), {"reason": payload.reason})
     except Exception:
         pass
     return ResponseModel(success=True, message="Document archived")
@@ -1942,17 +2038,17 @@ async def mark_archived(
 @router.post("/{document_id}/status/activate")
 async def mark_active(
     document_id: int,
-    payload: dict = None,
+    payload: DocumentStatusChangeRequest = Body(default=DocumentStatusChangeRequest(), example={"reason": "Document approved and ready for use"}),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Mark document as active/approved"""
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    reason = (payload or {}).get("reason") if payload else None
-    _set_status_with_reason(db, doc, DocumentStatus.APPROVED, reason, current_user.id)
+    _set_status_with_reason(db, doc, DocumentStatus.APPROVED, payload.reason, current_user.id)
     try:
-        audit_event(db, current_user.id, "document_activated", "documents", str(document_id), {"reason": reason})
+        audit_event(db, current_user.id, "document_activated", "documents", str(document_id), {"reason": payload.reason})
     except Exception:
         pass
     return ResponseModel(success=True, message="Document activated")
@@ -2040,19 +2136,32 @@ async def export_documents(
         result = document_service.get_documents(DocumentFilter(), 1, 1000)
         items = []
         for doc in result["items"]:
-            creator = db.query(User).filter(User.id == doc.created_by).first()
-            creator_name = creator.full_name if creator else "Unknown"
+            # doc is a dict from DocumentService.get_documents(), not an object
+            created_by_id = doc.get("created_by")
+            creator_name = "Unknown"
+            if created_by_id:
+                try:
+                    # If created_by is already a name (string), use it
+                    if isinstance(created_by_id, str):
+                        creator_name = created_by_id
+                    else:
+                        # If it's an ID, look up the user
+                        creator = db.query(User).filter(User.id == created_by_id).first()
+                        creator_name = creator.full_name if creator else f"User {created_by_id}"
+                except Exception:
+                    creator_name = f"User {created_by_id}" if created_by_id else "Unknown"
+            
             items.append({
-                "id": doc.id,
-                "document_number": doc.document_number,
-                "title": doc.title,
-                "document_type": doc.document_type.value if doc.document_type else None,
-                "category": doc.category.value if doc.category else None,
-                "status": doc.status.value if doc.status else None,
-                "version": doc.version,
-                "department": doc.department,
+                "id": doc.get("id"),
+                "document_number": doc.get("document_number"),
+                "title": doc.get("title"),
+                "document_type": doc.get("document_type"),
+                "category": doc.get("category"),
+                "status": doc.get("status"),
+                "version": doc.get("version"),
+                "department": doc.get("department"),
                 "created_by": creator_name,
-                "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                "created_at": doc.get("created_at"),
             })
 
         if format == "pdf":
@@ -2175,8 +2284,10 @@ async def create_document_approvals(
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if document.status not in [DocumentStatus.DRAFT, DocumentStatus.UNDER_REVIEW]:
-            raise HTTPException(status_code=400, detail="Document cannot be submitted for approval in current status")
+        # Allow resubmission for documents in various states
+        # DRAFT: New documents, UNDER_REVIEW: Already in process, OBSOLETE: Can be reactivated through approval
+        if document.status not in [DocumentStatus.DRAFT, DocumentStatus.UNDER_REVIEW, DocumentStatus.OBSOLETE]:
+            raise HTTPException(status_code=400, detail=f"Document cannot be submitted for approval in current status: {document.status.value}")
 
         # Remove existing pending approvals (if resubmitting)
         db.query(DocumentApproval).filter(DocumentApproval.document_id == document_id, DocumentApproval.status == "pending").delete()

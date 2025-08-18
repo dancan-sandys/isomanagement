@@ -175,6 +175,12 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
 def create_user_session(db: Session, user_id: int, access_token: str, refresh_token: str, 
                        ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> UserSession:
     """Create a new user session"""
+    # Invalidate existing active sessions for this user to avoid unique conflicts
+    try:
+        db.query(UserSession).filter(UserSession.user_id == user_id, UserSession.is_active == True).update({UserSession.is_active: False})
+        db.commit()
+    except Exception:
+        db.rollback()
     session = UserSession(
         user_id=user_id,
         session_token=access_token,

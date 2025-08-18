@@ -13,6 +13,7 @@ from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAc
 from .training import TrainingProgram, TrainingSession, TrainingAttendance, RoleRequiredTraining, TrainingCertificate, HACCPRequiredTraining
 from .equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
 from .settings import ApplicationSetting, UserPreference
+from .food_safety_objectives import FoodSafetyObjective
 from .risk import (
     RiskRegisterItem, RiskAction, RiskManagementFramework, RiskContext,
     FSMSRiskIntegration, RiskCorrelation, RiskResourceAllocation,
@@ -66,6 +67,8 @@ __all__ = [
     
     # Settings models
     "ApplicationSetting", "UserPreference",
+    # Food safety objectives
+    "FoodSafetyObjective",
     # Risk & Opportunity register
     "RiskRegisterItem", "RiskAction", "RiskManagementFramework", "RiskContext",
     "FSMSRiskIntegration", "RiskCorrelation", "RiskResourceAllocation",

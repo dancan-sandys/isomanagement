@@ -145,8 +145,8 @@ export const riskAPI = {
     return response.data;
   },
   
-  // Risk Treatment
-  planTreatment: async (riskId: number, treatmentData: RiskTreatmentData) => {
+  // Risk Treatment (by id)
+  planTreatmentById: async (riskId: number, treatmentData: RiskTreatmentData) => {
     const response: AxiosResponse = await api.post(`/risk-framework/${riskId}/treat`, treatmentData);
     return response.data;
   },
@@ -296,8 +296,8 @@ export const riskAPI = {
     return response.data;
   },
   
-  // Get FSMS Integrations
-  getFSMSIntegrations: async (riskId: number) => {
+  // Get FSMS Integration (alternate path)
+  getFSMSIntegration: async (riskId: number) => {
     const response: AxiosResponse = await api.get(`/risk-framework/fsms-integration/${riskId}`);
     return response.data;
   },

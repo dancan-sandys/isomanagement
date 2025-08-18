@@ -63,8 +63,7 @@ import {
   Done,
   Pending,
   PriorityHigh,
-  PriorityMedium,
-  PriorityLow,
+  LowPriority,
   AttachMoney,
   Timeline,
   Person,
@@ -193,8 +192,8 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
       
       // Fetch CAPA data
       const [correctiveResponse, preventiveResponse, dashboardResponse] = await Promise.all([
-        prpAPI.getCorrectiveActions(),
-        prpAPI.getPreventiveActions(),
+        prpAPI.getCorrectiveActions({}),
+        prpAPI.getPreventiveActions({}),
         prpAPI.getCAPADashboard(),
       ]);
 
@@ -247,8 +246,8 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
   const handleCompleteAction = async (actionId: number, actionType: 'corrective' | 'preventive') => {
     try {
       const response = actionType === 'corrective' 
-        ? await prpAPI.completeCorrectiveAction(actionId)
-        : await prpAPI.completePreventiveAction(actionId);
+        ? await prpAPI.completeCorrectiveAction(actionId, {})
+        : await prpAPI.completePreventiveAction(actionId, {});
       
       if (response.success) {
         setSuccess(`${actionType === 'corrective' ? 'Corrective' : 'Preventive'} action completed successfully`);
@@ -329,11 +328,11 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
       case 'critical':
         return <PriorityHigh />;
       case 'medium':
-        return <PriorityMedium />;
+        return <LowPriority />;
       case 'low':
-        return <PriorityLow />;
+        return <LowPriority />;
       default:
-        return <PriorityMedium />;
+        return <LowPriority />;
     }
   };
 

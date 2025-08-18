@@ -49,8 +49,8 @@ import {
   Error,
   Info,
   Refresh,
-  Escalation,
-  RiskAssessment,
+  NorthEast as Escalation,
+  Assessment as RiskAssessment,
 } from '@mui/icons-material';
 import { prpAPI } from '../../services/api';
 
@@ -230,7 +230,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
 
   const handleEscalateRisk = async (assessmentId: number) => {
     try {
-      const response = await prpAPI.escalateRiskToRegister(assessmentId);
+      const response = await prpAPI.escalateRiskAssessment(assessmentId);
       if (response.success) {
         setSuccess('Risk escalated to main risk register successfully');
         fetchData();

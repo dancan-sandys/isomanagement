@@ -73,7 +73,7 @@ import {
   Print,
   Share,
   Settings,
-  Optimization,
+  Tune,
   AutoFixHigh,
   TrendingUpOutlined,
   TrendingDownOutlined,
@@ -221,9 +221,9 @@ const PRPAnalytics: React.FC<{ programId?: number }> = ({ programId }) => {
       } else {
         // Fetch global analytics
         const [metricsResponse, predictiveResponse, insightsResponse] = await Promise.all([
-          prpAPI.getPerformanceMetrics(),
-          prpAPI.getPredictiveAnalytics(),
-          prpAPI.generateInsights(),
+          prpAPI.getPerformanceMetrics('all'),
+          prpAPI.getPredictiveAnalytics('compliance'),
+          prpAPI.generateInsights({}),
         ]);
 
         if (metricsResponse.success) {
@@ -1073,7 +1073,7 @@ const PRPAnalytics: React.FC<{ programId?: number }> = ({ programId }) => {
           </Button>
           <Button
             variant="outlined"
-            startIcon={<Optimization />}
+            startIcon={<Tune />}
             onClick={() => setOpenOptimizationDialog(true)}
           >
             Optimize Performance

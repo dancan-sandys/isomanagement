@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '../../../utils/test-utils';
 import QRCodeScanner from '../QRCodeScanner';
 import OfflineCapabilities from '../OfflineCapabilities';
 import MobileDataEntry from '../MobileDataEntry';
-import Traceability from '../../pages/Traceability';
+import Traceability from '../../../pages/Traceability';
 
 // Performance thresholds
 const PERFORMANCE_THRESHOLDS = {
@@ -186,7 +186,7 @@ describe('Performance Tests', () => {
 
   describe('Memory Usage Performance', () => {
     it('maintains reasonable memory usage during component lifecycle', () => {
-      const initialMemory = performance.memory?.usedJSHeapSize || 0;
+      const initialMemory = (performance as any).memory?.usedJSHeapSize || 0;
       
       const { unmount } = render(
         <QRCodeScanner
@@ -200,12 +200,12 @@ describe('Performance Tests', () => {
       const testButton = screen.getByText('Test Search');
       fireEvent.click(testButton);
       
-      const memoryAfterRender = performance.memory?.usedJSHeapSize || 0;
+      const memoryAfterRender = (performance as any).memory?.usedJSHeapSize || 0;
       const memoryIncrease = memoryAfterRender - initialMemory;
       
       unmount();
       
-      const memoryAfterUnmount = performance.memory?.usedJSHeapSize || 0;
+      const memoryAfterUnmount = (performance as any).memory?.usedJSHeapSize || 0;
       const memoryLeak = memoryAfterUnmount - initialMemory;
       
       // Memory increase should be reasonable

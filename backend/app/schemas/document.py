@@ -218,6 +218,15 @@ class BulkDocumentAction(BaseModel):
     reason: Optional[str] = None
 
 
+class DocumentStatusChangeRequest(BaseModel):
+    reason: Optional[str] = Field(None, description="Reason for status change")
+
+
+class DocumentVersionCreateRequest(BaseModel):
+    change_description: str = Field(..., min_length=1, description="Description of changes made")
+    change_reason: str = Field(..., min_length=1, description="Reason for creating new version")
+
+
 class DocumentStats(BaseModel):
     total_documents: int
     documents_by_status: Dict[str, int]

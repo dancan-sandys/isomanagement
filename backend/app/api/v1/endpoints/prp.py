@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
 from datetime import datetime, timedelta
@@ -128,7 +128,33 @@ async def get_prp_programs(
 
 @router.post("/programs")
 async def create_prp_program(
-    program_data: dict,
+    program_data: dict = Body(
+        ...,
+        example={
+            "program_code": "PRP-CLN-001",
+            "name": "Cleaning and Sanitation Program",
+            "description": "Routine cleaning and sanitation procedures for production area.",
+            "category": "cleaning_sanitation",
+            "objective": "Ensure hygienic conditions to prevent contamination.",
+            "scope": "All production lines and adjacent areas",
+            "responsible_department": "Quality Assurance",
+            "responsible_person": 1,
+            "frequency": "daily",
+            "frequency_details": "Every shift before start-up",
+            "start_date": "2025-01-01T08:00:00",
+            "sop_reference": "SOP-CS-001",
+            "forms_required": "Sanitation Checklist Form",
+            "records_required": "Daily Sanitation Log",
+            "training_requirements": "Sanitation Level 1",
+            "monitoring_frequency": "daily",
+            "verification_frequency": "weekly",
+            "acceptance_criteria": "No visual residues; ATP swab < threshold",
+            "trend_analysis_required": False,
+            "corrective_action_procedure": "Re-clean and re-verify before production resumes.",
+            "escalation_procedure": "Notify QA Manager if two consecutive failures occur.",
+            "preventive_action_procedure": "Review chemical concentration and employee retraining."
+        },
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

@@ -4,7 +4,7 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
 from datetime import datetime
-from .haccp import RiskLevel
+# Do not import RiskLevel from HACCP to avoid circular imports; PRP defines its own RiskLevel below
 
 
 class PRPCategory(str, enum.Enum):
@@ -500,6 +500,7 @@ class CorrectiveActionStatus(str, enum.Enum):
     VERIFIED = "verified"
     CLOSED = "closed"
     ESCALATED = "escalated"
+    COMPLETED = "completed"
 
 
 class CorrectiveAction(Base):
@@ -637,3 +638,6 @@ class PRPPreventiveAction(Base):
     
     def __repr__(self):
         return f"<PRPPreventiveAction(id={self.id}, action_code='{self.action_code}')>" 
+
+# Backwards-compatibility alias for tests expecting PreventiveAction under PRP
+PreventiveAction = PRPPreventiveAction

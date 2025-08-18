@@ -20,38 +20,46 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
-  unobserve() {}
-};
+class MockIntersectionObserver implements IntersectionObserver {
+  readonly root: Element | Document | null = null;
+  readonly rootMargin: string = '';
+  readonly thresholds: ReadonlyArray<number> = [];
+  disconnect(): void {}
+  observe(): void {}
+  takeRecords(): IntersectionObserverEntry[] { return []; }
+  unobserve(): void {}
+}
+(global as any).IntersectionObserver = MockIntersectionObserver as any;
 
 // Mock ResizeObserver
-global.ResizeObserver = class ResizeObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
-  unobserve() {}
-};
+class MockResizeObserver implements ResizeObserver {
+  disconnect(): void {}
+  observe(): void {}
+  unobserve(): void {}
+}
+(global as any).ResizeObserver = MockResizeObserver as any;
 
 // Mock localStorage
-const localStorageMock = {
+const localStorageMock: Storage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
   clear: jest.fn(),
+  key: jest.fn(),
+  length: 0,
 };
-global.localStorage = localStorageMock;
+(global as any).localStorage = localStorageMock;
 
 // Mock sessionStorage
-const sessionStorageMock = {
+const sessionStorageMock: Storage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
   clear: jest.fn(),
+  key: jest.fn(),
+  length: 0,
 };
-global.sessionStorage = sessionStorageMock;
+(global as any).sessionStorage = sessionStorageMock;
 
 // Mock navigator.geolocation
 Object.defineProperty(navigator, 'geolocation', {

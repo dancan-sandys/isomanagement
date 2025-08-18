@@ -122,6 +122,9 @@ class Product(Base):
     def __repr__(self):
         return f"<Product(id={self.id}, product_code='{self.product_code}', name='{self.name}')>"
 
+# Backwards-compatibility alias for tests expecting HACCPProduct
+HACCPProduct = Product
+
 
 class ProcessFlow(Base):
     __tablename__ = "process_flows"
@@ -1021,3 +1024,9 @@ class HACCPAuditLog(Base):
     
     def __repr__(self):
         return f"<HACCPAuditLog(id={self.id}, event_type='{self.event_type}', record_type='{self.record_type}')>"
+
+# Backwards-compatibility aliases expected by tests
+HACCPProcessFlow = ProcessFlow
+HACCPHazard = Hazard
+HACCPCCP = CCP
+HACCPValidation = CCPValidation

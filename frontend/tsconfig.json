@@ -19,6 +19,12 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": [
+      "node",
+      "jest",
+      "react",
+      "react-dom"
+    ],
     "noImplicitAny": false,
     "noImplicitReturns": false,
     "noImplicitThis": false,
@@ -44,8 +50,7 @@
   },
   "include": [
     "src",
-    "src/types/global.ts",
-    "src/types/suppress-d3.d.ts"
+    "src/types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules"

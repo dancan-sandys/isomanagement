@@ -271,6 +271,7 @@ class FSMSRiskIntegration(Base):
 
     # Relationships
     risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    food_safety_objective = relationship("FoodSafetyObjective", foreign_keys=[food_safety_objective_id])
     integrated_by_user = relationship("User", foreign_keys=[integrated_by])
 
     def __repr__(self):

@@ -859,6 +859,11 @@ class RiskAssessmentFilter(BaseModel):
     page: int = 1
     size: int = 20
 
+# Backwards-compatibility alias for tests expecting these names
+# Some tests import RiskAssessmentCreate directly from nonconformance schemas
+RiskAssessmentCreate = NonConformanceRiskAssessmentCreate
+NonConformanceRiskAssessmentFilter = RiskAssessmentFilter
+
 
 class EscalationRuleFilter(BaseModel):
     trigger_condition: Optional[str] = None
@@ -903,6 +908,9 @@ class RiskAssessmentCalculationRequest(BaseModel):
     regulatory_impact: str
     customer_impact: str
     business_impact: str
+
+# Backwards-compatibility alias for service/tests
+NonConformanceRiskAssessmentCalculationRequest = RiskAssessmentCalculationRequest
 
 
 class EscalationRuleTriggerRequest(BaseModel):

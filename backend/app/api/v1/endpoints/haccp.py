@@ -408,34 +408,26 @@ async def delete_product(
     current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
-    """Delete a product"""
+    """Delete a product and its dependent HACCP records safely."""
     try:
-        # Check if product exists
+        # Ensure product exists
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-        
-        # Check permissions (only QA Manager or System Administrator can delete)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+        # Permission check
         if current_user.role and current_user.role.name not in ["QA Manager", "System Administrator"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to delete products"
-            )
-        
-        db.delete(product)
-        db.commit()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to delete products")
+
+        service = HACCPService(db)
+        service.delete_product(product_id, deleted_by=current_user.id)
+
         try:
             audit_event(db, current_user.id, "haccp_product_deleted", "haccp", str(product_id))
         except Exception:
             pass
-        return ResponseModel(
-            success=True,
-            message="Product deleted successfully",
-            data={"id": product_id}
-        )
+
+        return ResponseModel(success=True, message="Product deleted successfully", data={"id": product_id})
     except HTTPException:
         raise
     except Exception as e:

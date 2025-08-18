@@ -12,7 +12,7 @@ from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
     HazardType, RiskLevel, CCPStatus,
     HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus,
-    ProductRiskConfig, DecisionTree
+    ProductRiskConfig, DecisionTree, HazardReview
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
@@ -358,6 +358,87 @@ class HACCPService:
         self.db.refresh(process_flow)
         
         return process_flow
+
+    def delete_product(self, product_id: int, deleted_by: int) -> bool:
+        """Delete a product and all dependent HACCP records in a safe order.
+
+        This avoids NOT NULL/foreign-key violations on SQLite by explicitly
+        deleting child rows before the parent product.
+        """
+        product: Optional[Product] = self.db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise ValueError("Product not found")
+
+        try:
+            # Collect related ids
+            ccp_ids = [cid for (cid,) in self.db.query(CCP.id).filter(CCP.product_id == product_id).all()]
+            hazard_ids = [hid for (hid,) in self.db.query(Hazard.id).filter(Hazard.product_id == product_id).all()]
+            plan_ids = [pid for (pid,) in self.db.query(HACCPPlan.id).filter(HACCPPlan.product_id == product_id).all()]
+
+            # Delete CCP-related artifacts first (logs, schedules, programs, validations, attachments)
+            if ccp_ids:
+                # Logs
+                self.db.query(CCPVerificationLog).filter(CCPVerificationLog.ccp_id.in_(ccp_ids)).delete(synchronize_session=False)
+                self.db.query(CCPMonitoringLog).filter(CCPMonitoringLog.ccp_id.in_(ccp_ids)).delete(synchronize_session=False)
+                # Programs/Schedules/Validations
+                try:
+                    self.db.query(CCPVerificationProgram).filter(CCPVerificationProgram.ccp_id.in_(ccp_ids)).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                try:
+                    self.db.query(CCPMonitoringSchedule).filter(CCPMonitoringSchedule.ccp_id.in_(ccp_ids)).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                try:
+                    self.db.query(CCPValidation).filter(CCPValidation.ccp_id.in_(ccp_ids)).delete(synchronize_session=False)
+                except Exception:
+                    pass
+
+            # Delete hazard-related artifacts (decision trees, reviews) then hazards
+            if hazard_ids:
+                self.db.query(DecisionTree).filter(DecisionTree.hazard_id.in_(hazard_ids)).delete(synchronize_session=False)
+                try:
+                    self.db.query(HazardReview).filter(HazardReview.hazard_id.in_(hazard_ids)).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                self.db.query(Hazard).filter(Hazard.id.in_(hazard_ids)).delete(synchronize_session=False)
+
+            # Delete process flows for this product
+            self.db.query(ProcessFlow).filter(ProcessFlow.product_id == product_id).delete(synchronize_session=False)
+
+            # Delete HACCP plans (versions and approvals first)
+            if plan_ids:
+                self.db.query(HACCPPlanApproval).filter(HACCPPlanApproval.plan_id.in_(plan_ids)).delete(synchronize_session=False)
+                self.db.query(HACCPPlanVersion).filter(HACCPPlanVersion.plan_id.in_(plan_ids)).delete(synchronize_session=False)
+                self.db.query(HACCPPlan).filter(HACCPPlan.id.in_(plan_ids)).delete(synchronize_session=False)
+
+            # Delete product-specific risk config
+            self.db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).delete(synchronize_session=False)
+
+            # Finally delete CCPs and the Product
+            if ccp_ids:
+                self.db.query(CCP).filter(CCP.id.in_(ccp_ids)).delete(synchronize_session=False)
+
+            self.db.delete(product)
+            self.db.commit()
+
+            # Audit (best effort)
+            try:
+                self.audit_service.log_event(
+                    user_id=deleted_by,
+                    event_type="haccp_product_deleted",
+                    record_type="haccp_product",
+                    record_id=str(product_id),
+                    description="Product and dependent HACCP records deleted",
+                )
+            except Exception:
+                pass
+
+            return True
+
+        except Exception:
+            self.db.rollback()
+            raise
     
     def create_hazard(self, product_id: int, hazard_data: HazardCreate, created_by: int) -> Hazard:
         """Create a hazard with product-specific risk assessment (ISO 22000 compliant)"""

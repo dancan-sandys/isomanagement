@@ -342,13 +342,17 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
     }));
   };
 
-  const updateNestedFormData = (field: keyof RecallFormData, nestedField: string, value: any) => {
+  const updateNestedFormData = (
+    field: 'timeline',
+    nestedField: keyof RecallFormData['timeline'],
+    value: any
+  ) => {
     setFormData(prev => ({
       ...prev,
-      [field]: {
-        ...prev[field],
-        [nestedField]: value
-      }
+      timeline: {
+        ...prev.timeline,
+        [nestedField]: value,
+      },
     }));
   };
 
@@ -406,8 +410,8 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
       const response = await traceabilityAPI.createRecall(recallData);
       
       // Classify the recall based on risk assessment
-      if (response.data?.id) {
-        await traceabilityAPI.classifyRecall(response.data.id, {
+      if ((response as any).data?.id) {
+        await traceabilityAPI.classifyRecall((response as any).data.id, {
           health_risk_level: formData.health_risk_level,
           affected_population: formData.affected_population,
           potential_health_effects: formData.potential_health_effects,
@@ -416,7 +420,7 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
         });
       }
 
-      onComplete?.(response.data);
+      onComplete?.((response as any).data || response);
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to create recall');
     } finally {
@@ -1129,14 +1133,14 @@ const SmartRecallWizard: React.FC<SmartRecallWizardProps> = ({
               icon={<ArrowBackIcon />}
               tooltipTitle="Previous Step"
               onClick={handleBack}
-              disabled={activeStep === 0}
+              FabProps={{ disabled: activeStep === 0 }}
               aria-label="Go to previous step"
             />
             <SpeedDialAction
               icon={<ArrowForwardIcon />}
               tooltipTitle="Next Step"
               onClick={handleNext}
-              disabled={!validateStep(activeStep)}
+              FabProps={{ disabled: !validateStep(activeStep) }}
               aria-label="Go to next step"
             />
             <SpeedDialAction

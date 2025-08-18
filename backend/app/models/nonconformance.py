@@ -523,3 +523,7 @@ class EffectivenessMonitoring(Base):
         now = datetime.now()
         return (self.status == "active" and 
                 self.monitoring_period_start <= now <= self.monitoring_period_end) 
+
+# Backwards-compatibility aliases used by tests and existing code
+# Some tests expect a generic name 'RiskAssessment' under nonconformance module
+RiskAssessment = NonConformanceRiskAssessment
