@@ -28,12 +28,6 @@ wheels/
 *.egg
 MANIFEST
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-iso22000_fsms.db
-*.db-journal
 
 # Logs
 *.log
