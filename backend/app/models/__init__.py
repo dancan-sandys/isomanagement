@@ -32,7 +32,11 @@ from .audit_risk import (
     AuditElementType, AuditRiskReviewOutcome, PRPAuditIntegration
 )
 from .notification import Notification, NotificationType, NotificationCategory, NotificationPriority
-from .management_review import ManagementReview, ReviewAgendaItem, ReviewAction, ManagementReviewStatus
+from .management_review import (
+    ManagementReview, ReviewAgendaItem, ReviewAction, ManagementReviewStatus,
+    ManagementReviewType, ReviewInputType, ReviewOutputType, ActionPriority, ActionStatus,
+    ManagementReviewInput, ManagementReviewOutput, ManagementReviewTemplate, ManagementReviewKPI
+)
 from .audit_mgmt import (
     Audit, AuditType, AuditStatus,
     AuditChecklistTemplate, AuditChecklistItem, ChecklistResponse,
@@ -85,6 +89,8 @@ __all__ = [
     "Notification", "NotificationType", "NotificationCategory", "NotificationPriority",
     # Management Reviews
     "ManagementReview", "ReviewAgendaItem", "ReviewAction", "ManagementReviewStatus",
+    "ManagementReviewType", "ReviewInputType", "ReviewOutputType", "ActionPriority", "ActionStatus",
+    "ManagementReviewInput", "ManagementReviewOutput", "ManagementReviewTemplate", "ManagementReviewKPI",
     # Audit management
     "Audit", "AuditType", "AuditStatus",
     "AuditChecklistTemplate", "AuditChecklistItem", "ChecklistResponse",
