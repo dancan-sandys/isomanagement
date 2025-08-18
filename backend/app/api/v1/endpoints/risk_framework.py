@@ -24,7 +24,7 @@ router = APIRouter()
 
 @router.get("/framework")
 async def get_risk_framework(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get the current risk management framework"""
@@ -65,7 +65,7 @@ async def get_risk_framework(
 @router.post("/framework", response_model=ResponseModel)
 async def create_risk_framework(
     framework_data: RiskManagementFrameworkCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create or update the risk management framework"""
@@ -89,7 +89,7 @@ async def create_risk_framework(
 
 @router.get("/framework/appetite")
 async def get_risk_appetite(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get risk appetite and tolerance levels"""
@@ -107,7 +107,7 @@ async def get_risk_appetite(
 
 @router.get("/framework/matrix")
 async def get_risk_matrix(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get risk assessment matrix configuration"""
@@ -129,7 +129,7 @@ async def get_risk_matrix(
 
 @router.get("/context", response_model=ResponseModel)
 async def get_risk_context(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get the current risk context"""
@@ -154,7 +154,7 @@ async def get_risk_context(
 @router.post("/context", response_model=ResponseModel)
 async def create_risk_context(
     context_data: RiskContextCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create or update the risk context"""
@@ -183,7 +183,7 @@ async def create_risk_context(
 @router.post("/fsms-integration", response_model=ResponseModel)
 async def create_fsms_integration(
     integration_data: FSMSRiskIntegrationCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create FSMS risk integration"""
@@ -208,7 +208,7 @@ async def create_fsms_integration(
 @router.get("/fsms-integration/{risk_id}", response_model=ResponseModel)
 async def get_fsms_integrations(
     risk_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get FSMS integrations for a risk"""
@@ -227,7 +227,7 @@ async def get_fsms_integrations(
 @router.post("/integrate/haccp-hazard/{hazard_id}", response_model=ResponseModel)
 async def create_risk_from_haccp_hazard(
     hazard_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create risk from HACCP hazard"""
@@ -255,7 +255,7 @@ async def create_risk_from_haccp_hazard(
 async def create_risk_from_prp_nonconformance(
     prp_id: int,
     nonconformance_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create risk from PRP non-conformance"""
@@ -284,7 +284,7 @@ async def create_risk_from_prp_nonconformance(
 async def create_risk_from_supplier_evaluation(
     supplier_id: int,
     evaluation_data: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create risk from supplier evaluation"""
@@ -312,7 +312,7 @@ async def create_risk_from_supplier_evaluation(
 @router.post("/integrate/audit-finding/{finding_id}", response_model=ResponseModel)
 async def create_risk_from_audit_finding(
     finding_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create risk from audit finding"""
@@ -339,7 +339,7 @@ async def create_risk_from_audit_finding(
 @router.post("/integrate/audit-opportunity/{finding_id}", response_model=ResponseModel)
 async def create_opportunity_from_audit_finding(
     finding_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create opportunity from audit finding"""
@@ -370,7 +370,7 @@ async def create_opportunity_from_audit_finding(
 @router.post("/assess", response_model=ResponseModel)
 async def assess_risk(
     assessment_data: RiskAssessmentCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:update")),
     db: Session = Depends(get_db),
 ):
     """Conduct risk assessment"""
@@ -397,7 +397,7 @@ async def assess_risk(
 @router.post("/treat", response_model=ResponseModel)
 async def plan_risk_treatment(
     treatment_data: RiskTreatmentCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:update")),
     db: Session = Depends(get_db),
 ):
     """Plan risk treatment"""
@@ -431,7 +431,7 @@ async def get_risk_analytics(
     severity: Optional[str] = None,
     status: Optional[str] = None,
     include_opportunities: bool = True,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get comprehensive risk analytics"""
@@ -459,7 +459,7 @@ async def get_risk_analytics(
 async def get_risk_trends(
     period: str = Query("monthly", description="Trend period: weekly, monthly, quarterly"),
     periods_back: int = Query(12, description="Number of periods to include"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get risk trends analysis"""
@@ -477,7 +477,7 @@ async def get_risk_trends(
 
 @router.get("/performance", response_model=ResponseModel)
 async def get_risk_performance(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get risk management performance metrics"""
@@ -495,7 +495,7 @@ async def get_risk_performance(
 
 @router.get("/compliance-status", response_model=ResponseModel)
 async def get_compliance_status(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get ISO compliance status"""
@@ -518,7 +518,7 @@ async def get_compliance_status(
 @router.post("/kpis", response_model=ResponseModel)
 async def create_kpi_enhanced(
     kpi_data: RiskKPICreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:create")),
     db: Session = Depends(get_db),
 ):
     """Create risk KPI with proper validation"""
@@ -543,7 +543,7 @@ async def create_kpi_enhanced(
 @router.get("/kpis", response_model=ResponseModel)
 async def get_kpis_enhanced(
     category: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get KPIs with enhanced response"""
@@ -561,7 +561,7 @@ async def get_kpis_enhanced(
 
 @router.get("/dashboard")
 async def get_risk_dashboard(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("risk_opportunity:view")),
     db: Session = Depends(get_db),
 ):
     """Get comprehensive risk dashboard data"""

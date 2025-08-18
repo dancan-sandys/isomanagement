@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi.responses import FileResponse
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_permission
 from app.models.user import User
 from app.models.equipment import CalibrationRecord
 from app.services.equipment_service import EquipmentService
@@ -31,7 +31,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.get("/analytics/stats", response_model=ResponseModel)
 async def get_equipment_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     """Get equipment statistics and analytics"""
     try:
@@ -49,7 +49,7 @@ async def get_equipment_stats(
 @router.get("/analytics/upcoming-maintenance", response_model=ResponseModel)
 async def get_upcoming_maintenance(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     """Get upcoming maintenance schedules"""
     try:
@@ -67,7 +67,7 @@ async def get_upcoming_maintenance(
 @router.get("/analytics/overdue-calibrations", response_model=ResponseModel)
 async def get_overdue_calibrations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     """Get overdue calibration schedules"""
     try:
@@ -85,7 +85,7 @@ async def get_overdue_calibrations(
 @router.get("/analytics/alerts", response_model=ResponseModel)
 async def get_equipment_alerts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     """Get equipment alerts and notifications"""
     try:
@@ -104,7 +104,7 @@ async def get_equipment_alerts(
 async def create_equipment(
     payload: EquipmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:create"))
 ):
     svc = EquipmentService(db)
     return svc.create_equipment(name=payload.name, equipment_type=payload.equipment_type, serial_number=payload.serial_number, location=payload.location, notes=payload.notes, created_by=current_user.id, is_active=payload.is_active, critical_to_food_safety=payload.critical_to_food_safety)
@@ -113,7 +113,7 @@ async def create_equipment(
 @router.get("/", response_model=list[EquipmentResponse])
 async def list_equipment(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     return svc.list_equipment()
@@ -123,7 +123,7 @@ async def list_equipment(
 async def get_equipment(
     equipment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     eq = svc.get_equipment(equipment_id)
@@ -137,7 +137,7 @@ async def update_equipment(
     equipment_id: int,
     payload: EquipmentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:update"))
 ):
     svc = EquipmentService(db)
     eq = svc.update_equipment(equipment_id, **payload.dict(exclude_unset=True))
@@ -150,7 +150,7 @@ async def update_equipment(
 async def delete_equipment(
     equipment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:delete"))
 ):
     svc = EquipmentService(db)
     ok = svc.delete_equipment(equipment_id)
@@ -165,7 +165,7 @@ async def create_maintenance_plan(
     equipment_id: int,
     payload: MaintenancePlanCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:create"))
 ):
     svc = EquipmentService(db)
     return svc.create_maintenance_plan(equipment_id=equipment_id, frequency_days=payload.frequency_days, maintenance_type=payload.maintenance_type, notes=payload.notes)
@@ -175,7 +175,7 @@ async def create_maintenance_plan(
 async def list_maintenance_plans(
     equipment_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     plans = svc.list_maintenance_plans(equipment_id=equipment_id)
@@ -212,7 +212,7 @@ async def update_maintenance_plan(
     plan_id: int,
     payload: MaintenancePlanUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:update"))
 ):
     svc = EquipmentService(db)
     plan = svc.update_maintenance_plan(plan_id, **payload.dict(exclude_unset=True))
@@ -247,7 +247,7 @@ async def update_maintenance_plan(
 async def delete_maintenance_plan(
     plan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:delete"))
 ):
     svc = EquipmentService(db)
     ok = svc.delete_maintenance_plan(plan_id)
@@ -261,7 +261,7 @@ async def delete_maintenance_plan(
 async def create_work_order(
     payload: MaintenanceWorkOrderCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:create"))
 ):
     svc = EquipmentService(db)
     return svc.create_work_order(equipment_id=payload.equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description, priority=payload.priority, assigned_to=payload.assigned_to, due_date=payload.due_date, created_by=current_user.id)
@@ -273,7 +273,7 @@ async def list_work_orders(
     plan_id: int | None = Query(default=None),
     status: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     items = svc.list_work_orders(equipment_id=equipment_id, plan_id=plan_id, status=status)
@@ -303,7 +303,7 @@ async def list_work_orders(
 async def get_work_order(
     work_order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     wo = svc.get_work_order(work_order_id)
@@ -333,7 +333,7 @@ async def update_work_order(
     work_order_id: int,
     payload: MaintenanceWorkOrderUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:update"))
 ):
     svc = EquipmentService(db)
     wo = svc.update_work_order(work_order_id, **payload.dict(exclude_unset=True))
@@ -362,7 +362,7 @@ async def update_work_order(
 async def complete_work_order(
     work_order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:update"))
 ):
     svc = EquipmentService(db)
     wo = svc.complete_work_order(work_order_id, completed_by=current_user.id)
@@ -391,7 +391,7 @@ async def complete_work_order(
 async def delete_work_order(
     work_order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:delete"))
 ):
     svc = EquipmentService(db)
     ok = svc.delete_work_order(work_order_id)
@@ -406,7 +406,7 @@ async def create_calibration_plan(
     equipment_id: int,
     payload: CalibrationPlanCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:create"))
 ):
     svc = EquipmentService(db)
     return svc.create_calibration_plan(equipment_id=equipment_id, schedule_date=payload.schedule_date, frequency_days=payload.frequency_days, notes=payload.notes)
@@ -416,7 +416,7 @@ async def create_calibration_plan(
 async def list_calibration_plans(
     equipment_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     items = svc.list_calibration_plans(equipment_id=equipment_id)
@@ -453,7 +453,7 @@ async def update_calibration_plan(
     plan_id: int,
     payload: CalibrationPlanUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:update"))
 ):
     svc = EquipmentService(db)
     plan = svc.update_calibration_plan(plan_id, **payload.dict(exclude_unset=True))
@@ -488,7 +488,7 @@ async def update_calibration_plan(
 async def delete_calibration_plan(
     plan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:delete"))
 ):
     svc = EquipmentService(db)
     ok = svc.delete_calibration_plan(plan_id)
@@ -502,7 +502,7 @@ async def upload_calibration_certificate(
     plan_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:create"))
 ):
     unique = f"{uuid4().hex}_{file.filename}"
     cert_dir = os.path.join(UPLOAD_DIR, "calibration")
@@ -519,7 +519,7 @@ async def upload_calibration_certificate(
 async def download_calibration_certificate(
     record_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     rec = db.query(CalibrationRecord).filter_by(id=record_id).first()
     if not rec:
@@ -536,7 +536,7 @@ async def maintenance_history(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     return svc.get_maintenance_history(equipment_id=equipment_id, start_date=start_date, end_date=end_date)
@@ -548,7 +548,7 @@ async def calibration_history(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("maintenance:view"))
 ):
     svc = EquipmentService(db)
     return svc.get_calibration_history(equipment_id=equipment_id, start_date=start_date, end_date=end_date)

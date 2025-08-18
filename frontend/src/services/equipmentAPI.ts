@@ -103,7 +103,7 @@ export const equipmentAPI = {
 
   // Analytics and Reports
   getEquipmentStats: async () => {
-    const res = await api.get('/equipment/stats');
+    const res = await api.get('/equipment/analytics/stats');
     return res.data;
   },
   getMaintenanceHistory: async (equipmentId?: number, params?: { start_date?: string; end_date?: string }) => {
@@ -121,15 +121,15 @@ export const equipmentAPI = {
 
   // Notifications and Alerts
   getUpcomingMaintenance: async () => {
-    const res = await api.get('/equipment/upcoming-maintenance');
+    const res = await api.get('/equipment/analytics/upcoming-maintenance');
     return res.data;
   },
   getOverdueCalibrations: async () => {
-    const res = await api.get('/equipment/overdue-calibrations');
+    const res = await api.get('/equipment/analytics/overdue-calibrations');
     return res.data;
   },
   getEquipmentAlerts: async () => {
-    const res = await api.get('/equipment/alerts');
+    const res = await api.get('/equipment/analytics/alerts');
     return res.data;
   },
 };
