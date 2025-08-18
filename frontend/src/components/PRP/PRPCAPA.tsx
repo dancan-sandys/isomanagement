@@ -144,7 +144,20 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [correctiveActions, setCorrectiveActions] = useState<CorrectiveAction[]>([]);
   const [preventiveActions, setPreventiveActions] = useState<PreventiveAction[]>([]);
-  const [dashboardData, setDashboardData] = useState<CAPADashboard | null>(null);
+  const [dashboardData, setDashboardData] = useState<CAPADashboard | null>({
+    total_corrective_actions: 0,
+    total_preventive_actions: 0,
+    completed_actions: 0,
+    overdue_actions: 0,
+    average_completion_time: 0,
+    effectiveness_rating: 0,
+    cost_summary: {
+      total_estimated: 0,
+      total_actual: 0,
+      variance: 0
+    },
+    overdue_actions_list: []
+  } as CAPADashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -156,16 +169,25 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
 
   // Form states
   const [correctiveForm, setCorrectiveForm] = useState({
-    title: '',
-    description: '',
-    root_cause: '',
-    action_type: '',
-    priority: 'medium',
-    assigned_to: '',
-    due_date: '',
-    effectiveness_rating: 3,
+    action_code: '',
+    source_type: 'inspection',
+    source_id: 1,
+    checklist_id: null,
+    program_id: programId || null,
+    non_conformance_description: '',
+    non_conformance_date: new Date().toISOString().split('T')[0],
+    severity: 'medium',
+    immediate_cause: '',
+    root_cause_analysis: '',
+    root_cause_category: '',
+    action_description: '',
+    action_type: 'corrective',
+    responsible_person: 1,
+    assigned_to: 1,
+    target_completion_date: '',
     cost_estimate: 0,
     verification_method: '',
+    effectiveness_rating: 3,
   });
 
   const [preventiveForm, setPreventiveForm] = useState({
@@ -272,16 +294,25 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
 
   const resetCorrectiveForm = () => {
     setCorrectiveForm({
-      title: '',
-      description: '',
-      root_cause: '',
-      action_type: '',
-      priority: 'medium',
-      assigned_to: '',
-      due_date: '',
-      effectiveness_rating: 3,
+      action_code: '',
+      source_type: 'inspection',
+      source_id: 1,
+      checklist_id: null,
+      program_id: programId || null,
+      non_conformance_description: '',
+      non_conformance_date: new Date().toISOString().split('T')[0],
+      severity: 'medium',
+      immediate_cause: '',
+      root_cause_analysis: '',
+      root_cause_category: '',
+      action_description: '',
+      action_type: 'corrective',
+      responsible_person: 1,
+      assigned_to: 1,
+      target_completion_date: '',
       cost_estimate: 0,
       verification_method: '',
+      effectiveness_rating: 3,
     });
   };
 
@@ -370,13 +401,13 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                       Total Actions
                     </Typography>
                     <Typography variant="h4">
-                      {dashboardData.total_corrective_actions + dashboardData.total_preventive_actions}
+                      {(dashboardData.total_corrective_actions || 0) + (dashboardData.total_preventive_actions || 0)}
                     </Typography>
                   </Box>
                   <Assessment color="primary" />
                 </Box>
                 <Typography variant="body2" color="textSecondary">
-                  {dashboardData.completed_actions} completed
+                  {dashboardData.completed_actions || 0} completed
                 </Typography>
               </CardContent>
             </Card>
@@ -391,7 +422,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                       Overdue Actions
                     </Typography>
                     <Typography variant="h4" color="error">
-                      {dashboardData.overdue_actions}
+                      {dashboardData.overdue_actions || 0}
                     </Typography>
                   </Box>
                   <Warning color="error" />
@@ -412,7 +443,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                       Avg Completion Time
                     </Typography>
                     <Typography variant="h4">
-                      {dashboardData.average_completion_time.toFixed(1)}d
+                      {dashboardData.average_completion_time ? dashboardData.average_completion_time.toFixed(1) : '0.0'}d
                     </Typography>
                   </Box>
                   <Timeline color="primary" />
@@ -433,7 +464,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                       Effectiveness
                     </Typography>
                     <Typography variant="h4">
-                      {dashboardData.effectiveness_rating.toFixed(1)}
+                      {dashboardData.effectiveness_rating ? dashboardData.effectiveness_rating.toFixed(1) : '0.0'}
                     </Typography>
                   </Box>
                   <TrendingUp color="success" />
@@ -458,7 +489,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                     </ListItemIcon>
                     <ListItemText
                       primary="Total Estimated Cost"
-                      secondary={`$${dashboardData.cost_summary.total_estimated.toLocaleString()}`}
+                      secondary={`$${dashboardData.cost_summary?.total_estimated?.toLocaleString() || '0'}`}
                     />
                   </ListItem>
                   <ListItem>
@@ -467,7 +498,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                     </ListItemIcon>
                     <ListItemText
                       primary="Total Actual Cost"
-                      secondary={`$${dashboardData.cost_summary.total_actual.toLocaleString()}`}
+                      secondary={`$${dashboardData.cost_summary?.total_actual?.toLocaleString() || '0'}`}
                     />
                   </ListItem>
                   <ListItem>
@@ -476,7 +507,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                     </ListItemIcon>
                     <ListItemText
                       primary="Variance"
-                      secondary={`$${dashboardData.cost_summary.variance.toLocaleString()}`}
+                      secondary={`$${dashboardData.cost_summary?.variance?.toLocaleString() || '0'}`}
                     />
                   </ListItem>
                 </List>
@@ -489,7 +520,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
               <CardContent>
                 <Typography variant="h6" gutterBottom>Overdue Actions</Typography>
                 <List>
-                  {dashboardData.overdue_actions_list.slice(0, 5).map((action) => (
+                  {(dashboardData.overdue_actions_list || []).slice(0, 5).map((action) => (
                     <ListItem key={action.id}>
                       <ListItemIcon>
                         <Warning color="error" />
@@ -527,11 +558,11 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
           <TableHead>
             <TableRow>
               <TableCell>Action Code</TableCell>
-              <TableCell>Title</TableCell>
-              <TableCell>Priority</TableCell>
+              <TableCell>Description</TableCell>
+              <TableCell>Severity</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Assigned To</TableCell>
-              <TableCell>Due Date</TableCell>
+              <TableCell>Target Date</TableCell>
               <TableCell>Effectiveness</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
@@ -542,10 +573,14 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                 <TableCell>{action.action_code}</TableCell>
                 <TableCell>
                   <Typography variant="body2" fontWeight="bold">
-                    {action.title}
+                    {action.action_description || 'No description'}
                   </Typography>
                   <Typography variant="caption" color="textSecondary">
-                    {action.description.substring(0, 50)}...
+                    {action.non_conformance_description ? 
+                      (action.non_conformance_description.length > 50 ? 
+                        `${action.non_conformance_description.substring(0, 50)}...` : 
+                        action.non_conformance_description) : 
+                      'No non-conformance description'}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -638,7 +673,11 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                     {action.title}
                   </Typography>
                   <Typography variant="caption" color="textSecondary">
-                    {action.description.substring(0, 50)}...
+                    {action.description ? 
+                      (action.description.length > 50 ? 
+                        `${action.description.substring(0, 50)}...` : 
+                        action.description) : 
+                      'No description'}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -713,18 +752,19 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Title"
-              value={correctiveForm.title}
-              onChange={(e) => setCorrectiveForm({ ...correctiveForm, title: e.target.value })}
+              label="Action Code"
+              value={correctiveForm.action_code}
+              onChange={(e) => setCorrectiveForm({ ...correctiveForm, action_code: e.target.value })}
+              placeholder="e.g., CA-001"
               required
             />
           </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Description"
-              value={correctiveForm.description}
-              onChange={(e) => setCorrectiveForm({ ...correctiveForm, description: e.target.value })}
+              label="Non-Conformance Description"
+              value={correctiveForm.non_conformance_description}
+              onChange={(e) => setCorrectiveForm({ ...correctiveForm, non_conformance_description: e.target.value })}
               multiline
               rows={3}
               required
@@ -733,35 +773,30 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Root Cause"
-              value={correctiveForm.root_cause}
-              onChange={(e) => setCorrectiveForm({ ...correctiveForm, root_cause: e.target.value })}
+              label="Action Description"
+              value={correctiveForm.action_description}
+              onChange={(e) => setCorrectiveForm({ ...correctiveForm, action_description: e.target.value })}
               multiline
               rows={2}
               required
             />
           </Grid>
-          <Grid item xs={6}>
-            <FormControl fullWidth>
-              <InputLabel>Action Type</InputLabel>
-              <Select
-                value={correctiveForm.action_type}
-                onChange={(e) => setCorrectiveForm({ ...correctiveForm, action_type: e.target.value })}
-                required
-              >
-                <MenuItem value="immediate">Immediate</MenuItem>
-                <MenuItem value="short_term">Short Term</MenuItem>
-                <MenuItem value="long_term">Long Term</MenuItem>
-                <MenuItem value="systemic">Systemic</MenuItem>
-              </Select>
-            </FormControl>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Root Cause Analysis"
+              value={correctiveForm.root_cause_analysis}
+              onChange={(e) => setCorrectiveForm({ ...correctiveForm, root_cause_analysis: e.target.value })}
+              multiline
+              rows={2}
+            />
           </Grid>
           <Grid item xs={6}>
             <FormControl fullWidth>
-              <InputLabel>Priority</InputLabel>
+              <InputLabel>Severity</InputLabel>
               <Select
-                value={correctiveForm.priority}
-                onChange={(e) => setCorrectiveForm({ ...correctiveForm, priority: e.target.value })}
+                value={correctiveForm.severity}
+                onChange={(e) => setCorrectiveForm({ ...correctiveForm, severity: e.target.value })}
                 required
               >
                 <MenuItem value="low">Low</MenuItem>
@@ -771,22 +806,24 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12}>
+          <Grid item xs={6}>
             <TextField
               fullWidth
-              label="Assigned To"
-              value={correctiveForm.assigned_to}
-              onChange={(e) => setCorrectiveForm({ ...correctiveForm, assigned_to: e.target.value })}
+              label="Non-Conformance Date"
+              type="date"
+              value={correctiveForm.non_conformance_date}
+              onChange={(e) => setCorrectiveForm({ ...correctiveForm, non_conformance_date: e.target.value })}
+              InputLabelProps={{ shrink: true }}
               required
             />
           </Grid>
           <Grid item xs={6}>
             <TextField
               fullWidth
-              label="Due Date"
+              label="Target Completion Date"
               type="date"
-              value={correctiveForm.due_date}
-              onChange={(e) => setCorrectiveForm({ ...correctiveForm, due_date: e.target.value })}
+              value={correctiveForm.target_completion_date}
+              onChange={(e) => setCorrectiveForm({ ...correctiveForm, target_completion_date: e.target.value })}
               InputLabelProps={{ shrink: true }}
               required
             />

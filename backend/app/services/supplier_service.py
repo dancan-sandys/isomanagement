@@ -917,18 +917,24 @@ class SupplierService:
         self.db.refresh(material)
         return material
 
-    def bulk_approve_materials(self, material_ids: List[int], approved_by: int) -> int:
-        """Bulk approve materials; returns count."""
+    def bulk_approve_materials(self, material_ids: List[int], approved_by: int) -> Dict[str, Any]:
+        """Bulk approve materials; returns results dictionary."""
         q = self.db.query(Material).filter(Material.id.in_(material_ids))
         count = 0
         for m in q.all():
             m.approval_status = "approved"
+            m.approved_by = approved_by
+            m.approved_at = datetime.utcnow()
             count += 1
         self.db.commit()
-        return count
+        return {
+            "approved_count": count,
+            "total_requested": len(material_ids),
+            "success_rate": f"{(count/len(material_ids)*100):.1f}%" if material_ids else "0%"
+        }
 
-    def bulk_reject_materials(self, material_ids: List[int], reason: str, rejected_by: int) -> int:
-        """Bulk reject materials; returns count."""
+    def bulk_reject_materials(self, material_ids: List[int], reason: str, rejected_by: int) -> Dict[str, Any]:
+        """Bulk reject materials; returns results dictionary."""
         q = self.db.query(Material).filter(Material.id.in_(material_ids))
         count = 0
         for m in q.all():
@@ -942,7 +948,12 @@ class SupplierService:
                 pass
             count += 1
         self.db.commit()
-        return count
+        return {
+            "rejected_count": count,
+            "total_requested": len(material_ids),
+            "rejection_reason": reason,
+            "success_rate": f"{(count/len(material_ids)*100):.1f}%" if material_ids else "0%"
+        }
 
     # Lightweight normalization helpers for Material list-like fields stored as Text/JSON
     def _ensure_list(self, value: Any) -> Optional[List[str]]:
@@ -972,3 +983,66 @@ class SupplierService:
         except Exception:
             pass
         return material 
+    def get_material_stats(self) -> Dict[str, Any]:
+        """Get material statistics"""
+        from sqlalchemy import func
+        
+        total = self.db.query(Material).count()
+        approved = self.db.query(Material).filter(Material.approval_status == "approved").count()
+        pending = self.db.query(Material).filter(Material.approval_status == "pending").count()
+        rejected = self.db.query(Material).filter(Material.approval_status == "rejected").count()
+        
+        # Get materials by category
+        by_category = self.db.query(Material.category, func.count(Material.id)).group_by(Material.category).all()
+        
+        # Get materials by supplier
+        by_supplier = (self.db.query(Supplier.name, func.count(Material.id))
+                      .join(Supplier, Supplier.id == Material.supplier_id)
+                      .group_by(Supplier.name)
+                      .all())
+        
+        return {
+            "total_materials": total,
+            "approved_materials": approved,
+            "pending_materials": pending,
+            "rejected_materials": rejected,
+            "materials_by_category": [
+                {"category": str(cat or "unknown"), "count": int(cnt)} 
+                for cat, cnt in by_category
+            ],
+            "materials_by_supplier": [
+                {"supplier_name": name, "count": int(cnt)} 
+                for name, cnt in by_supplier
+            ]
+        }
+
+    def search_materials(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search materials by name, code, or description"""
+        from sqlalchemy import or_
+        
+        search_term = f"%{query}%"
+        
+        materials = (self.db.query(Material)
+                    .filter(or_(
+                        Material.name.ilike(search_term),
+                        Material.material_code.ilike(search_term),
+                        Material.description.ilike(search_term)
+                    ))
+                    .limit(limit)
+                    .all())
+        
+        results = []
+        for material in materials:
+            supplier = self.db.query(Supplier).filter(Supplier.id == material.supplier_id).first()
+            results.append({
+                "id": material.id,
+                "material_code": material.material_code,
+                "name": material.name,
+                "description": material.description,
+                "category": material.category,
+                "approval_status": material.approval_status,
+                "supplier_name": supplier.name if supplier else "Unknown"
+            })
+        
+        return results
+

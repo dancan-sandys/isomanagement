@@ -127,7 +127,7 @@ class AllergenFlag(Base):
     resolution_notes = Column(Text)
     status = Column(Enum(AllergenFlagStatus), nullable=False, default=AllergenFlagStatus.ACTIVE)
     nc_id = Column(Integer, ForeignKey("nonconformances.id", ondelete="SET NULL"), nullable=True)  # Auto-created NC for critical issues
-    metadata = Column(JSON)  # Additional metadata (detection method, confidence score, etc.)
+    additional_data = Column(JSON)  # Additional metadata (detection method, confidence score, etc.)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

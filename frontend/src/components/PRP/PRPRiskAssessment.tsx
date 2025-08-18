@@ -110,6 +110,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
   const [assessments, setAssessments] = useState<RiskAssessment[]>([]);
   const [controls, setControls] = useState<RiskControl[]>([]);
   const [riskMatrices, setRiskMatrices] = useState<RiskMatrix[]>([]);
+  const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -124,6 +125,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
 
   // Form states
   const [assessmentForm, setAssessmentForm] = useState({
+    assessment_code: '',
     hazard_identified: '',
     hazard_description: '',
     likelihood_level: '',
@@ -132,6 +134,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
     additional_controls_required: '',
     control_effectiveness: '',
     next_review_date: '',
+    selected_program_id: programId || '',
   });
 
   const [controlForm, setControlForm] = useState({
@@ -176,10 +179,16 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
           setAssessments(assessmentsResponse.data.items || []);
         }
       } else {
-        // Fetch all risk matrices
+        // Fetch all risk matrices and programs
         const matricesResponse = await prpAPI.getRiskMatrices();
         if (matricesResponse.success) {
           setRiskMatrices(matricesResponse.data.items || []);
+        }
+        
+        // Fetch programs for selection
+        const programsResponse = await prpAPI.getPrograms();
+        if (programsResponse.success) {
+          setPrograms(programsResponse.data.items || []);
         }
       }
     } catch (err: any) {
@@ -190,10 +199,14 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
   };
 
   const handleCreateAssessment = async () => {
-    if (!programId) return;
+    const targetProgramId = programId || assessmentForm.selected_program_id;
+    if (!targetProgramId) {
+      setError('Please select a program for the risk assessment');
+      return;
+    }
     
     try {
-      const response = await prpAPI.createRiskAssessment(programId, assessmentForm);
+      const response = await prpAPI.createRiskAssessment(Number(targetProgramId), assessmentForm);
       if (response.success) {
         setSuccess('Risk assessment created successfully');
         setOpenAssessmentDialog(false);
@@ -249,6 +262,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
 
   const resetAssessmentForm = () => {
     setAssessmentForm({
+      assessment_code: '',
       hazard_identified: '',
       hazard_description: '',
       likelihood_level: '',
@@ -257,6 +271,7 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
       additional_controls_required: '',
       control_effectiveness: '',
       next_review_date: '',
+      selected_program_id: programId || '',
     });
   };
 
@@ -328,7 +343,6 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
           variant="contained"
           startIcon={<Add />}
           onClick={() => setOpenAssessmentDialog(true)}
-          disabled={!programId}
         >
           New Assessment
         </Button>
@@ -478,6 +492,34 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
       <DialogTitle>Create Risk Assessment</DialogTitle>
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 1 }}>
+          {!programId && (
+            <Grid item xs={12}>
+              <FormControl fullWidth required>
+                <InputLabel>Select Program</InputLabel>
+                <Select
+                  value={assessmentForm.selected_program_id}
+                  onChange={(e) => setAssessmentForm({ ...assessmentForm, selected_program_id: e.target.value })}
+                  label="Select Program"
+                >
+                  {programs.map((program) => (
+                    <MenuItem key={program.id} value={program.id}>
+                      {program.name} ({program.program_code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          )}
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Assessment Code"
+              value={assessmentForm.assessment_code}
+              onChange={(e) => setAssessmentForm({ ...assessmentForm, assessment_code: e.target.value })}
+              placeholder="e.g., RISK-001"
+              required
+            />
+          </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth

@@ -698,27 +698,8 @@ async def get_suppliers(
     )
 
 
-@router.get("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
-async def get_supplier(
-    supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get supplier by ID"""
-    service = SupplierService(db)
-    supplier = service.get_supplier(supplier_id)
-    
-    if not supplier:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Supplier not found"
-        )
-    
-    return ResponseModel(
-        success=True,
-        message="Supplier retrieved successfully",
-        data=supplier
-    )
+# IMPORTANT: All specific routes must come before parameterized /{supplier_id} routes
+# The /{supplier_id} route has been moved to the end of the file to prevent route conflicts
 
 
 @router.post("/", response_model=ResponseModel[SupplierResponse])
@@ -829,6 +810,7 @@ async def bulk_update_suppliers(
 
 # Evaluation endpoints
 @router.get("/evaluations/", response_model=ResponseModel[EvaluationListResponse])
+@router.get("/evaluations", response_model=ResponseModel[EvaluationListResponse])
 async def get_evaluations(
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -1146,6 +1128,7 @@ async def create_batch_from_delivery(
 
 # Delivery endpoints
 @router.get("/deliveries/", response_model=ResponseModel)
+@router.get("/deliveries", response_model=ResponseModel)
 async def get_deliveries(
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
     material_id: Optional[int] = Query(None, description="Filter by material"),
@@ -1696,3 +1679,27 @@ async def get_delivery_alert_summary(
     service = SupplierService(db)
     summary = service.get_delivery_alert_summary()
     return summary 
+
+
+# MOVED TO END: Parameterized supplier routes that must come after all specific routes
+@router.get("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
+async def get_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get supplier by ID"""
+    service = SupplierService(db)
+    supplier = service.get_supplier(supplier_id)
+    
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Supplier retrieved successfully",
+        data=supplier
+    ) 

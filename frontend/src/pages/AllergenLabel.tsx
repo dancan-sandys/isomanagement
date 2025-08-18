@@ -510,7 +510,7 @@ const AllergenLabel: React.FC = () => {
                   <Chip 
                     label={`${dashboardMetrics.allergen_flags.critical} Critical`} 
                     color="error" 
-                    size="small" 
+                     
                     sx={{ mt: 1 }} 
                   />
                 )}
@@ -544,7 +544,7 @@ const AllergenLabel: React.FC = () => {
                 <Chip 
                   label={dashboardMetrics.compliance_status?.iso_22000_compliant ? "ISO Compliant" : "Non-Compliant"} 
                   color={dashboardMetrics.compliance_status?.iso_22000_compliant ? "success" : "error"} 
-                  size="small" 
+                   
                   sx={{ mt: 1 }} 
                 />
               </CardContent>
@@ -658,7 +658,7 @@ const AllergenLabel: React.FC = () => {
                       <Chip
                         label={assessment.risk_level}
                         color={getRiskLevelColor(assessment.risk_level)}
-                        size="small"
+                        
                       />
                     </Stack>
                     <Stack spacing={1}>
@@ -677,10 +677,10 @@ const AllergenLabel: React.FC = () => {
                     </Stack>
                   </CardContent>
                   <CardActions>
-                    <Button size="small" startIcon={<ViewIcon />}>
+                    <Button  startIcon={<ViewIcon />}>
                       View Details
                     </Button>
-                    <Button size="small" startIcon={<EditIcon />}>
+                    <Button  startIcon={<EditIcon />}>
                       Edit
                     </Button>
                   </CardActions>
@@ -732,13 +732,13 @@ const AllergenLabel: React.FC = () => {
                     <Chip
                       label={template.is_active ? 'Active' : 'Inactive'}
                       color={template.is_active ? 'success' : 'default'}
-                      size="small"
+                      
                     />
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5} flexWrap="wrap">
                       {(template.allergen_declarations || []).map((allergen: string) => (
-                        <Chip key={allergen} label={allergen} size="small" variant="outlined" />
+                        <Chip key={allergen} label={allergen}  variant="outlined" />
                       ))}
                     </Stack>
                   </TableCell>
@@ -750,7 +750,7 @@ const AllergenLabel: React.FC = () => {
                             <Stack direction="row" spacing={1}>
                             <Tooltip title="Export PDF">
                               <IconButton
-                                size="small"
+                                
                                 onClick={async () => {
                                   try {
                                     const blob = await allergenLabelAPI.exportVersionPDF(template.id, version.id);
@@ -770,7 +770,7 @@ const AllergenLabel: React.FC = () => {
                             </Tooltip>
                             <Tooltip title="View Approvals">
                               <IconButton
-                                size="small"
+                                
                                 onClick={async () => {
                                   try {
                                     const aps = await allergenLabelAPI.listVersionApprovals(template.id, version.id);
@@ -797,13 +797,13 @@ const AllergenLabel: React.FC = () => {
                   <TableCell align="right">
                     <Stack direction="row" spacing={1}>
                       <Tooltip title="Edit Template">
-                        <IconButton size="small">
+                        <IconButton >
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Compare Versions">
                         <IconButton
-                          size="small"
+                          
                           disabled={(versions[template.id] || []).length < 2}
                           onClick={() => {
                             const versionList = versions[template.id] || [];
@@ -886,7 +886,7 @@ const AllergenLabel: React.FC = () => {
                       <Chip
                         label={flag.severity}
                         color={flag.severity === 'high' ? 'error' : flag.severity === 'medium' ? 'warning' : 'info'}
-                        size="small"
+                        
                       />
                     </Stack>
                     <Typography variant="body2" sx={{ mb: 2 }}>
@@ -911,7 +911,7 @@ const AllergenLabel: React.FC = () => {
                         </Typography>
                       )}
                       {flag.nc_created && (
-                        <Alert severity="warning" size="small" sx={{ mt: 1 }}>
+                        <Alert severity="warning"  sx={{ mt: 1 }}>
                           <Typography variant="caption">
                             <strong>NC Created:</strong> {flag.nc_id ? `NC-${flag.nc_id}` : 'Auto-generated'}
                           </Typography>
@@ -920,11 +920,11 @@ const AllergenLabel: React.FC = () => {
                     </Stack>
                   </CardContent>
                   <CardActions>
-                    <Button size="small" startIcon={<ViewIcon />}>
+                    <Button  startIcon={<ViewIcon />}>
                       View Details
                     </Button>
                     <Button 
-                      size="small" 
+                       
                       startIcon={<CheckIcon />}
                       onClick={() => {
                         const resolution = prompt('Enter resolution notes:');
@@ -959,12 +959,12 @@ const AllergenLabel: React.FC = () => {
                         <Chip
                           label={nc.severity}
                           color={nc.severity === 'critical' ? 'error' : nc.severity === 'high' ? 'warning' : 'default'}
-                          size="small"
+                          
                         />
                         <Chip
                           label={nc.status}
                           color={nc.status === 'open' ? 'error' : nc.status === 'closed' ? 'success' : 'warning'}
-                          size="small"
+                          
                         />
                       </Stack>
                     </Stack>
@@ -984,14 +984,14 @@ const AllergenLabel: React.FC = () => {
                         </Typography>
                       )}
                       {nc.requires_immediate_action && (
-                        <Alert severity="error" size="small" sx={{ mt: 1 }}>
+                        <Alert severity="error"  sx={{ mt: 1 }}>
                           <Typography variant="caption">
                             IMMEDIATE ACTION REQUIRED
                           </Typography>
                         </Alert>
                       )}
                       {nc.escalation_status === 'pending' && (
-                        <Alert severity="warning" size="small" sx={{ mt: 1 }}>
+                        <Alert severity="warning"  sx={{ mt: 1 }}>
                           <Typography variant="caption">
                             Escalation Pending - Management Review Required
                           </Typography>
@@ -1000,10 +1000,10 @@ const AllergenLabel: React.FC = () => {
                     </Stack>
                   </CardContent>
                   <CardActions>
-                    <Button size="small" startIcon={<ViewIcon />}>
+                    <Button  startIcon={<ViewIcon />}>
                       View Details
                     </Button>
-                    <Button size="small" startIcon={<EditIcon />}>
+                    <Button  startIcon={<EditIcon />}>
                       Manage CAPA
                     </Button>
                   </CardActions>
@@ -1483,7 +1483,7 @@ const AllergenLabel: React.FC = () => {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Typography variant="body2">Approver #{a.approver_id}</Typography>
                   <Chip
-                    size="small"
+                    
                     label={a.status}
                     color={a.status === 'approved' ? 'success' : a.status === 'rejected' ? 'error' : 'default'}
                   />
@@ -1491,7 +1491,7 @@ const AllergenLabel: React.FC = () => {
                 {approvalsCtx && currentUser && a.approver_id === currentUser.id && a.status === 'pending' && (
                   <Stack direction="row" spacing={1}>
                     <Button
-                      size="small"
+                      
                       variant="contained"
                       onClick={async () => {
                       if (!approvalsCtx) return;
@@ -1505,7 +1505,7 @@ const AllergenLabel: React.FC = () => {
                       Approve
                     </Button>
                     <Button
-                      size="small"
+                      
                       color="error"
                       variant="outlined"
                       onClick={async () => {
