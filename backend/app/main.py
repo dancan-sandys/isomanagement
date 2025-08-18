@@ -26,10 +26,10 @@ app = FastAPI(
 # Setup custom exception handlers
 setup_exception_handlers(app)
 
-# Add CORS middleware (explicit origins when credentials are allowed)
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS if settings.ALLOWED_CREDENTIALS else ["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=settings.ALLOWED_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
