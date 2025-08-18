@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, JSON, Decimal, Date, Enum
+from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, JSON, Date, Enum, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -84,7 +84,7 @@ class KPIDefinition(Base):
     # Display configuration
     unit = Column(String(50), nullable=True)  # %, count, score, etc.
     decimal_places = Column(Integer, default=2)
-    target_value = Column(Decimal(10, 2), nullable=True)
+    target_value = Column(Numeric(10, 2), nullable=True)
     target_operator = Column(String(10), default=">=")  # >=, <=, =, !=
     
     # Status and metadata
@@ -107,7 +107,7 @@ class KPIValue(Base):
     kpi_definition_id = Column(Integer, ForeignKey("kpi_definitions.id", ondelete="CASCADE"), nullable=False)
     
     # Value and period
-    value = Column(Decimal(15, 4), nullable=False)
+    value = Column(Numeric(15, 4), nullable=False)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
     
@@ -119,11 +119,11 @@ class KPIValue(Base):
     # Metadata
     calculated_at = Column(DateTime(timezone=True), server_default=func.now())
     calculation_duration = Column(Integer, nullable=True)  # milliseconds
-    metadata = Column(JSON, nullable=True)  # Additional context
+    kpi_metadata = Column(JSON, nullable=True)  # Additional context
     
     # Data quality indicators
-    confidence_score = Column(Decimal(3, 2), default=1.00)  # 0.00 to 1.00
-    data_completeness = Column(Decimal(3, 2), default=1.00)  # 0.00 to 1.00
+    confidence_score = Column(Numeric(3, 2), default=1.00)  # 0.00 to 1.00
+    data_completeness = Column(Numeric(3, 2), default=1.00)  # 0.00 to 1.00
     
     # Relationships
     kpi_definition = relationship("KPIDefinition", back_populates="kpi_values")
@@ -180,8 +180,8 @@ class DashboardAlert(Base):
     
     # Threshold settings
     threshold_type = Column(Enum(ThresholdType), nullable=False)
-    threshold_value = Column(Decimal(15, 4), nullable=False)
-    threshold_value_max = Column(Decimal(15, 4), nullable=True)  # For BETWEEN type
+    threshold_value = Column(Numeric(15, 4), nullable=False)
+    threshold_value_max = Column(Numeric(15, 4), nullable=True)  # For BETWEEN type
     
     # Alert settings
     alert_level = Column(Enum(AlertLevel), nullable=False)
