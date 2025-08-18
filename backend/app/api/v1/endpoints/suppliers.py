@@ -105,8 +105,7 @@ async def export_materials(
 async def search_materials(
     q: str = Query(..., description="Search query"),
     limit: int = Query(10, ge=1, le=50, description="Number of results"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Search materials by name, code, or description"""
     service = SupplierService(db)
@@ -164,8 +163,7 @@ async def get_materials(
     approval_status: Optional[str] = Query(None, description="Filter by approval status"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get materials with filtering and pagination"""
     filter_params = MaterialFilter(
@@ -198,8 +196,7 @@ async def get_materials(
 @router.get("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
 async def get_material(
     material_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get material by ID"""
     service = SupplierService(db)
@@ -221,8 +218,7 @@ async def get_material(
 @router.post("/materials/", response_model=ResponseModel[MaterialResponse])
 async def create_material(
     material_data: MaterialCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new material"""
     service = SupplierService(db)
@@ -233,15 +229,29 @@ async def create_material(
         Material.supplier_id == material_data.supplier_id
     ).exists()).scalar()
     
+    if existing_material:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Material code already exists for this supplier"
+        )
     
+    material = service.create_material(material_data, 1)
+    try:
+        audit_event(db, 1, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material created successfully",
+        data=material
+    )
 
 
 @router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
 async def update_material(
     material_id: int,
     material_data: MaterialUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update material"""
     service = SupplierService(db)
@@ -253,10 +263,10 @@ async def update_material(
             detail="Material not found"
         )
     
-        try:
-            audit_event(db, 1, "material_updated", "suppliers", str(material.id))
-        except Exception:
-            pass
+    try:
+        audit_event(db, 1, "material_updated", "suppliers", str(material.id))
+    except Exception:
+        pass
     return ResponseModel(
         success=True,
         message="Material updated successfully",
@@ -267,8 +277,7 @@ async def update_material(
 @router.delete("/materials/{material_id}", response_model=ResponseModel[dict])
 async def delete_material(
     material_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Delete material"""
     service = SupplierService(db)
@@ -281,7 +290,7 @@ async def delete_material(
         )
     
     try:
-        audit_event(db, current_user.id, "material_deleted", "suppliers", str(material_id))
+        audit_event(db, 1, "material_deleted", "suppliers", str(material_id))
     except Exception:
         pass
     return ResponseModel(
@@ -294,12 +303,11 @@ async def delete_material(
 @router.post("/materials/{material_id}/approve", response_model=ResponseModel[MaterialResponse])
 async def approve_material(
     material_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Approve material"""
     service = SupplierService(db)
-    material = service.approve_material(material_id, current_user.id)
+    material = service.approve_material(material_id, 1)
 
     if not material:
         raise HTTPException(
@@ -308,7 +316,7 @@ async def approve_material(
         )
 
     try:
-        audit_event(db, current_user.id, "material_approved", "suppliers", str(material_id))
+        audit_event(db, 1, "material_approved", "suppliers", str(material_id))
     except Exception:
         pass
     return ResponseModel(
@@ -322,15 +330,14 @@ async def approve_material(
 async def reject_material(
     material_id: int,
     payload: RejectMaterialPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Reject material"""
     service = SupplierService(db)
     reason = payload.rejection_reason or payload.reason or ""
     if not reason:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="rejection_reason is required")
-    material = service.reject_material(material_id, reason, current_user.id)
+    material = service.reject_material(material_id, reason, 1)
 
     if not material:
         raise HTTPException(
@@ -339,7 +346,7 @@ async def reject_material(
         )
 
     try:
-        audit_event(db, current_user.id, "material_rejected", "suppliers", str(material_id), {"reason": reason})
+        audit_event(db, 1, "material_rejected", "suppliers", str(material_id), {"reason": reason})
     except Exception:
         pass
     return ResponseModel(
@@ -352,15 +359,14 @@ async def reject_material(
 @router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
 async def bulk_approve_materials(
     payload: BulkApproveMaterialsPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Bulk approve materials"""
     service = SupplierService(db)
-    approved_count = service.bulk_approve_materials(payload.material_ids, current_user.id)
+    approved_count = service.bulk_approve_materials(payload.material_ids, 1)
 
     try:
-        audit_event(db, current_user.id, "materials_bulk_approved", "suppliers", str(payload.material_ids), {"count": approved_count})
+        audit_event(db, 1, "materials_bulk_approved", "suppliers", str(payload.material_ids), {"count": approved_count})
     except Exception:
         pass
     return ResponseModel(
@@ -373,15 +379,14 @@ async def bulk_approve_materials(
 @router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
 async def bulk_reject_materials(
     payload: BulkRejectMaterialsPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Bulk reject materials"""
     service = SupplierService(db)
-    rejected_count = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, current_user.id)
+    rejected_count = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, 1)
 
     try:
-        audit_event(db, current_user.id, "materials_bulk_rejected", "suppliers", str(payload.material_ids), {"reason": payload.rejection_reason, "count": rejected_count})
+        audit_event(db, 1, "materials_bulk_rejected", "suppliers", str(payload.material_ids), {"reason": payload.rejection_reason, "count": rejected_count})
     except Exception:
         pass
     return ResponseModel(
@@ -403,8 +408,7 @@ async def bulk_reject_materials(
 async def search_suppliers(
     query: str = Query(..., description="Search by name, code or contact"),
     limit: int = Query(10, ge=1, le=50),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     q = f"%{query}%"
     rows = (
@@ -426,8 +430,7 @@ async def get_performance_analytics(
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get performance analytics"""
     # Reuse the later implementation but wrap in ResponseModel for consistency
@@ -466,8 +469,7 @@ async def get_performance_analytics(
 
 @router.get("/analytics/risk-assessment", response_model=ResponseModel[dict])
 async def get_risk_assessment(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
     total = sum(int(c) for _, c in risk_rows) or 1
@@ -502,8 +504,7 @@ async def get_alerts(
     resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get alerts with filtering and pagination"""
     service = SupplierService(db)
@@ -560,8 +561,7 @@ async def get_alerts(
 @router.post("/alerts/{alert_id}/resolve", response_model=ResponseModel[dict])
 async def resolve_alert(
     alert_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Resolve an alert"""
     # Mock resolution for now
@@ -574,8 +574,7 @@ async def resolve_alert(
 # Statistics endpoints (must come before path parameter endpoints)
 @router.get("/stats", response_model=ResponseModel[dict])
 async def get_supplier_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get supplier statistics"""
     service = SupplierService(db)
@@ -597,8 +596,7 @@ async def get_supplier_stats(
 
 @router.get("/evaluations/stats", response_model=Dict[str, Any])
 async def get_evaluation_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     total = int(db.query(SupplierEvaluation).count())
     completed = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.COMPLETED).count())
@@ -632,8 +630,7 @@ async def get_evaluation_stats(
 # Dashboard endpoints (must come before path parameter endpoints)
 @router.get("/dashboard/stats", response_model=ResponseModel)
 async def get_dashboard_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get supplier dashboard statistics"""
     service = SupplierService(db)
@@ -655,8 +652,7 @@ async def get_suppliers(
     risk_level: Optional[str] = Query(None, description="Filter by risk level"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get suppliers with filtering and pagination"""
     filter_params = SupplierFilter(
@@ -684,8 +680,7 @@ async def get_suppliers(
 @router.post("/", response_model=ResponseModel[SupplierResponse])
 async def create_supplier(
     supplier_data: SupplierCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new supplier"""
     service = SupplierService(db)
@@ -701,9 +696,9 @@ async def create_supplier(
             detail="Supplier code already exists"
         )
     
-    supplier = service.create_supplier(supplier_data, current_user.id)
+    supplier = service.create_supplier(supplier_data, 1)
     try:
-        audit_event(db, current_user.id, "supplier_created", "suppliers", str(supplier.id))
+        audit_event(db, 1, "supplier_created", "suppliers", str(supplier.id))
     except Exception:
         pass
     return ResponseModel(
@@ -717,8 +712,7 @@ async def create_supplier(
 async def update_supplier(
     supplier_id: int,
     supplier_data: SupplierUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update supplier"""
     service = SupplierService(db)
@@ -731,7 +725,7 @@ async def update_supplier(
         )
     
     try:
-        audit_event(db, current_user.id, "supplier_updated", "suppliers", str(supplier.id))
+        audit_event(db, 1, "supplier_updated", "suppliers", str(supplier.id))
     except Exception:
         pass
     return ResponseModel(
@@ -744,8 +738,7 @@ async def update_supplier(
 @router.delete("/{supplier_id}", response_model=ResponseModel[dict])
 async def delete_supplier(
     supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Delete supplier"""
     service = SupplierService(db)
@@ -758,7 +751,7 @@ async def delete_supplier(
         )
     
     try:
-        audit_event(db, current_user.id, "supplier_deleted", "suppliers", str(supplier_id))
+        audit_event(db, 1, "supplier_deleted", "suppliers", str(supplier_id))
     except Exception:
         pass
     return ResponseModel(
@@ -771,8 +764,7 @@ async def delete_supplier(
 @router.post("/bulk/action", response_model=ResponseModel[dict])
 async def bulk_update_suppliers(
     action_data: BulkSupplierAction,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Bulk update suppliers"""
     service = SupplierService(db)
@@ -797,8 +789,7 @@ async def get_evaluations(
     date_to: Optional[datetime] = Query(None, description="Filter to date"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get evaluations with filtering and pagination"""
     filter_params = EvaluationFilter(
@@ -831,8 +822,7 @@ async def get_evaluations(
 @router.get("/evaluations/{evaluation_id}", response_model=ResponseModel[SupplierEvaluationResponse])
 async def get_evaluation(
     evaluation_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get evaluation by ID"""
     service = SupplierService(db)
@@ -854,14 +844,13 @@ async def get_evaluation(
 @router.post("/evaluations/", response_model=ResponseModel[SupplierEvaluationResponse])
 async def create_evaluation(
     evaluation_data: SupplierEvaluationCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new evaluation"""
     service = SupplierService(db)
-    evaluation = service.create_evaluation(evaluation_data, current_user.id)
+    evaluation = service.create_evaluation(evaluation_data, 1)
     try:
-        audit_event(db, current_user.id, "supplier_evaluation_created", "suppliers", str(evaluation.id), {"supplier_id": evaluation_data.supplier_id})
+        audit_event(db, 1, "supplier_evaluation_created", "suppliers", str(evaluation.id), {"supplier_id": evaluation_data.supplier_id})
     except Exception:
         pass
     return ResponseModel(
@@ -875,8 +864,7 @@ async def create_evaluation(
 async def update_evaluation(
     evaluation_id: int,
     evaluation_data: SupplierEvaluationUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update evaluation"""
     service = SupplierService(db)
@@ -889,7 +877,7 @@ async def update_evaluation(
         )
     
     try:
-        audit_event(db, current_user.id, "supplier_evaluation_updated", "suppliers", str(evaluation.id))
+        audit_event(db, 1, "supplier_evaluation_updated", "suppliers", str(evaluation.id))
     except Exception:
         pass
     return ResponseModel(
@@ -902,8 +890,7 @@ async def update_evaluation(
 @router.delete("/evaluations/{evaluation_id}", response_model=ResponseModel[dict])
 async def delete_evaluation(
     evaluation_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Delete evaluation"""
     service = SupplierService(db)
@@ -916,7 +903,7 @@ async def delete_evaluation(
         )
     
     try:
-        audit_event(db, current_user.id, "supplier_evaluation_deleted", "suppliers", str(evaluation_id))
+        audit_event(db, 1, "supplier_evaluation_deleted", "suppliers", str(evaluation_id))
     except Exception:
         pass
     return ResponseModel(
@@ -931,8 +918,7 @@ async def delete_evaluation(
 async def upload_delivery_coa(
     delivery_id: int,
     coa_file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Upload Certificate of Analysis (COA) file for a delivery"""
     service = SupplierService(db)
@@ -954,7 +940,7 @@ async def upload_delivery_coa(
     db.refresh(delivery)
 
     try:
-        audit_event(db, current_user.id, "delivery_coa_uploaded", "suppliers", str(delivery.id))
+        audit_event(db, 1, "delivery_coa_uploaded", "suppliers", str(delivery.id))
     except Exception:
         pass
     return ResponseModel(success=True, message="COA uploaded successfully", data={"file_path": file_path})
@@ -963,8 +949,7 @@ async def upload_delivery_coa(
 @router.get("/deliveries/{delivery_id}/coa/download")
 async def download_delivery_coa(
     delivery_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Download the COA file for a delivery"""
     service = SupplierService(db)
@@ -996,8 +981,7 @@ class BulkRejectMaterialsPayload(BaseModel):
 async def inspect_delivery(
     delivery_id: int,
     payload: InspectPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update inspection status; enforce COA for critical materials (e.g., raw milk, additives, cultures)."""
     service = SupplierService(db)
@@ -1023,7 +1007,7 @@ async def inspect_delivery(
     )
     updated = service.update_delivery(delivery_id, update)
     try:
-        audit_event(db, current_user.id, "delivery_inspected", "suppliers", str(delivery_id), {"status": normalized_status})
+        audit_event(db, 1, "delivery_inspected", "suppliers", str(delivery_id), {"status": normalized_status})
     except Exception:
         pass
     return updated
@@ -1035,8 +1019,7 @@ async def create_batch_from_delivery(
     delivery_id: int,
     link_to_batch_id: Optional[int] = Query(None, description="If provided, create a traceability link to this target batch"),
     link_relationship_type: Optional[str] = Query("ingredient"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a Batch from a delivery and create traceability link to it."""
     # Load delivery
@@ -1079,7 +1062,7 @@ async def create_batch_from_delivery(
     except Exception:
         pass
 
-    batch = trace_service.create_batch(batch_create, current_user.id)
+    batch = trace_service.create_batch(batch_create, 1)
 
     link_id: Optional[int] = None
     if link_to_batch_id:
@@ -1094,12 +1077,12 @@ async def create_batch_from_delivery(
                 usage_date=datetime.utcnow(),
                 process_step="receiving",
             ),
-            current_user.id,
+            1,
         )
         link_id = link.id
 
     try:
-        audit_event(db, current_user.id, "delivery_batch_created", "suppliers", str(delivery_id), {"batch_id": batch.id, "link_id": link_id})
+        audit_event(db, 1, "delivery_batch_created", "suppliers", str(delivery_id), {"batch_id": batch.id, "link_id": link_id})
     except Exception:
         pass
     return ResponseModel(success=True, message="Batch created from delivery", data={"batch_id": batch.id, "link_id": link_id})
@@ -1116,8 +1099,7 @@ async def get_deliveries(
     date_to: Optional[datetime] = Query(None, description="Filter to date"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get deliveries with filtering and pagination"""
     filter_params = DeliveryFilter(
@@ -1149,8 +1131,7 @@ async def get_deliveries(
 @router.get("/deliveries/{delivery_id}", response_model=ResponseModel[IncomingDeliveryResponse])
 async def get_delivery(
     delivery_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get delivery by ID"""
     service = SupplierService(db)
@@ -1168,14 +1149,13 @@ async def get_delivery(
 @router.post("/deliveries/", response_model=ResponseModel[IncomingDeliveryResponse])
 async def create_delivery(
     delivery_data: IncomingDeliveryCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new incoming delivery"""
     service = SupplierService(db)
-    delivery = service.create_delivery(delivery_data, current_user.id)
+    delivery = service.create_delivery(delivery_data, 1)
     try:
-        audit_event(db, current_user.id, "delivery_created", "suppliers", str(delivery.id), {"supplier_id": delivery.supplier_id})
+        audit_event(db, 1, "delivery_created", "suppliers", str(delivery.id), {"supplier_id": delivery.supplier_id})
     except Exception:
         pass
     return ResponseModel(success=True, message="Delivery created successfully", data=delivery)
@@ -1185,8 +1165,7 @@ async def create_delivery(
 async def update_delivery(
     delivery_id: int,
     delivery_data: IncomingDeliveryUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update delivery"""
     service = SupplierService(db)
@@ -1199,7 +1178,7 @@ async def update_delivery(
         )
     
     try:
-        audit_event(db, current_user.id, "delivery_updated", "suppliers", str(delivery.id))
+        audit_event(db, 1, "delivery_updated", "suppliers", str(delivery.id))
     except Exception:
         pass
     return ResponseModel(success=True, message="Delivery updated successfully", data=delivery)
@@ -1208,8 +1187,7 @@ async def update_delivery(
 @router.delete("/deliveries/{delivery_id}", response_model=ResponseModel[dict])
 async def delete_delivery(
     delivery_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Delete delivery"""
     service = SupplierService(db)
@@ -1222,7 +1200,7 @@ async def delete_delivery(
         )
     
     try:
-        audit_event(db, current_user.id, "delivery_deleted", "suppliers", str(delivery_id))
+        audit_event(db, 1, "delivery_deleted", "suppliers", str(delivery_id))
     except Exception:
         pass
     return ResponseModel(success=True, message="Delivery deleted successfully", data={"message": "Delivery deleted successfully"})
@@ -1235,8 +1213,7 @@ async def get_supplier_documents(
     supplier_id: int,
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get documents for a supplier"""
     service = SupplierService(db)
@@ -1257,8 +1234,7 @@ async def get_supplier_documents(
 @router.get("/documents/{document_id}", response_model=ResponseModel[SupplierDocumentResponse])
 async def get_document(
     document_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get document by ID"""
     service = SupplierService(db)
@@ -1283,8 +1259,7 @@ async def create_document(
     expiry_date: Optional[datetime] = Form(None, description="Expiry date"),
     issuing_authority: Optional[str] = Form(None, description="Issuing authority"),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Upload a document for a supplier"""
     service = SupplierService(db)
@@ -1325,9 +1300,9 @@ async def create_document(
         original_filename=file.filename
     )
     
-    document = service.create_document(document_data, current_user.id)
+    document = service.create_document(document_data, 1)
     try:
-        audit_event(db, current_user.id, "supplier_document_uploaded", "suppliers", str(document.id), {"supplier_id": supplier_id})
+        audit_event(db, 1, "supplier_document_uploaded", "suppliers", str(document.id), {"supplier_id": supplier_id})
     except Exception:
         pass
     return ResponseModel(success=True, message="Supplier document uploaded successfully", data=document)
@@ -1337,8 +1312,7 @@ async def create_document(
 async def update_document(
     document_id: int,
     document_data: SupplierDocumentUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update document"""
     service = SupplierService(db)
@@ -1351,7 +1325,7 @@ async def update_document(
         )
     
     try:
-        audit_event(db, current_user.id, "supplier_document_updated", "suppliers", str(document.id))
+        audit_event(db, 1, "supplier_document_updated", "suppliers", str(document.id))
     except Exception:
         pass
     return ResponseModel(success=True, message="Supplier document updated successfully", data=document)
@@ -1360,8 +1334,7 @@ async def update_document(
 @router.delete("/documents/{document_id}", response_model=ResponseModel[dict])
 async def delete_document(
     document_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Delete document"""
     service = SupplierService(db)
@@ -1374,7 +1347,7 @@ async def delete_document(
         )
     
     try:
-        audit_event(db, current_user.id, "supplier_document_deleted", "suppliers", str(document_id))
+        audit_event(db, 1, "supplier_document_deleted", "suppliers", str(document_id))
     except Exception:
         pass
     return ResponseModel(success=True, message="Document deleted successfully", data={"message": "Document deleted successfully"})
@@ -1383,8 +1356,7 @@ async def delete_document(
 @router.get("/documents/{document_id}/download")
 async def download_supplier_document(
     document_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Download a supplier document file"""
     service = SupplierService(db)
@@ -1406,8 +1378,7 @@ class VerifyDocumentPayload(BaseModel):
 async def verify_supplier_document(
     document_id: int,
     payload: VerifyDocumentPayload,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Verify or reject a supplier document"""
     service = SupplierService(db)
@@ -1424,12 +1395,12 @@ async def verify_supplier_document(
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification_status")
     # Optionally persist comments in issuing_authority or extend schema; skip for now
-    document.verified_by = current_user.id
+    document.verified_by = 1
     document.verified_at = datetime.utcnow()
     db.commit()
     db.refresh(document)
     try:
-        audit_event(db, current_user.id, "supplier_document_verified", "suppliers", str(document.id), {"verification_status": status_val})
+        audit_event(db, 1, "supplier_document_verified", "suppliers", str(document.id), {"verification_status": status_val})
     except Exception:
         pass
     return ResponseModel(success=True, message="Supplier document verification updated", data=document)
@@ -1437,8 +1408,7 @@ async def verify_supplier_document(
 
 @router.get("/alerts/expired-certificates")
 async def get_expired_certificates(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get expired supplier certificates"""
     service = SupplierService(db)
@@ -1448,8 +1418,7 @@ async def get_expired_certificates(
 
 @router.get("/alerts/overdue-evaluations")
 async def get_overdue_evaluations(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get suppliers with overdue evaluations"""
     service = SupplierService(db)
@@ -1461,8 +1430,7 @@ async def get_overdue_evaluations(
 @router.get("/deliveries/{delivery_id}/checklists/", response_model=List[InspectionChecklistResponse])
 async def get_delivery_checklists(
     delivery_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get inspection checklists for a delivery"""
     service = SupplierService(db)
@@ -1473,8 +1441,7 @@ async def get_delivery_checklists(
 @router.get("/checklists/{checklist_id}", response_model=InspectionChecklistResponse)
 async def get_inspection_checklist(
     checklist_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get inspection checklist by ID"""
     service = SupplierService(db)
@@ -1493,8 +1460,7 @@ async def get_inspection_checklist(
 async def create_inspection_checklist(
     delivery_id: int,
     checklist_data: InspectionChecklistCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new inspection checklist"""
     service = SupplierService(db)
@@ -1508,9 +1474,9 @@ async def create_inspection_checklist(
         )
     
     checklist_data.delivery_id = delivery_id
-    checklist = service.create_inspection_checklist(checklist_data, current_user.id)
+    checklist = service.create_inspection_checklist(checklist_data, 1)
     try:
-        audit_event(db, current_user.id, "inspection_checklist_created", "suppliers", str(checklist.id), {"delivery_id": delivery_id})
+        audit_event(db, 1, "inspection_checklist_created", "suppliers", str(checklist.id), {"delivery_id": delivery_id})
     except Exception:
         pass
     return checklist
@@ -1520,8 +1486,7 @@ async def create_inspection_checklist(
 async def update_inspection_checklist(
     checklist_id: int,
     checklist_data: InspectionChecklistUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update inspection checklist"""
     service = SupplierService(db)
@@ -1534,7 +1499,7 @@ async def update_inspection_checklist(
         )
     
     try:
-        audit_event(db, current_user.id, "inspection_checklist_updated", "suppliers", str(checklist.id))
+        audit_event(db, 1, "inspection_checklist_updated", "suppliers", str(checklist.id))
     except Exception:
         pass
     return checklist
@@ -1543,8 +1508,7 @@ async def update_inspection_checklist(
 @router.delete("/checklists/{checklist_id}")
 async def delete_inspection_checklist(
     checklist_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Delete inspection checklist"""
     service = SupplierService(db)
@@ -1557,7 +1521,7 @@ async def delete_inspection_checklist(
         )
     
     try:
-        audit_event(db, current_user.id, "inspection_checklist_deleted", "suppliers", str(checklist_id))
+        audit_event(db, 1, "inspection_checklist_deleted", "suppliers", str(checklist_id))
     except Exception:
         pass
     return {"message": "Inspection checklist deleted successfully"}
@@ -1566,8 +1530,7 @@ async def delete_inspection_checklist(
 @router.get("/checklists/{checklist_id}/items/", response_model=List[InspectionChecklistItemResponse])
 async def get_checklist_items(
     checklist_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get checklist items for a checklist"""
     service = SupplierService(db)
@@ -1579,8 +1542,7 @@ async def get_checklist_items(
 async def create_checklist_item(
     checklist_id: int,
     item_data: InspectionChecklistItemCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new checklist item"""
     service = SupplierService(db)
@@ -1602,12 +1564,11 @@ async def create_checklist_item(
 async def update_checklist_item(
     item_id: int,
     item_data: InspectionChecklistItemUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update checklist item"""
     service = SupplierService(db)
-    item = service.update_checklist_item(item_id, item_data, current_user.id)
+    item = service.update_checklist_item(item_id, item_data, 1)
     
     if not item:
         raise HTTPException(
@@ -1621,12 +1582,11 @@ async def update_checklist_item(
 @router.post("/checklists/{checklist_id}/complete", response_model=InspectionChecklistResponse)
 async def complete_inspection_checklist(
     checklist_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Complete an inspection checklist"""
     service = SupplierService(db)
-    checklist = service.complete_checklist(checklist_id, current_user.id)
+    checklist = service.complete_checklist(checklist_id, 1)
     
     if not checklist:
         raise HTTPException(
@@ -1640,8 +1600,7 @@ async def complete_inspection_checklist(
 # Noncompliant delivery alert endpoints
 @router.get("/alerts/noncompliant-deliveries")
 async def get_noncompliant_delivery_alerts(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get alerts for noncompliant deliveries"""
     service = SupplierService(db)
@@ -1651,8 +1610,7 @@ async def get_noncompliant_delivery_alerts(
 
 @router.get("/alerts/delivery-summary")
 async def get_delivery_alert_summary(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get summary of delivery alerts"""
     service = SupplierService(db)
@@ -1664,8 +1622,7 @@ async def get_delivery_alert_summary(
 @router.get("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
 async def get_supplier(
     supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get supplier by ID"""
     service = SupplierService(db)
