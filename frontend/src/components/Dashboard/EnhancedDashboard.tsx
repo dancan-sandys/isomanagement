@@ -270,14 +270,14 @@ const EnhancedDashboard: React.FC = () => {
       case 'compliance_by_department':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData.data}>
+            <RechartsBarChart data={chartData.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="department" />
               <YAxis />
               <RechartTooltip />
               <Legend />
               <Bar dataKey="compliance" fill="#8884d8" />
-            </BarChart>
+            </RechartsBarChart>
           </ResponsiveContainer>
         );
 
@@ -312,7 +312,7 @@ const EnhancedDashboard: React.FC = () => {
       case 'audit_findings':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
+            <RechartsPieChart>
               <Pie
                 data={chartData.data}
                 cx="50%"
@@ -328,14 +328,14 @@ const EnhancedDashboard: React.FC = () => {
                 ))}
               </Pie>
               <RechartTooltip />
-            </PieChart>
+            </RechartsPieChart>
           </ResponsiveContainer>
         );
 
       case 'document_status':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
+            <RechartsPieChart>
               <Pie
                 data={chartData.data}
                 cx="50%"
@@ -351,7 +351,7 @@ const EnhancedDashboard: React.FC = () => {
                 ))}
               </Pie>
               <RechartTooltip />
-            </PieChart>
+            </RechartsPieChart>
           </ResponsiveContainer>
         );
 
