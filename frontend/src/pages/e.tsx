@@ -967,14 +967,13 @@ const Users: React.FC = () => {
         <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
           <Tab label="Dashboard" icon={<AssessmentIcon />} />
           <Tab label="User Management" icon={<GroupIcon />} />
-          <Tab label="Training & Competency" icon={<SchoolIcon />} />
         </Tabs>
       </Box>
 
       {/* Tab Content */}
       {activeTab === 0 && renderDashboard()}
       {activeTab === 1 && renderUsersList()}
-      {activeTab === 2 && renderTrainingManagement()}
+      {false && activeTab === 2 && renderTrainingManagement()}
 
       {/* Create/Edit User Dialog */}
       <Dialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} maxWidth="md" fullWidth>
