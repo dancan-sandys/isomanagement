@@ -311,6 +311,105 @@ async def delete_equipment(
     return ResponseModel(success=True, message="Equipment deleted")
 
 
+# Backward compatibility endpoints for frontend
+@router.get("/maintenance-plans", response_model=list[MaintenancePlanResponse])
+async def list_all_maintenance_plans(
+    db: Session = Depends(get_db)
+):
+    """Backward compatibility endpoint - returns all maintenance plans"""
+    svc = EquipmentService(db)
+    all_plans = []
+    # Get all equipment and their maintenance plans
+    equipment_list = svc.list_equipment()
+    for equipment in equipment_list:
+        plans = svc.list_maintenance_plans(equipment_id=equipment.id)
+        for plan in plans:
+            equipment_name = plan.equipment.name if getattr(plan, "equipment", None) else None
+            status = None
+            if plan.next_due_at:
+                if plan.next_due_at < datetime.utcnow():
+                    status = "overdue"
+                elif plan.next_due_at <= datetime.utcnow():
+                    status = "due"
+                else:
+                    status = "on_schedule"
+            all_plans.append(MaintenancePlanResponse(
+                id=plan.id,
+                equipment_id=plan.equipment_id,
+                frequency_days=plan.frequency_days,
+                maintenance_type=plan.maintenance_type.value if plan.maintenance_type else None,
+                last_performed_at=plan.last_performed_at,
+                next_due_at=plan.next_due_at,
+                active=plan.active,
+                notes=plan.notes,
+                equipment_name=equipment_name,
+                last_maintenance_date=plan.last_performed_at,
+                next_due_date=plan.next_due_at,
+                status=status,
+            ))
+    return all_plans
+
+@router.get("/work-orders", response_model=list[MaintenanceWorkOrderResponse])
+async def list_all_work_orders(
+    db: Session = Depends(get_db)
+):
+    """Backward compatibility endpoint - returns all work orders"""
+    svc = EquipmentService(db)
+    all_work_orders = []
+    # Get all equipment and their work orders
+    equipment_list = svc.list_equipment()
+    for equipment in equipment_list:
+        work_orders = svc.list_work_orders(equipment_id=equipment.id)
+        for work_order in work_orders:
+            equipment_name = work_order.equipment.name if getattr(work_order, "equipment", None) else None
+            all_work_orders.append(MaintenanceWorkOrderResponse(
+                id=work_order.id,
+                equipment_id=work_order.equipment_id,
+                work_order_number=work_order.work_order_number,
+                description=work_order.description,
+                priority=work_order.priority.value if work_order.priority else None,
+                status=work_order.status.value if work_order.status else None,
+                assigned_to=work_order.assigned_to,
+                scheduled_date=work_order.scheduled_date,
+                completed_date=work_order.completed_date,
+                equipment_name=equipment_name,
+                maintenance_type=work_order.maintenance_type.value if work_order.maintenance_type else None,
+                estimated_hours=work_order.estimated_hours,
+                actual_hours=work_order.actual_hours,
+                parts_used=work_order.parts_used,
+                notes=work_order.notes,
+            ))
+    return all_work_orders
+
+@router.get("/calibration-plans", response_model=list[CalibrationPlanResponse])
+async def list_all_calibration_plans(
+    db: Session = Depends(get_db)
+):
+    """Backward compatibility endpoint - returns all calibration plans"""
+    svc = EquipmentService(db)
+    all_calibration_plans = []
+    # Get all equipment and their calibration plans
+    equipment_list = svc.list_equipment()
+    for equipment in equipment_list:
+        calibration_plans = svc.list_calibration_plans(equipment_id=equipment.id)
+        for plan in calibration_plans:
+            equipment_name = plan.equipment.name if getattr(plan, "equipment", None) else None
+            all_calibration_plans.append(CalibrationPlanResponse(
+                id=plan.id,
+                equipment_id=plan.equipment_id,
+                calibration_type=plan.calibration_type.value if plan.calibration_type else None,
+                frequency_days=plan.frequency_days,
+                last_calibrated_at=plan.last_calibrated_at,
+                next_due_at=plan.next_due_at,
+                active=plan.active,
+                notes=plan.notes,
+                equipment_name=equipment_name,
+                calibration_standard=plan.calibration_standard,
+                tolerance=plan.tolerance,
+                calibration_procedure=plan.calibration_procedure,
+            ))
+    return all_calibration_plans
+
 # Maintenance
 @router.post("/{equipment_id}/maintenance-plans", response_model=MaintenancePlanResponse)
 async def create_maintenance_plan(
