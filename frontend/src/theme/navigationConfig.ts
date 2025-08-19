@@ -44,8 +44,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 1,
     items: [
       { text: 'Overview', path: '/dashboard' },
-      { text: 'Analytics', path: '/dashboard/analytics' },
-      { text: 'Reports', path: '/dashboard/reports' },
     ],
   },
   
@@ -228,15 +226,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     ],
   },
 
-  advanced: {
-    title: 'Advanced Features',
-    icon: Settings,
-    order: 16,
-    items: [
-      { text: 'Advanced Reporting', path: '/advanced-reporting' },
-      { text: 'Advanced Security', path: '/advanced-security' },
-    ],
-  },
 };
 
 // Helper function to get navigation sections for a user
