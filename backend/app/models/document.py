@@ -117,7 +117,7 @@ class DocumentVersion(Base):
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     version_number = Column(String(20), nullable=False)
-    file_path = Column(String(500), nullable=True)
+    file_path = Column(String(500), nullable=False)
     file_size = Column(Integer)
     file_type = Column(String(50))
     original_filename = Column(String(255))

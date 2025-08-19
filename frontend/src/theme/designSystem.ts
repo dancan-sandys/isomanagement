@@ -54,63 +54,63 @@ export const PROFESSIONAL_COLORS = {
   },
 } as const;
 
-// Enhanced Typography Scale
+// COMPACT Typography Scale - Reduced sizes for better space utilization
 export const TYPOGRAPHY = {
   fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
   h1: {
-    fontSize: '2.5rem',
+    fontSize: '1.875rem', // Reduced from 2.5rem
     fontWeight: 800,
     lineHeight: 1.2,
     letterSpacing: '-0.025em',
   },
   h2: {
-    fontSize: '2rem',
+    fontSize: '1.5rem', // Reduced from 2rem
     fontWeight: 700,
     lineHeight: 1.3,
     letterSpacing: '-0.02em',
   },
   h3: {
-    fontSize: '1.5rem',
+    fontSize: '1.25rem', // Reduced from 1.5rem
     fontWeight: 700,
     lineHeight: 1.4,
     letterSpacing: '-0.015em',
   },
   h4: {
-    fontSize: '1.25rem',
+    fontSize: '1.125rem', // Reduced from 1.25rem
     fontWeight: 600,
     lineHeight: 1.4,
     letterSpacing: '-0.01em',
   },
   h5: {
-    fontSize: '1.125rem',
+    fontSize: '1rem', // Reduced from 1.125rem
     fontWeight: 600,
     lineHeight: 1.4,
     letterSpacing: '-0.005em',
   },
   h6: {
-    fontSize: '1rem',
+    fontSize: '0.875rem', // Reduced from 1rem
     fontWeight: 600,
     lineHeight: 1.4,
   },
   body1: {
-    fontSize: '1rem',
+    fontSize: '0.875rem', // Reduced from 1rem
     fontWeight: 400,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
   },
   body2: {
-    fontSize: '0.875rem',
+    fontSize: '0.8125rem', // Reduced from 0.875rem
     fontWeight: 400,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
   },
   caption: {
-    fontSize: '0.75rem',
+    fontSize: '0.6875rem', // Reduced from 0.75rem
     fontWeight: 600,
     lineHeight: 1.4,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
   button: {
-    fontSize: '0.875rem',
+    fontSize: '0.8125rem', // Reduced from 0.875rem
     fontWeight: 600,
     lineHeight: 1.4,
     textTransform: 'none',
@@ -118,38 +118,37 @@ export const TYPOGRAPHY = {
   },
 } as const;
 
-// Enhanced Component Styles with better animations and effects
+// COMPACT Component Styles - Reduced sizes and spacing
 export const COMPONENT_STYLES = {
   card: {
-    // Reduce default radius to avoid overly rounded/oval cards
-    borderRadius: 12,
+    borderRadius: 8, // Reduced from 12
     boxShadow: PROFESSIONAL_COLORS.shadow.light,
     border: '1px solid #E2E8F0',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       boxShadow: PROFESSIONAL_COLORS.shadow.medium,
-      transform: 'translateY(-2px)',
+      transform: 'translateY(-1px)', // Reduced from -2px
     },
     '&:active': {
       transform: 'translateY(0px)',
     },
   },
   elevatedCard: {
-    borderRadius: 14,
+    borderRadius: 10, // Reduced from 14
     boxShadow: PROFESSIONAL_COLORS.shadow.heavy,
     border: '1px solid #E2E8F0',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       boxShadow: PROFESSIONAL_COLORS.shadow.glow,
-      transform: 'translateY(-4px)',
+      transform: 'translateY(-2px)', // Reduced from -4px
     },
   },
   button: {
-    borderRadius: 12,
+    borderRadius: 8, // Reduced from 12
     textTransform: 'none',
     fontWeight: 600,
-    padding: '12px 24px',
-    minHeight: 48,
+    padding: '8px 16px', // Reduced from 12px 24px
+    minHeight: 36, // Reduced from 48
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       transform: 'translateY(-1px)',
@@ -168,7 +167,7 @@ export const COMPONENT_STYLES = {
     },
   },
   input: {
-    borderRadius: 12,
+    borderRadius: 8, // Reduced from 12
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     '& .MuiOutlinedInput-root': {
       '& fieldset': {
@@ -187,13 +186,13 @@ export const COMPONENT_STYLES = {
   table: {
     '& .MuiTableCell-root': {
       borderBottom: '1px solid #E2E8F0',
-      padding: '16px 20px',
+      padding: '12px 16px', // Reduced from 16px 20px
       transition: 'background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     },
     '& .MuiTableHead-root .MuiTableCell-root': {
       backgroundColor: '#F8FAFC',
       fontWeight: 700,
-      fontSize: '0.875rem',
+      fontSize: '0.8125rem', // Reduced from 0.875rem
       textTransform: 'uppercase',
       letterSpacing: '0.05em',
     },
@@ -202,66 +201,66 @@ export const COMPONENT_STYLES = {
     },
   },
   statusChip: {
-    borderRadius: 20,
+    borderRadius: 16, // Reduced from 20
     fontWeight: 700,
-    fontSize: '0.75rem',
+    fontSize: '0.6875rem', // Reduced from 0.75rem
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
-    padding: '6px 16px',
+    padding: '4px 12px', // Reduced from 6px 16px
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       transform: 'scale(1.05)',
     },
   },
   navigationItem: {
-    borderRadius: 12,
-    margin: '4px 8px',
+    borderRadius: 8, // Reduced from 12
+    margin: '2px 6px', // Reduced from 4px 8px
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       backgroundColor: 'rgba(30, 64, 175, 0.08)',
-      transform: 'translateX(4px)',
+      transform: 'translateX(2px)', // Reduced from 4px
     },
     '&.Mui-selected': {
       backgroundColor: '#1E40AF',
       color: '#FFFFFF',
-      boxShadow: '0 4px 12px rgba(30, 64, 175, 0.3)',
+      boxShadow: '0 2px 8px rgba(30, 64, 175, 0.3)', // Reduced from 0 4px 12px
       '&:hover': {
         backgroundColor: '#1E3A8A',
-        transform: 'translateX(4px)',
+        transform: 'translateX(2px)', // Reduced from 4px
       },
     },
   },
   metricCard: {
-    borderRadius: 20,
-    padding: '24px',
+    borderRadius: 12, // Reduced from 20
+    padding: '16px', // Reduced from 24px
     background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
     border: '1px solid #E2E8F0',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      transform: 'translateY(-2px)', // Reduced from -4px
+      boxShadow: '0 12px 20px -5px rgba(0, 0, 0, 0.1), 0 6px 8px -5px rgba(0, 0, 0, 0.04)', // Reduced shadow
     },
   },
   progressBar: {
-    height: 8,
-    borderRadius: 4,
+    height: 6, // Reduced from 8
+    borderRadius: 3, // Reduced from 4
     backgroundColor: '#E2E8F0',
     '& .MuiLinearProgress-bar': {
-      borderRadius: 4,
+      borderRadius: 3, // Reduced from 4
       transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     },
   },
 } as const;
 
-// Enhanced spacing system
+// COMPACT spacing system - Reduced spacing for tighter layout
 export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
-  xxxl: 64,
+  xs: 2, // Reduced from 4
+  sm: 4, // Reduced from 8
+  md: 8, // Reduced from 16
+  lg: 16, // Reduced from 24
+  xl: 24, // Reduced from 32
+  xxl: 32, // Reduced from 48
+  xxxl: 48, // Reduced from 64
 } as const;
 
 // Enhanced breakpoints
@@ -318,9 +317,9 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
       button: TYPOGRAPHY.button,
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 8, // Reduced from 12
     },
-    spacing: 8,
+    spacing: 4, // Reduced from 8 for tighter spacing
     components: {
       MuiCard: {
         styleOverrides: {
@@ -374,6 +373,7 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
             background: isLight 
               ? 'rgba(255, 255, 255, 0.95)' 
               : 'rgba(30, 41, 59, 0.95)',
+            minHeight: 56, // Reduced from default 64
           },
         },
       },
@@ -382,7 +382,7 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
           paper: {
             backgroundColor: isLight ? PROFESSIONAL_COLORS.background.sidebar : '#0F172A',
             borderRight: `1px solid ${isLight ? PROFESSIONAL_COLORS.divider : '#334155'}`,
-            width: 280,
+            width: 240, // Reduced from 280
             backdropFilter: 'blur(10px)',
             boxShadow: isLight ? '0 10px 30px rgba(2, 6, 23, 0.08)' : '0 10px 30px rgba(2,6,23,0.5)',
           },
@@ -392,9 +392,86 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
         styleOverrides: {
           root: {
             ...COMPONENT_STYLES.navigationItem,
+            minHeight: 40, // Reduced from default 48
+            padding: '8px 12px', // Reduced padding
             '& .MuiListItemIcon-root': {
               color: isLight ? '#334155' : '#E2E8F0',
+              minWidth: 32, // Reduced from default 40
             },
+            '& .MuiListItemText-root': {
+              '& .MuiTypography-root': {
+                fontSize: '0.875rem', // Reduced font size
+                fontWeight: 500,
+              },
+            },
+          },
+        },
+      },
+      MuiListItemIcon: {
+        styleOverrides: {
+          root: {
+            minWidth: 32, // Reduced from default 40
+            fontSize: '1.125rem', // Reduced from default 1.25rem
+          },
+        },
+      },
+      MuiListItemText: {
+        styleOverrides: {
+          root: {
+            margin: 0,
+            '& .MuiTypography-root': {
+              fontSize: '0.875rem', // Reduced font size
+              fontWeight: 500,
+            },
+          },
+        },
+      },
+      MuiToolbar: {
+        styleOverrides: {
+          root: {
+            minHeight: 56, // Reduced from default 64
+            padding: '0 16px', // Reduced padding
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            padding: 6, // Reduced from default 8
+            '& .MuiSvgIcon-root': {
+              fontSize: '1.25rem', // Reduced from default 1.5rem
+            },
+          },
+        },
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            borderRadius: 8, // Reduced from default 12
+          },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 8, // Reduced from default 12
+          },
+        },
+      },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 8, // Reduced from default 12
+            marginTop: 4, // Reduced from default 8
+          },
+        },
+      },
+      MuiMenuItem: {
+        styleOverrides: {
+          root: {
+            minHeight: 36, // Reduced from default 48
+            padding: '8px 16px', // Reduced padding
+            fontSize: '0.875rem', // Reduced font size
           },
         },
       },
@@ -405,64 +482,37 @@ export const createISOTheme = (mode: 'light' | 'dark' = 'light'): Theme => {
           },
         },
       },
-      MuiPaper: {
+      MuiCardContent: {
         styleOverrides: {
           root: {
-        backgroundImage: 'none',
-        borderRadius: 12,
-          },
-          elevation1: {
-            boxShadow: PROFESSIONAL_COLORS.shadow.light,
-          },
-          elevation2: {
-            boxShadow: PROFESSIONAL_COLORS.shadow.medium,
-          },
-          elevation3: {
-            boxShadow: PROFESSIONAL_COLORS.shadow.heavy,
+            padding: 16, // Reduced from default 24
+            '&:last-child': {
+              paddingBottom: 16, // Reduced from default 24
+            },
           },
         },
       },
-      MuiPopover: {
-        styleOverrides: {
-          paper: {
-            backdropFilter: 'blur(8px)',
-          },
-        },
-      },
-      MuiTooltip: {
-        styleOverrides: {
-          tooltip: {
-            backgroundColor: isLight ? '#1E293B' : '#F1F5F9',
-            color: isLight ? '#FFFFFF' : '#1E293B',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-            borderRadius: 8,
-            boxShadow: PROFESSIONAL_COLORS.shadow.medium,
-          },
-        },
-      },
-      MuiAlert: {
+      MuiCardActions: {
         styleOverrides: {
           root: {
-            borderRadius: 12,
-            fontWeight: 500,
+            padding: 12, // Reduced from default 16
           },
         },
       },
-      MuiDialog: {
-        styleOverrides: {
-          paper: {
-            borderRadius: 16,
-            boxShadow: PROFESSIONAL_COLORS.shadow.heavy,
-          },
-        },
-      },
-      MuiSnackbar: {
+      MuiGrid: {
         styleOverrides: {
           root: {
-            '& .MuiSnackbarContent-root': {
-              borderRadius: 12,
-              boxShadow: PROFESSIONAL_COLORS.shadow.medium,
+            '&.MuiGrid-container': {
+              margin: 0, // Remove default negative margins
+            },
+          },
+        },
+      },
+      MuiStack: {
+        styleOverrides: {
+          root: {
+            '&.MuiStack-root': {
+              gap: 8, // Reduced default gap
             },
           },
         },

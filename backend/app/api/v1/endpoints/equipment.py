@@ -26,6 +26,74 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Place static routes before dynamic '/{equipment_id}' routes to avoid path conflicts
 
+@router.get("/stats", response_model=ResponseModel)
+async def get_equipment_stats_root(
+    db: Session = Depends(get_db)
+):
+    """Get equipment statistics and analytics"""
+    try:
+        svc = EquipmentService(db)
+        stats = svc.get_equipment_stats()
+        return ResponseModel(
+            success=True,
+            message="Equipment statistics retrieved successfully",
+            data=stats
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve equipment stats: {str(e)}")
+
+
+@router.get("/upcoming-maintenance", response_model=ResponseModel)
+async def get_upcoming_maintenance_root(
+    db: Session = Depends(get_db)
+):
+    """Get upcoming maintenance schedules"""
+    try:
+        svc = EquipmentService(db)
+        maintenance = svc.get_upcoming_maintenance()
+        return ResponseModel(
+            success=True,
+            message="Upcoming maintenance retrieved successfully",
+            data=maintenance
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve upcoming maintenance: {str(e)}")
+
+
+@router.get("/overdue-calibrations", response_model=ResponseModel)
+async def get_overdue_calibrations_root(
+    db: Session = Depends(get_db)
+):
+    """Get overdue calibration schedules"""
+    try:
+        svc = EquipmentService(db)
+        calibrations = svc.get_overdue_calibrations()
+        return ResponseModel(
+            success=True,
+            message="Overdue calibrations retrieved successfully",
+            data=calibrations
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve overdue calibrations: {str(e)}")
+
+
+@router.get("/alerts", response_model=ResponseModel)
+async def get_equipment_alerts_root(
+    db: Session = Depends(get_db)
+):
+    """Get equipment alerts and notifications"""
+    try:
+        svc = EquipmentService(db)
+        alerts = svc.get_equipment_alerts()
+        return ResponseModel(
+            success=True,
+            message="Equipment alerts retrieved successfully",
+            data=alerts
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve equipment alerts: {str(e)}")
+
+
 @router.get("/analytics/stats", response_model=ResponseModel)
 async def get_equipment_stats(
     db: Session = Depends(get_db)

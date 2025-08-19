@@ -36,7 +36,7 @@ export interface NavigationSection {
   readonly order: number;
 }
 
-// Navigation configuration
+// COMPACT Navigation configuration - Reduced spacing and optimized layout
 export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   dashboard: {
     title: 'Dashboard',
