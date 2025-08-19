@@ -29,8 +29,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const [messages, setMessages] = useState<WebSocketMessage[]>([]);
   
   // Construct WebSocket URL
-  const wsUrl = userId && enabled ? 
-    `ws://localhost:8000/ws/dashboard/${userId}` : '';
+  const getWebSocketUrl = () => {
+    const wsBaseUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws';
+    return userId && enabled ? `${wsBaseUrl}/dashboard/${userId}` : '';
+  };
+  
+  const wsUrl = getWebSocketUrl();
 
   const {
     isConnected,
