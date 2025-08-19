@@ -8,6 +8,7 @@ export interface UXTestResult {
   score: number;
   details: string;
   recommendations?: string[];
+  wcagLevel?: 'A' | 'AA' | 'AAA';
 }
 
 export interface AccessibilityTest {
