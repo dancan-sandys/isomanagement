@@ -129,8 +129,9 @@ function App() {
                       <Route path="/traceability/reports" element={<Navigate to="/traceability?tab=3" replace />} />
                       
                       {/* Audit Management - QA and Auditor roles */}
-                      <Route path="/audits/internal" element={<Audits />} />
-                      <Route path="/audits/external" element={<Audits />} />
+                      <Route path="/audits" element={<Audits />} />
+                      <Route path="/audits/internal" element={<Navigate to="/audits" replace />} />
+                      <Route path="/audits/external" element={<Navigate to="/audits" replace />} />
                       <Route path="/audits/:id" element={<AuditDetail />} />
                       <Route path="/audits/schedule" element={<Navigate to="/audits?tab=schedule" replace />} />
                       <Route path="/audits/findings" element={<Navigate to="/audits?tab=findings" replace />} />

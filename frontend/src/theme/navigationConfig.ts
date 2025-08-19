@@ -127,8 +127,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 8,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Auditor', 'System Administrator'],
     items: [
-      { text: 'Internal Audits', path: '/audits/internal' },
-      { text: 'External Audits', path: '/audits/external' },
+      { text: 'Audits', path: '/audits' },
       { text: 'Audit Schedule', path: '/audits/schedule' },
       { text: 'Findings & NCs', path: '/audits/findings' },
       { text: 'Audit Reports', path: '/audits/reports' },
