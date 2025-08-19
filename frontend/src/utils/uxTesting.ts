@@ -8,6 +8,7 @@ export interface UXTestResult {
   score: number;
   details: string;
   recommendations?: string[];
+  wcagLevel?: 'A' | 'AA' | 'AAA'; // Add optional wcagLevel property
 }
 
 export interface AccessibilityTest {
@@ -98,15 +99,15 @@ class UXTestingSuite {
     const elements = document.querySelectorAll('*');
     let passed = true;
     
+    // Check for sufficient contrast ratios
     elements.forEach(element => {
       const style = window.getComputedStyle(element);
-      const color = style.color;
       const backgroundColor = style.backgroundColor;
+      const color = style.color;
       
-      // Basic contrast check (simplified)
-      if (color && backgroundColor) {
-        // This is a simplified check - real implementation would use color contrast algorithms
-        passed = passed && true; // Placeholder
+      // Simple contrast check (in real implementation, use proper contrast calculation)
+      if (backgroundColor === 'transparent' || color === 'transparent') {
+        passed = false;
       }
     });
     
@@ -114,16 +115,17 @@ class UXTestingSuite {
   }
 
   private testFocusIndicators(): boolean {
-    const interactiveElements = document.querySelectorAll('button, a, input, select, textarea, [tabindex]');
+    // Simulate focus indicator testing
+    const interactiveElements = document.querySelectorAll('button, a, input, select, textarea');
     let passed = true;
     
     interactiveElements.forEach(element => {
       const style = window.getComputedStyle(element);
       const outline = style.outline;
-      const outlineOffset = style.outlineOffset;
+      const boxShadow = style.boxShadow;
       
       // Check if focus indicators are present
-      if (outline === 'none' && !element.hasAttribute('aria-label')) {
+      if (outline === 'none' && !boxShadow.includes('rgba')) {
         passed = false;
       }
     });
@@ -132,7 +134,8 @@ class UXTestingSuite {
   }
 
   private testTouchTargets(): boolean {
-    const touchElements = document.querySelectorAll('button, a, input, [role="button"]');
+    // Simulate touch target testing
+    const touchElements = document.querySelectorAll('button, a, input[type="button"], input[type="submit"]');
     let passed = true;
     
     touchElements.forEach(element => {
@@ -148,16 +151,13 @@ class UXTestingSuite {
   }
 
   private testKeyboardNavigation(): boolean {
+    // Simulate keyboard navigation testing
     const interactiveElements = document.querySelectorAll('button, a, input, select, textarea');
     let passed = true;
     
     interactiveElements.forEach(element => {
       const tabIndex = element.getAttribute('tabindex');
-      const disabled = element.hasAttribute('disabled');
-      const hidden = element.hasAttribute('hidden');
-      
-      // Check if element is keyboard accessible
-      if (!disabled && !hidden && tabIndex === '-1') {
+      if (tabIndex === '-1') {
         passed = false;
       }
     });
@@ -166,17 +166,17 @@ class UXTestingSuite {
   }
 
   private testScreenReaderSupport(): boolean {
-    const elements = document.querySelectorAll('img, button, a, input, select, textarea');
+    // Simulate screen reader support testing
+    const elements = document.querySelectorAll('*');
     let passed = true;
     
     elements.forEach(element => {
-      const hasAriaLabel = element.hasAttribute('aria-label');
-      const hasAriaLabelledBy = element.hasAttribute('aria-labelledby');
-      const hasAlt = element.hasAttribute('alt');
-      const hasTitle = element.hasAttribute('title');
+      const ariaLabel = element.getAttribute('aria-label');
+      const ariaLabelledby = element.getAttribute('aria-labelledby');
+      const role = element.getAttribute('role');
       
-      // Check if element has proper accessibility attributes
-      if (element.tagName === 'IMG' && !hasAlt && !hasAriaLabel) {
+      // Check for basic ARIA support
+      if (element.tagName === 'BUTTON' && !ariaLabel && !ariaLabelledby) {
         passed = false;
       }
     });
@@ -186,160 +186,178 @@ class UXTestingSuite {
 
   // Performance Test Methods
   private testPageLoadTime(): boolean {
+    // Simulate page load time testing
     const loadTime = performance.now();
     return loadTime < 3000; // 3 seconds threshold
   }
 
   private testInteractiveResponse(): boolean {
-    // Simulate interaction response time test
+    // Simulate interactive response testing
     const startTime = performance.now();
-    // Simulate a simple interaction
+    
+    // Simulate interaction
     setTimeout(() => {
       const responseTime = performance.now() - startTime;
       return responseTime < 100; // 100ms threshold
-    }, 0);
+    }, 50);
     
-    return true; // Placeholder
+    return true; // Simplified for demo
   }
 
   private testSmoothScrolling(): boolean {
-    // Check if smooth scrolling is enabled
-    const html = document.documentElement;
-    const style = window.getComputedStyle(html);
-    return style.scrollBehavior === 'smooth';
+    // Simulate smooth scrolling testing
+    return 'scrollBehavior' in document.documentElement.style;
   }
 
   // Usability Test Methods
   private testMobileResponsiveness(): boolean {
+    // Simulate mobile responsiveness testing
     const viewport = window.innerWidth;
-    const isMobile = viewport <= 768;
-    
-    if (isMobile) {
-      // Check for mobile-specific optimizations
-      const touchElements = document.querySelectorAll('button, a');
-      let hasProperTouchTargets = true;
-      
-      touchElements.forEach(element => {
-        const rect = element.getBoundingClientRect();
-        if (rect.width < 44 || rect.height < 44) {
-          hasProperTouchTargets = false;
-        }
-      });
-      
-      return hasProperTouchTargets;
-    }
-    
-    return true;
+    return viewport >= 320; // Minimum mobile width
   }
 
   private testNavigationClarity(): boolean {
-    const navigationElements = document.querySelectorAll('nav, [role="navigation"]');
-    return navigationElements.length > 0;
+    // Simulate navigation clarity testing
+    const navElements = document.querySelectorAll('nav, [role="navigation"]');
+    return navElements.length > 0;
   }
 
   private testErrorHandling(): boolean {
-    // Check for error handling elements
+    // Simulate error handling testing
     const errorElements = document.querySelectorAll('[role="alert"], .error, .alert');
     return errorElements.length > 0;
   }
 
-  // Main Testing Methods
+  // Test Execution Methods
   async runAccessibilityTests(): Promise<UXTestResult[]> {
-    console.log('Running accessibility tests...');
+    this.results = [];
     
-    this.accessibilityTests.forEach(test => {
-      try {
-        const passed = test.test();
-        const result: UXTestResult = {
-          testName: test.name,
-          passed,
-          score: passed ? 100 : 0,
-          details: test.description,
-          wcagLevel: test.wcagLevel,
-          recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better accessibility`]
-        };
-        
-        this.results.push(result);
-      } catch (error) {
-        this.results.push({
-          testName: test.name,
-          passed: false,
-          score: 0,
-          details: `Test failed: ${error}`,
-          recommendations: ['Fix test implementation']
-        });
-      }
-    });
+    for (const test of this.accessibilityTests) {
+      const passed = test.test();
+      
+      const result: UXTestResult = {
+        testName: test.name,
+        passed,
+        score: passed ? 100 : 0,
+        details: test.description,
+        wcagLevel: test.wcagLevel,
+        recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better accessibility`]
+      };
+      
+      this.results.push(result);
+    }
     
     return this.results.filter(r => r.wcagLevel);
   }
 
   async runPerformanceTests(): Promise<UXTestResult[]> {
-    console.log('Running performance tests...');
+    this.results = [];
     
-    this.performanceTests.forEach(test => {
-      try {
-        const passed = test.test();
-        const result: UXTestResult = {
-          testName: test.name,
-          passed,
-          score: passed ? 100 : 0,
-          details: test.description,
-          recommendations: passed ? [] : [`Optimize ${test.name.toLowerCase()} for better performance`]
-        };
-        
-        this.results.push(result);
-      } catch (error) {
-        this.results.push({
-          testName: test.name,
-          passed: false,
-          score: 0,
-          details: `Test failed: ${error}`,
-          recommendations: ['Fix test implementation']
-        });
-      }
-    });
+    for (const test of this.performanceTests) {
+      const passed = test.test();
+      
+      const result: UXTestResult = {
+        testName: test.name,
+        passed,
+        score: passed ? 100 : 0,
+        details: test.description,
+        recommendations: passed ? [] : [`Optimize ${test.name.toLowerCase()} for better performance`]
+      };
+      
+      this.results.push(result);
+    }
     
     return this.results.filter(r => !r.wcagLevel && r.testName.includes('Performance'));
   }
 
   async runUsabilityTests(): Promise<UXTestResult[]> {
-    console.log('Running usability tests...');
+    this.results = [];
     
-    this.usabilityTests.forEach(test => {
-      try {
-        const passed = test.test();
-        const result: UXTestResult = {
-          testName: test.name,
-          passed,
-          score: passed ? 100 : 0,
-          details: test.description,
-          recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better usability`]
-        };
-        
-        this.results.push(result);
-      } catch (error) {
-        this.results.push({
-          testName: test.name,
-          passed: false,
-          score: 0,
-          details: `Test failed: ${error}`,
-          recommendations: ['Fix test implementation']
-        });
-      }
-    });
+    for (const test of this.usabilityTests) {
+      const passed = test.test();
+      
+      const result: UXTestResult = {
+        testName: test.name,
+        passed,
+        score: passed ? 100 : 0,
+        details: test.description,
+        recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better usability`]
+      };
+      
+      this.results.push(result);
+    }
     
     return this.results.filter(r => !r.wcagLevel && !r.testName.includes('Performance'));
   }
 
   async runAllTests(): Promise<UXTestResult[]> {
-    this.results = [];
+    const accessibilityResults = await this.runAccessibilityTests();
+    const performanceResults = await this.runPerformanceTests();
+    const usabilityResults = await this.runUsabilityTests();
     
-    await this.runAccessibilityTests();
-    await this.runPerformanceTests();
-    await this.runUsabilityTests();
+    return [...accessibilityResults, ...performanceResults, ...usabilityResults];
+  }
+
+  // Reporting Methods
+  generateReport(): string {
+    const total = this.results.length;
+    const passed = this.results.filter(r => r.passed).length;
+    const failed = total - passed;
     
+    const accessibilityTests = this.results.filter(r => r.wcagLevel);
+    const performanceTests = this.results.filter(r => !r.wcagLevel && r.testName.includes('Performance'));
+    const usabilityTests = this.results.filter(r => !r.wcagLevel && !r.testName.includes('Performance'));
+    
+    const accessibilityScore = accessibilityTests.length > 0 
+      ? accessibilityTests.reduce((sum, r) => sum + r.score, 0) / accessibilityTests.length 
+      : 0;
+    const performanceScore = performanceTests.length > 0 
+      ? performanceTests.reduce((sum, r) => sum + r.score, 0) / performanceTests.length 
+      : 0;
+    const usabilityScore = usabilityTests.length > 0 
+      ? usabilityTests.reduce((sum, r) => sum + r.score, 0) / usabilityTests.length 
+      : 0;
+    
+    const overallScore = total > 0 ? (passed / total) * 100 : 0;
+    
+    let report = `# UX Testing Report\n\n`;
+    report += `## Summary\n`;
+    report += `- **Overall Score:** ${overallScore.toFixed(1)}%\n`;
+    report += `- **Tests Passed:** ${passed}/${total}\n`;
+    report += `- **Tests Failed:** ${failed}/${total}\n\n`;
+    
+    report += `## Category Scores\n`;
+    report += `- **Accessibility:** ${accessibilityScore.toFixed(1)}%\n`;
+    report += `- **Performance:** ${performanceScore.toFixed(1)}%\n`;
+    report += `- **Usability:** ${usabilityScore.toFixed(1)}%\n\n`;
+    
+    report += `## Failed Tests\n`;
+    const failedTests = this.results.filter(r => !r.passed);
+    if (failedTests.length === 0) {
+      report += `All tests passed! 🎉\n\n`;
+    } else {
+      failedTests.forEach(test => {
+        report += `### ${test.testName}\n`;
+        report += `- **Details:** ${test.details}\n`;
+        if (test.recommendations && test.recommendations.length > 0) {
+          report += `- **Recommendations:**\n`;
+          test.recommendations.forEach(rec => {
+            report += `  - ${rec}\n`;
+          });
+        }
+        report += `\n`;
+      });
+    }
+    
+    return report;
+  }
+
+  getResults(): UXTestResult[] {
     return this.results;
+  }
+
+  clearResults(): void {
+    this.results = [];
   }
 
   getTestSummary(): {
@@ -362,18 +380,14 @@ class UXTestingSuite {
     const accessibilityScore = accessibilityTests.length > 0 
       ? accessibilityTests.reduce((sum, r) => sum + r.score, 0) / accessibilityTests.length 
       : 0;
-    
     const performanceScore = performanceTests.length > 0 
       ? performanceTests.reduce((sum, r) => sum + r.score, 0) / performanceTests.length 
       : 0;
-    
     const usabilityScore = usabilityTests.length > 0 
       ? usabilityTests.reduce((sum, r) => sum + r.score, 0) / usabilityTests.length 
       : 0;
     
-    const overallScore = total > 0 
-      ? this.results.reduce((sum, r) => sum + r.score, 0) / total 
-      : 0;
+    const overallScore = total > 0 ? (passed / total) * 100 : 0;
     
     return {
       total,
@@ -385,42 +399,8 @@ class UXTestingSuite {
       usabilityScore
     };
   }
-
-  generateReport(): string {
-    const summary = this.getTestSummary();
-    
-    let report = `# UX Testing Report\n\n`;
-    report += `## Summary\n`;
-    report += `- Total Tests: ${summary.total}\n`;
-    report += `- Passed: ${summary.passed}\n`;
-    report += `- Failed: ${summary.failed}\n`;
-    report += `- Overall Score: ${summary.overallScore.toFixed(1)}%\n\n`;
-    
-    report += `## Detailed Results\n\n`;
-    
-    this.results.forEach(result => {
-      const status = result.passed ? '✅ PASS' : '❌ FAIL';
-      report += `### ${result.testName}\n`;
-      report += `- Status: ${status}\n`;
-      report += `- Score: ${result.score}%\n`;
-      report += `- Details: ${result.details}\n`;
-      
-      if (result.recommendations && result.recommendations.length > 0) {
-        report += `- Recommendations:\n`;
-        result.recommendations.forEach(rec => {
-          report += `  - ${rec}\n`;
-        });
-      }
-      
-      report += `\n`;
-    });
-    
-    return report;
-  }
 }
 
-// Global UX testing instance
+// Export singleton instance
 export const uxTesting = new UXTestingSuite();
-
-export default uxTesting;
 

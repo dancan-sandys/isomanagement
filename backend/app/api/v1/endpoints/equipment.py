@@ -191,6 +191,101 @@ async def get_equipment(
     return eq
 
 
+@router.get("/{equipment_id}/details", response_model=dict)
+async def get_equipment_details(equipment_id: int, db: Session = Depends(get_db)):
+    """Get comprehensive equipment details including maintenance plans, work orders, and calibration plans"""
+    svc = EquipmentService(db)
+    
+    # Get equipment
+    equipment = svc.get_equipment(equipment_id)
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    
+    # Get maintenance plans
+    maintenance_plans = svc.list_maintenance_plans(equipment_id=equipment_id)
+    
+    # Get work orders
+    work_orders = svc.list_work_orders(equipment_id=equipment_id)
+    
+    # Get calibration plans
+    calibration_plans = svc.list_calibration_plans(equipment_id=equipment_id)
+    
+    return {
+        "equipment": equipment,
+        "maintenance_plans": maintenance_plans,
+        "work_orders": work_orders,
+        "calibration_plans": calibration_plans
+    }
+
+
+@router.get("/{equipment_id}/history", response_model=dict)
+async def get_equipment_history(equipment_id: int, db: Session = Depends(get_db)):
+    """Get equipment history including all maintenance, work orders, and calibration activities"""
+    svc = EquipmentService(db)
+    
+    # Verify equipment exists
+    equipment = svc.get_equipment(equipment_id)
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    
+    # Get all work orders (completed and in progress)
+    work_orders = svc.list_work_orders(equipment_id=equipment_id)
+    
+    # Get maintenance history
+    maintenance_plans = svc.list_maintenance_plans(equipment_id=equipment_id)
+    
+    # Get calibration history
+    calibration_plans = svc.list_calibration_plans(equipment_id=equipment_id)
+    
+    # Combine and sort by date
+    history_items = []
+    
+    # Add work orders to history
+    for wo in work_orders:
+        history_items.append({
+            "type": "work_order",
+            "date": wo.created_at,
+            "title": wo.title,
+            "status": wo.status.value if wo.status else None,
+            "description": wo.description,
+            "data": wo
+        })
+    
+    # Add maintenance activities to history
+    for plan in maintenance_plans:
+        if plan.last_performed_at:
+            history_items.append({
+                "type": "maintenance",
+                "date": plan.last_performed_at,
+                "title": f"Maintenance: {plan.maintenance_type.value if plan.maintenance_type else 'Unknown'}",
+                "status": "completed",
+                "description": plan.notes,
+                "data": plan
+            })
+    
+    # Add calibration activities to history
+    for plan in calibration_plans:
+        if plan.last_calibrated_at:
+            history_items.append({
+                "type": "calibration",
+                "date": plan.last_calibrated_at,
+                "title": "Calibration",
+                "status": "completed",
+                "description": plan.notes,
+                "data": plan
+            })
+    
+    # Sort by date (newest first)
+    history_items.sort(key=lambda x: x["date"], reverse=True)
+    
+    return {
+        "equipment_id": equipment_id,
+        "equipment_name": equipment.name,
+        "history": history_items,
+        "total_items": len(history_items)
+    }
+
+
 @router.put("/{equipment_id}", response_model=EquipmentResponse)
 async def update_equipment(
     equipment_id: int,
@@ -227,9 +322,9 @@ async def create_maintenance_plan(
     return svc.create_maintenance_plan(equipment_id=equipment_id, frequency_days=payload.frequency_days, maintenance_type=payload.maintenance_type, notes=payload.notes)
 
 
-@router.get("/maintenance-plans", response_model=list[MaintenancePlanResponse])
+@router.get("/{equipment_id}/maintenance-plans", response_model=list[MaintenancePlanResponse])
 async def list_maintenance_plans(
-    equipment_id: int | None = Query(default=None),
+    equipment_id: int,
     db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
@@ -310,18 +405,19 @@ async def delete_maintenance_plan(
 
 
 # Work Orders
-@router.post("/work-orders", response_model=MaintenanceWorkOrderResponse)
+@router.post("/{equipment_id}/work-orders", response_model=MaintenanceWorkOrderResponse)
 async def create_work_order(
+    equipment_id: int,
     payload: MaintenanceWorkOrderCreate,
     db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)
-    return svc.create_work_order(equipment_id=payload.equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description, priority=payload.priority, assigned_to=payload.assigned_to, due_date=payload.due_date, created_by=1)
+    return svc.create_work_order(equipment_id=equipment_id, plan_id=payload.plan_id, title=payload.title, description=payload.description, priority=payload.priority, assigned_to=payload.assigned_to, due_date=payload.due_date, created_by=1)
 
 
-@router.get("/work-orders", response_model=list[MaintenanceWorkOrderResponse])
+@router.get("/{equipment_id}/work-orders", response_model=list[MaintenanceWorkOrderResponse])
 async def list_work_orders(
-    equipment_id: int | None = Query(default=None),
+    equipment_id: int,
     plan_id: int | None = Query(default=None),
     status: str | None = Query(default=None),
     db: Session = Depends(get_db)
@@ -458,9 +554,9 @@ async def create_calibration_plan(
     return svc.create_calibration_plan(equipment_id=equipment_id, schedule_date=payload.schedule_date, frequency_days=payload.frequency_days, notes=payload.notes)
 
 
-@router.get("/calibration-plans", response_model=list[CalibrationPlanResponse])
+@router.get("/{equipment_id}/calibration-plans", response_model=list[CalibrationPlanResponse])
 async def list_calibration_plans(
-    equipment_id: int | None = Query(default=None),
+    equipment_id: int,
     db: Session = Depends(get_db)
 ):
     svc = EquipmentService(db)

@@ -78,19 +78,19 @@ const UXTestDashboard: React.FC = () => {
       name: 'Accessibility',
       icon: <AccessibilityIcon />,
       color: '#1976d2',
-      tests: testResults.filter(r => r.wcagLevel),
+      tests: testResults.filter(r => r.testName.includes('Color Contrast') || r.testName.includes('Focus') || r.testName.includes('Touch') || r.testName.includes('Keyboard') || r.testName.includes('Screen Reader')),
     },
     {
       name: 'Performance',
       icon: <SpeedIcon />,
       color: '#2e7d32',
-      tests: testResults.filter(r => !r.wcagLevel && r.testName.includes('Performance')),
+      tests: testResults.filter(r => r.testName.includes('Performance') || r.testName.includes('Load') || r.testName.includes('Response') || r.testName.includes('Scrolling')),
     },
     {
       name: 'Usability',
       icon: <TouchAppIcon />,
       color: '#ed6c02',
-      tests: testResults.filter(r => !r.wcagLevel && !r.testName.includes('Performance')),
+      tests: testResults.filter(r => !r.testName.includes('Color Contrast') && !r.testName.includes('Focus') && !r.testName.includes('Touch') && !r.testName.includes('Keyboard') && !r.testName.includes('Screen Reader') && !r.testName.includes('Performance') && !r.testName.includes('Load') && !r.testName.includes('Response') && !r.testName.includes('Scrolling')),
     },
   ];
 
