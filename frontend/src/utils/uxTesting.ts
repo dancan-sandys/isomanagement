@@ -8,7 +8,11 @@ export interface UXTestResult {
   score: number;
   details: string;
   recommendations?: string[];
+<<<<<<< HEAD
   wcagLevel?: 'A' | 'AA' | 'AAA'; // Add optional wcagLevel property
+=======
+  wcagLevel?: 'A' | 'AA' | 'AAA';
+>>>>>>> afd2ba48faeb2d47b30fbcf962d9e0e75d602d16
 }
 
 export interface AccessibilityTest {
