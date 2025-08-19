@@ -466,7 +466,6 @@ const Users: React.FC = () => {
         <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)}>
           <Tab label="Dashboard" icon={<AssessmentIcon />} />
           <Tab label="User Management" icon={<GroupIcon />} />
-          <Tab label="Training & Competency" icon={<SchoolIcon />} />
         </Tabs>
       </Box>
 
@@ -619,7 +618,9 @@ const Users: React.FC = () => {
                     <TableCell>{user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</TableCell>
                     <TableCell>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setViewUserDialogOpen(true); }}><VisibilityIcon /></IconButton>
-                      <IconButton size="small" title="Training & Competency" onClick={() => openCompetencyDialog(user)}><SchoolIcon /></IconButton>
+                      {false && (
+                        <IconButton size="small" title="Training & Competency" onClick={() => openCompetencyDialog(user)}><SchoolIcon /></IconButton>
+                      )}
                       <IconButton size="small" title="Permissions" onClick={() => openPermissionsDialog(user)}><LockIcon /></IconButton>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setUserForm({ username: user.username, email: user.email, full_name: user.full_name, password: '', role_id: user.role_id.toString(), department: user.department || '', position: user.position || '', phone: user.phone || '', employee_id: user.employee_id || '', bio: user.bio || '' }); setUserDialogOpen(true); }}><EditIcon /></IconButton>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setResetPassword(''); setResetDialogOpen(true); }} title="Reset Password"><PasswordIcon /></IconButton>
@@ -644,12 +645,7 @@ const Users: React.FC = () => {
         </Box>
       )}
 
-      {activeTab === 2 && (
-        <Box>
-          <Typography variant="h4" gutterBottom>Training & Competency Management</Typography>
-          <Typography variant="body1" color="textSecondary">This section will include training records, competency matrices, and skill assessments.</Typography>
-        </Box>
-      )}
+      {false && activeTab === 2 && <Box />}
 
       {/* Create/Edit User Dialog */}
       <Dialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} maxWidth="md" fullWidth>
@@ -846,11 +842,12 @@ const Users: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Training & Competency Dialog */}
-      <Dialog open={competencyDialogOpen} onClose={() => setCompetencyDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Training & Competency {selectedUser ? `— ${selectedUser.username}` : ''}</DialogTitle>
-        <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {/* Training & Competency Dialog - disabled */}
+      {false && (
+        <Dialog open={competencyDialogOpen} onClose={() => setCompetencyDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Training & Competency {selectedUser ? `— ${selectedUser.username}` : ''}</DialogTitle>
+          <DialogContent>
+            {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle1">Eligibility</Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
@@ -1073,11 +1070,12 @@ const Users: React.FC = () => {
               </Table>
             </TableContainer>
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCompetencyDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCompetencyDialogOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 };
