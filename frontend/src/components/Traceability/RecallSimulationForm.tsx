@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { RecallSimulation, SimulationResults, RiskAssessment, Recommendation } from '../../types/traceability';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
+import { haccpAPI } from '../../services/haccpAPI';
 
 interface RecallSimulationFormProps {
   open: boolean;
@@ -76,6 +77,7 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
   // Form state
   const [simulationForm, setSimulationForm] = useState({
     batch_id: '',
+    product_name: '',
     recall_type: '',
     reason: '',
     risk_level: 'medium'
@@ -84,6 +86,11 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
   // Batch options
   const [batches, setBatches] = useState<Array<{ id: number; batch_number: string; product_name?: string }>>([]);
   const [batchesLoading, setBatchesLoading] = useState(false);
+
+  // Product options
+  const [products, setProducts] = useState<Array<{ id: number; name: string }>>([]);
+  const [productInput, setProductInput] = useState('');
+  const [productsLoading, setProductsLoading] = useState(false);
 
   useEffect(() => {
     const loadBatches = async () => {
@@ -98,8 +105,21 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
         setBatchesLoading(false);
       }
     };
+    const loadProducts = async () => {
+      try {
+        setProductsLoading(true);
+        const res: any = await haccpAPI.getProducts();
+        const items = (res?.data?.products || res?.products || res || []).map((p: any) => ({ id: p.id, name: p.name || p.product_name || p.title || '' }));
+        setProducts(items.filter((p: any) => p.name));
+      } catch {
+        setProducts([]);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
     if (open) {
       loadBatches();
+      loadProducts();
     }
   }, [open]);
 
@@ -108,8 +128,9 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
-    if (!simulationForm.batch_id) {
-      errors.batch_id = 'Batch is required';
+    if (!simulationForm.batch_id && !simulationForm.product_name.trim()) {
+      errors.batch_id = 'Select a batch or choose a product';
+      errors.product_name = 'Select a batch or choose a product';
     }
 
     if (!simulationForm.recall_type) {
@@ -133,12 +154,16 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
       setLoading(true);
       setError(null);
 
-      const simulationData = {
-        batch_id: parseInt(simulationForm.batch_id),
+      const simulationData: any = {
         recall_type: simulationForm.recall_type,
         reason: simulationForm.reason,
         risk_level: simulationForm.risk_level
       };
+      if (simulationForm.batch_id) {
+        simulationData.batch_id = parseInt(simulationForm.batch_id);
+      } else if (simulationForm.product_name.trim()) {
+        simulationData.product_name = simulationForm.product_name.trim();
+      }
 
       const result = await traceabilityAPI.simulateRecall(simulationData);
       setSimulation(result);
@@ -154,6 +179,7 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
   const handleClose = () => {
     setSimulationForm({
       batch_id: '',
+      product_name: '',
       recall_type: '',
       reason: '',
       risk_level: 'medium'
@@ -238,29 +264,40 @@ const RecallSimulationForm: React.FC<RecallSimulationFormProps> = ({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Batch *"
-                    error={!!validationErrors.batch_id}
+                    label="Select Batch"
                     helperText={validationErrors.batch_id}
                   />
                 )}
               />
             </Grid>
+
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={!!validationErrors.recall_type}>
-                <InputLabel>Recall Type *</InputLabel>
-                <Select
-                  value={simulationForm.recall_type}
-                  onChange={(e) => handleInputChange('recall_type', e.target.value)}
-                  label="Recall Type *"
-                >
-                  <MenuItem value="class_i">Class I - Life-threatening</MenuItem>
-                  <MenuItem value="class_ii">Class II - Temporary health effects</MenuItem>
-                  <MenuItem value="class_iii">Class III - No health effects</MenuItem>
-                </Select>
-                {validationErrors.recall_type && (
-                  <FormHelperText>{validationErrors.recall_type}</FormHelperText>
+              <Autocomplete
+                freeSolo
+                options={products}
+                loading={productsLoading}
+                getOptionLabel={(option) => (typeof option === 'string' ? option : option.name)}
+                value={products.find(p => p.name === simulationForm.product_name) || null}
+                onChange={(_, newValue) => {
+                  if (typeof newValue === 'string') {
+                    handleInputChange('product_name', newValue);
+                  } else {
+                    handleInputChange('product_name', newValue ? newValue.name : '');
+                  }
+                }}
+                onInputChange={(_, val, reason) => {
+                  if (reason === 'input') setProductInput(val);
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Product Name (optional)"
+                    placeholder="Search products by name"
+                    helperText={validationErrors.product_name || 'Use this if you prefer selecting by product'}
+                  />
                 )}
-              </FormControl>
+                isOptionEqualToValue={(opt, val) => opt.id === (typeof val === 'string' ? -1 : val.id)}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField
