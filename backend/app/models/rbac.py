@@ -14,6 +14,7 @@ class PermissionType(enum.Enum):
     ASSIGN = "assign"
     EXPORT = "export"
     IMPORT = "import"
+    MANAGE_PROGRAM = "manage_program"
 
 # Module enum
 class Module(enum.Enum):
