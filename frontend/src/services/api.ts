@@ -397,6 +397,20 @@ export const documentsAPI = {
     return response.data;
   },
 
+  // Document Analytics
+  getAnalytics: async () => {
+    const response: AxiosResponse = await api.get('/documents/analytics');
+    return response.data;
+  },
+
+  exportAnalytics: async (format: string = 'excel') => {
+    const response: AxiosResponse = await api.get('/documents/analytics/export', {
+      params: { format },
+      responseType: 'blob'
+    });
+    return response;
+  },
+
   createDocument: async (formData: FormData) => {
     const response: AxiosResponse = await api.post('/documents/', formData, {
       headers: {

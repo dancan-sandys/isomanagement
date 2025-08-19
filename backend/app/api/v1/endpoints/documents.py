@@ -2688,3 +2688,279 @@ async def reject_document_step(
         raise HTTPException(status_code=500, detail=f"Failed to reject: {str(e)}")
 
 
+@router.get("/analytics", response_model=ResponseModel[dict])
+async def get_document_analytics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get comprehensive document analytics with real data from the database
+    """
+    try:
+        from sqlalchemy import extract, func, and_, or_
+        from datetime import datetime, timedelta
+        
+        now = datetime.utcnow()
+        last_12_months = now - timedelta(days=365)
+        
+        # Total documents
+        total_documents = db.query(func.count(Document.id)).scalar() or 0
+        
+        # Documents by status
+        status_counts = db.query(
+            Document.status,
+            func.count(Document.id).label('count')
+        ).group_by(Document.status).all()
+        
+        documents_by_status = {}
+        for status, count in status_counts:
+            status_key = status.value if hasattr(status, 'value') else str(status)
+            documents_by_status[status_key] = count
+        
+        # Documents by category
+        category_counts = db.query(
+            Document.category,
+            func.count(Document.id).label('count')
+        ).group_by(Document.category).all()
+        
+        documents_by_category = {}
+        for category, count in category_counts:
+            category_key = category.value if hasattr(category, 'value') else str(category)
+            documents_by_category[category_key] = count
+        
+        # Documents by type
+        type_counts = db.query(
+            Document.document_type,
+            func.count(Document.id).label('count')
+        ).group_by(Document.document_type).all()
+        
+        documents_by_type = {}
+        for doc_type, count in type_counts:
+            type_key = doc_type.value if hasattr(doc_type, 'value') else str(doc_type)
+            documents_by_type[type_key] = count
+        
+        # Documents by department
+        dept_counts = db.query(
+            Document.department,
+            func.count(Document.id).label('count')
+        ).filter(Document.department.isnot(None)).group_by(Document.department).all()
+        
+        documents_by_department = {}
+        for dept, count in dept_counts:
+            if dept:  # Only include non-null departments
+                documents_by_department[dept] = count
+        
+        # Documents by month (last 12 months)
+        monthly_counts = db.query(
+            func.date_trunc('month', Document.created_at).label('month'),
+            func.count(Document.id).label('count')
+        ).filter(
+            Document.created_at >= last_12_months
+        ).group_by(
+            func.date_trunc('month', Document.created_at)
+        ).order_by(
+            func.date_trunc('month', Document.created_at)
+        ).all()
+        
+        documents_by_month = {}
+        for month, count in monthly_counts:
+            if month:
+                month_key = month.strftime('%Y-%m')
+                documents_by_month[month_key] = count
+        
+        # Pending reviews (documents under review)
+        pending_reviews = db.query(func.count(Document.id)).filter(
+            Document.status == DocumentStatus.UNDER_REVIEW
+        ).scalar() or 0
+        
+        # Expired documents (past review date)
+        expired_documents = db.query(func.count(Document.id)).filter(
+            and_(
+                Document.review_date.isnot(None),
+                Document.review_date < now
+            )
+        ).scalar() or 0
+        
+        # Documents requiring approval (draft status)
+        documents_requiring_approval = db.query(func.count(Document.id)).filter(
+            Document.status == DocumentStatus.DRAFT
+        ).scalar() or 0
+        
+        # Average approval time (in days)
+        approval_times = db.query(
+            func.avg(
+                func.extract('epoch', Document.approved_at - Document.created_at) / 86400
+            )
+        ).filter(
+            and_(
+                Document.approved_at.isnot(None),
+                Document.created_at.isnot(None)
+            )
+        ).scalar() or 0
+        
+        average_approval_time = round(float(approval_times), 1) if approval_times else 0
+        
+        # Top contributors (users who created most documents)
+        top_contributors_query = db.query(
+            User.full_name,
+            func.count(Document.id).label('count')
+        ).join(
+            Document, Document.created_by == User.id
+        ).group_by(
+            User.id, User.full_name
+        ).order_by(
+            func.count(Document.id).desc()
+        ).limit(5).all()
+        
+        top_contributors = []
+        for name, count in top_contributors_query:
+            top_contributors.append({
+                "name": name or "Unknown User",
+                "count": count
+            })
+        
+        # Recent activity (last 10 document changes)
+        recent_activity_query = db.query(
+            DocumentChangeLog.id,
+            DocumentChangeLog.change_type,
+            Document.title,
+            User.full_name,
+            DocumentChangeLog.created_at
+        ).join(
+            Document, DocumentChangeLog.document_id == Document.id
+        ).join(
+            User, DocumentChangeLog.changed_by == User.id
+        ).order_by(
+            DocumentChangeLog.created_at.desc()
+        ).limit(10).all()
+        
+        recent_activity = []
+        for activity_id, change_type, title, user_name, timestamp in recent_activity_query:
+            recent_activity.append({
+                "id": activity_id,
+                "action": f"Document {change_type.replace('_', ' ').title()}",
+                "document_title": title,
+                "user": user_name or "Unknown User",
+                "timestamp": timestamp.isoformat() if timestamp else None
+            })
+        
+        analytics_data = {
+            "total_documents": total_documents,
+            "documents_by_status": documents_by_status,
+            "documents_by_category": documents_by_category,
+            "documents_by_type": documents_by_type,
+            "documents_by_department": documents_by_department,
+            "documents_by_month": documents_by_month,
+            "pending_reviews": pending_reviews,
+            "expired_documents": expired_documents,
+            "documents_requiring_approval": documents_requiring_approval,
+            "average_approval_time": average_approval_time,
+            "top_contributors": top_contributors,
+            "recent_activity": recent_activity
+        }
+        
+        return ResponseModel(
+            success=True,
+            message="Document analytics retrieved successfully",
+            data=analytics_data
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve document analytics: {str(e)}"
+        )
+
+
+@router.get("/analytics/export", response_model=ResponseModel[dict])
+async def export_document_analytics(
+    format: str = Query("excel", description="Export format (excel, csv)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Export document analytics data
+    """
+    try:
+        import pandas as pd
+        from io import BytesIO
+        
+        # Get analytics data
+        analytics_response = await get_document_analytics(current_user, db)
+        analytics_data = analytics_response.data
+        
+        # Create DataFrame for export
+        export_data = []
+        
+        # Add summary data
+        export_data.append({
+            "Metric": "Total Documents",
+            "Value": analytics_data["total_documents"]
+        })
+        export_data.append({
+            "Metric": "Pending Reviews",
+            "Value": analytics_data["pending_reviews"]
+        })
+        export_data.append({
+            "Metric": "Expired Documents",
+            "Value": analytics_data["expired_documents"]
+        })
+        export_data.append({
+            "Metric": "Documents Requiring Approval",
+            "Value": analytics_data["documents_requiring_approval"]
+        })
+        export_data.append({
+            "Metric": "Average Approval Time (days)",
+            "Value": analytics_data["average_approval_time"]
+        })
+        
+        # Add status breakdown
+        for status, count in analytics_data["documents_by_status"].items():
+            export_data.append({
+                "Metric": f"Status - {status.title()}",
+                "Value": count
+            })
+        
+        # Add category breakdown
+        for category, count in analytics_data["documents_by_category"].items():
+            export_data.append({
+                "Metric": f"Category - {category.title()}",
+                "Value": count
+            })
+        
+        # Add type breakdown
+        for doc_type, count in analytics_data["documents_by_type"].items():
+            export_data.append({
+                "Metric": f"Type - {doc_type.replace('_', ' ').title()}",
+                "Value": count
+            })
+        
+        df = pd.DataFrame(export_data)
+        
+        # Create file buffer
+        buffer = BytesIO()
+        
+        if format.lower() == "excel":
+            df.to_excel(buffer, index=False, sheet_name="Document Analytics")
+            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filename = f"document_analytics_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        else:  # csv
+            df.to_csv(buffer, index=False)
+            content_type = "text/csv"
+            filename = f"document_analytics_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            buffer,
+            media_type=content_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export document analytics: {str(e)}"
+        )
+
+

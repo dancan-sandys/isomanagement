@@ -99,101 +99,12 @@ const DocumentAnalyticsDialog: React.FC<DocumentAnalyticsDialogProps> = ({
     setError(null);
     
     try {
-      // Mock analytics data - in real implementation, this would come from API
-      const mockAnalytics: AnalyticsData = {
-        total_documents: 156,
-        documents_by_status: {
-          approved: 89,
-          draft: 23,
-          under_review: 31,
-          obsolete: 8,
-          archived: 5,
-        },
-        documents_by_category: {
-          haccp: 45,
-          prp: 38,
-          training: 22,
-          audit: 18,
-          maintenance: 15,
-          supplier: 12,
-          quality: 6,
-        },
-        documents_by_type: {
-          procedure: 52,
-          work_instruction: 34,
-          form: 28,
-          policy: 18,
-          manual: 12,
-          checklist: 8,
-          plan: 4,
-        },
-        documents_by_department: {
-          'Quality Assurance': 67,
-          'Production': 45,
-          'Maintenance': 23,
-          'Management': 21,
-        },
-        documents_by_month: {
-          '2024-01': 12,
-          '2024-02': 15,
-          '2024-03': 18,
-          '2024-04': 22,
-          '2024-05': 19,
-          '2024-06': 25,
-          '2024-07': 28,
-          '2024-08': 17,
-        },
-        pending_reviews: 31,
-        expired_documents: 8,
-        documents_requiring_approval: 31,
-        average_approval_time: 3.2,
-        top_contributors: [
-          { name: 'John Smith', count: 23 },
-          { name: 'Sarah Johnson', count: 18 },
-          { name: 'Mike Davis', count: 15 },
-          { name: 'Lisa Wilson', count: 12 },
-          { name: 'Tom Brown', count: 10 },
-        ],
-        recent_activity: [
-          {
-            id: 1,
-            action: 'Document Created',
-            document_title: 'HACCP Plan for Yogurt Production',
-            user: 'John Smith',
-            timestamp: '2024-08-05T10:30:00Z',
-          },
-          {
-            id: 2,
-            action: 'Document Approved',
-            document_title: 'Cleaning Procedure SOP',
-            user: 'Sarah Johnson',
-            timestamp: '2024-08-05T09:15:00Z',
-          },
-          {
-            id: 3,
-            action: 'Document Updated',
-            document_title: 'Quality Control Checklist',
-            user: 'Mike Davis',
-            timestamp: '2024-08-05T08:45:00Z',
-          },
-          {
-            id: 4,
-            action: 'Document Created',
-            document_title: 'Maintenance Schedule',
-            user: 'Lisa Wilson',
-            timestamp: '2024-08-04T16:20:00Z',
-          },
-          {
-            id: 5,
-            action: 'Document Approved',
-            document_title: 'Supplier Evaluation Form',
-            user: 'Tom Brown',
-            timestamp: '2024-08-04T14:30:00Z',
-          },
-        ],
-      };
-      
-      setAnalytics(mockAnalytics);
+      const response = await documentsAPI.getAnalytics();
+      if (response?.data) {
+        setAnalytics(response.data);
+      } else {
+        setError('No analytics data received');
+      }
     } catch (error: any) {
       setError(error.message || 'Failed to load analytics');
     } finally {
@@ -210,6 +121,27 @@ const DocumentAnalyticsDialog: React.FC<DocumentAnalyticsDialogProps> = ({
     setError(null);
     setSelectedTab(0);
     onClose();
+  };
+
+  const handleExportAnalytics = async () => {
+    try {
+      const response = await documentsAPI.exportAnalytics('excel');
+      
+      // Create download link
+      const blob = new Blob([response.data], { 
+        type: response.headers['content-type'] 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = response.headers['content-disposition']?.split('filename=')[1] || 'document_analytics.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      setError(error.message || 'Failed to export analytics');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -473,6 +405,14 @@ const DocumentAnalyticsDialog: React.FC<DocumentAnalyticsDialogProps> = ({
       </DialogContent>
 
       <DialogActions sx={{ p: 3 }}>
+        <Button
+          variant="outlined"
+          startIcon={<Download />}
+          onClick={handleExportAnalytics}
+          disabled={!analytics}
+        >
+          Export Analytics
+        </Button>
         <Button onClick={handleClose}>
           Close
         </Button>
