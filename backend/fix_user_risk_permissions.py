@@ -138,3 +138,4 @@ if __name__ == "__main__":
     print("1. Login with admin/admin123")
     print("2. Try accessing the risk module")
     print("3. Check browser console for any remaining 403 errors")
+

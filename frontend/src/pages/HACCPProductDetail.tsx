@@ -507,26 +507,21 @@ const HACCPProductDetail: React.FC = () => {
                 
                 console.log('Sending monitoring log request:', requestBody);
                 
-                await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, { 
-                  method: 'POST', 
-                  headers: { 
-                    'Content-Type': 'application/json', 
-                    Authorization: `Bearer ${localStorage.getItem('access_token')}` 
-                  }, 
-                  body: JSON.stringify(requestBody) 
-                });
+                // Use the API service instead of direct fetch
+                const api = (await import('../services/api')).api;
+                await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, requestBody);
                 
                 // reload logs
                 try {
-                  const resp = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
-                  const logsJson = await resp.json();
+                  const resp = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
+                  const logsJson = resp.data;
                   const items = logsJson?.data?.items || logsJson?.items || [];
                   setMonitoringLogs(items);
                 } catch {}
                 // open NC if created for this batch
                 if (monitoringForm.batch) {
-                  const res = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(monitoringForm.batch)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
-                  const data = await res.json();
+                  const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(monitoringForm.batch)}`);
+                  const data = res.data;
                   if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
                 }
               } catch (error) {
@@ -566,8 +561,9 @@ const HACCPProductDetail: React.FC = () => {
                         <TableCell>
                           <Button size="small" onClick={async () => {
                             const ccpId = Number(monitoringForm.ccp_id);
-                            const res = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || '')}`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } });
-                            const data = await res.json();
+                            const api = (await import('../services/api')).api;
+                            const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || '')}`);
+                            const data = res.data;
                             if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
                             else alert('No NC linked for this reading');
                           }}>Open NC</Button>

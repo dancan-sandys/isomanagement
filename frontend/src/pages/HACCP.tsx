@@ -1038,19 +1038,15 @@ const HACCP: React.FC = () => {
                 const ccpId = Number((ccpForm as any).monitor_ccp_id);
                 if (!ccpId) return;
                 try {
-                  await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-                    body: JSON.stringify({
-                      batch_number: (ccpForm as any).monitor_batch,
-                      measured_value: Number((ccpForm as any).monitor_value),
-                      unit: (ccpForm as any).monitor_unit,
-                    })
+                  // Use the API service instead of direct fetch
+                  const api = (await import('../services/api')).api;
+                  await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, {
+                    batch_number: (ccpForm as any).monitor_batch,
+                    measured_value: Number((ccpForm as any).monitor_value),
+                    unit: (ccpForm as any).monitor_unit,
                   });
-                  const res = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent((ccpForm as any).monitor_batch || '')}`, {
-                    headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-                  });
-                  const data = await res.json();
+                  const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent((ccpForm as any).monitor_batch || '')}`);
+                  const data = res.data;
                   if (data?.found) {
                     window.open(`/nonconformance/${data.id}`, '_blank');
                   } else {

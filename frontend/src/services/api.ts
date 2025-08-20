@@ -3,16 +3,24 @@ import axios, { AxiosResponse } from 'axios';
 // Resolve API base URL intelligently for dev/prod
 function resolveBaseURL(): string {
   const envUrl = process.env.REACT_APP_API_URL;
-  if (envUrl && envUrl.trim().length > 0) return envUrl.trim();
   
-  // In development, always use the proxy
+  // Always use environment variable if set, regardless of NODE_ENV
+  if (envUrl && envUrl.trim().length > 0) {
+    console.log('Using API URL from environment:', envUrl);
+    return envUrl.trim();
+  }
+  
+  // In development, use proxy if no env URL is set
   if (process.env.NODE_ENV === 'development') {
+    console.log('Using development proxy: /api/v1');
     return '/api/v1';
   }
   
   // Same-origin reverse proxy in production
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return origin ? `${origin}/api/v1` : '/api/v1';
+  const fallbackUrl = origin ? `${origin}/api/v1` : '/api/v1';
+  console.log('Using production fallback URL:', fallbackUrl);
+  return fallbackUrl;
 }
 
 // Create axios instance
