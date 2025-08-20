@@ -19,10 +19,10 @@ class UserRole(str, enum.Enum):
 
 
 class UserStatus(str, enum.Enum):
-    ACTIVE = "ACTIVE"
-    INACTIVE = "INACTIVE"
-    SUSPENDED = "SUSPENDED"
-    PENDING_APPROVAL = "PENDING_APPROVAL"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
+    PENDING_APPROVAL = "pending_approval"
 
 
 class User(Base):

@@ -47,6 +47,7 @@ import {
   BarChart,
   PieChart,
   TableChart,
+  Download,
 } from '@mui/icons-material';
 import { documentsAPI } from '../../services/api';
 

@@ -11,7 +11,7 @@ const NonConformance: React.FC = () => {
   const { list } = useSelector((s: RootState) => s.nc);
   const navigate = useNavigate();
   const [openCreate, setOpenCreate] = useState(false);
-  const [createPayload, setCreatePayload] = useState({ title: '', description: '', source: 'OTHER', severity: 'medium' });
+  const [createPayload, setCreatePayload] = useState({ title: '', description: '', source: 'other', severity: 'medium' });
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [source, setSource] = useState('');
@@ -36,11 +36,11 @@ const NonConformance: React.FC = () => {
           <TextField label="Search" size="small" value={search} onChange={e => setSearch(e.target.value)} />
           <TextField label="Status" size="small" select value={status} onChange={e => setStatus(e.target.value)} sx={{ minWidth: 180 }}>
             <MenuItem value="">All</MenuItem>
-            {['OPEN','UNDER_INVESTIGATION','ROOT_CAUSE_IDENTIFIED','CAPA_ASSIGNED','IN_PROGRESS','COMPLETED','VERIFIED','CLOSED'].map(s => (<MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>))}
+            {['open','under_investigation','root_cause_identified','capa_assigned','in_progress','completed','verified','closed'].map(s => (<MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>))}
           </TextField>
           <TextField label="Source" size="small" select value={source} onChange={e => setSource(e.target.value)} sx={{ minWidth: 180 }}>
             <MenuItem value="">All</MenuItem>
-            {['PRP','HACCP','SUPPLIER','AUDIT','DOCUMENT','PRODUCTION_DEVIATION','COMPLAINT','OTHER'].map(s => (<MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>))}
+            {['prp','haccp','supplier','audit','document','production_deviation','complaint','other'].map(s => (<MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>))}
           </TextField>
           <TextField label="Severity" size="small" select value={severity} onChange={e => setSeverity(e.target.value)} sx={{ minWidth: 180 }}>
             <MenuItem value="">All</MenuItem>
@@ -88,7 +88,7 @@ const NonConformance: React.FC = () => {
             <TextField label="Title" value={createPayload.title} onChange={e => setCreatePayload({ ...createPayload, title: e.target.value })} />
             <TextField label="Description" multiline minRows={3} value={createPayload.description} onChange={e => setCreatePayload({ ...createPayload, description: e.target.value })} />
             <TextField select label="Source" value={createPayload.source} onChange={e => setCreatePayload({ ...createPayload, source: e.target.value })}>
-              {['PRP','HACCP','SUPPLIER','AUDIT','DOCUMENT','PRODUCTION_DEVIATION','COMPLAINT','OTHER'].map(s => (<MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>))}
+              {['prp','haccp','supplier','audit','document','production_deviation','complaint','other'].map(s => (<MenuItem key={s} value={s}>{s.split('_').join(' ')}</MenuItem>))}
             </TextField>
             <TextField select label="Severity" value={createPayload.severity} onChange={e => setCreatePayload({ ...createPayload, severity: e.target.value })}>
               {['low','medium','high','critical'].map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}

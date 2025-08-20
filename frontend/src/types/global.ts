@@ -101,7 +101,7 @@ export interface Document {
   document_number: string;
   version: string;
   category: string;
-  status: 'draft' | 'review' | 'approved' | 'obsolete';
+  status: 'draft' | 'under_review' | 'approved' | 'obsolete' | 'archived';
   file_path?: string;
   file_size?: number;
   mime_type?: string;
@@ -182,7 +182,7 @@ export interface NonConformance {
   description: string;
   category: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'investigating' | 'corrective_action' | 'closed' | 'closed_verified';
+  status: 'open' | 'under_investigation' | 'root_cause_identified' | 'capa_assigned' | 'in_progress' | 'completed' | 'verified' | 'closed';
   reported_by: number;
   reported_at: string;
   assigned_to?: number;
@@ -202,7 +202,7 @@ export interface CAPA {
   title: string;
   description: string;
   type: 'corrective' | 'preventive';
-  status: 'open' | 'in_progress' | 'completed' | 'closed' | 'overdue';
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'verified' | 'closed' | 'overdue';
   priority: 'low' | 'medium' | 'high' | 'critical';
   assigned_to?: number;
   due_date?: string;
@@ -298,7 +298,7 @@ export interface Complaint {
   description: string;
   category: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'received' | 'investigating' | 'resolved' | 'closed';
+  status: 'open' | 'under_investigation' | 'resolved' | 'closed';
   reported_by: number;
   reported_at: string;
   assigned_to?: number;

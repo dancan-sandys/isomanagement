@@ -1203,7 +1203,10 @@ const Documents: React.FC = () => {
         onClose={() => setWorkflowDialogOpen(false)}
         onWorkflowUpdate={(workflow) => {
           console.log('Workflow updated:', workflow);
-          // Handle workflow updates
+          console.log('Document status in workflow:', workflow?.status);
+          // Refresh document list to reflect status changes
+          loadDocuments();
+          loadStats();
         }}
       />
 

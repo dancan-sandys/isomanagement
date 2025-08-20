@@ -565,10 +565,10 @@ const Users: React.FC = () => {
                     <InputLabel>Status</InputLabel>
                     <Select value={userFilters.status} onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}>
                       <MenuItem value="">All Statuses</MenuItem>
-                      <MenuItem value="ACTIVE">Active</MenuItem>
-                      <MenuItem value="INACTIVE">Inactive</MenuItem>
-                      <MenuItem value="SUSPENDED">Suspended</MenuItem>
-                      <MenuItem value="PENDING_APPROVAL">Pending Approval</MenuItem>
+                      <MenuItem value="active">Active</MenuItem>
+                      <MenuItem value="inactive">Inactive</MenuItem>
+                      <MenuItem value="suspended">Suspended</MenuItem>
+                      <MenuItem value="pending_approval">Pending Approval</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>

@@ -111,7 +111,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
   }, [open, document]);
 
   const loadWorkflow = async () => {
-    if (!document) return;
+    if (!document) return null;
     
     setLoading(true);
     setError(null);
@@ -121,8 +121,10 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
       const data = (resp && (resp.data || resp)) as any; // ResponseModel -> data
       setWorkflow(data);
       setActiveStep(Math.max(0, (data?.current_step || 1) - 1));
+      return data;
     } catch (error: any) {
       setError(error.message || 'Failed to load workflow');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -162,7 +164,12 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
       }
 
       // Reload the workflow to get updated status
-      await loadWorkflow();
+      const updatedWorkflow = await loadWorkflow();
+      
+      // Notify parent component about workflow update
+      if (onWorkflowUpdate && updatedWorkflow) {
+        onWorkflowUpdate(updatedWorkflow);
+      }
       
       setComments('');
     } catch (error: any) {

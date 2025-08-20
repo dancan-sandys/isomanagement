@@ -48,7 +48,7 @@ def upgrade() -> None:
             sa.Column('resolved_at', sa.DateTime),
             sa.Column('resolution_notes', sa.Text),
             sa.Column('status', sa.Enum('active', 'resolved', 'dismissed', name='allergenflagstatus'), nullable=False, server_default='active'),
-            sa.Column('nc_id', sa.Integer, sa.ForeignKey('nonconformances.id', ondelete='SET NULL'), nullable=True),
+            sa.Column('nc_id', sa.Integer, sa.ForeignKey('non_conformances.id', ondelete='SET NULL'), nullable=True),
             sa.Column('metadata', sa.JSON),
             sa.Column('created_at', sa.DateTime, server_default=sa.text('CURRENT_TIMESTAMP')),
             sa.Column('updated_at', sa.DateTime, server_default=sa.text('CURRENT_TIMESTAMP')),
