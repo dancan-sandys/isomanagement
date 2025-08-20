@@ -23,6 +23,7 @@
     "date-fns": "^2.30.0",
     "formik": "^2.4.5",
     "html5-qrcode": "^2.3.8",
+    "http-proxy-middleware": "^3.0.5",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^18.2.0",
@@ -85,9 +86,9 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.1.1"
   },
-  "proxy": "http://localhost:8000",
   "overrides": {
     "@types/d3-dispatch": "3.0.7",
     "@types/d3": "7.4.3"
-  }
+  },
+  "proxy": "http://localhost:8000"
 }

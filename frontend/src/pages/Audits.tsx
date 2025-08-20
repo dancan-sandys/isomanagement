@@ -360,7 +360,7 @@ const Audits: React.FC = () => {
                 <Stack key={att.id} direction="row" alignItems="center" justifyContent="space-between">
                   <Typography variant="body2">{att.filename}</Typography>
                   <Stack direction="row" spacing={1}>
-                    <Button size="small" onClick={() => window.open(`${process.env.REACT_APP_API_URL || '/api/v1'}/audits/attachments/${att.id}/download`, '_blank')}>Download</Button>
+                    <Button size="small" onClick={() => window.open(`/api/v1/audits/attachments/${att.id}/download`, '_blank')}>Download</Button>
                     <Button size="small" color="error" onClick={() => removeAttachment(att.id)}>Delete</Button>
                   </Stack>
                 </Stack>
