@@ -145,7 +145,7 @@ const HACCP: React.FC = () => {
   });
   const [hazardForm, setHazardForm] = useState({
     process_step_id: '',
-    hazard_type: 'biological',
+    hazard_type: 'BIOLOGICAL',
     hazard_name: '',
     description: '',
     likelihood: '1',
@@ -366,7 +366,7 @@ const HACCP: React.FC = () => {
     if (selectedHazardItem) {
       setHazardForm({
         process_step_id: String(selectedHazardItem.process_step_id ?? ''),
-        hazard_type: selectedHazardItem.hazard_type || 'biological',
+        hazard_type: selectedHazardItem.hazard_type || 'BIOLOGICAL',
         hazard_name: selectedHazardItem.hazard_name || '',
         description: selectedHazardItem.description || '',
         likelihood: String(selectedHazardItem.likelihood ?? '1'),
@@ -378,7 +378,7 @@ const HACCP: React.FC = () => {
         ccp_justification: selectedHazardItem.ccp_justification || '',
       });
     } else {
-      setHazardForm({ process_step_id: '', hazard_type: 'biological', hazard_name: '', description: '', likelihood: '1', severity: '1', control_measures: '', is_controlled: false, control_effectiveness: '', is_ccp: false, ccp_justification: '' });
+      setHazardForm({ process_step_id: '', hazard_type: 'BIOLOGICAL', hazard_name: '', description: '', likelihood: '1', severity: '1', control_measures: '', is_controlled: false, control_effectiveness: '', is_ccp: false, ccp_justification: '' });
     }
   }, [selectedHazardItem]);
 
@@ -567,10 +567,10 @@ const HACCP: React.FC = () => {
 
   const getHazardTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'biological': return <Science />;
-      case 'chemical': return <Warning />;
-      case 'physical': return <Security />;
-      case 'allergen': return <Warning />;
+          case 'biological': return <Science />;
+    case 'chemical': return <Warning />;
+    case 'physical': return <Security />;
+    case 'allergen': return <Warning />;
       default: return <Security />;
     }
   };
@@ -1271,10 +1271,10 @@ const HACCP: React.FC = () => {
                   label="Hazard Type"
                   onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })}
                 >
-                  <MenuItem value="biological">Biological</MenuItem>
-                  <MenuItem value="chemical">Chemical</MenuItem>
-                  <MenuItem value="physical">Physical</MenuItem>
-                  <MenuItem value="allergen">Allergen</MenuItem>
+                              <MenuItem value="BIOLOGICAL">Biological</MenuItem>
+            <MenuItem value="CHEMICAL">Chemical</MenuItem>
+            <MenuItem value="PHYSICAL">Physical</MenuItem>
+            <MenuItem value="ALLERGEN">Allergen</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

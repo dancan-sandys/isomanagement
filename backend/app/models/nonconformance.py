@@ -6,25 +6,26 @@ import enum
 
 
 class NonConformanceSource(str, enum.Enum):
-    PRP = "prp"
-    AUDIT = "audit"
-    COMPLAINT = "complaint"
-    PRODUCTION_DEVIATION = "production_deviation"
-    SUPPLIER = "supplier"
-    HACCP = "haccp"
-    DOCUMENT = "document"
-    OTHER = "other"
+    PRP = "PRP"
+    AUDIT = "AUDIT"
+    COMPLAINT = "COMPLAINT"
+    PRODUCTION_DEVIATION = "PRODUCTION_DEVIATION"
+    SUPPLIER = "SUPPLIER"
+    HACCP = "HACCP"
+    DOCUMENT = "DOCUMENT"
+    INSPECTION = "INSPECTION"
+    OTHER = "OTHER"
 
 
 class NonConformanceStatus(str, enum.Enum):
-    OPEN = "open"
-    UNDER_INVESTIGATION = "under_investigation"
-    ROOT_CAUSE_IDENTIFIED = "root_cause_identified"
-    CAPA_ASSIGNED = "capa_assigned"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    VERIFIED = "verified"
-    CLOSED = "closed"
+    OPEN = "OPEN"
+    UNDER_INVESTIGATION = "UNDER_INVESTIGATION"
+    ROOT_CAUSE_IDENTIFIED = "ROOT_CAUSE_IDENTIFIED"
+    CAPA_ASSIGNED = "CAPA_ASSIGNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    VERIFIED = "VERIFIED"
+    CLOSED = "CLOSED"
 
 
 class CAPAStatus(str, enum.Enum):

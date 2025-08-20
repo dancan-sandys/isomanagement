@@ -204,8 +204,8 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({ children 
         }}
       >
         <Toolbar>
-          <IconButton
-            color="inherit"
+            <IconButton 
+              color="inherit" 
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
@@ -225,8 +225,8 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({ children 
               </Badge>
             </IconButton>
             
-            <IconButton
-              color="inherit"
+            <IconButton 
+              color="inherit" 
               onClick={handleProfileMenuOpen}
             >
               <Avatar sx={{ width: 32, height: 32 }}>
@@ -327,41 +327,41 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({ children 
 
       {/* Bottom Navigation (Mobile Only) */}
       {isMobile && (
-        <Paper
-          sx={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
+      <Paper 
+        sx={{ 
+          position: 'fixed', 
+          bottom: 0, 
+          left: 0, 
+          right: 0,
             zIndex: theme.zIndex.appBar,
-          }}
+        }} 
           elevation={3}
-        >
-          <BottomNavigation
-            value={bottomNavValue}
-            onChange={handleBottomNavChange}
-            showLabels
-            sx={{
-              '& .MuiBottomNavigationAction-root': {
+      >
+        <BottomNavigation
+          value={bottomNavValue}
+          onChange={handleBottomNavChange}
+          showLabels
+          sx={{
+            '& .MuiBottomNavigationAction-root': {
                 minWidth: 'auto',
                 padding: '6px 12px 8px',
-              },
-            }}
-          >
-            {bottomNavItems.map((item, index) => (
-              <BottomNavigationAction
+            },
+          }}
+        >
+          {bottomNavItems.map((item, index) => (
+            <BottomNavigationAction
                 key={index}
-                label={item.label}
+              label={item.label}
                 icon={item.icon}
                 sx={{
                   '&.Mui-selected': {
                     color: theme.palette.primary.main,
                   },
                 }}
-              />
-            ))}
-          </BottomNavigation>
-        </Paper>
+            />
+          ))}
+        </BottomNavigation>
+      </Paper>
       )}
     </Box>
   );

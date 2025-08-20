@@ -234,6 +234,16 @@
   - [x] Global CSS overrides for consistent compact styling
   - [x] Mobile-responsive compact adjustments
 
+#### 3.1.5 Document Status Consistency Fix ✅
+- [x] **Fixed status mapping inconsistencies**
+  - [x] Updated document list status display: `draft` → `"Draft"` (was `"Created"`)
+  - [x] Updated document list status display: `under_review` → `"Reviewed"` (to match workflow stages)
+  - [x] Updated workflow stages: `Draft → Reviewed → Approved` (consistent naming)
+  - [x] Fixed filter dropdown options to match new status labels
+  - [x] Ensured complete consistency between document table and workflow dialog
+  - [x] Removed confusing horizontal workflow diagram from document list page
+  - [x] Simplified interface with clean action buttons layout
+
 ### 3.2 Mobile Experience Optimization ✅ **COMPLETED**
 
 #### 3.2.1 Mobile-Specific Features ✅ **COMPLETED**
