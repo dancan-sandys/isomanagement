@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box } from '@mui/material';
+import './styles/compact-layout.css'; // Import compact layout styles
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -50,7 +51,22 @@ import HiddenDemoTools from './pages/HiddenDemoTools';
 
 function App() {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      minHeight: '100vh',
+      // Compact spacing for better space utilization
+      '& .MuiContainer-root': {
+        paddingLeft: 2,
+        paddingRight: 2,
+      },
+      '& .MuiGrid-container': {
+        margin: 0,
+      },
+      '& .MuiCard-root': {
+        marginBottom: 1,
+      },
+    }}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
@@ -113,8 +129,9 @@ function App() {
                       <Route path="/traceability/reports" element={<Navigate to="/traceability?tab=3" replace />} />
                       
                       {/* Audit Management - QA and Auditor roles */}
-                      <Route path="/audits/internal" element={<Audits />} />
-                      <Route path="/audits/external" element={<Audits />} />
+                      <Route path="/audits" element={<Audits />} />
+                      <Route path="/audits/internal" element={<Navigate to="/audits" replace />} />
+                      <Route path="/audits/external" element={<Navigate to="/audits" replace />} />
                       <Route path="/audits/:id" element={<AuditDetail />} />
                       <Route path="/audits/schedule" element={<Navigate to="/audits?tab=schedule" replace />} />
                       <Route path="/audits/findings" element={<Navigate to="/audits?tab=findings" replace />} />

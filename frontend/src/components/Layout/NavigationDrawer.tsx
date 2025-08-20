@@ -47,8 +47,8 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}> {/* Reduced padding from 3 to 2 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}> {/* Reduced gap and margin */}
           <Box sx={{ 
             width: 40, 
             height: 40, 
@@ -79,8 +79,8 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
 
       {/* User Info */}
       {user && (
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+        <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}> {/* Reduced padding from 2 to 1.5 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}> {/* Reduced gap and margin */}
             <Avatar sx={{ width: 32, height: 32 }}>
               {user.profile_picture ? (
                 <img src={user.profile_picture} alt={user.full_name} />

@@ -92,7 +92,7 @@ interface PRPProgram {
   overdue_count: number;
   created_by: string;
   next_due_date?: string;
-  responsible_person?: string;
+  responsible_person?: number | string;
   compliance_percentage?: number;
 }
 
@@ -103,7 +103,7 @@ interface PRPChecklist {
   status: string;
   scheduled_date: string;
   due_date: string;
-  assigned_to: string;
+  assigned_to: number | string;
   compliance_percentage: number;
   total_items: number;
   passed_items: number;
@@ -159,7 +159,7 @@ const PRP: React.FC = () => {
     description: '',
     category: '',
     frequency: '',
-    responsible_person: '',
+    responsible_person: 0,
     objective: '',
     scope: '',
     responsible_department: '',
@@ -172,7 +172,7 @@ const PRP: React.FC = () => {
     description: '',
     scheduled_date: '',
     due_date: '',
-    assigned_to: '',
+    assigned_to: 0,
   });
 
   const [dashboardData, setDashboardData] = useState({
@@ -292,7 +292,7 @@ const PRP: React.FC = () => {
           description: '',
           category: '',
           frequency: '',
-          responsible_person: '',
+          responsible_person: 0,
           objective: '',
           scope: '',
           responsible_department: '',
@@ -321,7 +321,7 @@ const PRP: React.FC = () => {
           description: '',
           scheduled_date: '',
           due_date: '',
-          assigned_to: '',
+          assigned_to: 0,
         });
         setSelectedAssignee(null);
         fetchChecklists();
@@ -651,10 +651,18 @@ const PRP: React.FC = () => {
                   <TableCell>
                     <Box display="flex" alignItems="center" gap={1}>
                       <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
-                        {program.responsible_person?.charAt(0) || 'U'}
+                        {typeof program.responsible_person === 'string' && program.responsible_person
+                          ? program.responsible_person.charAt(0)
+                          : typeof program.responsible_person === 'number' && program.responsible_person > 0
+                            ? String(program.responsible_person).charAt(0)
+                            : 'U'}
                       </Avatar> 
                       <Typography variant="body2">
-                        {program.responsible_person || 'Unassigned'}
+                        {typeof program.responsible_person === 'string' && program.responsible_person
+                          ? program.responsible_person
+                          : typeof program.responsible_person === 'number' && program.responsible_person > 0
+                            ? `User #${program.responsible_person}`
+                            : 'Unassigned'}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -795,10 +803,18 @@ const PRP: React.FC = () => {
                   <TableCell>
                     <Box display="flex" alignItems="center" gap={1}>
                       <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
-                        {checklist.assigned_to?.charAt(0) || 'U'}
+                        {typeof checklist.assigned_to === 'string' && checklist.assigned_to
+                          ? checklist.assigned_to.charAt(0)
+                          : typeof checklist.assigned_to === 'number' && checklist.assigned_to > 0
+                            ? String(checklist.assigned_to).charAt(0)
+                            : 'U'}
                       </Avatar>
                       <Typography variant="body2">
-                        {checklist.assigned_to || 'Unassigned'}
+                        {typeof checklist.assigned_to === 'string' && checklist.assigned_to
+                          ? checklist.assigned_to
+                          : typeof checklist.assigned_to === 'number' && checklist.assigned_to > 0
+                            ? `User #${checklist.assigned_to}`
+                            : 'Unassigned'}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -1103,7 +1119,7 @@ const PRP: React.FC = () => {
                   value={selectedResponsible}
                   onChange={(_, val) => {
                     setSelectedResponsible(val);
-                    setProgramForm({ ...programForm, responsible_person: val ? (val.full_name || val.username) : '' });
+                    setProgramForm({ ...programForm, responsible_person: val ? val.id : 0 });
                   }}
                   onInputChange={(_, val, reason) => {
                     if (reason === 'input') setUserSearch(val);
@@ -1218,7 +1234,7 @@ const PRP: React.FC = () => {
               value={selectedAssignee}
               onChange={(_, val) => {
                 setSelectedAssignee(val);
-                setChecklistForm({ ...checklistForm, assigned_to: val ? (val.full_name || val.username) : '' });
+                setChecklistForm({ ...checklistForm, assigned_to: val ? val.id : 0 });
               }}
               onInputChange={(_, val, reason) => {
                 if (reason === 'input') setUserSearch(val);

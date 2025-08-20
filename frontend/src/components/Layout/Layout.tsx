@@ -40,7 +40,7 @@ interface LayoutProps {
   children?: React.ReactNode;
 }
 
-const drawerWidth = 280;
+const drawerWidth = 240; // Reduced from 280 for more compact layout
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const dispatch = useDispatch();
@@ -434,18 +434,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <SideRail onNavigate={handleNavigation} isSelected={isSelected} />
         </Box>
 
-        {/* Enhanced Main Content */}
+        {/* Enhanced Main Content - Compact Layout */}
         <Box
           component="main"
           id="main-content"
           tabIndex={-1}
           sx={{
             flexGrow: 1,
-            p: 3,
+            p: 2, // Reduced padding from 3 to 2
             // Leave space for the compact rail on desktop
             ml: { md: `72px` },
             width: { sm: '100%' },
-            mt: 8, // Account for AppBar height
+            mt: 7, // Reduced from 8 to 7 for more compact spacing
             backgroundColor: 'background.default',
             minHeight: '100vh',
             background: (theme) => theme.palette.mode === 'light' 

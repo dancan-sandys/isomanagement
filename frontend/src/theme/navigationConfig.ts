@@ -10,7 +10,6 @@ import {
   Assessment,
   School,
   Build,
-  Inventory,
   VerifiedUser,
   ReportProblem,
   SupportAgent,
@@ -36,7 +35,7 @@ export interface NavigationSection {
   readonly order: number;
 }
 
-// Navigation configuration
+// COMPACT Navigation configuration - Reduced spacing and optimized layout
 export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   dashboard: {
     title: 'Dashboard',
@@ -44,8 +43,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 1,
     items: [
       { text: 'Overview', path: '/dashboard' },
-      { text: 'Analytics', path: '/dashboard/analytics' },
-      { text: 'Reports', path: '/dashboard/reports' },
     ],
   },
   
@@ -130,8 +127,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 8,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Auditor', 'System Administrator'],
     items: [
-      { text: 'Internal Audits', path: '/audits/internal' },
-      { text: 'External Audits', path: '/audits/external' },
+      { text: 'Audits', path: '/audits' },
       { text: 'Audit Schedule', path: '/audits/schedule' },
       { text: 'Findings & NCs', path: '/audits/findings' },
       { text: 'Audit Reports', path: '/audits/reports' },
@@ -164,20 +160,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
       { text: 'Work Orders', path: '/maintenance/work-orders' },
       { text: 'Calibration', path: '/maintenance/calibration' },
       { text: 'Maintenance History', path: '/maintenance/history' },
-    ],
-  },
-  
-  inventory: {
-    title: 'Inventory Management',
-    icon: Inventory,
-    order: 11,
-    requiredRoles: ['Production Manager', 'Production Operator', 'Warehouse Manager', 'System Administrator'],
-    items: [
-      { text: 'Raw Materials', path: '/inventory/materials' },
-      { text: 'Finished Products', path: '/inventory/products' },
-      { text: 'Stock Levels', path: '/inventory/stock' },
-      { text: 'Inventory Counts', path: '/inventory/counts' },
-      { text: 'Inventory Reports', path: '/inventory/reports' },
     ],
   },
   
@@ -228,15 +210,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     ],
   },
 
-  advanced: {
-    title: 'Advanced Features',
-    icon: Settings,
-    order: 16,
-    items: [
-      { text: 'Advanced Reporting', path: '/advanced-reporting' },
-      { text: 'Advanced Security', path: '/advanced-security' },
-    ],
-  },
 };
 
 // Helper function to get navigation sections for a user
