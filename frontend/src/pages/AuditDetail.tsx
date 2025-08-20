@@ -191,7 +191,7 @@ const AuditDetail: React.FC = () => {
                   <TableCell>{att.filename}</TableCell>
                   <TableCell>{att.uploaded_at}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => window.open(`${process.env.REACT_APP_API_URL || '/api/v1'}/audits/attachments/${att.id}/download`, '_blank')}><AttachFile /></IconButton>
+                    <IconButton size="small" onClick={() => window.open(`/api/v1/audits/attachments/${att.id}/download`, '_blank')}><AttachFile /></IconButton>
                     <IconButton size="small" color="error" onClick={async () => { if (!window.confirm('Delete attachment?')) return; await auditsAPI.deleteAttachment(att.id); const att2 = await auditsAPI.listAttachments(auditId); setAttachments(att2); }}><Delete /></IconButton>
                   </TableCell>
                 </TableRow>
@@ -376,7 +376,7 @@ const AuditDetail: React.FC = () => {
                 <TableRow key={att.id}>
                   <TableCell>{att.filename}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => window.open(`${process.env.REACT_APP_API_URL || '/api/v1'}/audits/checklist/attachments/${att.id}/download`, '_blank')}><AttachFile /></IconButton>
+                    <IconButton size="small" onClick={() => window.open(`/api/v1/audits/checklist/attachments/${att.id}/download`, '_blank')}><AttachFile /></IconButton>
                     <IconButton size="small" color="error" onClick={async () => { if (!itemForAttachments) return; if (!window.confirm('Delete attachment?')) return; await auditsAPI.deleteItemAttachment(att.id); const list = await auditsAPI.listItemAttachments(itemForAttachments); setItemAttachments(list); }}><Delete /></IconButton>
                   </TableCell>
                 </TableRow>
@@ -454,7 +454,7 @@ const AuditDetail: React.FC = () => {
                 <TableRow key={att.id}>
                   <TableCell>{att.filename}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => window.open(`${process.env.REACT_APP_API_URL || '/api/v1'}/audits/findings/attachments/${att.id}/download`, '_blank')}><AttachFile /></IconButton>
+                    <IconButton size="small" onClick={() => window.open(`/api/v1/audits/findings/attachments/${att.id}/download`, '_blank')}><AttachFile /></IconButton>
                     <IconButton size="small" color="error" onClick={async () => { if (!findingForAttachments) return; if (!window.confirm('Delete attachment?')) return; await auditsAPI.deleteFindingAttachment(att.id); const list = await auditsAPI.listFindingAttachments(findingForAttachments); setFindingAttachments(list); }}><Delete /></IconButton>
                   </TableCell>
                 </TableRow>
