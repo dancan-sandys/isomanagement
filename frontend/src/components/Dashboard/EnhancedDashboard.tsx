@@ -274,7 +274,7 @@ const EnhancedDashboard: React.FC = () => {
             </Typography>
             <Typography variant="body2" color="textSecondary">
               Last updated: {new Date().toLocaleString()}
-            </Typography>
+        </Typography>
           </Box>
         </Box>
         
@@ -321,7 +321,7 @@ const EnhancedDashboard: React.FC = () => {
                 },
               }}
             >
-              <CardContent>
+        <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                   <Box>
                     <Typography variant="h3" component="div" fontWeight="bold" color={metric.color}>
@@ -358,9 +358,9 @@ const EnhancedDashboard: React.FC = () => {
                     },
                   }}
                 />
-              </CardContent>
-            </Card>
-          </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
         ))}
       </Grid>
 

@@ -248,7 +248,7 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
 
         {workflow && (
           <Box>
-            {/* Three-stage primary flow: Created → Reviewed → Approved */}
+            {/* Three-stage primary flow: Draft → Reviewed → Approved */}
             {(() => {
               const createdBy = (document?.created_by_name || document?.owner_name || document?.created_by || '').toString();
               const createdAt = document?.created_at ? new Date(document.created_at).toLocaleString() : '';
@@ -264,8 +264,8 @@ const DocumentWorkflowDialog: React.FC<DocumentWorkflowDialogProps> = ({
 
               const stages = [
                 {
-                  key: 'created',
-                  name: 'Created',
+                  key: 'draft',
+                  name: 'Draft',
                   status: 'completed' as const,
                   by: createdBy,
                   at: createdAt,

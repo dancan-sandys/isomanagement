@@ -68,7 +68,7 @@ def login_and_test():
                     product_id = products['data'][0]['id']
                     response = requests.get(f"{base_url}/haccp/products/{product_id}/hazards", headers=headers)
                     print(f"Hazards endpoint: {response.status_code}")
-                    if response.status_code == 200:
+                if response.status_code == 200:
                         hazards = response.json()
                         print(f"Found {len(hazards.get('data', []))} hazards")
                         
@@ -85,11 +85,11 @@ def login_and_test():
                             # Test decision tree run
                             response = requests.post(f"{base_url}/haccp/hazards/{hazard_id}/decision-tree/run", headers=headers)
                             print(f"Decision tree run endpoint: {response.status_code}")
-                            
-        else:
+                    
+            else:
             print(f"❌ Login failed: {response.text}")
-            
-    except Exception as e:
+                
+        except Exception as e:
         print(f"❌ Error: {e}")
 
 if __name__ == "__main__":

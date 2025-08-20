@@ -7,17 +7,17 @@ from datetime import datetime, timedelta
 
 
 class HazardType(str, enum.Enum):
-    BIOLOGICAL = "biological"
-    CHEMICAL = "chemical"
-    PHYSICAL = "physical"
-    ALLERGEN = "allergen"
+    BIOLOGICAL = "BIOLOGICAL"
+    CHEMICAL = "CHEMICAL"
+    PHYSICAL = "PHYSICAL"
+    ALLERGEN = "ALLERGEN"
 
 
 class RiskLevel(str, enum.Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 
 class RiskThreshold(Base):
@@ -76,9 +76,9 @@ class RiskThreshold(Base):
 
 
 class CCPStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    SUSPENDED = "suspended"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    SUSPENDED = "SUSPENDED"
 
 
 class Product(Base):

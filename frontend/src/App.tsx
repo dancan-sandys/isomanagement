@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box } from '@mui/material';
 import './styles/compact-layout.css'; // Import compact layout styles
+import './utils/resizeObserverFix'; // Fix ResizeObserver loop errors
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
