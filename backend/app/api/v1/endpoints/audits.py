@@ -47,6 +47,9 @@ from reportlab.pdfgen import canvas
 import logging
 
 logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
 # Schedule conflict detection
 @router.get("/schedule/conflicts", dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def detect_schedule_conflicts(
@@ -130,8 +133,6 @@ async def bulk_update_schedule(
             continue
     db.commit()
     return {"updated": updated}
-
-router = APIRouter()
 
 
 def can_perform_destructive_action(audit: AuditModel, current_user: User, db: Session) -> bool:
