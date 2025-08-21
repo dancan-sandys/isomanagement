@@ -1,0 +1,95 @@
+import React, { useEffect, useState } from 'react';
+import { Box, Stack, Typography, TextField, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton } from '@mui/material';
+import { Construction, Edit } from '@mui/icons-material';
+import { auditsAPI } from '../services/api';
+
+const AuditFindings: React.FC = () => {
+  const [auditId, setAuditId] = useState<string>('');
+  const [findings, setFindings] = useState<any[]>([]);
+  const [filters, setFilters] = useState<{ severity: string; status: string }>({ severity: '', status: '' });
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    if (!auditId) { setFindings([]); return; }
+    setLoading(true);
+    try {
+      const resp = await auditsAPI.listFindings(Number(auditId));
+      let items: any[] = resp?.data || resp || [];
+      if (filters.severity) items = items.filter(f => String(f.severity) === filters.severity);
+      if (filters.status) items = items.filter(f => String(f.status) === filters.status);
+      setFindings(items);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [auditId, filters]);
+
+  return (
+    <Box p={2}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2, gap: 1, flexWrap: 'wrap' }}>
+        <Typography variant="h5">Audit Findings</Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField size="small" label="Audit ID" value={auditId} onChange={(e) => setAuditId(e.target.value)} sx={{ width: 120 }} />
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Severity</InputLabel>
+            <Select value={filters.severity} label="Severity" onChange={(e) => setFilters({ ...filters, severity: String(e.target.value) })}>
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="minor">Minor</MenuItem>
+              <MenuItem value="major">Major</MenuItem>
+              <MenuItem value="critical">Critical</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Status</InputLabel>
+            <Select value={filters.status} label="Status" onChange={(e) => setFilters({ ...filters, status: String(e.target.value) })}>
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="open">Open</MenuItem>
+              <MenuItem value="in_progress">In Progress</MenuItem>
+              <MenuItem value="verified">Verified</MenuItem>
+              <MenuItem value="closed">Closed</MenuItem>
+            </Select>
+          </FormControl>
+          <Button variant="contained" size="small" onClick={load}>Apply</Button>
+          <Button variant="outlined" size="small" onClick={() => { setFilters({ severity: '', status: '' }); load(); }}>Clear</Button>
+        </Stack>
+      </Stack>
+
+      <Card variant="outlined">
+        <CardContent>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Clause</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Severity</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Target Date</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {findings.map((f: any) => (
+                <TableRow key={f.id}>
+                  <TableCell>{f.clause_ref || '-'}</TableCell>
+                  <TableCell>{f.description}</TableCell>
+                  <TableCell>{String(f.severity)}</TableCell>
+                  <TableCell>{String(f.status)}</TableCell>
+                  <TableCell>{(f.target_completion_date || '').toString().slice(0,10)}</TableCell>
+                  <TableCell align="right">
+                    <IconButton size="small"><Edit /></IconButton>
+                    <IconButton size="small" onClick={async () => { const nc = await auditsAPI.createNCFromFinding(f.id); window.open(`/nonconformance/${nc.id}`, '_blank'); }}><Construction /></IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {findings.length === 0 && (
+                <TableRow><TableCell colSpan={6}>{loading ? 'Loading...' : 'No findings found'}</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+};
+
+export default AuditFindings;
+
