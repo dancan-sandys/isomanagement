@@ -14,8 +14,8 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
   - [ ] RBAC: audits:view/create/update/delete/approve/export enforced
   - [ ] Ownership: lead auditor or program manager for destructive actions
 - Database
-  - [ ] Indexes: title, status, audit_type, department, auditor_id/lead_auditor_id, created_at
-  - [ ] Optional: actual_start_at, actual_end_at (for KPI accuracy)
+  - [x] Indexes: title, status, audit_type, department, auditor_id/lead_auditor_id, created_at
+  - [x] Optional: actual_start_at, actual_end_at (for KPI accuracy)
 - Frontend
   - [ ] Page `frontend/src/pages/Audits.tsx` shows register with filters, pagination, sorting
   - [ ] Create/Edit dialog includes title, type, status, dates, scope, objectives, criteria, department, lead/team auditors
@@ -37,10 +37,10 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
   - [ ] GET /api/v1/audits/programs/{id}/schedule for program timeline
   - [x] NEW GET /api/v1/audits/schedule/conflicts (start, end, auditor_id, department)
   - [x] NEW POST /api/v1/audits/schedule/bulk-update (id, start_date, end_date[])
-  - [ ] RBAC: view vs update (MANAGE_PROGRAM for cross-team)
+  - [x] RBAC: view vs update (MANAGE_PROGRAM for cross-team)
 - Database
-  - [ ] Indexes: (start_date, end_date), (auditor_id, start_date), (lead_auditor_id, start_date)
-  - [ ] Fields: schedule_lock, lock_reason, reschedule_count, last_rescheduled_at
+  - [x] Indexes: (start_date, end_date), (auditor_id, start_date), (lead_auditor_id, start_date)
+  - [x] Fields: schedule_lock, lock_reason, reschedule_count, last_rescheduled_at
 - Frontend
   - [ ] New page `frontend/src/pages/AuditSchedule.tsx` with calendar/Gantt
   - [ ] Filters: program, department, auditor, status; overdue badges

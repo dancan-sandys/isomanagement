@@ -332,7 +332,12 @@ class AuditResponse(AuditBase):
   created_by: int
   created_at: datetime
   updated_at: datetime
+  actual_start_at: datetime | None = None
   actual_end_at: datetime | None = None
+  schedule_lock: bool | None = None
+  lock_reason: str | None = None
+  reschedule_count: int | None = None
+  last_rescheduled_at: datetime | None = None
 
   class Config:
     from_attributes = True

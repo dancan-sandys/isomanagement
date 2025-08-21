@@ -110,10 +110,11 @@ async def bulk_update_schedule(
         audit = db.query(AuditModel).get(audit_id)
         if not audit:
             continue
-        try:
-            check_audit_ownership(audit, current_user, db, "update")
-        except HTTPException:
-            continue
+        # Enforce stronger role for cross-team updates (MANAGE_PROGRAM)
+        if not check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+            # Allow lead auditor to move only their own audits
+            if audit.lead_auditor_id != current_user.id:
+                continue
         start_s = u.get('start_date')
         end_s = u.get('end_date')
         try:
@@ -121,6 +122,9 @@ async def bulk_update_schedule(
                 audit.start_date = datetime.fromisoformat(start_s)
             if end_s:
                 audit.end_date = datetime.fromisoformat(end_s)
+            # Update governance fields
+            audit.reschedule_count = (getattr(audit, 'reschedule_count', 0) or 0) + 1
+            audit.last_rescheduled_at = datetime.utcnow()
             updated += 1
         except Exception:
             continue
