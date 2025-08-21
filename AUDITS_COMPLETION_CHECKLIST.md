@@ -35,8 +35,8 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
 - Backend/API
   - [ ] Use GET /api/v1/audits for dates and PUT /api/v1/audits/{id} to update
   - [ ] GET /api/v1/audits/programs/{id}/schedule for program timeline
-  - [ ] NEW GET /api/v1/audits/schedule/conflicts (start, end, auditor_id, department)
-  - [ ] NEW POST /api/v1/audits/schedule/bulk-update (id, start_date, end_date[])
+  - [x] NEW GET /api/v1/audits/schedule/conflicts (start, end, auditor_id, department)
+  - [x] NEW POST /api/v1/audits/schedule/bulk-update (id, start_date, end_date[])
   - [ ] RBAC: view vs update (MANAGE_PROGRAM for cross-team)
 - Database
   - [ ] Indexes: (start_date, end_date), (auditor_id, start_date), (lead_auditor_id, start_date)
@@ -58,10 +58,10 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
 ### 3) Findings & NCs
 - Backend/API
   - [ ] Per-audit endpoints present (list/add/update, attachments, create-nc)
-  - [ ] NEW GET /api/v1/audits/findings (cross-audit) with filters: audit_id, program_id, severity, status, date range, responsible_person_id, department, has_nc, overdue
-  - [ ] NEW POST /api/v1/audits/findings/bulk-update-status
-  - [ ] NEW POST /api/v1/audits/findings/bulk-assign
-  - [ ] NEW GET /api/v1/audits/findings/analytics (severity/status distributions, closure time stats, dept heatmap)
+  - [x] NEW GET /api/v1/audits/findings (cross-audit) with filters: audit_id, program_id, severity, status, date range, responsible_person_id, department, has_nc, overdue
+  - [x] NEW POST /api/v1/audits/findings/bulk-update-status
+  - [x] NEW POST /api/v1/audits/findings/bulk-assign
+  - [x] NEW GET /api/v1/audits/findings/analytics (severity/status distributions, closure time stats, dept heatmap)
   - [ ] RBAC: view/update; delete restricted to lead auditor or program manager; create NC requires NC permission
 - Database
   - [ ] Indexes: audit_id, severity, status, created_at, responsible_person_id, target_completion_date, related_nc_id
@@ -102,7 +102,7 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
 
 ### Cross-cutting
 - Navigation & Routing
-  - [ ] Add routes: /audits/schedule, /audits/findings, /audits/reports
+  - [x] Add routes: /audits/schedule, /audits/findings, /audits/reports
   - [ ] Update `frontend/src/theme/navigationConfig.ts` if needed
 - Performance & Security
   - [ ] Pagination and server-side filters everywhere; add missing DB indexes

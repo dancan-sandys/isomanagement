@@ -46,6 +46,85 @@ from reportlab.pdfgen import canvas
 import logging
 
 logger = logging.getLogger(__name__)
+# Schedule conflict detection
+@router.get("/schedule/conflicts", dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def detect_schedule_conflicts(
+    start: Optional[datetime] = Query(None),
+    end: Optional[datetime] = Query(None),
+    auditor_id: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Detect schedule conflicts based on overlapping audit date ranges for a given auditor or department.
+    """
+    q = db.query(AuditModel)
+    if auditor_id:
+        q = q.filter((AuditModel.auditor_id == auditor_id) | (AuditModel.lead_auditor_id == auditor_id))
+    if department:
+        q = q.filter(AuditModel.auditee_department == department)
+    audits = q.all()
+    conflicts = []
+    # Simple O(n^2) overlap detection for current scale
+    for i in range(len(audits)):
+        a = audits[i]
+        for j in range(i + 1, len(audits)):
+            b = audits[j]
+            a_start, a_end = getattr(a, 'start_date', None), getattr(a, 'end_date', None)
+            b_start, b_end = getattr(b, 'start_date', None), getattr(b, 'end_date', None)
+            if not a_start or not a_end or not b_start or not b_end:
+                continue
+            # Optional global window restriction
+            if start and a_end < start and b_end < start:
+                continue
+            if end and a_start > end and b_start > end:
+                continue
+            # Overlap if ranges intersect
+            if a_start <= b_end and b_start <= a_end:
+                conflicts.append({
+                    "audit_a": {"id": a.id, "title": a.title, "start": a_start, "end": a_end, "auditor_id": a.auditor_id, "lead_auditor_id": a.lead_auditor_id, "department": a.auditee_department},
+                    "audit_b": {"id": b.id, "title": b.title, "start": b_start, "end": b_end, "auditor_id": b.auditor_id, "lead_auditor_id": b.lead_auditor_id, "department": b.auditee_department},
+                    "reason": "overlap"
+                })
+    return {"total_conflicts": len(conflicts), "conflicts": conflicts}
+
+
+@router.post("/schedule/bulk-update", dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def bulk_update_schedule(
+    updates: List[dict],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Bulk update audit start/end dates. Each item: {id, start_date, end_date} (ISO strings).
+    Enforces ownership: lead auditor or program manager.
+    """
+    updated = 0
+    for u in updates:
+        try:
+            audit_id = int(u.get('id'))
+        except Exception:
+            continue
+        audit = db.query(AuditModel).get(audit_id)
+        if not audit:
+            continue
+        try:
+            check_audit_ownership(audit, current_user, db, "update")
+        except HTTPException:
+            continue
+        start_s = u.get('start_date')
+        end_s = u.get('end_date')
+        try:
+            if start_s:
+                audit.start_date = datetime.fromisoformat(start_s)
+            if end_s:
+                audit.end_date = datetime.fromisoformat(end_s)
+            updated += 1
+        except Exception:
+            continue
+    db.commit()
+    return {"updated": updated}
 
 router = APIRouter()
 

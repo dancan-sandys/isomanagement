@@ -1738,6 +1738,15 @@ export const auditsAPI = {
     const response: AxiosResponse = await api.get('/audits/kpis/overview', { params });
     return response.data;
   },
+  // Schedule utilities
+  detectScheduleConflicts: async (params?: { start?: string; end?: string; auditor_id?: number; department?: string }) => {
+    const response: AxiosResponse = await api.get('/audits/schedule/conflicts', { params });
+    return response.data;
+  },
+  bulkUpdateSchedule: async (updates: Array<{ id: number; start_date?: string; end_date?: string }>) => {
+    const response: AxiosResponse = await api.post('/audits/schedule/bulk-update', updates);
+    return response.data;
+  },
 
   // Audit Plan endpoints
   getPlan: async (auditId: number) => {

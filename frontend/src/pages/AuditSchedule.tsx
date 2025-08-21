@@ -7,6 +7,7 @@ const AuditSchedule: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<{ department: string; auditor_id?: number; status: string }>(() => ({ department: '', auditor_id: undefined, status: '' }));
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
+  const [conflicts, setConflicts] = useState<{ total_conflicts: number; conflicts: any[] } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -20,6 +21,12 @@ const AuditSchedule: React.FC = () => {
   };
 
   useEffect(() => { load(); }, []);
+  const checkConflicts = async () => {
+    try {
+      const res = await auditsAPI.detectScheduleConflicts({ department: filters.department || undefined, auditor_id: filters.auditor_id });
+      setConflicts(res);
+    } catch { setConflicts(null); }
+  };
   useEffect(() => {
     (async () => {
       try {
@@ -59,10 +66,17 @@ const AuditSchedule: React.FC = () => {
               <MenuItem value="closed">Closed</MenuItem>
             </Select>
           </FormControl>
-          <Button variant="contained" size="small" onClick={load}>Apply</Button>
+          <Button variant="contained" size="small" onClick={() => { load(); checkConflicts(); }}>Apply</Button>
           <Button variant="outlined" size="small" onClick={() => { setFilters({ department: '', auditor_id: undefined, status: '' }); load(); }}>Clear</Button>
+          <Button variant="text" size="small" onClick={checkConflicts}>Check Conflicts</Button>
         </Stack>
       </Stack>
+
+      {conflicts && (
+        <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+          <Chip color={conflicts.total_conflicts > 0 ? 'error' : 'success'} label={`Conflicts: ${conflicts.total_conflicts}`} />
+        </Stack>
+      )}
 
       <Card variant="outlined">
         <CardContent>
@@ -76,11 +90,15 @@ const AuditSchedule: React.FC = () => {
                 <TableCell>End</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Overdue</TableCell>
+                <TableCell>Update Dates</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {audits.map((a: any) => {
                 const overdue = a.status !== 'completed' && a.end_date && new Date(a.end_date) < new Date();
+                const [start, end] = [String(a.start_date || '').slice(0,10), String(a.end_date || '').slice(0,10)];
+                const [newStart, setNewStart] = useState<string>(start);
+                const [newEnd, setNewEnd] = useState<string>(end);
                 return (
                   <TableRow key={a.id}>
                     <TableCell>{a.title}</TableCell>
@@ -90,6 +108,16 @@ const AuditSchedule: React.FC = () => {
                     <TableCell>{(a.end_date || '').toString().slice(0,10)}</TableCell>
                     <TableCell sx={{ textTransform: 'capitalize' }}>{String(a.status || '').replace('_',' ')}</TableCell>
                     <TableCell>{overdue ? <Chip color="error" label="Overdue" size="small" /> : '-'}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1}>
+                        <TextField size="small" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+                        <TextField size="small" type="date" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
+                        <Button size="small" variant="outlined" onClick={async () => {
+                          await auditsAPI.bulkUpdateSchedule([{ id: a.id, start_date: newStart || undefined, end_date: newEnd || undefined }]);
+                          load(); checkConflicts();
+                        }}>Save</Button>
+                      </Stack>
+                    </TableCell>
                   </TableRow>
                 );
               })}
