@@ -382,6 +382,145 @@ async def create_checklist(
         )
 
 
+# Update an existing checklist
+@router.put("/checklists/{checklist_id}")
+async def update_checklist(
+    checklist_id: int,
+    checklist_update: ChecklistUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update checklist metadata fields (name, description, dates, assignment, comments)."""
+    try:
+        checklist = db.query(PRPChecklist).filter(PRPChecklist.id == checklist_id).first()
+        if not checklist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Checklist not found")
+
+        # Optional cross-field validation for dates
+        new_scheduled = checklist_update.scheduled_date or checklist.scheduled_date
+        new_due = checklist_update.due_date or checklist.due_date
+        if new_scheduled and new_due and new_due <= new_scheduled:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Due date must be after scheduled date")
+
+        # Apply provided fields only
+        if checklist_update.name is not None:
+            checklist.name = checklist_update.name
+        if checklist_update.description is not None:
+            checklist.description = checklist_update.description
+        if checklist_update.scheduled_date is not None:
+            checklist.scheduled_date = checklist_update.scheduled_date
+        if checklist_update.due_date is not None:
+            checklist.due_date = checklist_update.due_date
+        if checklist_update.assigned_to is not None:
+            checklist.assigned_to = checklist_update.assigned_to
+        if checklist_update.general_comments is not None:
+            checklist.general_comments = checklist_update.general_comments
+
+        checklist.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(checklist)
+
+        resp = ResponseModel(
+            success=True,
+            message="Checklist updated successfully",
+            data={
+                "id": checklist.id,
+                "name": checklist.name,
+                "description": checklist.description,
+                "scheduled_date": checklist.scheduled_date.isoformat() if checklist.scheduled_date else None,
+                "due_date": checklist.due_date.isoformat() if checklist.due_date else None,
+                "assigned_to": checklist.assigned_to,
+                "general_comments": checklist.general_comments,
+            }
+        )
+        try:
+            audit_event(db, current_user.id, "prp_checklist_updated", "prp", str(checklist.id))
+        except Exception:
+            pass
+        return resp
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update checklist: {str(e)}"
+        )
+
+
+# Get single PRP program details
+@router.get("/programs/{program_id}")
+async def get_prp_program_detail(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve a single PRP program with ISO-relevant fields and summary stats."""
+    try:
+        program = db.query(PRPProgram).filter(PRPProgram.id == program_id).first()
+        if not program:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PRP program not found")
+
+        # Resolve user names
+        creator = db.query(User).filter(User.id == program.created_by).first()
+        creator_name = creator.full_name if creator else "Unknown"
+        responsible_person = None
+        if program.responsible_person:
+            resp_user = db.query(User).filter(User.id == program.responsible_person).first()
+            responsible_person = resp_user.full_name if resp_user else "Unknown"
+
+        # Checklist stats
+        total_checklists = db.query(PRPChecklist).filter(PRPChecklist.program_id == program.id).count()
+        overdue_count = db.query(PRPChecklist).filter(
+            and_(
+                PRPChecklist.program_id == program.id,
+                PRPChecklist.due_date < datetime.utcnow(),
+                PRPChecklist.status.in_([ChecklistStatus.PENDING, ChecklistStatus.IN_PROGRESS])
+            )
+        ).count()
+
+        return ResponseModel(
+            success=True,
+            message="PRP program retrieved successfully",
+            data={
+                "id": program.id,
+                "program_code": program.program_code,
+                "name": program.name,
+                "description": program.description,
+                "category": program.category.value if program.category else None,
+                "status": program.status.value if program.status else None,
+                "objective": program.objective,
+                "scope": program.scope,
+                "responsible_department": program.responsible_department,
+                "responsible_person": responsible_person,
+                "frequency": program.frequency.value if program.frequency else None,
+                "frequency_details": program.frequency_details,
+                "next_due_date": program.next_due_date.isoformat() if program.next_due_date else None,
+                "sop_reference": program.sop_reference,
+                "forms_required": program.forms_required,
+                "records_required": program.records_required,
+                "training_requirements": program.training_requirements,
+                "monitoring_frequency": program.monitoring_frequency,
+                "verification_frequency": program.verification_frequency,
+                "acceptance_criteria": program.acceptance_criteria,
+                "trend_analysis_required": program.trend_analysis_required,
+                "created_by": creator_name,
+                "created_at": program.created_at.isoformat() if program.created_at else None,
+                "updated_at": program.updated_at.isoformat() if program.updated_at else None,
+                "checklist_count": total_checklists,
+                "overdue_count": overdue_count,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve PRP program: {str(e)}"
+        )
+
+
 # PRP Dashboard Statistics
 @router.get("/dashboard")
 async def get_prp_dashboard(
