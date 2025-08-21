@@ -44,6 +44,10 @@ from .audit_mgmt import (
     AuditAttachment, AuditItemAttachment, AuditFindingAttachment, AuditAuditee,
 )
 from .dashboard import Department
+from .production import (
+    ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
+    ProductProcessType, ProcessStatus, StepType, LogEvent
+)
 
 __all__ = [
     # User models
@@ -99,4 +103,7 @@ __all__ = [
     "AuditAttachment",
     # Dashboard/Department
     "Department",
+    # Production models
+    "ProductionProcess", "ProcessStep", "ProcessLog", "YieldRecord", "ColdRoomTransfer", "AgingRecord",
+    "ProductProcessType", "ProcessStatus", "StepType", "LogEvent",
 ] 

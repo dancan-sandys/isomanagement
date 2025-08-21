@@ -51,6 +51,7 @@ import AllergenLabel from './pages/AllergenLabel';
 import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
 import HiddenDemoTools from './pages/HiddenDemoTools';
+import ProductionPage from './pages/Production';
 
 function App() {
   return (
@@ -85,6 +86,7 @@ function App() {
                       <Route path="/dashboard/analytics" element={<DashboardAnalytics />} />
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
                       <Route path="/objectives" element={<ObjectivesPage />} />
+                      <Route path="/production" element={<ProductionPage />} />
                       
                       {/* Document Control - All authenticated users */}
                       <Route path="/documents" element={<Documents />} />
@@ -214,4 +216,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
