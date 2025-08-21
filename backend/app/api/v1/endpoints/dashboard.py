@@ -17,6 +17,7 @@ from app.models.audit_mgmt import Audit, AuditFinding
 from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.schemas.common import ResponseModel
 from app.models.food_safety_objectives import ObjectiveProgress, ObjectiveTarget, FoodSafetyObjective
+from app.models.actions import ActionLogEntry, ActionStatus
 
 router = APIRouter()
 
@@ -127,6 +128,21 @@ async def get_dashboard_stats(
             stats["objectivesKPI"] = objectives_summary
         except Exception:
             stats["objectivesKPI"] = []
+
+        # Actions KPI
+        try:
+            total_actions = db.query(func.count(ActionLogEntry.id)).scalar() or 0
+            open_actions = db.query(func.count(ActionLogEntry.id)).filter(ActionLogEntry.status == ActionStatus.OPEN).scalar() or 0
+            in_progress = db.query(func.count(ActionLogEntry.id)).filter(ActionLogEntry.status == ActionStatus.IN_PROGRESS).scalar() or 0
+            completed = db.query(func.count(ActionLogEntry.id)).filter(ActionLogEntry.status == ActionStatus.COMPLETED).scalar() or 0
+            stats["actionsKPI"] = {
+                "total": int(total_actions),
+                "open": int(open_actions),
+                "inProgress": int(in_progress),
+                "completed": int(completed),
+            }
+        except Exception:
+            stats["actionsKPI"] = {"total": 0, "open": 0, "inProgress": 0, "completed": 0}
         
         return ResponseModel(
             success=True,

@@ -52,6 +52,7 @@ import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
 import HiddenDemoTools from './pages/HiddenDemoTools';
 import ProductionPage from './pages/Production';
+import ActionsPage from './pages/Actions';
 
 function App() {
   return (
@@ -87,6 +88,7 @@ function App() {
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
                       <Route path="/objectives" element={<ObjectivesPage />} />
                       <Route path="/production" element={<ProductionPage />} />
+                      <Route path="/actions" element={<ActionsPage />} />
                       
                       {/* Document Control - All authenticated users */}
                       <Route path="/documents" element={<Documents />} />

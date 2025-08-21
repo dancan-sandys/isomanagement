@@ -48,6 +48,10 @@ from .production import (
     ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
     ProductProcessType, ProcessStatus, StepType, LogEvent
 )
+from .actions import (
+    ActionLogEntry, ActionSource, ActionStatus, ActionPriority,
+    InterestedParty, SWOTIssue, SWOTType, PESTELIssue, PESTELType
+)
 
 __all__ = [
     # User models
@@ -106,4 +110,7 @@ __all__ = [
     # Production models
     "ProductionProcess", "ProcessStep", "ProcessLog", "YieldRecord", "ColdRoomTransfer", "AgingRecord",
     "ProductProcessType", "ProcessStatus", "StepType", "LogEvent",
+    # Actions log
+    "ActionLogEntry", "ActionSource", "ActionStatus", "ActionPriority",
+    "InterestedParty", "SWOTIssue", "SWOTType", "PESTELIssue", "PESTELType",
 ] 
