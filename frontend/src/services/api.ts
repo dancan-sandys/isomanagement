@@ -803,6 +803,25 @@ export const prpAPI = {
     return response.data;
   },
 
+  getChecklistItems: async (checklistId: number) => {
+    const response: AxiosResponse = await api.get(`/prp/checklists/${checklistId}/items`);
+    return response.data;
+  },
+
+  completeChecklist: async (
+    checklistId: number,
+    completionData: {
+      items: Array<{ item_id: number; response: string; is_compliant: boolean; response_value?: number | null; comments?: string | null; evidence_files?: string | null }>;
+      general_comments?: string;
+      corrective_actions_required?: boolean;
+      corrective_actions?: string | null;
+      signature?: string | null;
+    }
+  ) => {
+    const response: AxiosResponse = await api.post(`/prp/checklists/${checklistId}/complete`, completionData);
+    return response.data;
+  },
+
   getDashboard: async () => {
     const response: AxiosResponse = await api.get('/prp/dashboard');
     return response.data;
