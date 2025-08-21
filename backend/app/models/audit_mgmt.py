@@ -80,6 +80,8 @@ class Audit(Base):
     criteria = Column(Text)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
+    # Actual execution timestamps
+    actual_start_at = Column(DateTime, nullable=True)
     # Actual completion timestamp to support KPI calculations
     actual_end_at = Column(DateTime)
     status = Column(Enum(AuditStatus), nullable=False, default=AuditStatus.PLANNED)
@@ -91,6 +93,12 @@ class Audit(Base):
     created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Scheduling governance
+    schedule_lock = Column(Boolean, default=False)
+    lock_reason = Column(Text, nullable=True)
+    reschedule_count = Column(Integer, default=0)
+    last_rescheduled_at = Column(DateTime, nullable=True)
 
     # Risk integration fields
     risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
@@ -393,4 +401,38 @@ class AuditActivityLog(Base):
     # Relationships
     audit = relationship("Audit", back_populates="activity_logs")
     conductor = relationship("User", foreign_keys=[conducted_by])
+
+
+class AuditReportHistory(Base):
+    __tablename__ = "audit_report_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Integer, nullable=False)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    file_path = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    audit = relationship("Audit")
+
+
+# Suggested indexes to improve query performance
+from sqlalchemy import Index
+
+Index('ix_audits_status', Audit.status)
+Index('ix_audits_type', Audit.audit_type)
+Index('ix_audits_department', Audit.auditee_department)
+Index('ix_audits_auditors', Audit.auditor_id, Audit.lead_auditor_id)
+Index('ix_audits_created_at', Audit.created_at)
+Index('ix_audits_dates', Audit.start_date, Audit.end_date)
+
+Index('ix_findings_audit', AuditFinding.audit_id)
+Index('ix_findings_severity', AuditFinding.severity)
+Index('ix_findings_status', AuditFinding.status)
+Index('ix_findings_created_at', AuditFinding.created_at)
+Index('ix_findings_resp', AuditFinding.responsible_person_id)
+Index('ix_findings_due', AuditFinding.target_completion_date)
+Index('ix_findings_nc', AuditFinding.related_nc_id)
 
