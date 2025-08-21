@@ -13,6 +13,13 @@ from app.models.production import ProductProcessType
 router = APIRouter()
 
 
+@router.get("/analytics")
+def get_analytics(process_type: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    service = ProductionService(db)
+    pt = ProductProcessType(process_type) if process_type else None
+    return service.get_analytics(pt)
+
+
 @router.post("/process")
 def create_process(payload: ProcessCreate, db: Session = Depends(get_db)):
     service = ProductionService(db)
@@ -71,11 +78,4 @@ def get_process(process_id: int, db: Session = Depends(get_db)):
     if not proc:
         raise HTTPException(status_code=404, detail="Process not found")
     return proc
-
-
-@router.get("/analytics")
-def get_analytics(process_type: Optional[str] = Query(None), db: Session = Depends(get_db)):
-    service = ProductionService(db)
-    pt = ProductProcessType(process_type) if process_type else None
-    return service.get_analytics(pt)
 
