@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Stack, Typography, TextField, MenuItem, Select, InputLabel, FormControl, Button, Chip, Card, CardContent, Table, TableHead, TableRow, TableCell, TableBody } from '@mui/material';
+import { Box, Stack, Typography, TextField, MenuItem, Select, InputLabel, FormControl, Button, Chip, Card, CardContent, Table, TableHead, TableRow, TableCell, TableBody, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { auditsAPI, usersAPI } from '../services/api';
+import AuditGantt from '../components/Audits/AuditGantt';
 
 const AuditSchedule: React.FC = () => {
   const [audits, setAudits] = useState<any[]>([]);
@@ -8,6 +9,7 @@ const AuditSchedule: React.FC = () => {
   const [filters, setFilters] = useState<{ department: string; auditor_id?: number; status: string }>(() => ({ department: '', auditor_id: undefined, status: '' }));
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
   const [conflicts, setConflicts] = useState<{ total_conflicts: number; conflicts: any[] } | null>(null);
+  const [view, setView] = useState<'table'|'gantt'>('gantt');
 
   const load = async () => {
     setLoading(true);
@@ -76,6 +78,28 @@ const AuditSchedule: React.FC = () => {
         <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
           <Chip color={conflicts.total_conflicts > 0 ? 'error' : 'success'} label={`Conflicts: ${conflicts.total_conflicts}`} />
         </Stack>
+      )}
+
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+        <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, v) => v && setView(v)}>
+          <ToggleButton value="gantt">Gantt</ToggleButton>
+          <ToggleButton value="table">Table</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+
+      {view === 'gantt' && (
+        <Card variant="outlined" sx={{ mb: 2 }}>
+          <CardContent>
+            <AuditGantt
+              audits={audits}
+              onUpdateDates={async (id, startISO, endISO) => {
+                await auditsAPI.bulkUpdateSchedule([{ id, start_date: startISO, end_date: endISO }]);
+                await load();
+                await checkConflicts();
+              }}
+            />
+          </CardContent>
+        </Card>
       )}
 
       <Card variant="outlined">
