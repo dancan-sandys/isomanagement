@@ -280,6 +280,14 @@
   - [x] Added form clearing after successful operations
   - [x] Improved visual feedback with investigation status display
 
+#### 3.1.10 PRP Corrective Action Creation Fix ✅
+- [x] **Fixed NOT NULL constraint violation on program_id**
+  - [x] Made program_id nullable in CorrectiveAction database model
+  - [x] Added default program selection logic in service layer
+  - [x] Enhanced error handling for missing programs
+  - [x] Improved validation and user feedback
+  - [x] Added fallback to first available program when none specified
+
 ### 3.2 Mobile Experience Optimization ✅ **COMPLETED**
 
 #### 3.2.1 Mobile-Specific Features ✅ **COMPLETED**
