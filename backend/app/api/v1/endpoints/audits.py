@@ -676,12 +676,22 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
     # Check ownership for finding update
     check_finding_ownership(finding, current_user, db, "update")
     
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updated_fields = payload.model_dump(exclude_unset=True)
+    for field, value in updated_fields.items():
         if field == "severity" and value is not None:
             value = FindingSeverity(value)
         if field == "status" and value is not None:
             value = FindingStatus(value)
         setattr(finding, field, value)
+    # Handle closed_at stamping
+    try:
+        if 'status' in updated_fields:
+            if finding.status in [FindingStatus.VERIFIED, FindingStatus.CLOSED] and not finding.closed_at:
+                finding.closed_at = datetime.utcnow()
+            if finding.status in [FindingStatus.OPEN, FindingStatus.IN_PROGRESS]:
+                finding.closed_at = None
+    except Exception:
+        pass
     db.commit()
     db.refresh(finding)
     return finding
@@ -1339,6 +1349,55 @@ async def export_audits(
             if y < 60: c.showPage(); y = 800
         c.showPage(); c.save(); buf.seek(0)
         headers = {"Content-Disposition": "attachment; filename=audits.pdf"}
+        return StreamingResponse(buf, media_type="application/pdf", headers=headers)
+
+
+@router.post("/reports/consolidated", dependencies=[Depends(require_permission_dependency("audits:export"))])
+async def export_consolidated_reports(
+    format: str = Query("pdf", pattern="^(pdf|xlsx)$"),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    program_id: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    auditor_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditModel)
+    if date_from:
+        q = q.filter(AuditModel.created_at >= date_from)
+    if date_to:
+        q = q.filter(AuditModel.created_at <= date_to)
+    if program_id:
+        q = q.filter(AuditModel.program_id == program_id)
+    if department:
+        q = q.filter(AuditModel.auditee_department == department)
+    if auditor_id:
+        q = q.filter((AuditModel.auditor_id == auditor_id) | (AuditModel.lead_auditor_id == auditor_id))
+    if status:
+        q = q.filter(AuditModel.status == AuditStatus(status))
+    items = q.order_by(AuditModel.created_at.desc()).all()
+
+    if format == "xlsx":
+        wb = Workbook(); ws = wb.active; ws.title = "Consolidated Reports"
+        ws.append(["ID", "Title", "Type", "Status", "Start", "End", "Department", "Lead Auditor", "Auditor"]) 
+        for a in items:
+            ws.append([a.id, a.title, a.audit_type.value, a.status.value, str(a.start_date or ''), str(a.end_date or ''), a.auditee_department or '', a.lead_auditor_id or '', a.auditor_id or ''])
+        buf = BytesIO(); wb.save(buf); buf.seek(0)
+        headers = {"Content-Disposition": "attachment; filename=audits_consolidated.xlsx"}
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
+    else:
+        buf = BytesIO(); c = canvas.Canvas(buf, pagesize=A4)
+        x, y = 40, 800
+        c.setFont("Helvetica-Bold", 14); c.drawString(x, y, "Consolidated Audit Reports"); y -= 20; c.setFont("Helvetica", 10)
+        for a in items:
+            line = f"#{a.id} {a.title} | {a.audit_type.value} | {a.status.value} | Dept={a.auditee_department or ''}"
+            c.drawString(x, y, line)
+            y -= 14
+            if y < 60: c.showPage(); y = 800
+        c.showPage(); c.save(); buf.seek(0)
+        headers = {"Content-Disposition": "attachment; filename=audits_consolidated.pdf"}
         return StreamingResponse(buf, media_type="application/pdf", headers=headers)
 
 

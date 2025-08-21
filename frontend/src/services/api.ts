@@ -1770,6 +1770,13 @@ export const auditsAPI = {
     });
     return response.data;
   },
+  exportConsolidatedReports: async (format: 'pdf'|'xlsx', params?: { date_from?: string; date_to?: string; program_id?: number; department?: string; auditor_id?: number; status?: string }) => {
+    const response: AxiosResponse<Blob> = await api.post('/audits/reports/consolidated', {}, {
+      params: { format, ...(params || {}) },
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 
   // Single audit report
   exportReport: async (auditId: number, format: 'pdf'|'xlsx') => {

@@ -72,7 +72,7 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
   - [ ] Create NC from finding; open NC detail
   - [ ] Analytics: severity heatmap, KPIs (open/overdue/critical/avg closure days)
 - Validation/Rules
-  - [ ] Status transitions; prevent duplicate NC linkage
+  - [x] Status transitions; prevent duplicate NC linkage
 - Testing
   - [ ] API filter correctness; bulk ops authorization
   - [ ] E2E triage → assign → create NC → verify link
@@ -85,13 +85,14 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
   - [x] NEW POST /api/v1/audits/{id}/report/approve with report_approved_by/at, notes
   - [x] NEW GET /api/v1/audits/{id}/report/history (versions, approvers, timestamps)
   - [ ] NEW POST /api/v1/audits/reports/consolidated (filters; pdf|xlsx)
+  - [x] NEW POST /api/v1/audits/reports/consolidated (filters; pdf|xlsx)
   - [ ] RBAC: audits:export, audits:approve
 - Database
   - [ ] Audit report_* fields and `AuditReportHistory` table with index (audit_id, version desc)
 - Frontend
   - [x] New page `frontend/src/pages/AuditReports.tsx` list with filters and per-audit export
   - [x] Approve report and view approval trail
-  - [ ] Consolidated export wizard
+  - [x] Consolidated export (initial actions)
 - Validation/Rules
   - [ ] Approval only when mandatory sections complete; versioned immutable history
 - Testing

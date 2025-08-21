@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Stack, Typography, TextField, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton } from '@mui/material';
+import { Box, Stack, Typography, TextField, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton, Checkbox } from '@mui/material';
 import { Construction, Edit } from '@mui/icons-material';
 import { auditsAPI } from '../services/api';
 
@@ -8,6 +8,8 @@ const AuditFindings: React.FC = () => {
   const [findings, setFindings] = useState<any[]>([]);
   const [filters, setFilters] = useState<{ severity: string; status: string }>({ severity: '', status: '' });
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [analytics, setAnalytics] = useState<any | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -27,6 +29,11 @@ const AuditFindings: React.FC = () => {
   };
 
   useEffect(() => { load(); }, [auditId, filters]);
+  useEffect(() => { (async () => { try { const a = await auditsAPI.getFindingsAnalytics(); setAnalytics(a); } catch { setAnalytics(null); } })(); }, []);
+
+  const toggleSelect = (id: number) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
 
   return (
     <Box p={2}>
@@ -60,9 +67,28 @@ const AuditFindings: React.FC = () => {
 
       <Card variant="outlined">
         <CardContent>
+          {analytics && (
+            <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+              <Chip label={`Open: ${analytics.open_findings}`} color="warning" />
+              <Chip label={`Overdue: ${analytics.overdue_findings}`} color={analytics.overdue_findings > 0 ? 'error' : 'default'} />
+              <Chip label={`Critical: ${analytics.critical_findings}`} color={analytics.critical_findings > 0 ? 'error' : 'default'} />
+              {typeof analytics.average_closure_days === 'number' && (
+                <Chip label={`Avg closure: ${analytics.average_closure_days.toFixed(1)} d`} color="info" />
+              )}
+            </Stack>
+          )}
+
+          {selected.length > 0 && (
+            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+              <Button size="small" variant="contained" onClick={async () => { await auditsAPI.bulkUpdateFindingsStatus(selected, 'in_progress'); setSelected([]); load(); }}>Mark In Progress</Button>
+              <Button size="small" variant="outlined" onClick={async () => { await auditsAPI.bulkUpdateFindingsStatus(selected, 'closed'); setSelected([]); load(); }}>Close</Button>
+            </Stack>
+          )}
+
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox"><Checkbox size="small" indeterminate={selected.length>0 && selected.length<findings.length} checked={findings.length>0 && selected.length===findings.length} onChange={(e) => setSelected(e.target.checked ? findings.map(f=>f.id) : [])} /></TableCell>
                 <TableCell>Clause</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell>Severity</TableCell>
@@ -74,6 +100,7 @@ const AuditFindings: React.FC = () => {
             <TableBody>
               {findings.map((f: any) => (
                 <TableRow key={f.id}>
+                  <TableCell padding="checkbox"><Checkbox size="small" checked={selected.includes(f.id)} onChange={() => toggleSelect(f.id)} /></TableCell>
                   <TableCell>{f.clause_ref || '-'}</TableCell>
                   <TableCell>{f.description}</TableCell>
                   <TableCell>{String(f.severity)}</TableCell>

@@ -59,6 +59,8 @@ const AuditReports: React.FC = () => {
           <Button variant="outlined" size="small" onClick={() => { setFilters({ search: '', status: '', type: '' }); load(); }}>Clear</Button>
           <Button size="small" onClick={() => exportList('pdf')}>Export PDF</Button>
           <Button size="small" variant="outlined" onClick={() => exportList('xlsx')}>Export XLSX</Button>
+          <Button size="small" onClick={async () => { const blob = await auditsAPI.exportConsolidatedReports('pdf'); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'audits_consolidated.pdf'; a.click(); window.URL.revokeObjectURL(url); }}>Consolidated PDF</Button>
+          <Button size="small" variant="outlined" onClick={async () => { const blob = await auditsAPI.exportConsolidatedReports('xlsx'); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'audits_consolidated.xlsx'; a.click(); window.URL.revokeObjectURL(url); }}>Consolidated XLSX</Button>
         </Stack>
       </Stack>
 
