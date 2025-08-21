@@ -10,14 +10,19 @@ const AuditFindings: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
-    if (!auditId) { setFindings([]); return; }
     setLoading(true);
     try {
-      const resp = await auditsAPI.listFindings(Number(auditId));
-      let items: any[] = resp?.data || resp || [];
-      if (filters.severity) items = items.filter(f => String(f.severity) === filters.severity);
-      if (filters.status) items = items.filter(f => String(f.status) === filters.status);
-      setFindings(items);
+      if (auditId) {
+        const resp = await auditsAPI.listFindings(Number(auditId));
+        let items: any[] = resp?.data || resp || [];
+        if (filters.severity) items = items.filter(f => String(f.severity) === filters.severity);
+        if (filters.status) items = items.filter(f => String(f.status) === filters.status);
+        setFindings(items);
+      } else {
+        const resp = await auditsAPI.listAllFindings({ severity: filters.severity || undefined, status: filters.status || undefined, size: 100 });
+        const items: any[] = resp?.items || resp?.data?.items || resp || [];
+        setFindings(items);
+      }
     } finally { setLoading(false); }
   };
 
@@ -28,7 +33,7 @@ const AuditFindings: React.FC = () => {
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2, gap: 1, flexWrap: 'wrap' }}>
         <Typography variant="h5">Audit Findings</Typography>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-          <TextField size="small" label="Audit ID" value={auditId} onChange={(e) => setAuditId(e.target.value)} sx={{ width: 120 }} />
+          <TextField size="small" label="Audit ID (optional)" value={auditId} onChange={(e) => setAuditId(e.target.value)} sx={{ width: 160 }} />
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel>Severity</InputLabel>
             <Select value={filters.severity} label="Severity" onChange={(e) => setFilters({ ...filters, severity: String(e.target.value) })}>

@@ -1837,6 +1837,36 @@ export const auditsAPI = {
     const response: AxiosResponse = await api.get(`/audits/${auditId}/findings`);
     return response.data;
   },
+  // Aggregated findings
+  listAllFindings: async (params?: {
+    audit_id?: number;
+    program_id?: number;
+    severity?: string;
+    status?: string;
+    department?: string;
+    responsible_person_id?: number;
+    has_nc?: boolean;
+    overdue?: boolean;
+    created_from?: string;
+    created_to?: string;
+    page?: number;
+    size?: number;
+  }) => {
+    const response: AxiosResponse = await api.get('/audits/findings', { params });
+    return response.data;
+  },
+  bulkUpdateFindingsStatus: async (findingIds: number[], status: 'open'|'in_progress'|'verified'|'closed') => {
+    const response: AxiosResponse = await api.post('/audits/findings/bulk-update-status', { finding_ids: findingIds, status });
+    return response.data;
+  },
+  bulkAssignFindings: async (findingIds: number[], responsible_person_id: number) => {
+    const response: AxiosResponse = await api.post('/audits/findings/bulk-assign', { finding_ids: findingIds, responsible_person_id });
+    return response.data;
+  },
+  getFindingsAnalytics: async (params?: { program_id?: number; department?: string }) => {
+    const response: AxiosResponse = await api.get('/audits/findings/analytics', { params });
+    return response.data;
+  },
   addFinding: async (auditId: number, payload: any) => {
     const response: AxiosResponse = await api.post(`/audits/${auditId}/findings`, payload);
     return response.data;

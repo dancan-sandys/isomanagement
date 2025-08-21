@@ -34,6 +34,7 @@ from app.schemas.audit import (
     AuditActivityLogCreate, AuditActivityLogUpdate, AuditActivityLogResponse, AuditActivityLogListResponse,
     CompetenceAssessmentRequest, CompetenceAssessmentResponse,
     ImpartialityCheckRequest, ImpartialityCheckResponse,
+    FindingListResponse, FindingsAnalyticsResponse, BulkFindingsStatusUpdateRequest, BulkFindingsAssignRequest,
 )
 from app.utils.audit import audit_event
 from app.schemas.nonconformance import NonConformanceCreate, NonConformanceResponse
@@ -604,6 +605,177 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
     db.commit()
     db.refresh(finding)
     return finding
+
+
+# Cross-audit findings aggregation
+@router.get("/findings", response_model=FindingListResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def list_all_findings(
+    audit_id: Optional[int] = Query(None),
+    program_id: Optional[int] = Query(None),
+    severity: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    responsible_person_id: Optional[int] = Query(None),
+    has_nc: Optional[bool] = Query(None),
+    overdue: Optional[bool] = Query(None),
+    created_from: Optional[datetime] = Query(None),
+    created_to: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditFinding)
+    if audit_id:
+        q = q.filter(AuditFinding.audit_id == audit_id)
+    if program_id:
+        # join via AuditModel
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id)
+        q = q.filter(AuditModel.program_id == program_id)
+    if severity:
+        try:
+            q = q.filter(AuditFinding.severity == FindingSeverity(severity))
+        except Exception:
+            pass
+    if status:
+        try:
+            q = q.filter(AuditFinding.status == FindingStatus(status))
+        except Exception:
+            pass
+    if department:
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id) if 'AuditModel' not in str(q) else q
+        q = q.filter(AuditModel.auditee_department == department)
+    if responsible_person_id:
+        q = q.filter(AuditFinding.responsible_person_id == responsible_person_id)
+    if has_nc is not None:
+        if has_nc:
+            q = q.filter(AuditFinding.related_nc_id.isnot(None))
+        else:
+            q = q.filter(AuditFinding.related_nc_id.is_(None))
+    if created_from:
+        q = q.filter(AuditFinding.created_at >= created_from)
+    if created_to:
+        q = q.filter(AuditFinding.created_at <= created_to)
+    if overdue is not None:
+        now = datetime.utcnow()
+        if overdue:
+            q = q.filter(
+                (AuditFinding.status.notin_([FindingStatus.VERIFIED, FindingStatus.CLOSED])) &
+                (AuditFinding.target_completion_date.isnot(None)) &
+                (AuditFinding.target_completion_date < now)
+            )
+        else:
+            q = q.filter(
+                (AuditFinding.status.in_([FindingStatus.VERIFIED, FindingStatus.CLOSED])) |
+                (AuditFinding.target_completion_date.is_(None)) |
+                (AuditFinding.target_completion_date >= now)
+            )
+
+    total = q.count()
+    items = (
+        q.order_by(AuditFinding.created_at.desc())
+         .offset((page - 1) * size)
+         .limit(size)
+         .all()
+    )
+    return FindingListResponse(items=items, total=total, page=page, size=size, pages=(total + size - 1) // size)
+
+
+@router.post("/findings/bulk-update-status", dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def bulk_update_findings_status(
+    payload: BulkFindingsStatusUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Update with ownership check per finding's audit
+    updated = 0
+    for fid in payload.finding_ids:
+        finding = db.query(AuditFinding).get(fid)
+        if not finding:
+            continue
+        audit = db.query(AuditModel).get(finding.audit_id)
+        if not audit:
+            continue
+        try:
+            check_finding_ownership(finding, current_user, db, "update")
+        except HTTPException:
+            continue
+        finding.status = FindingStatus(payload.status)
+        if finding.status in [FindingStatus.VERIFIED, FindingStatus.CLOSED] and not finding.closed_at:
+            finding.closed_at = datetime.utcnow()
+        updated += 1
+    db.commit()
+    return {"updated": updated}
+
+
+@router.post("/findings/bulk-assign", dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def bulk_assign_findings(
+    payload: BulkFindingsAssignRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    assigned = 0
+    for fid in payload.finding_ids:
+        finding = db.query(AuditFinding).get(fid)
+        if not finding:
+            continue
+        audit = db.query(AuditModel).get(finding.audit_id)
+        if not audit:
+            continue
+        try:
+            check_finding_ownership(finding, current_user, db, "update")
+        except HTTPException:
+            continue
+        finding.responsible_person_id = payload.responsible_person_id
+        assigned += 1
+    db.commit()
+    return {"assigned": assigned}
+
+
+@router.get("/findings/analytics", response_model=FindingsAnalyticsResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def findings_analytics(
+    program_id: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditFinding)
+    if program_id:
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id).filter(AuditModel.program_id == program_id)
+    if department:
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id).filter(AuditModel.auditee_department == department)
+    findings = q.all()
+    by_severity = {s.value: 0 for s in FindingSeverity}
+    by_status = {s.value: 0 for s in FindingStatus}
+    for f in findings:
+        try:
+            by_severity[f.severity.value if hasattr(f.severity, 'value') else str(f.severity)] += 1
+        except Exception:
+            pass
+        try:
+            by_status[f.status.value if hasattr(f.status, 'value') else str(f.status)] += 1
+        except Exception:
+            pass
+    now = datetime.utcnow()
+    open_findings = len([f for f in findings if f.status in [FindingStatus.OPEN, FindingStatus.IN_PROGRESS]])
+    overdue_findings = len([f for f in findings if f.status not in [FindingStatus.VERIFIED, FindingStatus.CLOSED] and f.target_completion_date and f.target_completion_date < now])
+    critical_findings = len([f for f in findings if f.severity == FindingSeverity.CRITICAL])
+    durations = []
+    for f in findings:
+        if f.closed_at and f.created_at:
+            try:
+                durations.append((f.closed_at - f.created_at).days)
+            except Exception:
+                pass
+    average_closure_days = (sum(durations) / len(durations)) if durations else None
+    return FindingsAnalyticsResponse(
+        by_severity=by_severity,
+        by_status=by_status,
+        open_findings=open_findings,
+        overdue_findings=overdue_findings,
+        critical_findings=critical_findings,
+        average_closure_days=average_closure_days,
+    )
 
 
 # Attachments

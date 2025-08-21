@@ -464,6 +464,34 @@ class AuditListResponse(BaseModel):
   pages: int
 
 
+# Cross-audit findings aggregation
+class FindingListResponse(BaseModel):
+  items: List[FindingResponse]
+  total: int
+  page: int
+  size: int
+  pages: int
+
+
+class FindingsAnalyticsResponse(BaseModel):
+  by_severity: Dict[str, int]
+  by_status: Dict[str, int]
+  open_findings: int
+  overdue_findings: int
+  critical_findings: int
+  average_closure_days: Optional[float] = None
+
+
+class BulkFindingsStatusUpdateRequest(BaseModel):
+  finding_ids: List[int]
+  status: str = Field(pattern="^(open|in_progress|verified|closed)$")
+
+
+class BulkFindingsAssignRequest(BaseModel):
+  finding_ids: List[int]
+  responsible_person_id: int
+
+
 class AuditStatsResponse(BaseModel):
   total: int
   by_status: Dict[str, int]
