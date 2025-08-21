@@ -1014,12 +1014,22 @@ class PRPService:
         if existing_action:
             raise ValueError(f"Corrective action code '{action_data.action_code}' already exists")
         
+        # Get default program if none provided
+        program_id = action_data.program_id
+        if not program_id:
+            # Get the first available program as default
+            default_program = self.db.query(PRPProgram).first()
+            if default_program:
+                program_id = default_program.id
+            else:
+                raise ValueError("No PRP program available. Please create a program first.")
+        
         action = CorrectiveAction(
             action_code=action_data.action_code,
             source_type=action_data.source_type,
             source_id=action_data.source_id,
             checklist_id=action_data.checklist_id,
-            program_id=action_data.program_id,
+            program_id=program_id,
             non_conformance_description=action_data.non_conformance_description,
             non_conformance_date=action_data.non_conformance_date,
             severity=action_data.severity,

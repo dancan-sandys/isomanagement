@@ -515,7 +515,7 @@ class CorrectiveAction(Base):
     source_type = Column(String(50), nullable=False)  # checklist, audit, complaint, etc.
     source_id = Column(Integer, nullable=False)  # ID of the source record
     checklist_id = Column(Integer, ForeignKey("prp_checklists.id"))
-    program_id = Column(Integer, ForeignKey("prp_programs.id"), nullable=False)
+    program_id = Column(Integer, ForeignKey("prp_programs.id"), nullable=True)
     
     # Non-conformance details
     non_conformance_description = Column(Text, nullable=False)
