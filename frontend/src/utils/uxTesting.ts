@@ -230,11 +230,11 @@ class UXTestingSuite {
 
   // Test Execution Methods
   async runAccessibilityTests(): Promise<UXTestResult[]> {
-    this.results = [];
-    
+    const suiteResults: UXTestResult[] = [];
+
     for (const test of this.accessibilityTests) {
       const passed = test.test();
-      
+
       const result: UXTestResult = {
         testName: test.name,
         passed,
@@ -243,19 +243,19 @@ class UXTestingSuite {
         wcagLevel: test.wcagLevel,
         recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better accessibility`]
       };
-      
-      this.results.push(result);
+
+      suiteResults.push(result);
     }
-    
-    return this.results.filter(r => r.wcagLevel);
+
+    return suiteResults;
   }
 
   async runPerformanceTests(): Promise<UXTestResult[]> {
-    this.results = [];
-    
+    const suiteResults: UXTestResult[] = [];
+
     for (const test of this.performanceTests) {
       const passed = test.test();
-      
+
       const result: UXTestResult = {
         testName: test.name,
         passed,
@@ -263,19 +263,19 @@ class UXTestingSuite {
         details: test.description,
         recommendations: passed ? [] : [`Optimize ${test.name.toLowerCase()} for better performance`]
       };
-      
-      this.results.push(result);
+
+      suiteResults.push(result);
     }
-    
-    return this.results.filter(r => !r.wcagLevel && r.testName.includes('Performance'));
+
+    return suiteResults;
   }
 
   async runUsabilityTests(): Promise<UXTestResult[]> {
-    this.results = [];
-    
+    const suiteResults: UXTestResult[] = [];
+
     for (const test of this.usabilityTests) {
       const passed = test.test();
-      
+
       const result: UXTestResult = {
         testName: test.name,
         passed,
@@ -283,19 +283,26 @@ class UXTestingSuite {
         details: test.description,
         recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better usability`]
       };
-      
-      this.results.push(result);
+
+      suiteResults.push(result);
     }
-    
-    return this.results.filter(r => !r.wcagLevel && !r.testName.includes('Performance'));
+
+    return suiteResults;
   }
 
   async runAllTests(): Promise<UXTestResult[]> {
     const accessibilityResults = await this.runAccessibilityTests();
     const performanceResults = await this.runPerformanceTests();
     const usabilityResults = await this.runUsabilityTests();
-    
-    return [...accessibilityResults, ...performanceResults, ...usabilityResults];
+
+    const allResults = [
+      ...accessibilityResults,
+      ...performanceResults,
+      ...usabilityResults
+    ];
+
+    this.results = allResults;
+    return allResults;
   }
 
   // Reporting Methods

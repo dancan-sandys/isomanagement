@@ -87,7 +87,7 @@
     "prettier": "^3.1.1"
   },
   "overrides": {
-    "@types/d3-dispatch": "3.0.7",
+    "@types/d3-dispatch": "3.0.6",
     "@types/d3": "7.4.3"
   },
   "proxy": "http://localhost:8000"
