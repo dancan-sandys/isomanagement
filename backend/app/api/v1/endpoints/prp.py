@@ -449,6 +449,78 @@ async def update_checklist(
         )
 
 
+# Get single PRP program details
+@router.get("/programs/{program_id}")
+async def get_prp_program_detail(
+    program_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve a single PRP program with ISO-relevant fields and summary stats."""
+    try:
+        program = db.query(PRPProgram).filter(PRPProgram.id == program_id).first()
+        if not program:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PRP program not found")
+
+        # Resolve user names
+        creator = db.query(User).filter(User.id == program.created_by).first()
+        creator_name = creator.full_name if creator else "Unknown"
+        responsible_person = None
+        if program.responsible_person:
+            resp_user = db.query(User).filter(User.id == program.responsible_person).first()
+            responsible_person = resp_user.full_name if resp_user else "Unknown"
+
+        # Checklist stats
+        total_checklists = db.query(PRPChecklist).filter(PRPChecklist.program_id == program.id).count()
+        overdue_count = db.query(PRPChecklist).filter(
+            and_(
+                PRPChecklist.program_id == program.id,
+                PRPChecklist.due_date < datetime.utcnow(),
+                PRPChecklist.status.in_([ChecklistStatus.PENDING, ChecklistStatus.IN_PROGRESS])
+            )
+        ).count()
+
+        return ResponseModel(
+            success=True,
+            message="PRP program retrieved successfully",
+            data={
+                "id": program.id,
+                "program_code": program.program_code,
+                "name": program.name,
+                "description": program.description,
+                "category": program.category.value if program.category else None,
+                "status": program.status.value if program.status else None,
+                "objective": program.objective,
+                "scope": program.scope,
+                "responsible_department": program.responsible_department,
+                "responsible_person": responsible_person,
+                "frequency": program.frequency.value if program.frequency else None,
+                "frequency_details": program.frequency_details,
+                "next_due_date": program.next_due_date.isoformat() if program.next_due_date else None,
+                "sop_reference": program.sop_reference,
+                "forms_required": program.forms_required,
+                "records_required": program.records_required,
+                "training_requirements": program.training_requirements,
+                "monitoring_frequency": program.monitoring_frequency,
+                "verification_frequency": program.verification_frequency,
+                "acceptance_criteria": program.acceptance_criteria,
+                "trend_analysis_required": program.trend_analysis_required,
+                "created_by": creator_name,
+                "created_at": program.created_at.isoformat() if program.created_at else None,
+                "updated_at": program.updated_at.isoformat() if program.updated_at else None,
+                "checklist_count": total_checklists,
+                "overdue_count": overdue_count,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve PRP program: {str(e)}"
+        )
+
+
 # PRP Dashboard Statistics
 @router.get("/dashboard")
 async def get_prp_dashboard(

@@ -11,6 +11,7 @@ import Documents from './pages/Documents';
 import HACCP from './pages/HACCP';
 import HACCPProductDetail from './pages/HACCPProductDetail';
 import PRP from './pages/PRP';
+import PRPProgramDetail from './pages/PRPProgramDetail';
 import Suppliers from './pages/Suppliers';
 import Traceability from './pages/Traceability';
 import NonConformance from './pages/NonConformance';
@@ -97,6 +98,7 @@ function App() {
                       
                       {/* PRP Programs - Production and Maintenance roles */}
                       <Route path="/prp" element={<PRP />} />
+                      <Route path="/prp/programs/:id" element={<PRPProgramDetail />} />
                       <Route path="/prp/cleaning" element={<Navigate to="/prp?category=cleaning_sanitation&tab=programs" replace />} />
                       <Route path="/prp/maintenance" element={<Navigate to="/prp?category=maintenance&tab=programs" replace />} />
                       <Route path="/prp/pest-control" element={<Navigate to="/prp?category=pest_control&tab=programs" replace />} />

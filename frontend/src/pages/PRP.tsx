@@ -760,7 +760,7 @@ const PRP: React.FC = () => {
                   <TableCell align="center">
                     <Box display="flex" gap={1}>
                       <Tooltip title="View Details">
-                        <IconButton size="small">
+                        <IconButton size="small" onClick={() => window.location.assign(`/prp/programs/${program.id}`)}>
                           <Visibility />
                         </IconButton>
                       </Tooltip>
