@@ -720,11 +720,13 @@ async def list_all_findings(
     current_user: User = Depends(get_current_user)
 ):
     q = db.query(AuditFinding)
+    joined_audit_model = False
     if audit_id:
         q = q.filter(AuditFinding.audit_id == audit_id)
     if program_id:
         # join via AuditModel
         q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id)
+        joined_audit_model = True
         q = q.filter(AuditModel.program_id == program_id)
     if severity:
         try:
@@ -737,7 +739,9 @@ async def list_all_findings(
         except Exception:
             pass
     if department:
-        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id) if 'AuditModel' not in str(q) else q
+        if not joined_audit_model:
+            q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id)
+            joined_audit_model = True
         q = q.filter(AuditModel.auditee_department == department)
     if responsible_person_id:
         q = q.filter(AuditFinding.responsible_person_id == responsible_person_id)
