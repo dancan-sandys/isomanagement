@@ -80,6 +80,7 @@ const AuditSchedule: React.FC = () => {
 
       <Card variant="outlined">
         <CardContent>
+          {/* Simple Gantt-like view: rows with start/end sliders could be added later; keep table with inline date edits for now */}
           <Table size="small">
             <TableHead>
               <TableRow>

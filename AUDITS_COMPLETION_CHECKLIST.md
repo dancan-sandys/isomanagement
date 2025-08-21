@@ -42,7 +42,7 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
   - [x] Indexes: (start_date, end_date), (auditor_id, start_date), (lead_auditor_id, start_date)
   - [x] Fields: schedule_lock, lock_reason, reschedule_count, last_rescheduled_at
 - Frontend
-  - [ ] New page `frontend/src/pages/AuditSchedule.tsx` with calendar/Gantt
+  - [x] New page `frontend/src/pages/AuditSchedule.tsx` with calendar/Gantt (initial inline edits)
   - [ ] Filters: program, department, auditor, status; overdue badges
   - [ ] Drag-drop rescheduling with optimistic UI and rollback
   - [ ] Conflict detection banner and approval flow
@@ -84,9 +84,9 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
   - [ ] GET /api/v1/audits/{id}/report (pdf|xlsx); POST /api/v1/audits/export
   - [x] NEW POST /api/v1/audits/{id}/report/approve with report_approved_by/at, notes
   - [x] NEW GET /api/v1/audits/{id}/report/history (versions, approvers, timestamps)
-  - [ ] NEW POST /api/v1/audits/reports/consolidated (filters; pdf|xlsx)
   - [x] NEW POST /api/v1/audits/reports/consolidated (filters; pdf|xlsx)
   - [ ] RBAC: audits:export, audits:approve
+  - [x] Approval gating: block approval if findings not closed/verified
 - Database
   - [ ] Audit report_* fields and `AuditReportHistory` table with index (audit_id, version desc)
 - Frontend
@@ -114,4 +114,3 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
 - Sign-off
   - [ ] Role matrix validated (QA Manager, Auditor, Auditee, Program Manager)
   - [ ] All tests green; manual export verification
-

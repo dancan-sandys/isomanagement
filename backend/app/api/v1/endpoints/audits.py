@@ -1471,6 +1471,20 @@ async def approve_audit_report(
     # Ownership check for approval
     check_audit_ownership(audit, current_user, db, "update")
 
+    # Approval gating rules: all findings must be verified or closed
+    open_count = (
+        db.query(AuditFinding)
+        .filter(AuditFinding.audit_id == audit_id)
+        .filter(AuditFinding.status.notin_([FindingStatus.VERIFIED, FindingStatus.CLOSED]))
+        .count()
+    )
+    if open_count > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+            "error": "approval_blocked",
+            "message": f"Cannot approve report: {open_count} finding(s) are not closed or verified",
+            "open_findings": open_count
+        })
+
     # Determine next version
     last = (
         db.query(AuditReportHistory)
