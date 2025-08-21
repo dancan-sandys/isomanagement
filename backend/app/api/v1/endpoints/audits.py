@@ -134,6 +134,8 @@ async def bulk_update_schedule(
     db.commit()
     return {"updated": updated}
 
+router = APIRouter()
+
 
 def can_perform_destructive_action(audit: AuditModel, current_user: User, db: Session) -> bool:
     """
