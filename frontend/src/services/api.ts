@@ -803,6 +803,21 @@ export const prpAPI = {
     return response.data;
   },
 
+  updateChecklist: async (
+    checklistId: number,
+    payload: {
+      name?: string;
+      description?: string;
+      scheduled_date?: string;
+      due_date?: string;
+      assigned_to?: number;
+      general_comments?: string;
+    }
+  ) => {
+    const response: AxiosResponse = await api.put(`/prp/checklists/${checklistId}`, payload);
+    return response.data;
+  },
+
   getChecklistItems: async (checklistId: number) => {
     const response: AxiosResponse = await api.get(`/prp/checklists/${checklistId}/items`);
     return response.data;

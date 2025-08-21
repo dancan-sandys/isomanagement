@@ -382,6 +382,73 @@ async def create_checklist(
         )
 
 
+# Update an existing checklist
+@router.put("/checklists/{checklist_id}")
+async def update_checklist(
+    checklist_id: int,
+    checklist_update: ChecklistUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update checklist metadata fields (name, description, dates, assignment, comments)."""
+    try:
+        checklist = db.query(PRPChecklist).filter(PRPChecklist.id == checklist_id).first()
+        if not checklist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Checklist not found")
+
+        # Optional cross-field validation for dates
+        new_scheduled = checklist_update.scheduled_date or checklist.scheduled_date
+        new_due = checklist_update.due_date or checklist.due_date
+        if new_scheduled and new_due and new_due <= new_scheduled:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Due date must be after scheduled date")
+
+        # Apply provided fields only
+        if checklist_update.name is not None:
+            checklist.name = checklist_update.name
+        if checklist_update.description is not None:
+            checklist.description = checklist_update.description
+        if checklist_update.scheduled_date is not None:
+            checklist.scheduled_date = checklist_update.scheduled_date
+        if checklist_update.due_date is not None:
+            checklist.due_date = checklist_update.due_date
+        if checklist_update.assigned_to is not None:
+            checklist.assigned_to = checklist_update.assigned_to
+        if checklist_update.general_comments is not None:
+            checklist.general_comments = checklist_update.general_comments
+
+        checklist.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(checklist)
+
+        resp = ResponseModel(
+            success=True,
+            message="Checklist updated successfully",
+            data={
+                "id": checklist.id,
+                "name": checklist.name,
+                "description": checklist.description,
+                "scheduled_date": checklist.scheduled_date.isoformat() if checklist.scheduled_date else None,
+                "due_date": checklist.due_date.isoformat() if checklist.due_date else None,
+                "assigned_to": checklist.assigned_to,
+                "general_comments": checklist.general_comments,
+            }
+        )
+        try:
+            audit_event(db, current_user.id, "prp_checklist_updated", "prp", str(checklist.id))
+        except Exception:
+            pass
+        return resp
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update checklist: {str(e)}"
+        )
+
+
 # PRP Dashboard Statistics
 @router.get("/dashboard")
 async def get_prp_dashboard(
