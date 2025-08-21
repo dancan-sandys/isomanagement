@@ -17,7 +17,7 @@ from app.models.audit_mgmt import (
     AuditAttachment, AuditItemAttachment, AuditFindingAttachment, AuditAuditee,
 	AuditPlan, AuditProgram, ProgramStatus, RiskMethod, AuditRisk, RiskLevel,
     AuditTeamMember, TeamMemberRole, CompetenceStatus,
-    AuditEvidence, AuditActivityLog,
+    AuditEvidence, AuditActivityLog, AuditReportHistory,
 )
 from app.schemas.audit import (
     AuditCreate, AuditUpdate, AuditResponse, AuditListResponse,
@@ -35,6 +35,7 @@ from app.schemas.audit import (
     CompetenceAssessmentRequest, CompetenceAssessmentResponse,
     ImpartialityCheckRequest, ImpartialityCheckResponse,
     FindingListResponse, FindingsAnalyticsResponse, BulkFindingsStatusUpdateRequest, BulkFindingsAssignRequest,
+    AuditReportApproveRequest, AuditReportHistoryResponse,
 )
 from app.utils.audit import audit_event
 from app.schemas.nonconformance import NonConformanceCreate, NonConformanceResponse
@@ -1392,6 +1393,67 @@ async def export_audit_report(
         return StreamingResponse(buf, media_type="application/pdf", headers=headers)
 
 
+# Report approval and history
+@router.post("/{audit_id:int}/report/approve", dependencies=[Depends(require_permission_dependency("audits:approve"))])
+async def approve_audit_report(
+    audit_id: int,
+    payload: AuditReportApproveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    audit = db.query(AuditModel).get(audit_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Ownership check for approval
+    check_audit_ownership(audit, current_user, db, "update")
+
+    # Determine next version
+    last = (
+        db.query(AuditReportHistory)
+        .filter(AuditReportHistory.audit_id == audit_id)
+        .order_by(AuditReportHistory.version.desc())
+        .first()
+    )
+    next_version = 1 if not last else last.version + 1
+
+    rec = AuditReportHistory(
+        audit_id=audit_id,
+        version=next_version,
+        approved_by=current_user.id,
+        approved_at=datetime.utcnow(),
+        notes=payload.notes,
+        file_path=payload.file_path,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    try:
+        audit_event(db, current_user.id, "audit_report_approved", "audits", str(audit_id), {"version": next_version})
+    except Exception:
+        pass
+    return {"audit_id": audit_id, "version": next_version, "approved_by": current_user.id, "approved_at": rec.approved_at}
+
+
+@router.get("/{audit_id:int}/report/history", response_model=AuditReportHistoryResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_audit_report_history(
+    audit_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    audit = db.query(AuditModel).get(audit_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Basic view access
+    check_audit_ownership(audit, current_user, db, "view")
+    items = (
+        db.query(AuditReportHistory)
+        .filter(AuditReportHistory.audit_id == audit_id)
+        .order_by(AuditReportHistory.version.desc())
+        .all()
+    )
+    return {"items": items}
 # Auditees
 @router.get("/{audit_id:int}/auditees", response_model=List[AuditeeResponse], dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

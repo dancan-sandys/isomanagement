@@ -549,3 +549,26 @@ class AuditeeResponse(BaseModel):
     from_attributes = True
 
 
+# Report approval/history
+class AuditReportApproveRequest(BaseModel):
+  notes: Optional[str] = None
+  file_path: Optional[str] = None
+
+
+class AuditReportHistoryRecord(BaseModel):
+  id: int
+  audit_id: int
+  version: int
+  approved_by: int
+  approved_at: datetime
+  notes: Optional[str] = None
+  file_path: Optional[str] = None
+
+  class Config:
+    from_attributes = True
+
+
+class AuditReportHistoryResponse(BaseModel):
+  items: List[AuditReportHistoryRecord]
+
+

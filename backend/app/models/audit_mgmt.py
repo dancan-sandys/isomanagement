@@ -394,3 +394,18 @@ class AuditActivityLog(Base):
     audit = relationship("Audit", back_populates="activity_logs")
     conductor = relationship("User", foreign_keys=[conducted_by])
 
+
+class AuditReportHistory(Base):
+    __tablename__ = "audit_report_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Integer, nullable=False)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    file_path = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    audit = relationship("Audit")
+

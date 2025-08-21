@@ -1779,6 +1779,14 @@ export const auditsAPI = {
     });
     return response.data;
   },
+  approveReport: async (auditId: number, payload?: { notes?: string; file_path?: string }) => {
+    const response: AxiosResponse = await api.post(`/audits/${auditId}/report/approve`, payload || {});
+    return response.data;
+  },
+  getReportHistory: async (auditId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/${auditId}/report/history`);
+    return response.data;
+  },
 
   // Audit-level attachments
   listAttachments: async (auditId: number) => {

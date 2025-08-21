@@ -73,6 +73,7 @@ const AuditReports: React.FC = () => {
                 <TableCell>Start</TableCell>
                 <TableCell>End</TableCell>
                 <TableCell>Report</TableCell>
+                <TableCell>Approval</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -87,6 +88,12 @@ const AuditReports: React.FC = () => {
                     <Stack direction="row" spacing={1}>
                       <Button size="small" onClick={async () => { const blob = await auditsAPI.exportReport(a.id, 'pdf'); const name = `audit_${a.id}.pdf`; const url = window.URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); window.URL.revokeObjectURL(url); }}>PDF</Button>
                       <Button size="small" variant="outlined" onClick={async () => { const blob = await auditsAPI.exportReport(a.id, 'xlsx'); const name = `audit_${a.id}.xlsx`; const url = window.URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); window.URL.revokeObjectURL(url); }}>XLSX</Button>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" onClick={async () => { await auditsAPI.approveReport(a.id); alert('Report approved'); }}>Approve</Button>
+                      <Button size="small" variant="outlined" onClick={async () => { const h = await auditsAPI.getReportHistory(a.id); const items = h?.items || []; const msg = items.map((r: any) => `v${r.version} by ${r.approved_by} at ${r.approved_at}`).join('\n') || 'No history'; alert(msg); }}>History</Button>
                     </Stack>
                   </TableCell>
                 </TableRow>

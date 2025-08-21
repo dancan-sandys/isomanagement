@@ -82,15 +82,15 @@ Scope: Ensure the following four submenus are implemented to meet ISO 19011 and 
 ### 4) Audit Reports
 - Backend/API
   - [ ] GET /api/v1/audits/{id}/report (pdf|xlsx); POST /api/v1/audits/export
-  - [ ] NEW POST /api/v1/audits/{id}/report/approve with report_approved_by/at, notes
-  - [ ] NEW GET /api/v1/audits/{id}/report/history (versions, approvers, timestamps)
+  - [x] NEW POST /api/v1/audits/{id}/report/approve with report_approved_by/at, notes
+  - [x] NEW GET /api/v1/audits/{id}/report/history (versions, approvers, timestamps)
   - [ ] NEW POST /api/v1/audits/reports/consolidated (filters; pdf|xlsx)
   - [ ] RBAC: audits:export, audits:approve
 - Database
   - [ ] Audit report_* fields and `AuditReportHistory` table with index (audit_id, version desc)
 - Frontend
-  - [ ] New page `frontend/src/pages/AuditReports.tsx` list with filters and per-audit export
-  - [ ] Approve report and view approval trail
+  - [x] New page `frontend/src/pages/AuditReports.tsx` list with filters and per-audit export
+  - [x] Approve report and view approval trail
   - [ ] Consolidated export wizard
 - Validation/Rules
   - [ ] Approval only when mandatory sections complete; versioned immutable history
