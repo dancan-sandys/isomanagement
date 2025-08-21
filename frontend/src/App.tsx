@@ -35,6 +35,7 @@ import ComplaintDetail from './pages/ComplaintDetail';
 import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import DashboardAnalytics from './pages/DashboardAnalytics';
+import ObjectivesPage from './pages/Objectives';
 import DashboardReports from './pages/DashboardReports';
 import RiskRegister from './pages/RiskRegister';
 import OpportunitiesRegister from './pages/OpportunitiesRegister';
@@ -83,6 +84,7 @@ function App() {
                       <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/dashboard/analytics" element={<DashboardAnalytics />} />
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
+                      <Route path="/objectives" element={<ObjectivesPage />} />
                       
                       {/* Document Control - All authenticated users */}
                       <Route path="/documents" element={<Documents />} />
