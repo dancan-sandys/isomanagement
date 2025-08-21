@@ -1065,11 +1065,21 @@ class PRPService:
         if existing_action:
             raise ValueError(f"Preventive action code '{action_data.action_code}' already exists")
         
+        # Get default program if none provided
+        program_id = action_data.program_id
+        if not program_id:
+            # Get the first available program as default
+            default_program = self.db.query(PRPProgram).first()
+            if default_program:
+                program_id = default_program.id
+            else:
+                raise ValueError("No PRP program available. Please create a program first.")
+        
         action = PRPPreventiveAction(
             action_code=action_data.action_code,
             trigger_type=action_data.trigger_type,
             trigger_description=action_data.trigger_description,
-            program_id=action_data.program_id,
+            program_id=program_id,
             action_description=action_data.action_description,
             objective=action_data.objective,
             responsible_person=action_data.responsible_person,

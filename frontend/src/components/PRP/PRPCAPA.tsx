@@ -39,6 +39,7 @@ import {
   AccordionDetails,
   Rating,
   Badge,
+  Autocomplete,
 } from '@mui/material';
 import {
   Add,
@@ -69,7 +70,7 @@ import {
   Person,
   CalendarToday,
 } from '@mui/icons-material';
-import { prpAPI } from '../../services/api';
+import { prpAPI, usersAPI } from '../../services/api';
 
 interface CorrectiveAction {
   id: number;
@@ -161,6 +162,12 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  
+  // Debug users state
+  useEffect(() => {
+    console.log('Current users state:', users);
+  }, [users]);
   
   // Dialog states
   const [openCorrectiveDialog, setOpenCorrectiveDialog] = useState(false);
@@ -191,17 +198,20 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
   });
 
   const [preventiveForm, setPreventiveForm] = useState({
-    title: '',
-    description: '',
-    potential_issue: '',
-    action_type: '',
-    priority: 'medium',
-    assigned_to: '',
-    start_date: '',
-    due_date: '',
-    effectiveness_rating: 3,
-    cost_estimate: 0,
-    verification_method: '',
+    action_code: '',
+    trigger_type: 'trend_analysis',
+    trigger_description: '',
+    action_description: '',
+    objective: '',
+    responsible_person: 1,
+    assigned_to: 1,
+    program_id: programId || null,
+    implementation_plan: '',
+    resources_required: '',
+    budget_estimate: 0,
+    planned_start_date: '',
+    planned_completion_date: '',
+    success_criteria: '',
   });
 
   useEffect(() => {
@@ -212,12 +222,30 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
     try {
       setLoading(true);
       
-      // Fetch CAPA data
+      // Fetch CAPA data and users
       const [correctiveResponse, preventiveResponse, dashboardResponse] = await Promise.all([
         prpAPI.getCorrectiveActions({}),
         prpAPI.getPreventiveActions({}),
         prpAPI.getCAPADashboard(),
       ]);
+
+      // Fetch users separately to handle potential issues
+      let usersResponse;
+      try {
+        usersResponse = await usersAPI.getUsers({});
+        console.log('Users API response:', usersResponse);
+        // The users API returns PaginatedResponse directly, not wrapped in ResponseModel
+        if (usersResponse.items) {
+          console.log('Setting users:', usersResponse.items);
+          setUsers(usersResponse.items);
+        } else {
+          console.error('Users API failed - no items found:', usersResponse);
+          setUsers([]);
+        }
+      } catch (userError) {
+        console.error('Error fetching users:', userError);
+        setUsers([]);
+      }
 
       if (correctiveResponse.success) {
         setCorrectiveActions(correctiveResponse.data.items || []);
@@ -229,6 +257,13 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
 
       if (dashboardResponse.success) {
         setDashboardData(dashboardResponse.data);
+      }
+
+      if (usersResponse.success) {
+        console.log('Users response:', usersResponse);
+        setUsers(usersResponse.data.items || usersResponse.data || []);
+      } else {
+        console.error('Users API failed:', usersResponse);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load CAPA data');
@@ -318,17 +353,20 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
 
   const resetPreventiveForm = () => {
     setPreventiveForm({
-      title: '',
-      description: '',
-      potential_issue: '',
-      action_type: '',
-      priority: 'medium',
-      assigned_to: '',
-      start_date: '',
-      due_date: '',
-      effectiveness_rating: 3,
-      cost_estimate: 0,
-      verification_method: '',
+      action_code: '',
+      trigger_type: 'trend_analysis',
+      trigger_description: '',
+      action_description: '',
+      objective: '',
+      responsible_person: 1,
+      assigned_to: 1,
+      program_id: programId || null,
+      implementation_plan: '',
+      resources_required: '',
+      budget_estimate: 0,
+      planned_start_date: '',
+      planned_completion_date: '',
+      success_criteria: '',
     });
   };
 
@@ -829,6 +867,74 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
             />
           </Grid>
           <Grid item xs={6}>
+            <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option.full_name || option.username || ''}
+              value={users.find(user => user.id === correctiveForm.responsible_person) || null}
+              noOptionsText="No users found"
+              loading={users.length === 0}
+              loadingText="Loading users..."
+              onChange={(event, newValue) => {
+                setCorrectiveForm({ 
+                  ...correctiveForm, 
+                  responsible_person: newValue ? newValue.id : 1 
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Responsible Person"
+                  required
+                  placeholder="Search for a user..."
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Box>
+                    <Typography variant="body1">{option.full_name || option.username}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option.full_name || option.username || ''}
+              value={users.find(user => user.id === correctiveForm.assigned_to) || null}
+              noOptionsText="No users found"
+              loading={users.length === 0}
+              loadingText="Loading users..."
+              onChange={(event, newValue) => {
+                setCorrectiveForm({ 
+                  ...correctiveForm, 
+                  assigned_to: newValue ? newValue.id : 1 
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Assigned To"
+                  required
+                  placeholder="Search for a user..."
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Box>
+                    <Typography variant="body1">{option.full_name || option.username}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            />
+          </Grid>
+          <Grid item xs={6}>
             <TextField
               fullWidth
               label="Cost Estimate"
@@ -867,112 +973,195 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Title"
-              value={preventiveForm.title}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, title: e.target.value })}
+              label="Action Code"
+              value={preventiveForm.action_code}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, action_code: e.target.value })}
+              placeholder="e.g., PA-2024-001"
+              required
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <FormControl fullWidth>
+              <InputLabel>Trigger Type</InputLabel>
+              <Select
+                value={preventiveForm.trigger_type}
+                onChange={(e) => setPreventiveForm({ ...preventiveForm, trigger_type: e.target.value })}
+                required
+              >
+                <MenuItem value="trend_analysis">Trend Analysis</MenuItem>
+                <MenuItem value="risk_assessment">Risk Assessment</MenuItem>
+                <MenuItem value="audit_finding">Audit Finding</MenuItem>
+                <MenuItem value="customer_feedback">Customer Feedback</MenuItem>
+                <MenuItem value="regulatory_change">Regulatory Change</MenuItem>
+                <MenuItem value="other">Other</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={6}>
+            <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option.full_name || option.username || ''}
+              value={users.find(user => user.id === preventiveForm.responsible_person) || null}
+              noOptionsText="No users found"
+              loading={users.length === 0}
+              loadingText="Loading users..."
+              onChange={(event, newValue) => {
+                setPreventiveForm({ 
+                  ...preventiveForm, 
+                  responsible_person: newValue ? newValue.id : 1 
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Responsible Person"
+                  required
+                  placeholder="Search for a user..."
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Box>
+                    <Typography variant="body1">{option.full_name || option.username}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Trigger Description"
+              value={preventiveForm.trigger_description}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, trigger_description: e.target.value })}
+              multiline
+              rows={2}
+              placeholder="Describe what triggered this preventive action"
               required
             />
           </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Description"
-              value={preventiveForm.description}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, description: e.target.value })}
+              label="Action Description"
+              value={preventiveForm.action_description}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, action_description: e.target.value })}
               multiline
               rows={3}
+              placeholder="Describe the preventive action to be taken"
               required
             />
           </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Potential Issue"
-              value={preventiveForm.potential_issue}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, potential_issue: e.target.value })}
+              label="Objective"
+              value={preventiveForm.objective}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, objective: e.target.value })}
               multiline
               rows={2}
+              placeholder="What is the objective of this preventive action?"
               required
             />
           </Grid>
           <Grid item xs={6}>
-            <FormControl fullWidth>
-              <InputLabel>Action Type</InputLabel>
-              <Select
-                value={preventiveForm.action_type}
-                onChange={(e) => setPreventiveForm({ ...preventiveForm, action_type: e.target.value })}
-                required
-              >
-                <MenuItem value="proactive">Proactive</MenuItem>
-                <MenuItem value="predictive">Predictive</MenuItem>
-                <MenuItem value="preventive">Preventive</MenuItem>
-                <MenuItem value="improvement">Improvement</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={6}>
-            <FormControl fullWidth>
-              <InputLabel>Priority</InputLabel>
-              <Select
-                value={preventiveForm.priority}
-                onChange={(e) => setPreventiveForm({ ...preventiveForm, priority: e.target.value })}
-                required
-              >
-                <MenuItem value="low">Low</MenuItem>
-                <MenuItem value="medium">Medium</MenuItem>
-                <MenuItem value="high">High</MenuItem>
-                <MenuItem value="critical">Critical</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Assigned To"
-              value={preventiveForm.assigned_to}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, assigned_to: e.target.value })}
-              required
+            <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option.full_name || option.username || ''}
+              value={users.find(user => user.id === preventiveForm.assigned_to) || null}
+              noOptionsText="No users found"
+              loading={users.length === 0}
+              loadingText="Loading users..."
+              onChange={(event, newValue) => {
+                setPreventiveForm({ 
+                  ...preventiveForm, 
+                  assigned_to: newValue ? newValue.id : 1 
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Assigned To"
+                  required
+                  placeholder="Search for a user..."
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Box>
+                    <Typography variant="body1">{option.full_name || option.username}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
             />
           </Grid>
           <Grid item xs={6}>
             <TextField
               fullWidth
-              label="Start Date"
-              type="date"
-              value={preventiveForm.start_date}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, start_date: e.target.value })}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              fullWidth
-              label="Due Date"
-              type="date"
-              value={preventiveForm.due_date}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, due_date: e.target.value })}
-              InputLabelProps={{ shrink: true }}
-              required
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              fullWidth
-              label="Cost Estimate"
+              label="Budget Estimate"
               type="number"
-              value={preventiveForm.cost_estimate}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, cost_estimate: parseFloat(e.target.value) || 0 })}
+              value={preventiveForm.budget_estimate}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, budget_estimate: parseFloat(e.target.value) || 0 })}
+              placeholder="0.00"
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              label="Planned Start Date"
+              type="date"
+              value={preventiveForm.planned_start_date}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, planned_start_date: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              label="Planned Completion Date"
+              type="date"
+              value={preventiveForm.planned_completion_date}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, planned_completion_date: e.target.value })}
+              InputLabelProps={{ shrink: true }}
             />
           </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Verification Method"
-              value={preventiveForm.verification_method}
-              onChange={(e) => setPreventiveForm({ ...preventiveForm, verification_method: e.target.value })}
+              label="Implementation Plan"
+              value={preventiveForm.implementation_plan}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, implementation_plan: e.target.value })}
+              multiline
+              rows={3}
+              placeholder="Describe the implementation plan"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Resources Required"
+              value={preventiveForm.resources_required}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, resources_required: e.target.value })}
               multiline
               rows={2}
-              required
+              placeholder="List resources required for implementation"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Success Criteria"
+              value={preventiveForm.success_criteria}
+              onChange={(e) => setPreventiveForm({ ...preventiveForm, success_criteria: e.target.value })}
+              multiline
+              rows={2}
+              placeholder="Define success criteria for this preventive action"
             />
           </Grid>
         </Grid>

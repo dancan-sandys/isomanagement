@@ -288,6 +288,23 @@
   - [x] Improved validation and user feedback
   - [x] Added fallback to first available program when none specified
 
+#### 3.1.11 PRP Preventive Action Form Fix ✅
+- [x] **Fixed validation errors in preventive action creation**
+  - [x] Updated form fields to match backend schema requirements
+  - [x] Added proper user dropdowns for assigned_to and responsible_person
+  - [x] Fixed field type mismatches (string vs number)
+  - [x] Added comprehensive form validation and placeholders
+  - [x] Enhanced user experience with proper field labels and descriptions
+  - [x] Updated form reset function to match new schema
+  - [x] Fixed NOT NULL constraint violation on program_id (made nullable in model)
+  - [x] Added default program selection logic in service layer
+  - [x] Converted user dropdowns to searchable Autocomplete components
+  - [x] Enhanced user selection with name and email display
+  - [x] Applied same user dropdown improvements to corrective action form
+  - [x] Fixed users API response structure handling (PaginatedResponse vs ResponseModel)
+  - [x] Removed mock users and implemented proper error handling
+  - [x] Added comprehensive debugging and logging for user loading
+
 ### 3.2 Mobile Experience Optimization ✅ **COMPLETED**
 
 #### 3.2.1 Mobile-Specific Features ✅ **COMPLETED**

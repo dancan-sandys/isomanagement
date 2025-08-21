@@ -586,7 +586,7 @@ class PRPPreventiveAction(Base):
     # Trigger information
     trigger_type = Column(String(50), nullable=False)  # trend_analysis, risk_assessment, etc.
     trigger_description = Column(Text, nullable=False)
-    program_id = Column(Integer, ForeignKey("prp_programs.id"), nullable=False)
+    program_id = Column(Integer, ForeignKey("prp_programs.id"), nullable=True)
     
     # Action details
     action_description = Column(Text, nullable=False)
