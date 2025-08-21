@@ -24,6 +24,9 @@ import TrainingMatrix from './pages/TrainingMatrix';
 import TrainingPolicies from './pages/TrainingPolicies';
 import RiskThresholds from './pages/RiskThresholds';
 import Audits from './pages/Audits';
+import AuditSchedule from './pages/AuditSchedule';
+import AuditFindings from './pages/AuditFindings';
+import AuditReports from './pages/AuditReports';
 import AuditDetail from './pages/AuditDetail';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
@@ -136,9 +139,9 @@ function App() {
                       <Route path="/audits/internal" element={<Navigate to="/audits" replace />} />
                       <Route path="/audits/external" element={<Navigate to="/audits" replace />} />
                       <Route path="/audits/:id" element={<AuditDetail />} />
-                      <Route path="/audits/schedule" element={<Navigate to="/audits?tab=schedule" replace />} />
-                      <Route path="/audits/findings" element={<Navigate to="/audits?tab=findings" replace />} />
-                      <Route path="/audits/reports" element={<Navigate to="/audits?tab=reports" replace />} />
+                      <Route path="/audits/schedule" element={<AuditSchedule />} />
+                      <Route path="/audits/findings" element={<AuditFindings />} />
+                      <Route path="/audits/reports" element={<AuditReports />} />
                       
                       {/* Training & Competence - QA and HR roles */}
                       <Route path="/training/programs" element={<Navigate to="/training" replace />} />

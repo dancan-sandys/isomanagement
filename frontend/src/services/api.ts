@@ -1749,6 +1749,15 @@ export const auditsAPI = {
     const response: AxiosResponse = await api.get('/audits/kpis/overview', { params });
     return response.data;
   },
+  // Schedule utilities
+  detectScheduleConflicts: async (params?: { start?: string; end?: string; auditor_id?: number; department?: string }) => {
+    const response: AxiosResponse = await api.get('/audits/schedule/conflicts', { params });
+    return response.data;
+  },
+  bulkUpdateSchedule: async (updates: Array<{ id: number; start_date?: string; end_date?: string }>) => {
+    const response: AxiosResponse = await api.post('/audits/schedule/bulk-update', updates);
+    return response.data;
+  },
 
   // Audit Plan endpoints
   getPlan: async (auditId: number) => {
@@ -1772,6 +1781,13 @@ export const auditsAPI = {
     });
     return response.data;
   },
+  exportConsolidatedReports: async (format: 'pdf'|'xlsx', params?: { date_from?: string; date_to?: string; program_id?: number; department?: string; auditor_id?: number; status?: string }) => {
+    const response: AxiosResponse<Blob> = await api.post('/audits/reports/consolidated', {}, {
+      params: { format, ...(params || {}) },
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 
   // Single audit report
   exportReport: async (auditId: number, format: 'pdf'|'xlsx') => {
@@ -1779,6 +1795,14 @@ export const auditsAPI = {
       params: { format },
       responseType: 'blob',
     });
+    return response.data;
+  },
+  approveReport: async (auditId: number, payload?: { notes?: string; file_path?: string }) => {
+    const response: AxiosResponse = await api.post(`/audits/${auditId}/report/approve`, payload || {});
+    return response.data;
+  },
+  getReportHistory: async (auditId: number) => {
+    const response: AxiosResponse = await api.get(`/audits/${auditId}/report/history`);
     return response.data;
   },
 
@@ -1846,6 +1870,36 @@ export const auditsAPI = {
   // Findings
   listFindings: async (auditId: number) => {
     const response: AxiosResponse = await api.get(`/audits/${auditId}/findings`);
+    return response.data;
+  },
+  // Aggregated findings
+  listAllFindings: async (params?: {
+    audit_id?: number;
+    program_id?: number;
+    severity?: string;
+    status?: string;
+    department?: string;
+    responsible_person_id?: number;
+    has_nc?: boolean;
+    overdue?: boolean;
+    created_from?: string;
+    created_to?: string;
+    page?: number;
+    size?: number;
+  }) => {
+    const response: AxiosResponse = await api.get('/audits/findings', { params });
+    return response.data;
+  },
+  bulkUpdateFindingsStatus: async (findingIds: number[], status: 'open'|'in_progress'|'verified'|'closed') => {
+    const response: AxiosResponse = await api.post('/audits/findings/bulk-update-status', { finding_ids: findingIds, status });
+    return response.data;
+  },
+  bulkAssignFindings: async (findingIds: number[], responsible_person_id: number) => {
+    const response: AxiosResponse = await api.post('/audits/findings/bulk-assign', { finding_ids: findingIds, responsible_person_id });
+    return response.data;
+  },
+  getFindingsAnalytics: async (params?: { program_id?: number; department?: string }) => {
+    const response: AxiosResponse = await api.get('/audits/findings/analytics', { params });
     return response.data;
   },
   addFinding: async (auditId: number, payload: any) => {
