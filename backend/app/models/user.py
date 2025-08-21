@@ -61,6 +61,7 @@ class User(Base):
     role = relationship("Role", back_populates="users")
     custom_permissions = relationship("UserPermission", back_populates="user", cascade="all, delete-orphan", foreign_keys="UserPermission.user_id")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    dashboard_configurations = relationship("DashboardConfiguration", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role_id={self.role_id})>"

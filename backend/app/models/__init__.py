@@ -13,7 +13,7 @@ from .traceability import Batch, TraceabilityLink, Recall, RecallEntry, RecallAc
 from .training import TrainingProgram, TrainingSession, TrainingAttendance, RoleRequiredTraining, TrainingCertificate, HACCPRequiredTraining
 from .equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
 from .settings import ApplicationSetting, UserPreference
-from .food_safety_objectives import FoodSafetyObjective
+from .food_safety_objectives import FoodSafetyObjective, ObjectiveTarget, ObjectiveProgress
 from .risk import (
     RiskRegisterItem, RiskAction, RiskManagementFramework, RiskContext,
     FSMSRiskIntegration, RiskCorrelation, RiskResourceAllocation,
@@ -42,6 +42,11 @@ from .audit_mgmt import (
     AuditChecklistTemplate, AuditChecklistItem, ChecklistResponse,
     AuditFinding, FindingSeverity, FindingStatus,
     AuditAttachment, AuditItemAttachment, AuditFindingAttachment, AuditAuditee,
+)
+from .dashboard import Department
+from .production import (
+    ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
+    ProductProcessType, ProcessStatus, StepType, LogEvent
 )
 
 __all__ = [
@@ -72,7 +77,7 @@ __all__ = [
     # Settings models
     "ApplicationSetting", "UserPreference",
     # Food safety objectives
-    "FoodSafetyObjective",
+    "FoodSafetyObjective", "ObjectiveTarget", "ObjectiveProgress",
     # Risk & Opportunity register
     "RiskRegisterItem", "RiskAction", "RiskManagementFramework", "RiskContext",
     "FSMSRiskIntegration", "RiskCorrelation", "RiskResourceAllocation",
@@ -96,4 +101,9 @@ __all__ = [
     "AuditChecklistTemplate", "AuditChecklistItem", "ChecklistResponse",
     "AuditFinding", "FindingSeverity", "FindingStatus",
     "AuditAttachment",
+    # Dashboard/Department
+    "Department",
+    # Production models
+    "ProductionProcess", "ProcessStep", "ProcessLog", "YieldRecord", "ColdRoomTransfer", "AgingRecord",
+    "ProductProcessType", "ProcessStatus", "StepType", "LogEvent",
 ] 

@@ -16,6 +16,7 @@ from app.models.nonconformance import NonConformance, CAPAAction
 from app.models.audit_mgmt import Audit, AuditFinding
 from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.schemas.common import ResponseModel
+from app.models.food_safety_objectives import ObjectiveProgress, ObjectiveTarget, FoodSafetyObjective
 
 router = APIRouter()
 
@@ -100,6 +101,32 @@ async def get_dashboard_stats(
             "nextAuditDate": (datetime.utcnow() + timedelta(days=30)).isoformat(),
             "recentDocuments": recent_docs_data
         }
+
+        # Objectives KPI (corporate snapshot) - latest period per objective
+        try:
+            latest_progress = (
+                db.query(ObjectiveProgress)
+                .order_by(desc(ObjectiveProgress.period_end))
+                .limit(10)
+                .all()
+            )
+            objectives_summary = []
+            for p in latest_progress:
+                try:
+                    obj = db.query(FoodSafetyObjective).filter(FoodSafetyObjective.id == p.objective_id).first()
+                    objectives_summary.append({
+                        "objectiveId": p.objective_id,
+                        "code": obj.objective_code if obj else None,
+                        "title": obj.title if obj else None,
+                        "attainment": round(p.attainment_percent or 0.0, 2) if (p.attainment_percent is not None) else None,
+                        "status": p.status,
+                        "periodEnd": p.period_end.isoformat() if p.period_end else None
+                    })
+                except Exception:
+                    continue
+            stats["objectivesKPI"] = objectives_summary
+        except Exception:
+            stats["objectivesKPI"] = []
         
         return ResponseModel(
             success=True,

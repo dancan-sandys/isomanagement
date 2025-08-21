@@ -38,6 +38,7 @@ import ComplaintDetail from './pages/ComplaintDetail';
 import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import DashboardAnalytics from './pages/DashboardAnalytics';
+import ObjectivesPage from './pages/Objectives';
 import DashboardReports from './pages/DashboardReports';
 import RiskRegister from './pages/RiskRegister';
 import OpportunitiesRegister from './pages/OpportunitiesRegister';
@@ -53,6 +54,7 @@ import AllergenLabel from './pages/AllergenLabel';
 import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
 import HiddenDemoTools from './pages/HiddenDemoTools';
+import ProductionPage from './pages/Production';
 
 function App() {
   return (
@@ -86,6 +88,8 @@ function App() {
                       <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/dashboard/analytics" element={<DashboardAnalytics />} />
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
+                      <Route path="/objectives" element={<ObjectivesPage />} />
+                      <Route path="/production" element={<ProductionPage />} />
                       
                       {/* Document Control - All authenticated users */}
                       <Route path="/documents" element={<Documents />} />
@@ -215,4 +219,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
