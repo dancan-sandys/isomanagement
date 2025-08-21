@@ -244,6 +244,42 @@
   - [x] Removed confusing horizontal workflow diagram from document list page
   - [x] Simplified interface with clean action buttons layout
 
+#### 3.1.6 PRP Risk Assessment Table Refresh Fix ✅
+- [x] **Fixed risk assessment creation and table refresh issues**
+  - [x] Added comprehensive debugging to track API calls and responses
+  - [x] Enhanced data refresh logic after risk assessment creation
+  - [x] Added explicit program-specific assessment refresh
+  - [x] Improved error handling and user feedback
+  - [x] Added empty state message for when no assessments exist
+  - [x] Enhanced console logging for troubleshooting
+
+#### 3.1.7 PRP Risk Assessment Code Uniqueness Fix ✅
+- [x] **Fixed unique constraint violation on assessment codes**
+  - [x] Added validation to check for duplicate assessment codes
+  - [x] Implemented auto-generation of unique assessment codes
+  - [x] Added fallback code generation with timestamp-based suffixes
+  - [x] Made assessment code field optional in frontend
+  - [x] Added helpful placeholder text and helper text
+  - [x] Enhanced error messages for better user guidance
+
+#### 3.1.8 PRP Risk Assessment Data Fetching & Display Fix ✅
+- [x] **Fixed risk assessment table not showing created assessments**
+  - [x] Added new backend endpoint `/prp/risk-assessments` to fetch all assessments
+  - [x] Enhanced frontend data fetching logic for both program-specific and all assessments
+  - [x] Fixed data refresh after assessment creation
+  - [x] Added comprehensive debugging and logging
+  - [x] Improved error handling and user feedback
+  - [x] Enhanced table rendering with proper empty state handling
+
+#### 3.1.9 Complaint Investigation Enhancement ✅
+- [x] **Enhanced complaint investigation functionality**
+  - [x] Added display of current investigation data in a dedicated section
+  - [x] Improved form with helpful placeholders and better UX
+  - [x] Added automatic form population with existing investigation data
+  - [x] Enhanced error handling with try-catch blocks
+  - [x] Added form clearing after successful operations
+  - [x] Improved visual feedback with investigation status display
+
 ### 3.2 Mobile Experience Optimization ✅ **COMPLETED**
 
 #### 3.2.1 Mobile-Specific Features ✅ **COMPLETED**

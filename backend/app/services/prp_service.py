@@ -892,6 +892,21 @@ class PRPService:
         if not program:
             raise ValueError("PRP program not found")
         
+        # Check if assessment code already exists and generate a unique one if needed
+        assessment_code = assessment_data.assessment_code
+        if not assessment_code:
+            # Generate a default code if none provided
+            assessment_code = self._generate_unique_assessment_code(program_id)
+        else:
+            # Check if the provided code already exists
+            existing_assessment = self.db.query(RiskAssessment).filter(
+                RiskAssessment.assessment_code == assessment_code
+            ).first()
+            
+            if existing_assessment:
+                # Generate a unique code based on the provided one
+                assessment_code = self._generate_unique_assessment_code(program_id, base_code=assessment_code)
+        
         # Calculate risk score and level
         risk_score, risk_level = self._calculate_risk_score(
             assessment_data.likelihood_level,
@@ -900,7 +915,7 @@ class PRPService:
         
         assessment = RiskAssessment(
             program_id=program_id,
-            assessment_code=assessment_data.assessment_code,
+            assessment_code=assessment_code,
             hazard_identified=assessment_data.hazard_identified,
             hazard_description=assessment_data.hazard_description,
             likelihood_level=assessment_data.likelihood_level,
@@ -959,6 +974,34 @@ class PRPService:
             risk_level = RiskLevel.CRITICAL
         
         return risk_score, risk_level
+    
+    def _generate_unique_assessment_code(self, program_id: int, base_code: str = None) -> str:
+        """Generate a unique assessment code for a PRP program"""
+        
+        # Get program info for prefix
+        program = self.db.query(PRPProgram).filter(PRPProgram.id == program_id).first()
+        if not program:
+            raise ValueError("PRP program not found")
+        
+        # Create base prefix from program code
+        prefix = f"RA-{program.program_code}-"
+        
+        if base_code:
+            # If base code provided, try to use it with a suffix
+            base = base_code
+            counter = 1
+            while True:
+                test_code = f"{base}-{counter}" if counter > 1 else base
+                existing = self.db.query(RiskAssessment).filter(
+                    RiskAssessment.assessment_code == test_code
+                ).first()
+                if not existing:
+                    return test_code
+                counter += 1
+        else:
+            # Generate a timestamp-based code
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            return f"{prefix}{timestamp}"
     
     def create_corrective_action(self, action_data: CorrectiveActionCreate, created_by: int) -> CorrectiveAction:
         """Create a new corrective action"""

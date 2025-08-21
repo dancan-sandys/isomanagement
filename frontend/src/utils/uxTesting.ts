@@ -233,18 +233,18 @@ class UXTestingSuite {
     this.results = [];
     
     for (const test of this.accessibilityTests) {
-      const passed = test.test();
+        const passed = test.test();
       
-      const result: UXTestResult = {
-        testName: test.name,
-        passed,
-        score: passed ? 100 : 0,
-        details: test.description,
-        wcagLevel: test.wcagLevel,
-        recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better accessibility`]
-      };
-      
-      this.results.push(result);
+        const result: UXTestResult = {
+          testName: test.name,
+          passed,
+          score: passed ? 100 : 0,
+          details: test.description,
+          wcagLevel: test.wcagLevel,
+          recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better accessibility`]
+        };
+        
+        this.results.push(result);
     }
     
     return this.results.filter(r => r.wcagLevel);
@@ -254,17 +254,17 @@ class UXTestingSuite {
     this.results = [];
     
     for (const test of this.performanceTests) {
-      const passed = test.test();
+        const passed = test.test();
       
-      const result: UXTestResult = {
-        testName: test.name,
-        passed,
-        score: passed ? 100 : 0,
-        details: test.description,
-        recommendations: passed ? [] : [`Optimize ${test.name.toLowerCase()} for better performance`]
-      };
-      
-      this.results.push(result);
+        const result: UXTestResult = {
+          testName: test.name,
+          passed,
+          score: passed ? 100 : 0,
+          details: test.description,
+          recommendations: passed ? [] : [`Optimize ${test.name.toLowerCase()} for better performance`]
+        };
+        
+        this.results.push(result);
     }
     
     return this.results.filter(r => !r.wcagLevel && r.testName.includes('Performance'));
@@ -274,17 +274,17 @@ class UXTestingSuite {
     this.results = [];
     
     for (const test of this.usabilityTests) {
-      const passed = test.test();
+        const passed = test.test();
       
-      const result: UXTestResult = {
-        testName: test.name,
-        passed,
-        score: passed ? 100 : 0,
-        details: test.description,
-        recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better usability`]
-      };
-      
-      this.results.push(result);
+        const result: UXTestResult = {
+          testName: test.name,
+          passed,
+          score: passed ? 100 : 0,
+          details: test.description,
+          recommendations: passed ? [] : [`Improve ${test.name.toLowerCase()} for better usability`]
+        };
+        
+        this.results.push(result);
     }
     
     return this.results.filter(r => !r.wcagLevel && !r.testName.includes('Performance'));

@@ -36,6 +36,8 @@ class Module(enum.Enum):
     RISK_OPPORTUNITY = "risk_opportunity"
     MANAGEMENT_REVIEW = "management_review"
     ALLERGEN_LABEL = "allergen_label"
+    EQUIPMENT = "equipment"
+    REPORTS = "reports"
 
 # Role-Permission association table
 role_permissions = Table(

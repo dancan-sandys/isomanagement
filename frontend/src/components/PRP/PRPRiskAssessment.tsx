@@ -52,7 +52,7 @@ import {
   NorthEast as Escalation,
   Assessment as RiskAssessment,
 } from '@mui/icons-material';
-import { prpAPI } from '../../services/api';
+import { prpAPI, api } from '../../services/api';
 
 interface RiskAssessment {
   id: number;
@@ -171,15 +171,23 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      console.log('Fetching data for programId:', programId);
       
       if (programId) {
         // Fetch assessments for specific program
+        console.log('Fetching assessments for program:', programId);
         const assessmentsResponse = await prpAPI.getProgramRiskAssessments(programId);
+        console.log('Assessments response:', assessmentsResponse);
+        
         if (assessmentsResponse.success) {
+          console.log('Setting assessments:', assessmentsResponse.data.items);
           setAssessments(assessmentsResponse.data.items || []);
+        } else {
+          console.error('Failed to fetch assessments:', assessmentsResponse);
         }
       } else {
         // Fetch all risk matrices and programs
+        console.log('Fetching all risk matrices and programs');
         const matricesResponse = await prpAPI.getRiskMatrices();
         if (matricesResponse.success) {
           setRiskMatrices(matricesResponse.data.items || []);
@@ -190,8 +198,26 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
         if (programsResponse.success) {
           setPrograms(programsResponse.data.items || []);
         }
+        
+        // Also fetch all assessments if no specific program is selected
+        console.log('Fetching all assessments since no specific program selected');
+        try {
+          // Use the new endpoint to fetch all risk assessments
+          const allAssessmentsResponse = await api.get('/prp/risk-assessments');
+          console.log('All assessments response:', allAssessmentsResponse);
+          
+          if (allAssessmentsResponse.data.success) {
+            console.log('Setting all assessments:', allAssessmentsResponse.data.data.items);
+            setAssessments(allAssessmentsResponse.data.data.items || []);
+          } else {
+            console.error('Failed to fetch all assessments:', allAssessmentsResponse.data);
+          }
+        } catch (assessmentError) {
+          console.log('Could not fetch all assessments:', assessmentError);
+        }
       }
     } catch (err: any) {
+      console.error('Error in fetchData:', err);
       setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
@@ -206,14 +232,39 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
     }
     
     try {
+      console.log('Creating risk assessment for program:', targetProgramId, 'with data:', assessmentForm);
       const response = await prpAPI.createRiskAssessment(Number(targetProgramId), assessmentForm);
+      console.log('Risk assessment creation response:', response);
+      
       if (response.success) {
         setSuccess('Risk assessment created successfully');
         setOpenAssessmentDialog(false);
         resetAssessmentForm();
-        fetchData();
+        
+        // Force refresh the data
+        console.log('Refreshing data after creation...');
+        await fetchData();
+        
+        // Also refresh if we're in a specific program view
+        if (programId) {
+          console.log('Refreshing program-specific assessments...');
+          const assessmentsResponse = await prpAPI.getProgramRiskAssessments(programId);
+          if (assessmentsResponse.success) {
+            console.log('Updated assessments:', assessmentsResponse.data.items);
+            setAssessments(assessmentsResponse.data.items || []);
+          }
+        } else {
+          // Refresh all assessments if no specific program
+          console.log('Refreshing all assessments...');
+          const allAssessmentsResponse = await api.get('/prp/risk-assessments');
+          if (allAssessmentsResponse.data.success) {
+            console.log('Updated all assessments:', allAssessmentsResponse.data.data.items);
+            setAssessments(allAssessmentsResponse.data.data.items || []);
+          }
+        }
       }
     } catch (err: any) {
+      console.error('Error creating risk assessment:', err);
       setError(err.message || 'Failed to create assessment');
     }
   };
@@ -363,7 +414,20 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {assessments.map((assessment) => (
+            {(() => {
+              console.log('Rendering assessments table with', assessments.length, 'items:', assessments);
+              return null;
+            })()}
+            {assessments.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} align="center">
+                  <Typography variant="body2" color="textSecondary">
+                    No risk assessments found. Create your first assessment using the "New Assessment" button.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              assessments.map((assessment) => (
               <TableRow key={assessment.id}>
                 <TableCell>{assessment.assessment_code}</TableCell>
                 <TableCell>
@@ -438,7 +502,8 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
                   </Box>
                 </TableCell>
               </TableRow>
-            ))}
+            ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -513,11 +578,11 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Assessment Code"
+              label="Assessment Code (Optional)"
               value={assessmentForm.assessment_code}
               onChange={(e) => setAssessmentForm({ ...assessmentForm, assessment_code: e.target.value })}
-              placeholder="e.g., RISK-001"
-              required
+              placeholder="Leave empty for auto-generation (e.g., RA-PROG-20250821-140649)"
+              helperText="If left empty, a unique code will be automatically generated based on the program and timestamp"
             />
           </Grid>
           <Grid item xs={12}>

@@ -1419,6 +1419,91 @@ async def escalate_risk_assessment(
         )
 
 
+@router.get("/risk-assessments")
+async def get_all_risk_assessments(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = 1,
+    size: int = 10,
+    program_id: Optional[int] = None,
+    risk_level: Optional[str] = None,
+    escalated: Optional[bool] = None
+):
+    """Get all risk assessments with optional filtering"""
+    try:
+        query = db.query(RiskAssessment)
+        
+        # Apply filters
+        if program_id:
+            query = query.filter(RiskAssessment.program_id == program_id)
+        if risk_level:
+            query = query.filter(RiskAssessment.risk_level == RiskLevel(risk_level))
+        if escalated is not None:
+            query = query.filter(RiskAssessment.escalated_to_risk_register == escalated)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        assessments = query.order_by(desc(RiskAssessment.assessment_date)).offset((page - 1) * size).limit(size).all()
+        
+        items = []
+        for assessment in assessments:
+            # Get program details
+            program = db.query(PRPProgram).filter(PRPProgram.id == assessment.program_id).first()
+            
+            # Get creator name
+            creator = db.query(User).filter(User.id == assessment.created_by).first()
+            
+            items.append({
+                "id": assessment.id,
+                "assessment_code": assessment.assessment_code,
+                "program": {
+                    "id": program.id if program else None,
+                    "name": program.name if program else None,
+                    "program_code": program.program_code if program else None,
+                    "category": program.category.value if program else None
+                },
+                "hazard_identified": assessment.hazard_identified,
+                "hazard_description": assessment.hazard_description,
+                "likelihood_level": assessment.likelihood_level,
+                "severity_level": assessment.severity_level,
+                "risk_level": assessment.risk_level.value if assessment.risk_level else None,
+                "risk_score": assessment.risk_score,
+                "acceptability": assessment.acceptability,
+                "existing_controls": assessment.existing_controls,
+                "additional_controls_required": assessment.additional_controls_required,
+                "control_effectiveness": assessment.control_effectiveness,
+                "residual_risk_level": assessment.residual_risk_level.value if assessment.residual_risk_level else None,
+                "residual_risk_score": assessment.residual_risk_score,
+                "assessment_date": assessment.assessment_date.isoformat() if assessment.assessment_date else None,
+                "next_review_date": assessment.next_review_date.isoformat() if assessment.next_review_date else None,
+                "escalated_to_risk_register": assessment.escalated_to_risk_register,
+                "escalation_date": assessment.escalation_date.isoformat() if assessment.escalation_date else None,
+                "created_by": creator.full_name if creator else "Unknown",
+                "created_at": assessment.created_at.isoformat() if assessment.created_at else None,
+                "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None
+            })
+        
+        return ResponseModel(
+            success=True,
+            message="Risk assessments retrieved successfully",
+            data={
+                "items": items,
+                "total": total,
+                "page": page,
+                "size": size,
+                "pages": (total + size - 1) // size
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve risk assessments: {str(e)}"
+        )
+
+
 @router.get("/risk-assessments/{assessment_id}")
 async def get_risk_assessment(
     assessment_id: int,

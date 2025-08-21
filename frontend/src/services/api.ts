@@ -829,6 +829,17 @@ export const prpAPI = {
     return response.data;
   },
 
+  getAllRiskAssessments: async (params?: { 
+    page?: number; 
+    size?: number; 
+    program_id?: number;
+    risk_level?: string; 
+    escalated?: boolean 
+  }) => {
+    const response: AxiosResponse = await api.get('/prp/risk-assessments', { params });
+    return response.data;
+  },
+
   createRiskAssessment: async (programId: number, assessmentData: any) => {
     const response: AxiosResponse = await api.post(`/prp/programs/${programId}/risk-assessments`, assessmentData);
     return response.data;
