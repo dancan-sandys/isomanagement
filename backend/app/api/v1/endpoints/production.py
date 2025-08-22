@@ -21,6 +21,8 @@ from app.schemas.production import MaterialConsumptionCreate
 from app.models.production import ProductProcessType, ProcessStatus
 from app.core.security import get_current_active_user
 from app.core.permissions import require_permission_dependency
+from app.models.production import ProcessParameter as PP
+from app.models.production import MaterialConsumption as MC
 
 router = APIRouter()
 
@@ -532,6 +534,22 @@ def export_production_sheet_pdf(
     else:
         c.drawString(x, y, "Not released")
         y -= 12
+    # Materials
+    try:
+        rows = db.query(MC).filter(MC.process_id == process_id).order_by(MC.consumed_at.asc()).all()
+        if rows:
+            if y < 80:
+                c.showPage(); y = height - 40
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(x, y, "Materials Consumption")
+            y -= 16
+            c.setFont("Helvetica", 9)
+            for m in rows[-12:]:
+                if y < 60:
+                    c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+                c.drawString(x, y, f"Material {m.material_id} • {m.quantity} {m.unit} • Lot {m.lot_number or '-'}"); y -= 12
+    except Exception:
+        pass
     c.showPage(); c.save(); buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=production_sheet_{process_id}.pdf"})
 

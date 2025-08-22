@@ -75,6 +75,7 @@ const ProductionPage: React.FC = () => {
   const [processDetails, setProcessDetails] = useState<any | null>(null);
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
+  const [matForm, setMatForm] = useState({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
 
   // Form states
   const [newProcess, setNewProcess] = useState<ProcessCreatePayload>({
@@ -571,6 +572,32 @@ const ProductionPage: React.FC = () => {
                 <Button size="small" variant="outlined" color="warning" onClick={() => setMocOpen(true)}>Request Change</Button>
               </Stack>
               <Divider />
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Materials</Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                  <TextField label="Material ID" size="small" value={matForm.material_id} onChange={(e) => setMatForm({ ...matForm, material_id: e.target.value })} />
+                  <TextField label="Qty" size="small" value={matForm.quantity} onChange={(e) => setMatForm({ ...matForm, quantity: e.target.value })} />
+                  <TextField label="Unit" size="small" value={matForm.unit} onChange={(e) => setMatForm({ ...matForm, unit: e.target.value })} />
+                  <TextField label="Lot" size="small" value={matForm.lot_number} onChange={(e) => setMatForm({ ...matForm, lot_number: e.target.value })} />
+                  <Button size="small" variant="outlined" onClick={async () => {
+                    try {
+                      await fetch(`/api/v1/production/processes/${processDetails.id}/materials`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          material_id: parseInt(matForm.material_id, 10),
+                          quantity: parseFloat(matForm.quantity),
+                          unit: matForm.unit,
+                          lot_number: matForm.lot_number,
+                        })
+                      });
+                      setMatForm({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
+                    } catch (e) {
+                      setError('Failed to record material consumption');
+                    }
+                  }}>Record</Button>
+                </Stack>
+              </Box>
               <Box>
                 <Typography variant="subtitle2" color="text.secondary">Change Requests</Typography>
                 <Button size="small" onClick={async () => {
