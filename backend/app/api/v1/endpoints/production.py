@@ -283,6 +283,91 @@ def get_enhanced_analytics(
     analytics = service.get_enhanced_analytics(pt)
     return analytics
 
+@router.get("/analytics/export/csv")
+def export_analytics_csv(
+    process_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    service = ProductionService(db)
+    pt = ProductProcessType(process_type) if process_type else None
+    data = service.get_enhanced_analytics(pt)
+    # Build a simple CSV with key metrics and trend rows
+    import csv, io as _io
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["metric", "value"])
+    w.writerow(["total_deviations", data.get("total_deviations")])
+    w.writerow(["critical_deviations", data.get("critical_deviations")])
+    w.writerow(["total_alerts", data.get("total_alerts")])
+    w.writerow(["unacknowledged_alerts", data.get("unacknowledged_alerts")])
+    w.writerow([])
+    w.writerow(["process_type", "count"])
+    for k, v in (data.get("process_type_breakdown") or {}).items():
+        w.writerow([k, v])
+    w.writerow([])
+    w.writerow(["yield_trend_date", "count"])
+    for r in (data.get("yield_trends") or []):
+        w.writerow([r.get("date"), r.get("count")])
+    w.writerow([])
+    w.writerow(["deviation_trend_date", "count"])
+    for r in (data.get("deviation_trends") or []):
+        w.writerow([r.get("date"), r.get("count")])
+    out = buf.getvalue().encode("utf-8")
+    return StreamingResponse(io.BytesIO(out), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=production_analytics.csv"})
+
+@router.get("/analytics/export/pdf")
+def export_analytics_pdf(
+    process_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    service = ProductionService(db)
+    pt = ProductProcessType(process_type) if process_type else None
+    data = service.get_enhanced_analytics(pt)
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    x, y = 40, height - 40
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(x, y, "Production Analytics Summary")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    metrics = [
+        ("Total deviations", data.get("total_deviations")),
+        ("Critical deviations", data.get("critical_deviations")),
+        ("Total alerts", data.get("total_alerts")),
+        ("Unacknowledged alerts", data.get("unacknowledged_alerts")),
+    ]
+    for k, v in metrics:
+        c.drawString(x, y, f"{k}: {v}"); y -= 14
+    y -= 6
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Process Type Breakdown"); y -= 16
+    c.setFont("Helvetica", 10)
+    for k, v in (data.get("process_type_breakdown") or {}).items():
+        if y < 60:
+            c.showPage(); y = height - 40; c.setFont("Helvetica", 10)
+        c.drawString(x, y, f"{k}: {v}"); y -= 12
+    y -= 8
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "30-Day Yield Trend"); y -= 16
+    c.setFont("Helvetica", 10)
+    for r in (data.get("yield_trends") or [])[:30]:
+        if y < 60:
+            c.showPage(); y = height - 40; c.setFont("Helvetica", 10)
+        c.drawString(x, y, f"{r.get('date')}: {r.get('count')}"); y -= 12
+    y -= 8
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "30-Day Deviation Trend"); y -= 16
+    c.setFont("Helvetica", 10)
+    for r in (data.get("deviation_trends") or [])[:30]:
+        if y < 60:
+            c.showPage(); y = height - 40; c.setFont("Helvetica", 10)
+        c.drawString(x, y, f"{r.get('date')}: {r.get('count')}"); y -= 12
+    c.showPage(); c.save()
+    return StreamingResponse(io.BytesIO(buf.getvalue()), media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=production_analytics.pdf"})
+
 @router.get("/processes/{process_id}/audit")
 def list_process_audit(
     process_id: int,

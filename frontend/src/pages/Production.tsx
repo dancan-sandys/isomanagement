@@ -60,6 +60,8 @@ import productionAPI, {
   ProcessAlertPayload,
   ProcessTemplatePayload,
 } from '../services/productionAPI';
+import { suppliersAPI } from '../services/productionAPI';
+import Autocomplete from '@mui/material/Autocomplete';
 
 const ProductionPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
@@ -75,9 +77,12 @@ const ProductionPage: React.FC = () => {
   const [processDetails, setProcessDetails] = useState<any | null>(null);
   const [processAudit, setProcessAudit] = useState<any[]>([]);
   const [detailsTab, setDetailsTab] = useState(0);
+  const [auditFilter, setAuditFilter] = useState({ action: '', from: '', to: '' });
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
   const [matForm, setMatForm] = useState({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
+  const [materialOptions, setMaterialOptions] = useState<any[]>([]);
+  const [materialQuery, setMaterialQuery] = useState('');
 
   // Form states
   const [newProcess, setNewProcess] = useState<ProcessCreatePayload>({
@@ -370,6 +375,38 @@ const ProductionPage: React.FC = () => {
         {/* Analytics Tab */}
         {activeTab === 2 && (
           <Box p={2}>
+            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+              <Button size="small" variant="outlined" onClick={async () => {
+                try {
+                  const blob = await productionAPI.exportAnalyticsCSV();
+                  const url = window.URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'production_analytics.csv';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                } catch (e) {
+                  setError('Export CSV failed');
+                }
+              }}>Export CSV</Button>
+              <Button size="small" variant="outlined" onClick={async () => {
+                try {
+                  const blob = await productionAPI.exportAnalyticsPDF();
+                  const url = window.URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'production_analytics.pdf';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                } catch (e) {
+                  setError('Export PDF failed');
+                }
+              }}>Export PDF</Button>
+            </Stack>
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <Card>
@@ -550,6 +587,80 @@ const ProductionPage: React.FC = () => {
                 <ListItem><ListItemText primary={`Status: ${processDetails?.status}`} secondary={`Batch: ${processDetails?.batch_id}`} /></ListItem>
                 <ListItem><ListItemText primary={`Operator: ${processDetails?.operator_id || '—'}`} secondary={`Start: ${processDetails?.start_time}`} /></ListItem>
               </List>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="subtitle1" gutterBottom>Materials</Typography>
+              <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 1 }}>
+                <Autocomplete
+                  size="small"
+                  options={materialOptions}
+                  getOptionLabel={(o: any) => o.name || o.code || String(o.id)}
+                  onInputChange={async (_, value) => {
+                    setMaterialQuery(value);
+                    if (value && value.length >= 2) {
+                      try {
+                        const results = await suppliersAPI.searchMaterials(value, 10);
+                        setMaterialOptions(results);
+                      } catch (e) {
+                        setMaterialOptions([]);
+                      }
+                    } else {
+                      setMaterialOptions([]);
+                    }
+                  }}
+                  onChange={(_, value: any) => {
+                    setMatForm({ ...matForm, material_id: value?.id ? String(value.id) : '' });
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Search Material" />
+                  )}
+                  sx={{ minWidth: 260 }}
+                />
+                <TextField label="Qty" size="small" value={matForm.quantity} onChange={(e) => setMatForm({ ...matForm, quantity: e.target.value })} />
+                <TextField label="Unit" size="small" value={matForm.unit} onChange={(e) => setMatForm({ ...matForm, unit: e.target.value })} />
+                <TextField label="Lot" size="small" value={matForm.lot_number} onChange={(e) => setMatForm({ ...matForm, lot_number: e.target.value })} />
+                <Button size="small" variant="outlined" onClick={async () => {
+                  try {
+                    await fetch(`/api/v1/production/processes/${processDetails.id}/materials`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        material_id: parseInt(matForm.material_id, 10),
+                        quantity: parseFloat(matForm.quantity),
+                        unit: matForm.unit,
+                        lot_number: matForm.lot_number,
+                      })
+                    });
+                    setMatForm({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
+                  } catch (e) {
+                    setError('Failed to record material consumption');
+                  }
+                }}>Record</Button>
+              </Stack>
+              <Typography variant="subtitle2" color="text.secondary">Consumptions</Typography>
+              <Table size="small" sx={{ mb: 1 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Material</TableCell>
+                    <TableCell>Qty</TableCell>
+                    <TableCell>Unit</TableCell>
+                    <TableCell>Lot</TableCell>
+                    <TableCell>When</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(processDetails?.materials || []).map((m: any) => (
+                    <TableRow key={m.id}>
+                      <TableCell>{m.id}</TableCell>
+                      <TableCell>{m.material_id}</TableCell>
+                      <TableCell>{m.quantity}</TableCell>
+                      <TableCell>{m.unit}</TableCell>
+                      <TableCell>{m.lot_number}</TableCell>
+                      <TableCell>{m.consumed_at ? new Date(m.consumed_at).toLocaleString() : '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </Box>
           )}
           {detailsTab === 1 && (
@@ -610,26 +721,42 @@ const ProductionPage: React.FC = () => {
           {detailsTab === 3 && (
             <Box>
               <Typography variant="subtitle1" gutterBottom>Audit Trail</Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell>Action</TableCell>
-                    <TableCell>User</TableCell>
-                    <TableCell>Details</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {processAudit.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
-                      <TableCell><Chip label={r.action} size="small" /></TableCell>
-                      <TableCell>{r.user_id ?? '—'}</TableCell>
-                      <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                <TextField size="small" label="Action contains" value={auditFilter.action} onChange={(e) => setAuditFilter({ ...auditFilter, action: e.target.value })} />
+                <TextField size="small" label="From" type="date" InputLabelProps={{ shrink: true }} value={auditFilter.from} onChange={(e) => setAuditFilter({ ...auditFilter, from: e.target.value })} />
+                <TextField size="small" label="To" type="date" InputLabelProps={{ shrink: true }} value={auditFilter.to} onChange={(e) => setAuditFilter({ ...auditFilter, to: e.target.value })} />
+              </Stack>
+              {(() => {
+                const filtered = processAudit.filter((r) => {
+                  const okAction = auditFilter.action ? (r.action || '').toLowerCase().includes(auditFilter.action.toLowerCase()) : true;
+                  const ts = r.created_at ? new Date(r.created_at).getTime() : 0;
+                  const fromOk = auditFilter.from ? ts >= new Date(auditFilter.from).getTime() : true;
+                  const toOk = auditFilter.to ? ts <= new Date(auditFilter.to).getTime() + 24*3600*1000 - 1 : true;
+                  return okAction && fromOk && toOk;
+                });
+                return (
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Timestamp</TableCell>
+                        <TableCell>Action</TableCell>
+                        <TableCell>User</TableCell>
+                        <TableCell>Details</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filtered.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
+                          <TableCell><Chip label={r.action} size="small" /></TableCell>
+                          <TableCell>{r.user_id ?? '—'}</TableCell>
+                          <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                );
+              })()}
             </Box>
           )}
         </DialogContent>

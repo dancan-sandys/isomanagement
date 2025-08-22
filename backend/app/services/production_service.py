@@ -543,6 +543,16 @@ class ProductionService:
         parameters = self.db.query(ProcessParameter).filter(ProcessParameter.process_id == process_id).order_by(ProcessParameter.recorded_at).all()
         deviations = self.db.query(ProcessDeviation).filter(ProcessDeviation.process_id == process_id).order_by(ProcessDeviation.created_at).all()
         alerts = self.db.query(ProcessAlert).filter(ProcessAlert.process_id == process_id).order_by(ProcessAlert.created_at).all()
+        try:
+            from app.models.production import MaterialConsumption
+            materials = (
+                self.db.query(MaterialConsumption)
+                .filter(MaterialConsumption.process_id == process_id)
+                .order_by(MaterialConsumption.consumed_at.desc())
+                .all()
+            )
+        except Exception:
+            materials = []
         
         return {
             "process": process,
@@ -551,6 +561,7 @@ class ProductionService:
             "parameters": parameters,
             "deviations": deviations,
             "alerts": alerts,
+            "materials": materials,
         }
 
     def get_enhanced_analytics(self, process_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:

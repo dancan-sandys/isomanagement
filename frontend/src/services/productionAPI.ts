@@ -145,6 +145,14 @@ const productionAPI = {
     const res = await api.get('/production/analytics/enhanced', { params: { process_type: processType } });
     return res.data;
   },
+  exportAnalyticsCSV: async (processType?: string) => {
+    const res = await api.get('/production/analytics/export/csv', { params: { process_type: processType }, responseType: 'blob' });
+    return res.data as Blob;
+  },
+  exportAnalyticsPDF: async (processType?: string) => {
+    const res = await api.get('/production/analytics/export/pdf', { params: { process_type: processType }, responseType: 'blob' });
+    return res.data as Blob;
+  },
 
   getProcessAudit: async (processId: number, params?: { limit?: number; offset?: number }) => {
     const res = await api.get(`/production/processes/${processId}/audit`, { params });
@@ -184,6 +192,13 @@ const productionAPI = {
   approveChangeRequest: async (id: number, payload: { decision: 'approved'|'rejected'; comments?: string; sequence?: number }) => {
     const res = await api.post(`/change-requests/${id}/approve`, { decision: payload.decision, comments: payload.comments }, { params: { sequence: payload.sequence } });
     return res.data;
+  },
+};
+
+export const suppliersAPI = {
+  searchMaterials: async (q: string, limit: number = 10) => {
+    const res = await api.get('/suppliers/materials/search', { params: { q, limit } });
+    return res.data?.data?.results || [];
   },
 };
 
