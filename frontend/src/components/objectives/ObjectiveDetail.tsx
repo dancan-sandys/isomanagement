@@ -40,6 +40,7 @@ import { objectivesService } from '../../services/objectivesService';
 import { Objective } from '../../types/objectives';
 import ProgressChart from './ProgressChart';
 import ProgressEntryForm from './ProgressEntryForm';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface ObjectiveDetailProps {
   open: boolean;
@@ -57,6 +58,7 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showProgressForm, setShowProgressForm] = useState(false);
+  const [links, setLinks] = useState<{ linked_risk_ids: number[]; linked_control_ids: number[]; linked_document_ids: number[]; management_review_refs: number[] } | null>(null);
 
   useEffect(() => {
     if (open && objective) {
@@ -76,6 +78,15 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       // Load progress history
       const progressResponse = await objectivesService.getObjectiveProgress(objective.id);
       setProgressHistory(progressResponse.data || []);
+
+      // Load linkages
+      try {
+        const linkRes = await objectivesService.getObjectiveLinks(objective.id);
+        setLinks(linkRes);
+      } catch (e) {
+        // non-blocking
+        setLinks({ linked_risk_ids: [], linked_control_ids: [], linked_document_ids: [], management_review_refs: [] });
+      }
     } catch (err) {
       setError('Failed to load objective details');
       console.error('Error loading objective details:', err);
@@ -374,6 +385,64 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                     </ListItem>
                   )}
                 </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Linkages */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Typography variant="h6">Linked Risks / Controls / Documents / MR</Typography>
+                  <Tooltip title="Refresh Links">
+                    <IconButton size="small" onClick={loadDetailedData}>
+                      <RefreshIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={3}>
+                    <Typography variant="caption" color="textSecondary">Risks</Typography>
+                    <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+                      {(links?.linked_risk_ids || []).length === 0 ? (
+                        <Typography variant="body2">None</Typography>
+                      ) : (
+                        links!.linked_risk_ids.map((id) => <Chip key={`risk-${id}`} label={`Risk #${id}`} size="small" />)
+                      )}
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Typography variant="caption" color="textSecondary">Controls</Typography>
+                    <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+                      {(links?.linked_control_ids || []).length === 0 ? (
+                        <Typography variant="body2">None</Typography>
+                      ) : (
+                        links!.linked_control_ids.map((id) => <Chip key={`ctrl-${id}`} label={`Control #${id}`} size="small" />)
+                      )}
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Typography variant="caption" color="textSecondary">Documents</Typography>
+                    <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+                      {(links?.linked_document_ids || []).length === 0 ? (
+                        <Typography variant="body2">None</Typography>
+                      ) : (
+                        links!.linked_document_ids.map((id) => <Chip key={`doc-${id}`} label={`Doc #${id}`} size="small" />)
+                      )}
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Typography variant="caption" color="textSecondary">Management Reviews</Typography>
+                    <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+                      {(links?.management_review_refs || []).length === 0 ? (
+                        <Typography variant="body2">None</Typography>
+                      ) : (
+                        links!.management_review_refs.map((id) => <Chip key={`mr-${id}`} label={`MR #${id}`} size="small" />)
+                      )}
+                    </Box>
+                  </Grid>
+                </Grid>
               </CardContent>
             </Card>
           </Grid>

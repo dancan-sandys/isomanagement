@@ -162,6 +162,16 @@ export const objectivesService = {
     return response.data;
   },
 
+  // Objective Linkages API
+  getObjectiveLinks: async (objectiveId: number): Promise<{ linked_risk_ids: number[]; linked_control_ids: number[]; linked_document_ids: number[]; management_review_refs: number[] }> => {
+              const response = await apiClient.get(`/objectives-v2/objectives/${objectiveId}/links`);
+    return response.data;
+  },
+  updateObjectiveLinks: async (objectiveId: number, payload: Partial<{ linked_risk_ids: number[]; linked_control_ids: number[]; linked_document_ids: number[]; management_review_refs: number[] }>): Promise<ObjectiveResponse> => {
+              const response = await apiClient.put(`/objectives-v2/objectives/${objectiveId}/links`, payload);
+    return response.data;
+  },
+
   // Dashboard API
   // Get dashboard KPIs
   getDashboardKPIs: async (): Promise<DashboardKPI> => {
