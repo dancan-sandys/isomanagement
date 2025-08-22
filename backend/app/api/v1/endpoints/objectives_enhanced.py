@@ -703,6 +703,8 @@ def assign_owner(
     updated = service.assign_owner(objective_id, owner_user_id)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=owner_user_id, action="objective_assign_owner", resource_type="objective", resource_id=str(objective_id), details={"owner_user_id": owner_user_id}))
+    db.commit()
     return updated
 
 
@@ -717,6 +719,8 @@ def submit_for_approval(
     updated = service.submit_for_approval(objective_id, current_user.id, notes)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_submit", resource_type="objective", resource_id=str(objective_id), details={"notes": notes}))
+    db.commit()
     return updated
 
 
@@ -731,6 +735,8 @@ def approve_objective(
     updated = service.approve(objective_id, current_user.id, notes)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_approve", resource_type="objective", resource_id=str(objective_id), details={"notes": notes}))
+    db.commit()
     return updated
 
 
@@ -745,6 +751,8 @@ def reject_objective(
     updated = service.reject(objective_id, current_user.id, notes)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_reject", resource_type="objective", resource_id=str(objective_id), details={"notes": notes}))
+    db.commit()
     return updated
 
 
@@ -759,6 +767,8 @@ def close_objective(
     updated = service.close(objective_id, current_user.id, reason)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_close", resource_type="objective", resource_id=str(objective_id), details={"reason": reason}))
+    db.commit()
     return updated
 
 # =========================================================================
