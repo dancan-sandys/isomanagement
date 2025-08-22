@@ -164,7 +164,10 @@ def create_migration():
             ("ix_department_users_period", "department_users (assigned_from, assigned_until)"),
             ("ix_objectives_hierarchy", "food_safety_objectives (parent_objective_id, objective_type)"),
             ("ix_objectives_department", "food_safety_objectives (department_id, objective_type)"),
-            ("ix_objectives_type_level", "food_safety_objectives (objective_type, hierarchy_level)")
+            ("ix_objectives_type_level", "food_safety_objectives (objective_type, hierarchy_level)"),
+            ("ix_objectives_status_created", "food_safety_objectives (status, created_at)"),
+            ("ix_objectives_status_next_review", "food_safety_objectives (status, next_review_date)"),
+            ("ix_objective_evidence_verification", "objective_evidence (objective_id, is_verified, uploaded_at)"),
         ]
         
         for index_name, index_def in indexes:

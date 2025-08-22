@@ -7,6 +7,7 @@ Supports corporate and departmental objectives with advanced tracking
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc, asc
+from sqlalchemy.orm import selectinload
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 import json
@@ -22,6 +23,11 @@ from app.models.user import User
 class ObjectivesServiceEnhanced:
     def __init__(self, db: Session):
         self.db = db
+        # simple in-process cache (TTL)
+        if not hasattr(ObjectivesServiceEnhanced, "_summary_cache"):
+            ObjectivesServiceEnhanced._summary_cache: Optional[Dict[str, Any]] = None
+            ObjectivesServiceEnhanced._summary_cache_ts: Optional[datetime] = None
+            ObjectivesServiceEnhanced._summary_cache_ttl_seconds: int = 30
 
     def create_objective(self, objective_data: Dict[str, Any]) -> FoodSafetyObjective:
         """Create a new objective with enhanced validation"""
@@ -42,14 +48,16 @@ class ObjectivesServiceEnhanced:
         self.db.add(objective)
         self.db.commit()
         self.db.refresh(objective)
+        self._invalidate_caches()
         
         return objective
 
     def get_objective(self, objective_id: int) -> Optional[FoodSafetyObjective]:
         """Get objective by ID with related data"""
-        return self.db.query(FoodSafetyObjective).filter(
-            FoodSafetyObjective.id == objective_id
-        ).first()
+        return self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets),
+            selectinload(FoodSafetyObjective.progress_entries)
+        ).filter(FoodSafetyObjective.id == objective_id).first()
 
     def list_objectives(
         self,
@@ -62,7 +70,9 @@ class ObjectivesServiceEnhanced:
     ) -> List[FoodSafetyObjective]:
         """List objectives with filtering"""
         
-        query = self.db.query(FoodSafetyObjective)
+        query = self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets)
+        )
         
         if objective_type:
             query = query.filter(FoodSafetyObjective.objective_type == objective_type)
@@ -87,13 +97,17 @@ class ObjectivesServiceEnhanced:
 
     def get_corporate_objectives(self) -> List[FoodSafetyObjective]:
         """Get all corporate objectives"""
-        return self.db.query(FoodSafetyObjective).filter(
+        return self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets)
+        ).filter(
             FoodSafetyObjective.objective_type == ObjectiveType.CORPORATE
         ).order_by(desc(FoodSafetyObjective.created_at)).all()
 
     def get_departmental_objectives(self, department_id: int) -> List[FoodSafetyObjective]:
         """Get objectives for a specific department"""
-        return self.db.query(FoodSafetyObjective).filter(
+        return self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets)
+        ).filter(
             FoodSafetyObjective.department_id == department_id
         ).order_by(desc(FoodSafetyObjective.created_at)).all()
 
@@ -133,6 +147,7 @@ class ObjectivesServiceEnhanced:
         
         self.db.commit()
         self.db.refresh(objective)
+        self._invalidate_caches()
         
         return objective
 
@@ -147,6 +162,7 @@ class ObjectivesServiceEnhanced:
         objective.last_updated_at = datetime.utcnow()
         
         self.db.commit()
+        self._invalidate_caches()
         return True
 
     # ------------------------------
@@ -159,6 +175,7 @@ class ObjectivesServiceEnhanced:
         obj.owner_user_id = owner_user_id
         obj.last_updated_at = datetime.utcnow()
         self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
         return obj
 
     def submit_for_approval(self, objective_id: int, user_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
@@ -172,6 +189,7 @@ class ObjectivesServiceEnhanced:
             obj.approval_notes = notes
         obj.last_updated_at = datetime.utcnow()
         self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
         return obj
 
     def approve(self, objective_id: int, approver_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
@@ -185,6 +203,7 @@ class ObjectivesServiceEnhanced:
             obj.approval_notes = notes
         obj.last_updated_at = datetime.utcnow()
         self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
         return obj
 
     def reject(self, objective_id: int, approver_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
@@ -198,6 +217,7 @@ class ObjectivesServiceEnhanced:
             obj.approval_notes = notes
         obj.last_updated_at = datetime.utcnow()
         self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
         return obj
 
     def close(self, objective_id: int, closer_id: int, reason: Optional[str] = None) -> Optional[FoodSafetyObjective]:
@@ -211,6 +231,7 @@ class ObjectivesServiceEnhanced:
             obj.closure_reason = reason
         obj.last_updated_at = datetime.utcnow()
         self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
         return obj
 
     # ------------------------------
@@ -249,6 +270,7 @@ class ObjectivesServiceEnhanced:
         obj.last_updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(obj)
+        self._invalidate_caches()
         return obj
 
     def create_target(self, target_data: Dict[str, Any]) -> ObjectiveTarget:
@@ -258,6 +280,7 @@ class ObjectivesServiceEnhanced:
         self.db.add(target)
         self.db.commit()
         self.db.refresh(target)
+        self._invalidate_caches()
         
         return target
 
@@ -295,6 +318,7 @@ class ObjectivesServiceEnhanced:
         
         # Update objective trend and performance color
         self._update_objective_performance(progress.objective_id)
+        self._invalidate_caches()
         
         return progress
 
@@ -445,12 +469,10 @@ class ObjectivesServiceEnhanced:
         # Check for objectives with no recent progress
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         objectives_without_progress = self.db.query(FoodSafetyObjective).filter(
-            and_(
-                FoodSafetyObjective.status == 'active',
-                ~FoodSafetyObjective.id.in_(
-                    self.db.query(ObjectiveProgress.objective_id).filter(
-                        ObjectiveProgress.created_at >= thirty_days_ago
-                    )
+            FoodSafetyObjective.status == 'active',
+            ~FoodSafetyObjective.id.in_(
+                self.db.query(ObjectiveProgress.objective_id).filter(
+                    ObjectiveProgress.created_at >= thirty_days_ago
                 )
             )
         ).all()
@@ -465,29 +487,33 @@ class ObjectivesServiceEnhanced:
             })
         
         # Check for objectives significantly off track
-        off_track_progress = self.db.query(ObjectiveProgress).filter(
-            and_(
-                ObjectiveProgress.status == 'off_track',
-                ObjectiveProgress.created_at >= thirty_days_ago
-            )
+        rows = self.db.query(ObjectiveProgress, FoodSafetyObjective.title, FoodSafetyObjective.id).join(
+            FoodSafetyObjective, FoodSafetyObjective.id == ObjectiveProgress.objective_id
+        ).filter(
+            ObjectiveProgress.status == 'off_track',
+            ObjectiveProgress.created_at >= thirty_days_ago
         ).all()
-        
-        for progress in off_track_progress:
-            objective = self.get_objective(progress.objective_id)
-            if objective:
-                alerts.append({
-                    "type": "off_track",
-                    "objective_id": objective.id,
-                    "objective_title": objective.title,
-                    "message": f"'{objective.title}' is significantly off track ({progress.attainment_percent}% attainment)",
-                    "severity": "high",
-                    "attainment_percent": progress.attainment_percent
-                })
+        for progress, objective_title, objective_id in rows:
+            alerts.append({
+                "type": "off_track",
+                "objective_id": objective_id,
+                "objective_title": objective_title,
+                "message": f"'{objective_title}' is significantly off track ({progress.attainment_percent}% attainment)",
+                "severity": "high",
+                "attainment_percent": progress.attainment_percent
+            })
         
         return alerts
 
     def get_dashboard_summary(self) -> Dict[str, Any]:
         """Aggregate KPIs, performance metrics, sample trends and alerts."""
+        # Return cached if fresh
+        if (
+            ObjectivesServiceEnhanced._summary_cache is not None and
+            ObjectivesServiceEnhanced._summary_cache_ts is not None and
+            (datetime.utcnow() - ObjectivesServiceEnhanced._summary_cache_ts).total_seconds() < ObjectivesServiceEnhanced._summary_cache_ttl_seconds
+        ):
+            return ObjectivesServiceEnhanced._summary_cache  # type: ignore[return-value]
         kpis = self.get_dashboard_kpis()
         performance = self.get_performance_metrics()
         # Build trends for up to 5 recent active objectives
@@ -503,12 +529,15 @@ class ObjectivesServiceEnhanced:
             })
             trends.append(ta)
         alerts = self.get_alerts()
-        return {
+        summary = {
             "kpis": kpis,
             "performance_metrics": performance,
             "trends": trends,
             "alerts": alerts,
         }
+        ObjectivesServiceEnhanced._summary_cache = summary
+        ObjectivesServiceEnhanced._summary_cache_ts = datetime.utcnow()
+        return summary
 
     # ------------------------------
     # Departments CRUD
@@ -524,6 +553,7 @@ class ObjectivesServiceEnhanced:
         self.db.add(department)
         self.db.commit()
         self.db.refresh(department)
+        self._invalidate_caches()
         return department
 
     def get_department(self, department_id: int) -> Optional[DepartmentModel]:
@@ -544,6 +574,7 @@ class ObjectivesServiceEnhanced:
                 setattr(department, field, value)
         self.db.commit()
         self.db.refresh(department)
+        self._invalidate_caches()
         return department
 
     def delete_department(self, department_id: int) -> bool:
@@ -553,6 +584,7 @@ class ObjectivesServiceEnhanced:
         # Soft delete by setting status
         department.status = 'inactive'
         self.db.commit()
+        self._invalidate_caches()
         return True
 
     def _generate_objective_code(self) -> str:
@@ -621,3 +653,7 @@ class ObjectivesServiceEnhanced:
                 objective.performance_color = PerformanceColor.RED
         
         self.db.commit()
+
+    def _invalidate_caches(self) -> None:
+        ObjectivesServiceEnhanced._summary_cache = None
+        ObjectivesServiceEnhanced._summary_cache_ts = None
