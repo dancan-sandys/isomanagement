@@ -41,6 +41,7 @@ import { Objective } from '../../types/objectives';
 import ProgressChart from './ProgressChart';
 import ProgressEntryForm from './ProgressEntryForm';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import EvidenceSection from './EvidenceSection';
 
 interface ObjectiveDetailProps {
   open: boolean;
@@ -443,6 +444,15 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                     </Box>
                   </Grid>
                 </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Evidence */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <EvidenceSection objectiveId={detailedObjective.id} />
               </CardContent>
             </Card>
           </Grid>

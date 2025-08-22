@@ -239,6 +239,27 @@ export const objectivesService = {
               await apiClient.delete(`/objectives-v2/departments/${id}`);
   },
 
+  // Evidence API
+  listEvidence: async (objectiveId: number): Promise<{ data: ObjectiveEvidence[] }> => {
+              const response = await apiClient.get(`/objectives-v2/objectives/${objectiveId}/evidence`);
+    return response.data;
+  },
+  uploadEvidence: async (objectiveId: number, payload: { file: File; notes?: string; progress_id?: number }): Promise<ObjectiveEvidence> => {
+    const formData = new FormData();
+    formData.append('file', payload.file);
+    if (payload.notes) formData.append('notes', payload.notes);
+    if (payload.progress_id) formData.append('progress_id', String(payload.progress_id));
+              const response = await apiClient.post(`/objectives-v2/objectives/${objectiveId}/evidence`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return response.data;
+  },
+  verifyEvidence: async (objectiveId: number, evidenceId: number): Promise<ObjectiveEvidence> => {
+              const response = await apiClient.post(`/objectives-v2/objectives/${objectiveId}/evidence/${evidenceId}/verify`);
+    return response.data;
+  },
+  deleteEvidence: async (objectiveId: number, evidenceId: number): Promise<void> => {
+              await apiClient.delete(`/objectives-v2/objectives/${objectiveId}/evidence/${evidenceId}`);
+  },
+
   // Utility functions
   // Export objectives data
   exportObjectives: async (format: 'csv' | 'excel' = 'csv'): Promise<Blob> => {
