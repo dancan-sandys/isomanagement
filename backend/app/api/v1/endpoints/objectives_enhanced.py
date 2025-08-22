@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
+from app.core.security import require_permission, get_current_active_user
 from app.services.objectives_service_enhanced import ObjectivesServiceEnhanced
 from app.schemas.objectives_enhanced import (
     ObjectiveCreate, ObjectiveUpdate, Objective,
@@ -22,6 +23,7 @@ from app.schemas.objectives_enhanced import (
     ObjectiveHierarchy, BulkProgressCreate, BulkTargetCreate, ObjectiveLinks, ObjectiveLinksUpdate,
     ObjectiveType, HierarchyLevel, PerformanceColor, TrendDirection
 )
+from app.models.rbac import Module
 from app.models.food_safety_objectives import FoodSafetyObjective
 
 router = APIRouter()
@@ -31,7 +33,7 @@ router = APIRouter()
 # OBJECTIVES MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@router.post("/", response_model=Objective, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Objective, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "CREATE")))])
 def create_objective(
     objective: ObjectiveCreate,
     db: Session = Depends(get_db)
@@ -52,7 +54,7 @@ def create_objective(
 
 
 
-@router.get("/", response_model=ObjectivesListResponse)
+@router.get("/", response_model=ObjectivesListResponse, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def list_objectives_root(
     objective_type: Optional[ObjectiveType] = Query(None, description="Filter by objective type"),
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
@@ -96,7 +98,7 @@ def list_objectives_root(
     )
 
 
-@router.get("/{objective_id}", response_model=ObjectiveDetailResponse)
+@router.get("/{objective_id}", response_model=ObjectiveDetailResponse, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_objective(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -126,7 +128,7 @@ def get_objective(
     )
 
 
-@router.put("/{objective_id}", response_model=Objective)
+@router.put("/{objective_id}", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def update_objective(
     objective_id: int = Path(..., description="Objective ID"),
     objective_update: ObjectiveUpdate = None,
@@ -145,7 +147,7 @@ def update_objective(
     return result
 
 
-@router.delete("/{objective_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{objective_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "DELETE")))])
 def delete_objective(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -165,7 +167,7 @@ def delete_objective(
 # CORPORATE AND DEPARTMENTAL OBJECTIVES ENDPOINTS
 # ============================================================================
 
-@router.get("/corporate", response_model=List[Objective])
+@router.get("/corporate", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_corporate_objectives(
     db: Session = Depends(get_db)
 ):
@@ -174,7 +176,7 @@ def get_corporate_objectives(
     return service.get_corporate_objectives()
 
 
-@router.get("/departmental/{department_id}", response_model=List[Objective])
+@router.get("/departmental/{department_id}", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_departmental_objectives(
     department_id: int = Path(..., description="Department ID"),
     db: Session = Depends(get_db)
@@ -184,7 +186,7 @@ def get_departmental_objectives(
     return service.get_departmental_objectives(department_id)
 
 
-@router.get("/hierarchy", response_model=ObjectiveHierarchy)
+@router.get("/hierarchy", response_model=ObjectiveHierarchy, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_hierarchical_objectives(
     db: Session = Depends(get_db)
 ):
@@ -198,7 +200,7 @@ def get_hierarchical_objectives(
 # PROGRESS TRACKING ENDPOINTS
 # ============================================================================
 
-@router.post("/{objective_id}/progress", response_model=ObjectiveProgress, status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/progress", response_model=ObjectiveProgress, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_progress(
     objective_id: int = Path(..., description="Objective ID"),
     progress: ObjectiveProgressCreate = None,
@@ -224,7 +226,7 @@ def create_progress(
         )
 
 
-@router.get("/{objective_id}/progress", response_model=List[ObjectiveProgress])
+@router.get("/{objective_id}/progress", response_model=List[ObjectiveProgress], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_progress(
     objective_id: int = Path(..., description="Objective ID"),
     limit: int = Query(50, ge=1, le=100, description="Number of entries to return"),
@@ -235,7 +237,7 @@ def get_progress(
     return service.get_progress(objective_id, limit)
 
 
-@router.get("/{objective_id}/progress/trend", response_model=TrendAnalysis)
+@router.get("/{objective_id}/progress/trend", response_model=TrendAnalysis, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_trend_analysis(
     objective_id: int = Path(..., description="Objective ID"),
     periods: int = Query(6, ge=2, le=12, description="Number of periods to analyze"),
@@ -246,7 +248,7 @@ def get_trend_analysis(
     return service.get_trend_analysis(objective_id, periods)
 
 
-@router.post("/{objective_id}/progress/bulk", response_model=List[ObjectiveProgress], status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/progress/bulk", response_model=List[ObjectiveProgress], status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_bulk_progress(
     objective_id: int = Path(..., description="Objective ID"),
     bulk_progress: BulkProgressCreate = None,
@@ -274,7 +276,7 @@ def create_bulk_progress(
 # TARGET MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@router.post("/{objective_id}/targets", response_model=ObjectiveTarget, status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/targets", response_model=ObjectiveTarget, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_target(
     objective_id: int = Path(..., description="Objective ID"),
     target: ObjectiveTargetCreate = None,
@@ -299,7 +301,7 @@ def create_target(
         )
 
 
-@router.get("/{objective_id}/targets", response_model=List[ObjectiveTarget])
+@router.get("/{objective_id}/targets", response_model=List[ObjectiveTarget], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_targets(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -309,7 +311,7 @@ def get_targets(
     return service.get_targets(objective_id)
 
 
-@router.post("/{objective_id}/targets/bulk", response_model=List[ObjectiveTarget], status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/targets/bulk", response_model=List[ObjectiveTarget], status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_bulk_targets(
     objective_id: int = Path(..., description="Objective ID"),
     bulk_targets: BulkTargetCreate = None,
@@ -337,7 +339,7 @@ def create_bulk_targets(
 # DASHBOARD INTEGRATION ENDPOINTS
 # ============================================================================
 
-@router.get("/dashboard/kpis", response_model=DashboardKPIs)
+@router.get("/dashboard/kpis", response_model=DashboardKPIs, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_kpis(
     db: Session = Depends(get_db)
 ):
@@ -346,7 +348,7 @@ def get_dashboard_kpis(
     return service.get_dashboard_kpis()
 
 
-@router.get("/dashboard/performance", response_model=PerformanceMetrics)
+@router.get("/dashboard/performance", response_model=PerformanceMetrics, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_performance_metrics(
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
     db: Session = Depends(get_db)
@@ -356,7 +358,7 @@ def get_performance_metrics(
     return service.get_performance_metrics(department_id)
 
 
-@router.get("/dashboard/trends", response_model=List[TrendAnalysis])
+@router.get("/dashboard/trends", response_model=List[TrendAnalysis], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_trends(
     objective_ids: List[int] = Query(..., description="List of objective IDs to analyze"),
     periods: int = Query(6, ge=2, le=12, description="Number of periods to analyze"),
@@ -373,7 +375,7 @@ def get_dashboard_trends(
     return trends
 
 
-@router.get("/dashboard/alerts", response_model=List[PerformanceAlert])
+@router.get("/dashboard/alerts", response_model=List[PerformanceAlert], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_alerts(
     db: Session = Depends(get_db)
 ):
@@ -382,7 +384,7 @@ def get_dashboard_alerts(
     return service.get_alerts()
 
 
-@router.get("/dashboard/summary", response_model=Dict[str, Any])
+@router.get("/dashboard/summary", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_summary(
     db: Session = Depends(get_db)
 ):
@@ -391,7 +393,7 @@ def get_dashboard_summary(
     return service.get_dashboard_summary()
 
 
-@router.get("/dashboard/comparison", response_model=Dict[str, Any])
+@router.get("/dashboard/comparison", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_performance_comparison(
     period_start: datetime = Query(..., description="Comparison period start"),
     period_end: datetime = Query(..., description="Comparison period end"),
@@ -425,7 +427,7 @@ def get_performance_comparison(
 # DEPARTMENT MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@router.post("/departments", response_model=Department, status_code=status.HTTP_201_CREATED)
+@router.post("/departments", response_model=Department, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_department(
     department: DepartmentCreate,
     db: Session = Depends(get_db)
@@ -443,7 +445,7 @@ def create_department(
         )
 
 
-@router.get("/departments", response_model=List[Department])
+@router.get("/departments", response_model=List[Department], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def list_departments(
     status: Optional[str] = Query(None, description="Filter by status"),
     db: Session = Depends(get_db)
@@ -453,7 +455,7 @@ def list_departments(
     return service.list_departments(status=status)
 
 
-@router.get("/departments/{department_id}", response_model=Department)
+@router.get("/departments/{department_id}", response_model=Department, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_department(
     department_id: int = Path(..., description="Department ID"),
     db: Session = Depends(get_db)
@@ -466,7 +468,7 @@ def get_department(
     return dept
 
 
-@router.put("/departments/{department_id}", response_model=Department)
+@router.put("/departments/{department_id}", response_model=Department, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def update_department(
     department_id: int = Path(..., description="Department ID"),
     payload: DepartmentUpdate = None,
@@ -480,7 +482,7 @@ def update_department(
     return updated
 
 
-@router.delete("/departments/{department_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/departments/{department_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "DELETE")))])
 def delete_department(
     department_id: int = Path(..., description="Department ID"),
     db: Session = Depends(get_db)
@@ -520,7 +522,7 @@ def get_progress_summary(
     }
 
 
-@router.get("/export", response_model=Dict[str, Any])
+@router.get("/export", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "EXPORT")))])
 def export_objectives(
     format: str = Query("json", description="Export format (json, csv, excel)"),
     objective_type: Optional[ObjectiveType] = Query(None, description="Filter by objective type"),
@@ -566,7 +568,7 @@ def export_objectives(
 # LINKAGES ENDPOINTS
 # =========================================================================
 
-@router.get("/{objective_id}/links", response_model=ObjectiveLinks)
+@router.get("/{objective_id}/links", response_model=ObjectiveLinks, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_objective_links(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -578,7 +580,7 @@ def get_objective_links(
     return links
 
 
-@router.put("/{objective_id}/links", response_model=Objective)
+@router.put("/{objective_id}/links", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def update_objective_links(
     objective_id: int = Path(..., description="Objective ID"),
     payload: ObjectiveLinksUpdate = None,
