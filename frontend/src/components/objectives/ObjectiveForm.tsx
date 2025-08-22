@@ -16,7 +16,10 @@ import {
   Alert,
   Chip,
   FormHelperText,
-  Autocomplete
+  Autocomplete,
+  Stepper,
+  Step,
+  StepLabel
 } from '@mui/material';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
@@ -59,12 +62,15 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
   const [parentObjectives, setParentObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeStep, setActiveStep] = useState(0);
+  const steps = ['Basic Info', 'Targets & Measurement', 'Timeline'];
 
   const isEditing = !!objective;
 
   useEffect(() => {
     if (open) {
       loadFormData();
+      setActiveStep(0);
     }
   }, [open]);
 
@@ -152,302 +158,314 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     }
   };
 
+  const nextStep = () => setActiveStep((s) => Math.min(s + 1, steps.length - 1));
+  const prevStep = () => setActiveStep((s) => Math.max(s - 1, 0));
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth aria-labelledby="objective-wizard-title">
+      <DialogTitle id="objective-wizard-title">
         {isEditing ? 'Edit Objective' : 'Create New Objective'}
       </DialogTitle>
       <DialogContent>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }} role="alert">
             {error}
           </Alert>
         )}
 
-        <Box component="form" onSubmit={formik.handleSubmit} sx={{ mt: 1 }}>
+        <Stepper activeStep={activeStep} alternativeLabel aria-label="Objective creation steps">
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+
+        <Box component="form" onSubmit={formik.handleSubmit} sx={{ mt: 2 }} aria-live="polite">
           <Grid container spacing={3}>
-            {/* Basic Information */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
-                Basic Information
-              </Typography>
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                name="title"
-                label="Objective Title"
-                value={formik.values.title}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.title && Boolean(formik.errors.title)}
-                helperText={formik.touched.title && formik.errors.title}
-                required
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                name="description"
-                label="Description"
-                multiline
-                rows={3}
-                value={formik.values.description}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.description && Boolean(formik.errors.description)}
-                helperText={formik.touched.description && formik.errors.description}
-                required
-              />
-            </Grid>
-
-            {/* Classification */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
-                Classification
-              </Typography>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={formik.touched.objective_type && Boolean(formik.errors.objective_type)}>
-                <InputLabel>Objective Type</InputLabel>
-                <Select
-                  name="objective_type"
-                  value={formik.values.objective_type}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  label="Objective Type"
-                >
-                  <MenuItem value="corporate">
-                    <Chip label="Corporate" color="primary" size="small" />
-                  </MenuItem>
-                  <MenuItem value="departmental">
-                    <Chip label="Departmental" color="secondary" size="small" />
-                  </MenuItem>
-                  <MenuItem value="operational">
-                    <Chip label="Operational" color="default" size="small" />
-                  </MenuItem>
-                </Select>
-                {formik.touched.objective_type && formik.errors.objective_type && (
-                  <FormHelperText>{formik.errors.objective_type}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={formik.touched.hierarchy_level && Boolean(formik.errors.hierarchy_level)}>
-                <InputLabel>Hierarchy Level</InputLabel>
-                <Select
-                  name="hierarchy_level"
-                  value={formik.values.hierarchy_level}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  label="Hierarchy Level"
-                >
-                  <MenuItem value="strategic">
-                    <Chip label="Strategic" color="error" size="small" />
-                  </MenuItem>
-                  <MenuItem value="tactical">
-                    <Chip label="Tactical" color="warning" size="small" />
-                  </MenuItem>
-                  <MenuItem value="operational">
-                    <Chip label="Operational" color="info" size="small" />
-                  </MenuItem>
-                </Select>
-                {formik.touched.hierarchy_level && formik.errors.hierarchy_level && (
-                  <FormHelperText>{formik.errors.hierarchy_level}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Department</InputLabel>
-                <Select
-                  name="department_id"
-                  value={formik.values.department_id || ''}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  label="Department"
-                >
-                  <MenuItem value="">
-                    <em>No Department</em>
-                  </MenuItem>
-                  {departments.map((dept) => (
-                    <MenuItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Parent Objective</InputLabel>
-                <Select
-                  name="parent_objective_id"
-                  value={formik.values.parent_objective_id || ''}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  label="Parent Objective"
-                >
-                  <MenuItem value="">
-                    <em>No Parent</em>
-                  </MenuItem>
-                  {parentObjectives
-                    .filter(obj => obj.id !== objective?.id) // Exclude current objective when editing
-                    .map((obj) => (
-                      <MenuItem key={obj.id} value={obj.id}>
-                        {obj.title}
+            {activeStep === 0 && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom>
+                    Basic Information
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    name="title"
+                    label="Objective Title"
+                    value={formik.values.title}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.title && Boolean(formik.errors.title)}
+                    helperText={formik.touched.title && formik.errors.title}
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    name="description"
+                    label="Description"
+                    multiline
+                    rows={3}
+                    value={formik.values.description}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.description && Boolean(formik.errors.description)}
+                    helperText={formik.touched.description && formik.errors.description}
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth error={formik.touched.objective_type && Boolean(formik.errors.objective_type)}>
+                    <InputLabel>Objective Type</InputLabel>
+                    <Select
+                      name="objective_type"
+                      value={formik.values.objective_type}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      label="Objective Type"
+                    >
+                      <MenuItem value="corporate">
+                        <Chip label="Corporate" color="primary" size="small" />
                       </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-            </Grid>
+                      <MenuItem value="departmental">
+                        <Chip label="Departmental" color="secondary" size="small" />
+                      </MenuItem>
+                      <MenuItem value="operational">
+                        <Chip label="Operational" color="default" size="small" />
+                      </MenuItem>
+                    </Select>
+                    {formik.touched.objective_type && formik.errors.objective_type && (
+                      <FormHelperText>{formik.errors.objective_type}</FormHelperText>
+                    )}
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth error={formik.touched.hierarchy_level && Boolean(formik.errors.hierarchy_level)}>
+                    <InputLabel>Hierarchy Level</InputLabel>
+                    <Select
+                      name="hierarchy_level"
+                      value={formik.values.hierarchy_level}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      label="Hierarchy Level"
+                    >
+                      <MenuItem value="strategic">
+                        <Chip label="Strategic" color="error" size="small" />
+                      </MenuItem>
+                      <MenuItem value="tactical">
+                        <Chip label="Tactical" color="warning" size="small" />
+                      </MenuItem>
+                      <MenuItem value="operational">
+                        <Chip label="Operational" color="info" size="small" />
+                      </MenuItem>
+                    </Select>
+                    {formik.touched.hierarchy_level && formik.errors.hierarchy_level && (
+                      <FormHelperText>{formik.errors.hierarchy_level}</FormHelperText>
+                    )}
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Department</InputLabel>
+                    <Select
+                      name="department_id"
+                      value={formik.values.department_id || ''}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      label="Department"
+                    >
+                      <MenuItem value="">
+                        <em>No Department</em>
+                      </MenuItem>
+                      {departments.map((dept) => (
+                        <MenuItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Parent Objective</InputLabel>
+                    <Select
+                      name="parent_objective_id"
+                      value={formik.values.parent_objective_id || ''}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      label="Parent Objective"
+                    >
+                      <MenuItem value="">
+                        <em>No Parent</em>
+                      </MenuItem>
+                      {parentObjectives
+                        .filter(obj => obj.id !== objective?.id)
+                        .map((obj) => (
+                          <MenuItem key={obj.id} value={obj.id}>
+                            {obj.title}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </>
+            )}
 
-            {/* Targets and Measurements */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
-                Targets and Measurements
-              </Typography>
-            </Grid>
+            {activeStep === 1 && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom>
+                    Targets and Measurements
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    name="baseline_value"
+                    label="Baseline Value"
+                    type="number"
+                    value={formik.values.baseline_value}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.baseline_value && Boolean(formik.errors.baseline_value)}
+                    helperText={formik.touched.baseline_value && formik.errors.baseline_value}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    name="target_value"
+                    label="Target Value"
+                    type="number"
+                    value={formik.values.target_value}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.target_value && Boolean(formik.errors.target_value)}
+                    helperText={formik.touched.target_value && formik.errors.target_value}
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    name="weight"
+                    label="Weight (%)"
+                    type="number"
+                    value={formik.values.weight}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.weight && Boolean(formik.errors.weight)}
+                    helperText={formik.touched.weight && formik.errors.weight}
+                    inputProps={{ min: 0, max: 100 }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    name="unit_of_measure"
+                    label="Unit of Measure"
+                    value={formik.values.unit_of_measure}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.unit_of_measure && Boolean(formik.errors.unit_of_measure)}
+                    helperText={formik.touched.unit_of_measure && formik.errors.unit_of_measure}
+                    placeholder="e.g., %, kg, liters, count"
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth error={formik.touched.measurement_frequency && Boolean(formik.errors.measurement_frequency)}>
+                    <InputLabel>Measurement Frequency</InputLabel>
+                    <Select
+                      name="measurement_frequency"
+                      value={formik.values.measurement_frequency}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      label="Measurement Frequency"
+                    >
+                      <MenuItem value="daily">Daily</MenuItem>
+                      <MenuItem value="weekly">Weekly</MenuItem>
+                      <MenuItem value="monthly">Monthly</MenuItem>
+                      <MenuItem value="quarterly">Quarterly</MenuItem>
+                      <MenuItem value="annually">Annually</MenuItem>
+                    </Select>
+                    {formik.touched.measurement_frequency && formik.errors.measurement_frequency && (
+                      <FormHelperText>{formik.errors.measurement_frequency}</FormHelperText>
+                    )}
+                  </FormControl>
+                </Grid>
+              </>
+            )}
 
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                name="baseline_value"
-                label="Baseline Value"
-                type="number"
-                value={formik.values.baseline_value}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.baseline_value && Boolean(formik.errors.baseline_value)}
-                helperText={formik.touched.baseline_value && formik.errors.baseline_value}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                name="target_value"
-                label="Target Value"
-                type="number"
-                value={formik.values.target_value}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.target_value && Boolean(formik.errors.target_value)}
-                helperText={formik.touched.target_value && formik.errors.target_value}
-                required
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                name="weight"
-                label="Weight (%)"
-                type="number"
-                value={formik.values.weight}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.weight && Boolean(formik.errors.weight)}
-                helperText={formik.touched.weight && formik.errors.weight}
-                inputProps={{ min: 0, max: 100 }}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                name="unit_of_measure"
-                label="Unit of Measure"
-                value={formik.values.unit_of_measure}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.unit_of_measure && Boolean(formik.errors.unit_of_measure)}
-                helperText={formik.touched.unit_of_measure && formik.errors.unit_of_measure}
-                placeholder="e.g., %, kg, liters, count"
-                required
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={formik.touched.measurement_frequency && Boolean(formik.errors.measurement_frequency)}>
-                <InputLabel>Measurement Frequency</InputLabel>
-                <Select
-                  name="measurement_frequency"
-                  value={formik.values.measurement_frequency}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  label="Measurement Frequency"
-                >
-                  <MenuItem value="daily">Daily</MenuItem>
-                  <MenuItem value="weekly">Weekly</MenuItem>
-                  <MenuItem value="monthly">Monthly</MenuItem>
-                  <MenuItem value="quarterly">Quarterly</MenuItem>
-                  <MenuItem value="annually">Annually</MenuItem>
-                </Select>
-                {formik.touched.measurement_frequency && formik.errors.measurement_frequency && (
-                  <FormHelperText>{formik.errors.measurement_frequency}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
-
-            {/* Timeline */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
-                Timeline
-              </Typography>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                name="start_date"
-                label="Start Date"
-                type="date"
-                value={formik.values.start_date}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.start_date && Boolean(formik.errors.start_date)}
-                helperText={formik.touched.start_date && formik.errors.start_date}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                name="target_date"
-                label="Target Date"
-                type="date"
-                value={formik.values.target_date}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.target_date && Boolean(formik.errors.target_date)}
-                helperText={formik.touched.target_date && formik.errors.target_date}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
-            </Grid>
+            {activeStep === 2 && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom>
+                    Timeline
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    name="start_date"
+                    label="Start Date"
+                    type="date"
+                    value={formik.values.start_date}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.start_date && Boolean(formik.errors.start_date)}
+                    helperText={formik.touched.start_date && formik.errors.start_date}
+                    InputLabelProps={{ shrink: true }}
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    name="target_date"
+                    label="Target Date"
+                    type="date"
+                    value={formik.values.target_date}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.target_date && Boolean(formik.errors.target_date)}
+                    helperText={formik.touched.target_date && formik.errors.target_date}
+                    InputLabelProps={{ shrink: true }}
+                    required
+                  />
+                </Grid>
+              </>
+            )}
           </Grid>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button onClick={handleClose} disabled={loading} aria-label="Cancel objective form">
           Cancel
         </Button>
-        <Button
-          onClick={() => formik.handleSubmit()}
-          variant="contained"
-          disabled={loading || !formik.isValid}
-        >
-          {loading ? 'Saving...' : (isEditing ? 'Update' : 'Create')}
-        </Button>
+        {activeStep > 0 && (
+          <Button onClick={prevStep} disabled={loading} aria-label="Previous step">
+            Back
+          </Button>
+        )}
+        {activeStep < steps.length - 1 ? (
+          <Button onClick={nextStep} variant="contained" disabled={loading} aria-label="Next step">
+            Next
+          </Button>
+        ) : (
+          <Button
+            onClick={() => formik.handleSubmit()}
+            variant="contained"
+            disabled={loading || !formik.isValid}
+            aria-label="Save objective"
+          >
+            {loading ? 'Saving...' : (isEditing ? 'Update' : 'Create')}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
