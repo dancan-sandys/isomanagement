@@ -425,20 +425,8 @@ def create_department(
     service = ObjectivesServiceEnhanced(db)
     
     try:
-        # This would be implemented in the service
-        # For now, return a placeholder
-        return Department(
-            id=1,
-            department_code=department.department_code,
-            name=department.name,
-            description=department.description,
-            parent_department_id=department.parent_department_id,
-            manager_id=department.manager_id,
-            color_code=department.color_code,
-            status="active",
-            created_at=datetime.utcnow(),
-            created_by=1
-        )
+        created = service.create_department(department.model_dump())
+        return created
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -452,34 +440,48 @@ def list_departments(
     db: Session = Depends(get_db)
 ):
     """List departments"""
-    # This would be implemented in the service
-    # For now, return sample data
-    return [
-        Department(
-            id=1,
-            department_code="CORP",
-            name="Corporate",
-            description="Corporate level objectives and strategic goals",
-            parent_department_id=None,
-            manager_id=None,
-            color_code="#1976D2",
-            status="active",
-            created_at=datetime.utcnow(),
-            created_by=1
-        ),
-        Department(
-            id=2,
-            department_code="PROD",
-            name="Production",
-            description="Production department objectives",
-            parent_department_id=None,
-            manager_id=None,
-            color_code="#388E3C",
-            status="active",
-            created_at=datetime.utcnow(),
-            created_by=1
-        )
-    ]
+    service = ObjectivesServiceEnhanced(db)
+    return service.list_departments(status=status)
+
+
+@router.get("/departments/{department_id}", response_model=Department)
+def get_department(
+    department_id: int = Path(..., description="Department ID"),
+    db: Session = Depends(get_db)
+):
+    """Get a specific department"""
+    service = ObjectivesServiceEnhanced(db)
+    dept = service.get_department(department_id)
+    if not dept:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+    return dept
+
+
+@router.put("/departments/{department_id}", response_model=Department)
+def update_department(
+    department_id: int = Path(..., description="Department ID"),
+    payload: DepartmentUpdate = None,
+    db: Session = Depends(get_db)
+):
+    """Update a department"""
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.update_department(department_id, (payload.model_dump(exclude_unset=True) if payload else {}))
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+    return updated
+
+
+@router.delete("/departments/{department_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_department(
+    department_id: int = Path(..., description="Department ID"),
+    db: Session = Depends(get_db)
+):
+    """Delete (soft) a department"""
+    service = ObjectivesServiceEnhanced(db)
+    ok = service.delete_department(department_id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+    return None
 
 
 # ============================================================================

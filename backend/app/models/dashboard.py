@@ -275,37 +275,5 @@ class DashboardAuditLog(Base):
     # Relationships
     user = relationship("User")
 
-# Department model (if not exists)
-class Department(Base):
-    """Departments for filtering dashboard data and objectives management"""
-    __tablename__ = "departments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    department_code = Column(String(50), unique=True, index=True, nullable=False)
-    name = Column(String(200), nullable=False)
-    description = Column(Text)
-    
-    # Hierarchy support
-    parent_department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    
-    # Department management
-    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
-    # Status and metadata
-    status = Column(String(20), default="active")  # active, inactive, archived
-    color_code = Column(String(7), nullable=True)  # Hex color for UI display
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
-    # Relationships
-    parent_department = relationship("Department", remote_side=[id], back_populates="child_departments")
-    child_departments = relationship("Department", back_populates="parent_department")
-    manager = relationship("User", foreign_keys=[manager_id])
-    created_by_user = relationship("User", foreign_keys=[created_by])
-    users = relationship("User", foreign_keys="User.department_id")
-    objectives = relationship("FoodSafetyObjective", foreign_keys="FoodSafetyObjective.department_id")
-    objective_targets = relationship("ObjectiveTarget", foreign_keys="ObjectiveTarget.department_id")
-    objective_progress = relationship("ObjectiveProgress", foreign_keys="ObjectiveProgress.department_id")
+# Department model is defined in app.models.departments; import it here to avoid duplicate table definitions
+from app.models.departments import Department
