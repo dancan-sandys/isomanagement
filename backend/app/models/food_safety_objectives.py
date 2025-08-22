@@ -119,8 +119,17 @@ class FoodSafetyObjective(Base):
     change_reason = Column(Text, nullable=True)
 
     # Relationships
-    parent_objective = relationship("FoodSafetyObjective", remote_side=[id], back_populates="child_objectives")
-    child_objectives = relationship("FoodSafetyObjective", back_populates="parent_objective")
+    parent_objective = relationship(
+        "FoodSafetyObjective",
+        remote_side=[id],
+        back_populates="child_objectives",
+        foreign_keys=[parent_objective_id]
+    )
+    child_objectives = relationship(
+        "FoodSafetyObjective",
+        back_populates="parent_objective",
+        foreign_keys=[parent_objective_id]
+    )
     department = relationship("Department", back_populates="objectives")
     responsible_person = relationship("User", foreign_keys=[responsible_person_id])
     created_by_user = relationship("User", foreign_keys=[created_by])
@@ -130,6 +139,11 @@ class FoodSafetyObjective(Base):
     progress_entries = relationship("ObjectiveProgress", back_populates="objective", cascade="all, delete-orphan")
     owner_user = relationship("User", foreign_keys=[owner_user_id])
     sponsor_user = relationship("User", foreign_keys=[sponsor_user_id])
+    superseded_by = relationship(
+        "FoodSafetyObjective",
+        remote_side=[id],
+        foreign_keys=[superseded_by_id]
+    )
 
     __table_args__ = (
         Index("ix_objectives_hierarchy", "parent_objective_id", "objective_type"),

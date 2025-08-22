@@ -14,6 +14,7 @@ from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.models.audit_mgmt import Audit, AuditPlan, AuditFinding, AuditStatus, FindingStatus
 from app.models.haccp import CCPMonitoringSchedule, CCP
 from app.models.user import User
+from app.models.food_safety_objectives import FoodSafetyObjective, ObjectiveProgress
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,129 @@ class ScheduledTasksService:
             logger.error(f"Error cleaning up old notifications: {str(e)}")
             self.db.rollback()
             return 0
+
+    def check_objectives_review_reminders(self) -> List[dict]:
+        """
+        Check objectives with upcoming or overdue next_review_date and create notifications for owners.
+        """
+        try:
+            now = datetime.utcnow()
+            fourteen_days_from_now = now + timedelta(days=14)
+            # Fetch objectives with a next_review_date due within 14 days or overdue and active
+            objectives = self.db.query(FoodSafetyObjective).filter(
+                FoodSafetyObjective.status == 'active',
+                FoodSafetyObjective.next_review_date != None,
+                FoodSafetyObjective.next_review_date <= fourteen_days_from_now
+            ).all()
+
+            created = []
+            for obj in objectives:
+                days_until = (obj.next_review_date - now).days if obj.next_review_date else None
+                is_overdue = days_until is not None and days_until < 0
+                owner_id = obj.owner_user_id or obj.responsible_person_id or obj.created_by
+                if not owner_id:
+                    continue
+                title = "Objective Review Due" if not is_overdue else "Objective Review OVERDUE"
+                msg_suffix = f"Due in {days_until} days" if days_until is not None and days_until >= 0 else f"Overdue by {abs(days_until)} days"
+                notification = Notification(
+                    user_id=owner_id,
+                    title=title,
+                    message=(
+                        f"Objective '{obj.title}' (Code: {obj.objective_code}) requires review. "
+                        f"Next review date: {obj.next_review_date.strftime('%Y-%m-%d')}. {msg_suffix}."
+                    ),
+                    notification_type=NotificationType.WARNING if not is_overdue else NotificationType.ERROR,
+                    priority=NotificationPriority.HIGH if is_overdue else NotificationPriority.MEDIUM,
+                    category=NotificationCategory.SYSTEM,
+                    notification_data={
+                        "objective_id": obj.id,
+                        "objective_code": obj.objective_code,
+                        "next_review_date": obj.next_review_date.isoformat(),
+                        "days_until": days_until,
+                        "overdue": is_overdue
+                    }
+                )
+                self.db.add(notification)
+                created.append({
+                    "objective_id": obj.id,
+                    "overdue": is_overdue,
+                    "days_until": days_until
+                })
+
+            self.db.commit()
+            logger.info(f"Created {len(created)} objective review notifications")
+            return created
+        except Exception as e:
+            logger.error(f"Error checking objective reviews: {e}")
+            self.db.rollback()
+            return []
+
+    def check_objectives_progress_activity(self) -> List[dict]:
+        """
+        Alert on objectives with no recent progress based on measurement_frequency.
+        """
+        try:
+            now = datetime.utcnow()
+
+            def max_age_days(freq: Optional[str]) -> int:
+                if not freq:
+                    return 60
+                f = (freq or '').lower()
+                if 'daily' in f:
+                    return 3
+                if 'weekly' in f:
+                    return 14
+                if 'monthly' in f:
+                    return 45
+                if 'quarter' in f:
+                    return 120
+                if 'annual' in f or 'year' in f:
+                    return 400
+                return 60
+
+            alerts = []
+            objectives = self.db.query(FoodSafetyObjective).filter(FoodSafetyObjective.status == 'active').all()
+            for obj in objectives:
+                threshold_days = max_age_days(obj.measurement_frequency)
+                recent = self.db.query(ObjectiveProgress).filter(
+                    ObjectiveProgress.objective_id == obj.id
+                ).order_by(ObjectiveProgress.period_end.desc()).first()
+                last_date = recent.period_end if recent else None
+                days_since = (now - last_date).days if last_date else None
+                if days_since is None or days_since > threshold_days:
+                    owner_id = obj.owner_user_id or obj.responsible_person_id or obj.created_by
+                    notification = Notification(
+                        user_id=owner_id or 1,
+                        title="No Recent Objective Progress",
+                        message=(
+                            f"Objective '{obj.title}' (Code: {obj.objective_code}) has no progress "
+                            f"for {days_since if days_since is not None else 'N/A'} days (threshold {threshold_days})."
+                        ),
+                        notification_type=NotificationType.WARNING,
+                        priority=NotificationPriority.MEDIUM,
+                        category=NotificationCategory.SYSTEM,
+                        notification_data={
+                            "objective_id": obj.id,
+                            "objective_code": obj.objective_code,
+                            "last_progress_end": last_date.isoformat() if last_date else None,
+                            "days_since": days_since,
+                            "threshold_days": threshold_days
+                        }
+                    )
+                    self.db.add(notification)
+                    alerts.append({
+                        "objective_id": obj.id,
+                        "days_since": days_since,
+                        "threshold_days": threshold_days
+                    })
+
+            self.db.commit()
+            logger.info(f"Created {len(alerts)} no-progress alerts for objectives")
+            return alerts
+        except Exception as e:
+            logger.error(f"Error checking objective progress activity: {e}")
+            self.db.rollback()
+            return []
     
     def check_audit_plan_reminders(self) -> List[dict]:
         """
@@ -500,7 +624,9 @@ class ScheduledTasksService:
             "findings_due_reminders": 0,
             "overdue_escalations": 0,
             "missed_monitoring_alerts": 0,
-            "errors": []
+            "errors": [],
+            "objective_review_notifications": 0,
+            "objective_no_progress_alerts": 0
         }
         
         try:
@@ -530,6 +656,18 @@ class ScheduledTasksService:
             
             escalation_results = self.escalate_overdue_findings()
             results["overdue_escalations"] = len(escalation_results)
+
+            # Objectives-related tasks
+            try:
+                obj_review_results = self.check_objectives_review_reminders()
+                results["objective_review_notifications"] = len(obj_review_results)
+            except Exception as e:
+                results["errors"].append(f"objective reviews: {e}")
+            try:
+                obj_no_progress = self.check_objectives_progress_activity()
+                results["objective_no_progress_alerts"] = len(obj_no_progress)
+            except Exception as e:
+                results["errors"].append(f"objective no progress: {e}")
 
             # Alerts for equipment due dates within 7 days
             try:
