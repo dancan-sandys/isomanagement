@@ -129,7 +129,17 @@ def create_migration():
             ("management_review_refs", "TEXT"),
             ("version", "INTEGER DEFAULT 1"),
             ("superseded_by_id", "INTEGER"),
-            ("change_reason", "TEXT")
+            ("change_reason", "TEXT"),
+            # Workflow fields
+            ("approval_status", "VARCHAR(20) DEFAULT 'draft'"),
+            ("submitted_by_id", "INTEGER"),
+            ("submitted_at", "TIMESTAMP"),
+            ("approved_by_id", "INTEGER"),
+            ("approved_at", "TIMESTAMP"),
+            ("approval_notes", "TEXT"),
+            ("closed_at", "TIMESTAMP"),
+            ("closed_by_id", "INTEGER"),
+            ("closure_reason", "TEXT"),
         ]
         
         for column_name, column_def in new_columns:

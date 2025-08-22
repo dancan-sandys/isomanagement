@@ -150,6 +150,70 @@ class ObjectivesServiceEnhanced:
         return True
 
     # ------------------------------
+    # Workflow methods
+    # ------------------------------
+    def assign_owner(self, objective_id: int, owner_user_id: int) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.owner_user_id = owner_user_id
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        return obj
+
+    def submit_for_approval(self, objective_id: int, user_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'pending'
+        obj.submitted_by_id = user_id
+        obj.submitted_at = datetime.utcnow()
+        if notes:
+            obj.approval_notes = notes
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        return obj
+
+    def approve(self, objective_id: int, approver_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'approved'
+        obj.approved_by_id = approver_id
+        obj.approved_at = datetime.utcnow()
+        if notes:
+            obj.approval_notes = notes
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        return obj
+
+    def reject(self, objective_id: int, approver_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'rejected'
+        obj.approved_by_id = approver_id
+        obj.approved_at = datetime.utcnow()
+        if notes:
+            obj.approval_notes = notes
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        return obj
+
+    def close(self, objective_id: int, closer_id: int, reason: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'closed'
+        obj.closed_by_id = closer_id
+        obj.closed_at = datetime.utcnow()
+        if reason:
+            obj.closure_reason = reason
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        return obj
+
+    # ------------------------------
     # Linkages
     # ------------------------------
     def get_objective_links(self, objective_id: int) -> Dict[str, Any]:

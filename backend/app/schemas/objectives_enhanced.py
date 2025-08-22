@@ -75,6 +75,10 @@ class ObjectiveBase(BaseModel):
     linked_document_ids: Optional[str] = Field(None, description="Linked document IDs (JSON array)")
     management_review_refs: Optional[str] = Field(None, description="Management review references (JSON array)")
 
+    # Workflow
+    approval_status: Optional[str] = Field(None, description="Workflow status: draft|pending|approved|rejected|closed")
+    approval_notes: Optional[str] = None
+
 
 class ObjectiveCreate(ObjectiveBase):
     objective_code: Optional[str] = Field(None, max_length=50, description="Objective code (auto-generated if not provided)")
@@ -113,6 +117,10 @@ class ObjectiveUpdate(BaseModel):
     linked_control_ids: Optional[str] = None
     linked_document_ids: Optional[str] = None
     management_review_refs: Optional[str] = None
+    
+    # Workflow fields
+    approval_status: Optional[str] = None
+    approval_notes: Optional[str] = None
 
 
 class Objective(ObjectiveBase):
@@ -138,6 +146,14 @@ class Objective(ObjectiveBase):
     version: Optional[int] = None
     superseded_by_id: Optional[int] = None
     change_reason: Optional[str] = None
+    
+    # Workflow stamps
+    submitted_by_id: Optional[int] = None
+    submitted_at: Optional[datetime] = None
+    approved_by_id: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    closed_by_id: Optional[int] = None
+    closed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

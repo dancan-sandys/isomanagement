@@ -423,9 +423,9 @@ def get_performance_comparison(
     }
 
 
-# ============================================================================
+# =========================================================================
 # DEPARTMENT MANAGEMENT ENDPOINTS
-# ============================================================================
+# =========================================================================
 
 @router.post("/departments", response_model=Department, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_department(
@@ -495,9 +495,9 @@ def delete_department(
     return None
 
 
-# ============================================================================
+# =========================================================================
 # UTILITY ENDPOINTS
-# ============================================================================
+# =========================================================================
 
 @router.get("/progress/summary", response_model=Dict[str, Any])
 def get_progress_summary(
@@ -591,3 +591,80 @@ def update_objective_links(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
     return updated
+ 
+ 
+# =========================================================================
+# WORKFLOW ENDPOINTS
+# =========================================================================
+
+@router.post("/{objective_id}/assign", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "ASSIGN")))])
+def assign_owner(
+    objective_id: int = Path(..., description="Objective ID"),
+    owner_user_id: int = Query(..., description="New owner user ID"),
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.assign_owner(objective_id, owner_user_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
+
+
+@router.post("/{objective_id}/submit", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def submit_for_approval(
+    objective_id: int = Path(..., description="Objective ID"),
+    notes: Optional[str] = Query(None, description="Submission notes"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.submit_for_approval(objective_id, current_user.id, notes)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
+
+
+@router.post("/{objective_id}/approve", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "APPROVE")))])
+def approve_objective(
+    objective_id: int = Path(..., description="Objective ID"),
+    notes: Optional[str] = Query(None, description="Approval notes"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.approve(objective_id, current_user.id, notes)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
+
+
+@router.post("/{objective_id}/reject", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "APPROVE")))])
+def reject_objective(
+    objective_id: int = Path(..., description="Objective ID"),
+    notes: Optional[str] = Query(None, description="Rejection notes"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.reject(objective_id, current_user.id, notes)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
+
+
+@router.post("/{objective_id}/close", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def close_objective(
+    objective_id: int = Path(..., description="Objective ID"),
+    reason: Optional[str] = Query(None, description="Closure reason"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.close(objective_id, current_user.id, reason)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
+
+# =========================================================================
+# UTILITY ENDPOINTS
+# =========================================================================

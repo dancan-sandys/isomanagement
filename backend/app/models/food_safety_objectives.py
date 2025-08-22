@@ -145,6 +145,21 @@ class FoodSafetyObjective(Base):
         foreign_keys=[superseded_by_id]
     )
 
+    # Workflow / approvals
+    approval_status = Column(String(20), default="draft")  # draft, pending, approved, rejected, closed
+    submitted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    closure_reason = Column(Text, nullable=True)
+
+    submitted_by = relationship("User", foreign_keys=[submitted_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
+    closed_by = relationship("User", foreign_keys=[closed_by_id])
+
     __table_args__ = (
         Index("ix_objectives_hierarchy", "parent_objective_id", "objective_type"),
         Index("ix_objectives_department", "department_id", "objective_type"),
