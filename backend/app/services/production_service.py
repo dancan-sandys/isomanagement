@@ -112,6 +112,46 @@ class ProductionService:
     def get_process(self, process_id: int) -> Optional[ProductionProcess]:
         return self.db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
 
+    def list_processes(self, product_type: Optional[ProductProcessType], status: Optional[ProcessStatus], limit: int, offset: int) -> List[ProductionProcess]:
+        query = self.db.query(ProductionProcess)
+        if product_type:
+            query = query.filter(ProductionProcess.process_type == product_type)
+        if status:
+            query = query.filter(ProductionProcess.status == status)
+        return query.order_by(ProductionProcess.start_time.desc()).offset(offset).limit(limit).all()
+
+    def get_process_parameters(self, process_id: int) -> List[ProcessParameter]:
+        return (
+            self.db.query(ProcessParameter)
+            .filter(ProcessParameter.process_id == process_id)
+            .order_by(ProcessParameter.recorded_at.asc())
+            .all()
+        )
+
+    def update_process(self, process_id: int, data: Dict[str, Any]) -> ProductionProcess:
+        proc = self.get_process(process_id)
+        if not proc:
+            raise ValueError("Process not found")
+        # Update allowed fields
+        if "status" in data and data["status"]:
+            # Map incoming string to enum if needed
+            if isinstance(data["status"], str):
+                proc.status = ProcessStatus(data["status"])  # may raise ValueError for invalid
+            else:
+                proc.status = data["status"]
+        if "notes" in data:
+            proc.notes = data["notes"]
+        if "end_time" in data:
+            proc.end_time = data["end_time"]
+        # Touch updated_at if present on model
+        try:
+            proc.updated_at = datetime.utcnow()
+        except Exception:
+            pass
+        self.db.commit()
+        self.db.refresh(proc)
+        return proc
+
     def get_analytics(self, product_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:
         query = self.db.query(YieldRecord)
         if product_type:
@@ -211,7 +251,7 @@ class ProductionService:
             expected_value=parameter_data.get("target_value", 0),
             actual_value=parameter_data["parameter_value"],
             severity=self._calculate_severity(parameter_data),
-            created_by=parameter_data.get("recorded_by"),
+            created_by=parameter_data.get("created_by") or parameter_data.get("recorded_by"),
         )
         
         # Calculate deviation percentage
