@@ -166,6 +166,20 @@ const productionAPI = {
     const res = await api.get(`/production/processes/${processId}/export/pdf`, { responseType: 'blob' });
     return res.data as Blob;
   },
+
+  // MOC helpers (via change-requests endpoints)
+  listChangeRequests: async (params?: { process_id?: number; status?: string }) => {
+    const res = await api.get('/change-requests/', { params });
+    return res.data;
+  },
+  getChangeRequest: async (id: number) => {
+    const res = await api.get(`/change-requests/${id}`);
+    return res.data;
+  },
+  approveChangeRequest: async (id: number, payload: { decision: 'approved'|'rejected'; comments?: string; sequence?: number }) => {
+    const res = await api.post(`/change-requests/${id}/approve`, { decision: payload.decision, comments: payload.comments }, { params: { sequence: payload.sequence } });
+    return res.data;
+  },
 };
 
 export default productionAPI;

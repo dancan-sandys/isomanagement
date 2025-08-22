@@ -571,6 +571,36 @@ const ProductionPage: React.FC = () => {
                 <Button size="small" variant="outlined" color="warning" onClick={() => setMocOpen(true)}>Request Change</Button>
               </Stack>
               <Divider />
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Change Requests</Typography>
+                <Button size="small" onClick={async () => {
+                  try {
+                    const data = await productionAPI.listChangeRequests({ process_id: processDetails.id });
+                    setProcessDetails({ ...processDetails, change_requests: data });
+                  } catch (e) {
+                    setError('Failed to load change requests');
+                  }
+                }}>Refresh</Button>
+                <List dense>
+                  {(processDetails.change_requests || []).map((cr: any) => (
+                    <ListItem key={cr.id} alignItems="flex-start" sx={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <Typography variant="body1" fontWeight={600}>{cr.title}</Typography>
+                        <Chip size="small" label={cr.status} color={cr.status === 'approved' ? 'success' : cr.status === 'rejected' ? 'error' : cr.status === 'implemented' ? 'info' : 'default'} />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">Reason: {cr.reason}</Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Approval Chain</Typography>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                          {(cr.approvals || []).sort((a: any, b: any) => a.sequence - b.sequence).map((ap: any) => (
+                            <Chip key={ap.id} size="small" label={`#${ap.sequence} • ${ap.approver_id} • ${ap.decision}`} color={ap.decision === 'approved' ? 'success' : ap.decision === 'rejected' ? 'error' : 'default'} variant={ap.decision === 'pending' ? 'outlined' : 'filled'} />
+                          ))}
+                        </Box>
+                      </Box>
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
               {processDetails.release_check && (
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">Release Check</Typography>
