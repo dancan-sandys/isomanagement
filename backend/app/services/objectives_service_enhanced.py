@@ -7,6 +7,7 @@ Supports corporate and departmental objectives with advanced tracking
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc, asc
+from sqlalchemy.orm import selectinload
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 import json
@@ -15,13 +16,18 @@ from app.models.food_safety_objectives import (
     FoodSafetyObjective, ObjectiveTarget, ObjectiveProgress,
     ObjectiveType, HierarchyLevel, TrendDirection, PerformanceColor, DataSource
 )
-from app.models.dashboard import Department
+from app.models.departments import Department as DepartmentModel
 from app.models.user import User
 
 
 class ObjectivesServiceEnhanced:
     def __init__(self, db: Session):
         self.db = db
+        # simple in-process cache (TTL)
+        if not hasattr(ObjectivesServiceEnhanced, "_summary_cache"):
+            ObjectivesServiceEnhanced._summary_cache: Optional[Dict[str, Any]] = None
+            ObjectivesServiceEnhanced._summary_cache_ts: Optional[datetime] = None
+            ObjectivesServiceEnhanced._summary_cache_ttl_seconds: int = 30
 
     def create_objective(self, objective_data: Dict[str, Any]) -> FoodSafetyObjective:
         """Create a new objective with enhanced validation"""
@@ -42,14 +48,16 @@ class ObjectivesServiceEnhanced:
         self.db.add(objective)
         self.db.commit()
         self.db.refresh(objective)
+        self._invalidate_caches()
         
         return objective
 
     def get_objective(self, objective_id: int) -> Optional[FoodSafetyObjective]:
         """Get objective by ID with related data"""
-        return self.db.query(FoodSafetyObjective).filter(
-            FoodSafetyObjective.id == objective_id
-        ).first()
+        return self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets),
+            selectinload(FoodSafetyObjective.progress_entries)
+        ).filter(FoodSafetyObjective.id == objective_id).first()
 
     def list_objectives(
         self,
@@ -62,7 +70,9 @@ class ObjectivesServiceEnhanced:
     ) -> List[FoodSafetyObjective]:
         """List objectives with filtering"""
         
-        query = self.db.query(FoodSafetyObjective)
+        query = self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets)
+        )
         
         if objective_type:
             query = query.filter(FoodSafetyObjective.objective_type == objective_type)
@@ -87,13 +97,17 @@ class ObjectivesServiceEnhanced:
 
     def get_corporate_objectives(self) -> List[FoodSafetyObjective]:
         """Get all corporate objectives"""
-        return self.db.query(FoodSafetyObjective).filter(
+        return self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets)
+        ).filter(
             FoodSafetyObjective.objective_type == ObjectiveType.CORPORATE
         ).order_by(desc(FoodSafetyObjective.created_at)).all()
 
     def get_departmental_objectives(self, department_id: int) -> List[FoodSafetyObjective]:
         """Get objectives for a specific department"""
-        return self.db.query(FoodSafetyObjective).filter(
+        return self.db.query(FoodSafetyObjective).options(
+            selectinload(FoodSafetyObjective.targets)
+        ).filter(
             FoodSafetyObjective.department_id == department_id
         ).order_by(desc(FoodSafetyObjective.created_at)).all()
 
@@ -133,6 +147,7 @@ class ObjectivesServiceEnhanced:
         
         self.db.commit()
         self.db.refresh(objective)
+        self._invalidate_caches()
         
         return objective
 
@@ -147,7 +162,116 @@ class ObjectivesServiceEnhanced:
         objective.last_updated_at = datetime.utcnow()
         
         self.db.commit()
+        self._invalidate_caches()
         return True
+
+    # ------------------------------
+    # Workflow methods
+    # ------------------------------
+    def assign_owner(self, objective_id: int, owner_user_id: int) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.owner_user_id = owner_user_id
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
+        return obj
+
+    def submit_for_approval(self, objective_id: int, user_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'pending'
+        obj.submitted_by_id = user_id
+        obj.submitted_at = datetime.utcnow()
+        if notes:
+            obj.approval_notes = notes
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
+        return obj
+
+    def approve(self, objective_id: int, approver_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'approved'
+        obj.approved_by_id = approver_id
+        obj.approved_at = datetime.utcnow()
+        if notes:
+            obj.approval_notes = notes
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
+        return obj
+
+    def reject(self, objective_id: int, approver_id: int, notes: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'rejected'
+        obj.approved_by_id = approver_id
+        obj.approved_at = datetime.utcnow()
+        if notes:
+            obj.approval_notes = notes
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
+        return obj
+
+    def close(self, objective_id: int, closer_id: int, reason: Optional[str] = None) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        obj.approval_status = 'closed'
+        obj.closed_by_id = closer_id
+        obj.closed_at = datetime.utcnow()
+        if reason:
+            obj.closure_reason = reason
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit(); self.db.refresh(obj)
+        self._invalidate_caches()
+        return obj
+
+    # ------------------------------
+    # Linkages
+    # ------------------------------
+    def get_objective_links(self, objective_id: int) -> Dict[str, Any]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return {}
+        def parse(text_value: Optional[str]) -> list:
+            try:
+                return json.loads(text_value) if text_value else []
+            except Exception:
+                return []
+        return {
+            "linked_risk_ids": parse(obj.linked_risk_ids),
+            "linked_control_ids": parse(obj.linked_control_ids),
+            "linked_document_ids": parse(obj.linked_document_ids),
+            "management_review_refs": parse(obj.management_review_refs),
+        }
+
+    def update_objective_links(self, objective_id: int, links: Dict[str, Any]) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        def dump(val):
+            return json.dumps(val) if isinstance(val, (list, dict)) else None
+        if 'linked_risk_ids' in links:
+            obj.linked_risk_ids = dump(links.get('linked_risk_ids'))
+        if 'linked_control_ids' in links:
+            obj.linked_control_ids = dump(links.get('linked_control_ids'))
+        if 'linked_document_ids' in links:
+            obj.linked_document_ids = dump(links.get('linked_document_ids'))
+        if 'management_review_refs' in links:
+            obj.management_review_refs = dump(links.get('management_review_refs'))
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(obj)
+        self._invalidate_caches()
+        return obj
 
     def create_target(self, target_data: Dict[str, Any]) -> ObjectiveTarget:
         """Create objective target"""
@@ -156,6 +280,7 @@ class ObjectivesServiceEnhanced:
         self.db.add(target)
         self.db.commit()
         self.db.refresh(target)
+        self._invalidate_caches()
         
         return target
 
@@ -193,6 +318,7 @@ class ObjectivesServiceEnhanced:
         
         # Update objective trend and performance color
         self._update_objective_performance(progress.objective_id)
+        self._invalidate_caches()
         
         return progress
 
@@ -343,12 +469,10 @@ class ObjectivesServiceEnhanced:
         # Check for objectives with no recent progress
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         objectives_without_progress = self.db.query(FoodSafetyObjective).filter(
-            and_(
-                FoodSafetyObjective.status == 'active',
-                ~FoodSafetyObjective.id.in_(
-                    self.db.query(ObjectiveProgress.objective_id).filter(
-                        ObjectiveProgress.created_at >= thirty_days_ago
-                    )
+            FoodSafetyObjective.status == 'active',
+            ~FoodSafetyObjective.id.in_(
+                self.db.query(ObjectiveProgress.objective_id).filter(
+                    ObjectiveProgress.created_at >= thirty_days_ago
                 )
             )
         ).all()
@@ -363,31 +487,110 @@ class ObjectivesServiceEnhanced:
             })
         
         # Check for objectives significantly off track
-        off_track_progress = self.db.query(ObjectiveProgress).filter(
-            and_(
-                ObjectiveProgress.status == 'off_track',
-                ObjectiveProgress.created_at >= thirty_days_ago
-            )
+        rows = self.db.query(ObjectiveProgress, FoodSafetyObjective.title, FoodSafetyObjective.id).join(
+            FoodSafetyObjective, FoodSafetyObjective.id == ObjectiveProgress.objective_id
+        ).filter(
+            ObjectiveProgress.status == 'off_track',
+            ObjectiveProgress.created_at >= thirty_days_ago
         ).all()
-        
-        for progress in off_track_progress:
-            objective = self.get_objective(progress.objective_id)
-            if objective:
-                alerts.append({
-                    "type": "off_track",
-                    "objective_id": objective.id,
-                    "objective_title": objective.title,
-                    "message": f"'{objective.title}' is significantly off track ({progress.attainment_percent}% attainment)",
-                    "severity": "high",
-                    "attainment_percent": progress.attainment_percent
-                })
+        for progress, objective_title, objective_id in rows:
+            alerts.append({
+                "type": "off_track",
+                "objective_id": objective_id,
+                "objective_title": objective_title,
+                "message": f"'{objective_title}' is significantly off track ({progress.attainment_percent}% attainment)",
+                "severity": "high",
+                "attainment_percent": progress.attainment_percent
+            })
         
         return alerts
+
+    def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Aggregate KPIs, performance metrics, sample trends and alerts."""
+        # Return cached if fresh
+        if (
+            ObjectivesServiceEnhanced._summary_cache is not None and
+            ObjectivesServiceEnhanced._summary_cache_ts is not None and
+            (datetime.utcnow() - ObjectivesServiceEnhanced._summary_cache_ts).total_seconds() < ObjectivesServiceEnhanced._summary_cache_ttl_seconds
+        ):
+            return ObjectivesServiceEnhanced._summary_cache  # type: ignore[return-value]
+        kpis = self.get_dashboard_kpis()
+        performance = self.get_performance_metrics()
+        # Build trends for up to 5 recent active objectives
+        recent_objectives = self.db.query(FoodSafetyObjective).filter(
+            FoodSafetyObjective.status == 'active'
+        ).order_by(desc(FoodSafetyObjective.created_at)).limit(5).all()
+        trends: List[Dict[str, Any]] = []
+        for obj in recent_objectives:
+            ta = self.get_trend_analysis(obj.id, periods=6)
+            ta.update({
+                "objective_id": obj.id,
+                "objective_title": obj.title,
+            })
+            trends.append(ta)
+        alerts = self.get_alerts()
+        summary = {
+            "kpis": kpis,
+            "performance_metrics": performance,
+            "trends": trends,
+            "alerts": alerts,
+        }
+        ObjectivesServiceEnhanced._summary_cache = summary
+        ObjectivesServiceEnhanced._summary_cache_ts = datetime.utcnow()
+        return summary
+
+    # ------------------------------
+    # Departments CRUD
+    # ------------------------------
+    def create_department(self, data: Dict[str, Any]) -> DepartmentModel:
+        """Create a new department"""
+        # Ensure required metadata
+        if 'created_by' not in data or not data['created_by']:
+            data['created_by'] = 1  # fallback system user
+        # Default status
+        data.setdefault('status', 'active')
+        department = DepartmentModel(**data)
+        self.db.add(department)
+        self.db.commit()
+        self.db.refresh(department)
+        self._invalidate_caches()
+        return department
+
+    def get_department(self, department_id: int) -> Optional[DepartmentModel]:
+        return self.db.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
+
+    def list_departments(self, status: Optional[str] = None) -> List[DepartmentModel]:
+        query = self.db.query(DepartmentModel)
+        if status:
+            query = query.filter(DepartmentModel.status == status)
+        return query.order_by(DepartmentModel.name.asc()).all()
+
+    def update_department(self, department_id: int, data: Dict[str, Any]) -> Optional[DepartmentModel]:
+        department = self.get_department(department_id)
+        if not department:
+            return None
+        for field, value in data.items():
+            if hasattr(department, field):
+                setattr(department, field, value)
+        self.db.commit()
+        self.db.refresh(department)
+        self._invalidate_caches()
+        return department
+
+    def delete_department(self, department_id: int) -> bool:
+        department = self.get_department(department_id)
+        if not department:
+            return False
+        # Soft delete by setting status
+        department.status = 'inactive'
+        self.db.commit()
+        self._invalidate_caches()
+        return True
 
     def _generate_objective_code(self) -> str:
         """Generate unique objective code"""
         prefix = "OBJ"
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
         return f"{prefix}-{timestamp}"
 
     def _build_objective_tree(self, objective: FoodSafetyObjective, objective_map: Dict[int, FoodSafetyObjective]) -> Dict[str, Any]:
@@ -450,3 +653,7 @@ class ObjectivesServiceEnhanced:
                 objective.performance_color = PerformanceColor.RED
         
         self.db.commit()
+
+    def _invalidate_caches(self) -> None:
+        ObjectivesServiceEnhanced._summary_cache = None
+        ObjectivesServiceEnhanced._summary_cache_ts = None

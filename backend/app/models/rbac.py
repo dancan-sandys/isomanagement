@@ -38,6 +38,7 @@ class Module(enum.Enum):
     ALLERGEN_LABEL = "allergen_label"
     EQUIPMENT = "equipment"
     REPORTS = "reports"
+    OBJECTIVES = "objectives"
 
 # Role-Permission association table
 role_permissions = Table(

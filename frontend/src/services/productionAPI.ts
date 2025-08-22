@@ -145,6 +145,61 @@ const productionAPI = {
     const res = await api.get('/production/analytics/enhanced', { params: { process_type: processType } });
     return res.data;
   },
+  exportAnalyticsCSV: async (processType?: string) => {
+    const res = await api.get('/production/analytics/export/csv', { params: { process_type: processType }, responseType: 'blob' });
+    return res.data as Blob;
+  },
+  exportAnalyticsPDF: async (processType?: string) => {
+    const res = await api.get('/production/analytics/export/pdf', { params: { process_type: processType }, responseType: 'blob' });
+    return res.data as Blob;
+  },
+
+  getProcessAudit: async (processId: number, params?: { limit?: number; offset?: number }) => {
+    const res = await api.get(`/production/processes/${processId}/audit`, { params });
+    return res.data as Array<{ id: number; user_id?: number; action: string; details?: any; created_at: string; ip_address?: string; user_agent?: string }>;
+  },
+
+  // Spec binding and release
+  bindSpec: async (processId: number, payload: { document_id: number; document_version: string; locked_parameters?: any }) => {
+    const res = await api.post(`/production/processes/${processId}/spec/bind`, payload);
+    return res.data;
+  },
+
+  checkRelease: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/release/check`);
+    return res.data;
+  },
+
+  releaseProcess: async (processId: number, payload: { released_qty?: number; unit?: string; signature_hash: string }) => {
+    const res = await api.post(`/production/processes/${processId}/release`, payload);
+    return res.data;
+  },
+
+  exportProductionSheetPDF: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/export/pdf`, { responseType: 'blob' });
+    return res.data as Blob;
+  },
+
+  // MOC helpers (via change-requests endpoints)
+  listChangeRequests: async (params?: { process_id?: number; status?: string }) => {
+    const res = await api.get('/change-requests/', { params });
+    return res.data;
+  },
+  getChangeRequest: async (id: number) => {
+    const res = await api.get(`/change-requests/${id}`);
+    return res.data;
+  },
+  approveChangeRequest: async (id: number, payload: { decision: 'approved'|'rejected'; comments?: string; sequence?: number }) => {
+    const res = await api.post(`/change-requests/${id}/approve`, { decision: payload.decision, comments: payload.comments }, { params: { sequence: payload.sequence } });
+    return res.data;
+  },
+};
+
+export const suppliersAPI = {
+  searchMaterials: async (q: string, limit: number = 10) => {
+    const res = await api.get('/suppliers/materials/search', { params: { q, limit } });
+    return res.data?.data?.results || [];
+  },
 };
 
 export default productionAPI;
