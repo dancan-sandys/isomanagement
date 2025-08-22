@@ -73,6 +73,8 @@ const ProductionPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [processDetails, setProcessDetails] = useState<any | null>(null);
+  const [processAudit, setProcessAudit] = useState<any[]>([]);
+  const [detailsTab, setDetailsTab] = useState(0);
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
   const [matForm, setMatForm] = useState({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
@@ -157,6 +159,13 @@ const ProductionPage: React.FC = () => {
       setLoading(true);
       const res = await (await fetch(`/api/v1/production/processes/${processId}/details`)).json();
       setProcessDetails(res);
+      try {
+        const audit = await productionAPI.getProcessAudit(processId, { limit: 100, offset: 0 });
+        setProcessAudit(audit);
+      } catch (e) {
+        console.warn('Failed to load audit logs', e);
+        setProcessAudit([]);
+      }
       setDetailsOpen(true);
     } catch (e) {
       setError('Failed to load process details');
@@ -387,26 +396,25 @@ const ProductionPage: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Typography variant="h6" gutterBottom>
-                      Performance Metrics
+                      30-Day Trends
                     </Typography>
-                    <Stack spacing={2}>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Average Yield
-                        </Typography>
-                        <Typography variant="h4">
-                          {analytics?.average_yield_percent ? `${analytics.average_yield_percent}%` : '—'}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Critical Deviations
-                        </Typography>
-                        <Typography variant="h4" color="error.main">
-                          {analytics?.critical_deviations ?? '—'}
-                        </Typography>
-                      </Box>
-                    </Stack>
+                    <Typography variant="subtitle2">Yield Records</Typography>
+                    <List dense>
+                      {analytics?.yield_trends?.map((row: any) => (
+                        <ListItem key={`y-${row.date}`}>
+                          <ListItemText primary={`${row.date}`} secondary={`${row.count} records`} />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle2">Deviations</Typography>
+                    <List dense>
+                      {analytics?.deviation_trends?.map((row: any) => (
+                        <ListItem key={`d-${row.date}`}>
+                          <ListItemText primary={`${row.date}`} secondary={`${row.count} deviations`} />
+                        </ListItem>
+                      ))}
+                    </List>
                   </CardContent>
                 </Card>
               </Grid>
@@ -525,199 +533,104 @@ const ProductionPage: React.FC = () => {
       {/* Process Details Dialog */}
       <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Process Details</DialogTitle>
-        <DialogContent>
-          {!processDetails && (
-            <Typography variant="body2" color="text.secondary">No details loaded.</Typography>
+        <DialogContent dividers>
+          <Tabs value={detailsTab} onChange={(_, v) => setDetailsTab(v)} sx={{ mb: 2 }}>
+            <Tab label="Overview" />
+            <Tab label="Parameters" />
+            <Tab label="Deviations & Alerts" />
+            <Tab label="Audit" />
+          </Tabs>
+          {detailsTab === 0 && (
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>
+                Core Info
+              </Typography>
+              <List>
+                <ListItem><ListItemText primary={`ID: ${processDetails?.id}`} secondary={`Type: ${processDetails?.process_type}`} /></ListItem>
+                <ListItem><ListItemText primary={`Status: ${processDetails?.status}`} secondary={`Batch: ${processDetails?.batch_id}`} /></ListItem>
+                <ListItem><ListItemText primary={`Operator: ${processDetails?.operator_id || '—'}`} secondary={`Start: ${processDetails?.start_time}`} /></ListItem>
+              </List>
+            </Box>
           )}
-          {processDetails && (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Process</Typography>
-                <Typography variant="body1">#{processDetails.id} • {processDetails.process_type} • {processDetails.status}</Typography>
-                <Typography variant="body2" color="text.secondary">Started: {new Date(processDetails.start_time).toLocaleString()}</Typography>
-              </Box>
-              <Stack direction="row" spacing={1}>
-                <Button size="small" variant="outlined" onClick={async () => {
-                  try {
-                    await productionAPI.bindSpec(processDetails.id, { document_id: 1, document_version: '1.0' });
-                    const res = await productionAPI.checkRelease(processDetails.id);
-                    setProcessDetails({ ...processDetails, release_check: res });
-                  } catch (e) {
-                    setError('Spec bind or release check failed');
-                  }
-                }}>Bind Spec & Check Release</Button>
-                <Button size="small" variant="contained" color="success" onClick={async () => {
-                  try {
-                    const res = await productionAPI.releaseProcess(processDetails.id, { signature_hash: 'demo-signature' });
-                    setProcessDetails({ ...processDetails, release_result: res });
-                  } catch (e) {
-                    setError('Release failed');
-                  }
-                }}>Release</Button>
-                <Button size="small" variant="outlined" onClick={async () => {
-                  try {
-                    const blob = await productionAPI.exportProductionSheetPDF(processDetails.id);
-                    const url = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `production_sheet_${processDetails.id}.pdf`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-                  } catch (e) {
-                    setError('Export PDF failed');
-                  }
-                }}>Download PDF</Button>
-                <Button size="small" variant="outlined" color="warning" onClick={() => setMocOpen(true)}>Request Change</Button>
-              </Stack>
-              <Divider />
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Materials</Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                  <TextField label="Material ID" size="small" value={matForm.material_id} onChange={(e) => setMatForm({ ...matForm, material_id: e.target.value })} />
-                  <TextField label="Qty" size="small" value={matForm.quantity} onChange={(e) => setMatForm({ ...matForm, quantity: e.target.value })} />
-                  <TextField label="Unit" size="small" value={matForm.unit} onChange={(e) => setMatForm({ ...matForm, unit: e.target.value })} />
-                  <TextField label="Lot" size="small" value={matForm.lot_number} onChange={(e) => setMatForm({ ...matForm, lot_number: e.target.value })} />
-                  <Button size="small" variant="outlined" onClick={async () => {
-                    try {
-                      await fetch(`/api/v1/production/processes/${processDetails.id}/materials`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          material_id: parseInt(matForm.material_id, 10),
-                          quantity: parseFloat(matForm.quantity),
-                          unit: matForm.unit,
-                          lot_number: matForm.lot_number,
-                        })
-                      });
-                      setMatForm({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
-                    } catch (e) {
-                      setError('Failed to record material consumption');
-                    }
-                  }}>Record</Button>
-                </Stack>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Change Requests</Typography>
-                <Button size="small" onClick={async () => {
-                  try {
-                    const data = await productionAPI.listChangeRequests({ process_id: processDetails.id });
-                    setProcessDetails({ ...processDetails, change_requests: data });
-                  } catch (e) {
-                    setError('Failed to load change requests');
-                  }
-                }}>Refresh</Button>
-                <List dense>
-                  {(processDetails.change_requests || []).map((cr: any) => (
-                    <ListItem key={cr.id} alignItems="flex-start" sx={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <Typography variant="body1" fontWeight={600}>{cr.title}</Typography>
-                        <Chip size="small" label={cr.status} color={cr.status === 'approved' ? 'success' : cr.status === 'rejected' ? 'error' : cr.status === 'implemented' ? 'info' : 'default'} />
-                      </Box>
-                      <Typography variant="body2" color="text.secondary">Reason: {cr.reason}</Typography>
-                      <Box sx={{ mt: 1 }}>
-                        <Typography variant="caption" color="text.secondary">Approval Chain</Typography>
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-                          {(cr.approvals || []).sort((a: any, b: any) => a.sequence - b.sequence).map((ap: any) => (
-                            <Chip key={ap.id} size="small" label={`#${ap.sequence} • ${ap.approver_id} • ${ap.decision}`} color={ap.decision === 'approved' ? 'success' : ap.decision === 'rejected' ? 'error' : 'default'} variant={ap.decision === 'pending' ? 'outlined' : 'filled'} />
-                          ))}
-                        </Box>
-                        {/* Approver action: allow approve/reject on first pending step (sequence) */}
-                        {(() => {
-                          const pending = (cr.approvals || []).filter((ap: any) => ap.decision === 'pending').sort((a: any, b: any) => a.sequence - b.sequence)[0];
-                          if (!pending) return null;
-                          return (
-                            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                              <Button size="small" variant="contained" color="success" onClick={async () => {
-                                try {
-                                  await productionAPI.approveChangeRequest(cr.id, { decision: 'approved', sequence: pending.sequence });
-                                  const data = await productionAPI.listChangeRequests({ process_id: processDetails.id });
-                                  setProcessDetails({ ...processDetails, change_requests: data });
-                                } catch (e) {
-                                  setError('Approval failed');
-                                }
-                              }}>Approve</Button>
-                              <Button size="small" variant="outlined" color="error" onClick={async () => {
-                                try {
-                                  await productionAPI.approveChangeRequest(cr.id, { decision: 'rejected', sequence: pending.sequence });
-                                  const data = await productionAPI.listChangeRequests({ process_id: processDetails.id });
-                                  setProcessDetails({ ...processDetails, change_requests: data });
-                                } catch (e) {
-                                  setError('Rejection failed');
-                                }
-                              }}>Reject</Button>
-                            </Stack>
-                          );
-                        })()}
-                        {/* Timeline */}
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Timeline</Typography>
-                          <List dense>
-                            {(cr.events || []).map((ev: any, idx: number) => (
-                              <ListItem key={idx}>
-                                <ListItemText primary={`${ev.type.replace('_', ' ')} • by ${ev.by}`} secondary={ev.at} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
-                      </Box>
-                    </ListItem>
+          {detailsTab === 1 && (
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>Parameters</Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Value</TableCell>
+                    <TableCell>Unit</TableCell>
+                    <TableCell>Target</TableCell>
+                    <TableCell>Tolerance</TableCell>
+                    <TableCell>Within</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {processDetails?.parameters?.map((p: any) => (
+                    <TableRow key={p.id}>
+                      <TableCell>{p.parameter_name}</TableCell>
+                      <TableCell>{p.parameter_value}</TableCell>
+                      <TableCell>{p.unit}</TableCell>
+                      <TableCell>{p.target_value ?? '—'}</TableCell>
+                      <TableCell>{p.tolerance_min ?? '—'} - {p.tolerance_max ?? '—'}</TableCell>
+                      <TableCell>{p.is_within_tolerance === false ? <Chip label="OOT" color="error" size="small"/> : 'OK'}</TableCell>
+                    </TableRow>
                   ))}
-                </List>
-              </Box>
-              {processDetails.release_check && (
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Release Check</Typography>
-                  <List dense>
-                    {(processDetails.release_check.checklist || []).map((c: any, idx: number) => (
-                      <ListItem key={idx}>
-                        <ListItemText primary={`${c.item}`} secondary={c.passed ? 'OK' : 'FAIL'} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Parameters</Typography>
-                <List dense>
-                  {(processDetails.parameters || []).slice(0, 10).map((p: any) => (
-                    <ListItem key={p.id}>
-                      <ListItemText
-                        primary={`${p.parameter_name}: ${p.parameter_value} ${p.unit}`}
-                        secondary={`Recorded: ${new Date(p.recorded_at).toLocaleString()}${p.is_within_tolerance === false ? ' • OUT OF TOLERANCE' : ''}`}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Deviations</Typography>
-                <List dense>
-                  {(processDetails.deviations || []).slice(0, 10).map((d: any) => (
+                </TableBody>
+              </Table>
+            </Box>
+          )}
+          {detailsTab === 2 && (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" gutterBottom>Deviations</Typography>
+                <List>
+                  {processDetails?.deviations?.map((d: any) => (
                     <ListItem key={d.id}>
-                      <ListItemText
-                        primary={`${d.deviation_type}: ${d.actual_value} (target ${d.expected_value}) • ${d.severity}`}
-                        secondary={`Resolved: ${d.resolved ? 'Yes' : 'No'}`}
-                      />
+                      <ListItemIcon><Warning color={d.severity === 'critical' ? 'error' : 'warning'} /></ListItemIcon>
+                      <ListItemText primary={`${d.deviation_type}: ${d.actual_value} vs ${d.expected_value}`} secondary={`Severity: ${d.severity} • ${new Date(d.created_at).toLocaleString()}`} />
                     </ListItem>
                   ))}
                 </List>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Alerts</Typography>
-                <List dense>
-                  {(processDetails.alerts || []).slice(0, 10).map((a: any) => (
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" gutterBottom>Alerts</Typography>
+                <List>
+                  {processDetails?.alerts?.map((a: any) => (
                     <ListItem key={a.id}>
-                      <ListItemText
-                        primary={`${a.alert_type}: ${a.message} • ${a.alert_level}`}
-                        secondary={`Ack: ${a.acknowledged ? 'Yes' : 'No'}`}
-                      />
+                      <ListItemIcon>{getAlertIcon(a.alert_level)}</ListItemIcon>
+                      <ListItemText primary={a.message} secondary={`${a.alert_type} • ${new Date(a.created_at).toLocaleString()}`} />
                     </ListItem>
                   ))}
                 </List>
-              </Box>
-            </Stack>
+              </Grid>
+            </Grid>
+          )}
+          {detailsTab === 3 && (
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>Audit Trail</Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Timestamp</TableCell>
+                    <TableCell>Action</TableCell>
+                    <TableCell>User</TableCell>
+                    <TableCell>Details</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {processAudit.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
+                      <TableCell><Chip label={r.action} size="small" /></TableCell>
+                      <TableCell>{r.user_id ?? '—'}</TableCell>
+                      <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>

@@ -23,6 +23,7 @@ from app.core.security import get_current_active_user
 from app.core.permissions import require_permission_dependency
 from app.models.production import ProcessParameter as PP
 from app.models.production import MaterialConsumption as MC
+from app.models.audit import AuditLog
 
 router = APIRouter()
 
@@ -281,6 +282,32 @@ def get_enhanced_analytics(
     pt = ProductProcessType(process_type) if process_type else None
     analytics = service.get_enhanced_analytics(pt)
     return analytics
+
+@router.get("/processes/{process_id}/audit")
+def list_process_audit(
+    process_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    q = (
+        db.query(AuditLog)
+        .filter(AuditLog.resource_type == "production_process", AuditLog.resource_id == str(process_id))
+        .order_by(AuditLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = q.all()
+    return [{
+        "id": r.id,
+        "user_id": r.user_id,
+        "action": r.action,
+        "details": r.details,
+        "created_at": r.created_at,
+        "ip_address": r.ip_address,
+        "user_agent": r.user_agent,
+    } for r in rows]
 
 @router.get("/processes/{process_id}/details", response_model=ProcessResponse)
 def get_process_details(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):

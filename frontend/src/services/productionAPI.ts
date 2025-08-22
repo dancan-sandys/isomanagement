@@ -146,6 +146,11 @@ const productionAPI = {
     return res.data;
   },
 
+  getProcessAudit: async (processId: number, params?: { limit?: number; offset?: number }) => {
+    const res = await api.get(`/production/processes/${processId}/audit`, { params });
+    return res.data as Array<{ id: number; user_id?: number; action: string; details?: any; created_at: string; ip_address?: string; user_agent?: string }>;
+  },
+
   // Spec binding and release
   bindSpec: async (processId: number, payload: { document_id: number; document_version: string; locked_parameters?: any }) => {
     const res = await api.post(`/production/processes/${processId}/spec/bind`, payload);
