@@ -39,13 +39,17 @@ router = APIRouter()
 @router.post("/", response_model=Objective, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "CREATE")))])
 def create_objective(
     objective: ObjectiveCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
 ):
     """Create a new objective"""
     service = ObjectivesServiceEnhanced(db)
     
     try:
-        result = service.create_objective(objective.model_dump())
+        payload = objective.model_dump()
+        if not payload.get("created_by"):
+            payload["created_by"] = current_user.id
+        result = service.create_objective(payload)
         return result
     except Exception as e:
         raise HTTPException(

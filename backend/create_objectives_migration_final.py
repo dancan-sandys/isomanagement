@@ -108,6 +108,8 @@ def create_migration():
             ("baseline_value", "REAL"),
             ("weight", "REAL DEFAULT 1.0"),
             ("measurement_frequency", "VARCHAR(100)"),
+            ("start_date", "TIMESTAMP"),
+            ("target_date", "TIMESTAMP"),
             ("trend_direction", "VARCHAR(50)"),
             ("performance_color", "VARCHAR(20)"),
             ("automated_calculation", "BOOLEAN DEFAULT 0"),

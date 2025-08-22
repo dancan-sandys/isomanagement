@@ -558,7 +558,7 @@ class ObjectivesServiceEnhanced:
     def _generate_objective_code(self) -> str:
         """Generate unique objective code"""
         prefix = "OBJ"
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
         return f"{prefix}-{timestamp}"
 
     def _build_objective_tree(self, objective: FoodSafetyObjective, objective_map: Dict[int, FoodSafetyObjective]) -> Dict[str, Any]:

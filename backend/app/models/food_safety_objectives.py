@@ -70,6 +70,8 @@ class FoodSafetyObjective(Base):
     measurement_unit = Column(String(50))
     weight = Column(Float, default=1.0)  # Weight for KPI calculations
     measurement_frequency = Column(String(100))  # daily, weekly, monthly, quarterly, annually
+    start_date = Column(DateTime(timezone=True), nullable=True)
+    target_date = Column(DateTime(timezone=True), nullable=True)
     
     # Enhanced progress tracking
     trend_direction = Column(
