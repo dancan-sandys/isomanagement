@@ -251,6 +251,51 @@ class ProductSpecification(Base):
     updater = relationship("User", foreign_keys=[updated_by])
 
 
+class ProcessSpecLink(Base):
+    __tablename__ = "process_spec_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
+    document_version = Column(String(20), nullable=False)
+    locked_parameters = Column(JSON, nullable=True)  # { parameter_name: { target_value, tolerance_min, tolerance_max, unit? } }
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReleaseRecord(Base):
+    __tablename__ = "release_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    checklist_results = Column(JSON, nullable=False)
+    released_qty = Column(Float, nullable=True)
+    unit = Column(String(20), nullable=True)
+    verifier_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    signed_at = Column(DateTime(timezone=True), server_default=func.now())
+    signature_hash = Column(String(256), nullable=True)
+
+    process = relationship("ProductionProcess")
+
+
+class MaterialConsumption(Base):
+    __tablename__ = "material_consumptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    material_id = Column(Integer, ForeignKey("materials.id"), nullable=False)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
+    delivery_id = Column(Integer, ForeignKey("incoming_deliveries.id"), nullable=True)
+    lot_number = Column(String(50))
+    quantity = Column(Float, nullable=False)
+    unit = Column(String(20), nullable=False)
+    consumed_at = Column(DateTime(timezone=True), server_default=func.now())
+    recorded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text)
+
+    process = relationship("ProductionProcess")
+
+
 class ProcessTemplate(Base):
     __tablename__ = "process_templates"
 
