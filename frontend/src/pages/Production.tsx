@@ -596,6 +596,44 @@ const ProductionPage: React.FC = () => {
                             <Chip key={ap.id} size="small" label={`#${ap.sequence} • ${ap.approver_id} • ${ap.decision}`} color={ap.decision === 'approved' ? 'success' : ap.decision === 'rejected' ? 'error' : 'default'} variant={ap.decision === 'pending' ? 'outlined' : 'filled'} />
                           ))}
                         </Box>
+                        {/* Approver action: allow approve/reject on first pending step (sequence) */}
+                        {(() => {
+                          const pending = (cr.approvals || []).filter((ap: any) => ap.decision === 'pending').sort((a: any, b: any) => a.sequence - b.sequence)[0];
+                          if (!pending) return null;
+                          return (
+                            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                              <Button size="small" variant="contained" color="success" onClick={async () => {
+                                try {
+                                  await productionAPI.approveChangeRequest(cr.id, { decision: 'approved', sequence: pending.sequence });
+                                  const data = await productionAPI.listChangeRequests({ process_id: processDetails.id });
+                                  setProcessDetails({ ...processDetails, change_requests: data });
+                                } catch (e) {
+                                  setError('Approval failed');
+                                }
+                              }}>Approve</Button>
+                              <Button size="small" variant="outlined" color="error" onClick={async () => {
+                                try {
+                                  await productionAPI.approveChangeRequest(cr.id, { decision: 'rejected', sequence: pending.sequence });
+                                  const data = await productionAPI.listChangeRequests({ process_id: processDetails.id });
+                                  setProcessDetails({ ...processDetails, change_requests: data });
+                                } catch (e) {
+                                  setError('Rejection failed');
+                                }
+                              }}>Reject</Button>
+                            </Stack>
+                          );
+                        })()}
+                        {/* Timeline */}
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary">Timeline</Typography>
+                          <List dense>
+                            {(cr.events || []).map((ev: any, idx: number) => (
+                              <ListItem key={idx}>
+                                <ListItemText primary={`${ev.type.replace('_', ' ')} • by ${ev.by}`} secondary={ev.at} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
                       </Box>
                     </ListItem>
                   ))}

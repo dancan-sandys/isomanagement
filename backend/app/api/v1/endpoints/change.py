@@ -8,6 +8,7 @@ from app.core.security import get_current_user
 from app.services.change_service import ChangeService
 from app.schemas.change import ChangeRequestCreate, ChangeApprovalStep, ChangeRequestResponse, ChangeAssessUpdate, ChangeDecisionRequest
 from app.models.change import ApprovalDecision, ChangeRequest
+from datetime import datetime
 
 router = APIRouter()
 
@@ -120,6 +121,12 @@ def list_changes(
 			}
 			for ap in r.approvals
 		]
+		# events timeline
+		ev = [{"type": "created", "at": r.created_at, "by": r.initiator_id}]
+		for ap in r.approvals:
+			if ap.decided_at:
+				ev.append({"type": f"approval_{ap.decision.value}", "at": ap.decided_at, "by": ap.approver_id, "sequence": ap.sequence})
+		item.events = sorted(ev, key=lambda e: (e.get("at") or datetime.min))
 		result.append(item)
 	return result
 
@@ -141,4 +148,9 @@ def get_change(change_id: int, db: Session = Depends(get_db), current_user = Dep
 		}
 		for ap in row.approvals
 	]
+	ev = [{"type": "created", "at": row.created_at, "by": row.initiator_id}]
+	for ap in row.approvals:
+		if ap.decided_at:
+			ev.append({"type": f"approval_{ap.decision.value}", "at": ap.decided_at, "by": ap.approver_id, "sequence": ap.sequence})
+	item.events = sorted(ev, key=lambda e: (e.get("at") or datetime.min))
 	return item

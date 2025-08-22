@@ -36,6 +36,7 @@ class ChangeRequestResponse(BaseModel):
 	created_at: datetime
 	updated_at: Optional[datetime]
 	approvals: List[Dict[str, Any]] = []
+	events: Optional[List[Dict[str, Any]]] = None
 
 	class Config:
 		from_attributes = True
