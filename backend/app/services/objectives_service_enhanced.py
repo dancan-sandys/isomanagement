@@ -15,7 +15,7 @@ from app.models.food_safety_objectives import (
     FoodSafetyObjective, ObjectiveTarget, ObjectiveProgress,
     ObjectiveType, HierarchyLevel, TrendDirection, PerformanceColor, DataSource
 )
-from app.models.dashboard import Department
+from app.models.departments import Department as DepartmentModel
 from app.models.user import User
 
 
@@ -383,6 +383,51 @@ class ObjectivesServiceEnhanced:
                 })
         
         return alerts
+
+    # ------------------------------
+    # Departments CRUD
+    # ------------------------------
+    def create_department(self, data: Dict[str, Any]) -> DepartmentModel:
+        """Create a new department"""
+        # Ensure required metadata
+        if 'created_by' not in data or not data['created_by']:
+            data['created_by'] = 1  # fallback system user
+        # Default status
+        data.setdefault('status', 'active')
+        department = DepartmentModel(**data)
+        self.db.add(department)
+        self.db.commit()
+        self.db.refresh(department)
+        return department
+
+    def get_department(self, department_id: int) -> Optional[DepartmentModel]:
+        return self.db.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
+
+    def list_departments(self, status: Optional[str] = None) -> List[DepartmentModel]:
+        query = self.db.query(DepartmentModel)
+        if status:
+            query = query.filter(DepartmentModel.status == status)
+        return query.order_by(DepartmentModel.name.asc()).all()
+
+    def update_department(self, department_id: int, data: Dict[str, Any]) -> Optional[DepartmentModel]:
+        department = self.get_department(department_id)
+        if not department:
+            return None
+        for field, value in data.items():
+            if hasattr(department, field):
+                setattr(department, field, value)
+        self.db.commit()
+        self.db.refresh(department)
+        return department
+
+    def delete_department(self, department_id: int) -> bool:
+        department = self.get_department(department_id)
+        if not department:
+            return False
+        # Soft delete by setting status
+        department.status = 'inactive'
+        self.db.commit()
+        return True
 
     def _generate_objective_code(self) -> str:
         """Generate unique objective code"""
