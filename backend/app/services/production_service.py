@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.models.production import (
     ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
@@ -445,6 +446,30 @@ class ProductionService:
             if count > 0:
                 process_breakdown[pt.value] = count
         
+        # Trends: last 30 days
+        try:
+            from datetime import datetime, timedelta
+            cutoff = datetime.utcnow() - timedelta(days=30)
+            # Yield trends (counts per day)
+            yq = self.db.query(func.date(YieldRecord.created_at).label('d'), func.count(YieldRecord.id)).filter(
+                YieldRecord.created_at >= cutoff
+            )
+            if process_type:
+                yq = yq.join(ProductionProcess, ProductionProcess.id == YieldRecord.process_id).filter(ProductionProcess.process_type == process_type)
+            yq = yq.group_by('d').order_by('d').all()
+            yield_trends = [{"date": str(d), "count": c} for d, c in yq]
+            # Deviation trends
+            dq = self.db.query(func.date(ProcessDeviation.created_at).label('d'), func.count(ProcessDeviation.id)).filter(
+                ProcessDeviation.created_at >= cutoff
+            )
+            if process_type:
+                dq = dq.join(ProductionProcess, ProductionProcess.id == ProcessDeviation.process_id).filter(ProductionProcess.process_type == process_type)
+            dq = dq.group_by('d').order_by('d').all()
+            deviation_trends = [{"date": str(d), "count": c} for d, c in dq]
+        except Exception:
+            yield_trends = []
+            deviation_trends = []
+        
         return {
             **base_analytics,
             "total_deviations": total_deviations,
@@ -452,6 +477,8 @@ class ProductionService:
             "total_alerts": total_alerts,
             "unacknowledged_alerts": unacknowledged_alerts,
             "process_type_breakdown": process_breakdown,
+            "yield_trends": yield_trends,
+            "deviation_trends": deviation_trends,
         }
 
     # Materials
