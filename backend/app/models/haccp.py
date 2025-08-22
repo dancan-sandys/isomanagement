@@ -253,7 +253,7 @@ class HazardReview(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    hazard = relationship("Hazard", back_populates="reviews")
+    hazard = relationship("Hazard", overlaps="risk_assessments", back_populates="reviews")
     reviewer = relationship("User")
     
     def __repr__(self):
@@ -368,7 +368,7 @@ class CCP(Base):
     
     # Relationships
     product = relationship("Product", back_populates="ccps")
-    hazard = relationship("Hazard", back_populates="ccp")
+    hazard = relationship("Hazard", overlaps="risk_assessments", back_populates="ccp")
     monitoring_logs = relationship("CCPMonitoringLog", back_populates="ccp")
     verification_logs = relationship("CCPVerificationLog", back_populates="ccp")
     monitoring_schedule = relationship("CCPMonitoringSchedule", back_populates="ccp", uselist=False, cascade="all, delete-orphan")
@@ -693,7 +693,7 @@ class DecisionTree(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    hazard = relationship("Hazard", back_populates="decision_tree")
+    hazard = relationship("Hazard", overlaps="risk_assessments", back_populates="decision_tree")
     q1_user = relationship("User", foreign_keys=[q1_answered_by])
     q2_user = relationship("User", foreign_keys=[q2_answered_by])
     q3_user = relationship("User", foreign_keys=[q3_answered_by])

@@ -6,7 +6,11 @@ from datetime import datetime
 from app.core.database import get_db
 from app.services.production_service import ProductionService
 from app.schemas.production import (
-    ProcessCreate, ProcessLogCreate, YieldCreate, TransferCreate, AgingCreate
+    ProcessCreate, ProcessLogCreate, YieldCreate, TransferCreate, AgingCreate,
+    ProcessParameterCreate, ProcessDeviationCreate, ProcessAlertCreate,
+    ProcessTemplateCreate, ProcessTemplateUpdate, ProcessCreateEnhanced,
+    ProcessUpdate, ProcessResponse, ProcessParameterResponse, ProcessDeviationResponse,
+    ProcessAlertResponse, ProcessTemplateResponse, ProductionAnalytics
 )
 from app.models.production import ProductProcessType
 
@@ -78,4 +82,162 @@ def get_process(process_id: int, db: Session = Depends(get_db)):
     if not proc:
         raise HTTPException(status_code=404, detail="Process not found")
     return proc
+
+# Enhanced Production Endpoints
+@router.post("/processes", response_model=ProcessResponse)
+def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depends(get_db)):
+    """Create a new production process with enhanced features"""
+    service = ProductionService(db)
+    try:
+        if payload.template_id:
+            # Use template if provided
+            template = service.get_process_templates()
+            # TODO: Implement template-based process creation
+            pass
+        
+        proc = service.create_process(
+            payload.batch_id, 
+            ProductProcessType(payload.process_type), 
+            payload.operator_id, 
+            payload.spec or {}
+        )
+        return proc
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes", response_model=List[ProcessResponse])
+def list_processes(
+    process_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    """List production processes with filtering"""
+    service = ProductionService(db)
+    # TODO: Implement process listing with filters
+    return []
+
+
+@router.put("/processes/{process_id}", response_model=ProcessResponse)
+def update_process(process_id: int, payload: ProcessUpdate, db: Session = Depends(get_db)):
+    """Update a production process"""
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    # TODO: Implement process update
+    return proc
+
+
+@router.post("/processes/{process_id}/parameters", response_model=ProcessParameterResponse)
+def record_parameter(process_id: int, payload: ProcessParameterCreate, db: Session = Depends(get_db)):
+    """Record a process parameter"""
+    service = ProductionService(db)
+    try:
+        parameter = service.record_parameter(process_id, payload.model_dump())
+        return parameter
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/parameters", response_model=List[ProcessParameterResponse])
+def get_process_parameters(process_id: int, db: Session = Depends(get_db)):
+    """Get all parameters for a process"""
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    # TODO: Implement parameter retrieval
+    return []
+
+
+@router.post("/processes/{process_id}/deviations", response_model=ProcessDeviationResponse)
+def create_deviation(process_id: int, payload: ProcessDeviationCreate, db: Session = Depends(get_db)):
+    """Create a process deviation"""
+    service = ProductionService(db)
+    try:
+        deviation = service._create_deviation(process_id, payload.model_dump())
+        return deviation
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/deviations/{deviation_id}/resolve")
+def resolve_deviation(
+    deviation_id: int, 
+    corrective_action: str = Query(..., description="Corrective action taken"),
+    db: Session = Depends(get_db)
+):
+    """Resolve a process deviation"""
+    service = ProductionService(db)
+    try:
+        # TODO: Get current user ID from authentication
+        user_id = 1  # Placeholder
+        deviation = service.resolve_deviation(deviation_id, user_id, corrective_action)
+        return {"message": "Deviation resolved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/alerts", response_model=ProcessAlertResponse)
+def create_alert(process_id: int, payload: ProcessAlertCreate, db: Session = Depends(get_db)):
+    """Create a process alert"""
+    service = ProductionService(db)
+    try:
+        alert = service.create_alert(process_id, payload.model_dump())
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/alerts/{alert_id}/acknowledge")
+def acknowledge_alert(alert_id: int, db: Session = Depends(get_db)):
+    """Acknowledge a process alert"""
+    service = ProductionService(db)
+    try:
+        # TODO: Get current user ID from authentication
+        user_id = 1  # Placeholder
+        alert = service.acknowledge_alert(alert_id, user_id)
+        return {"message": "Alert acknowledged successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/templates", response_model=ProcessTemplateResponse)
+def create_template(payload: ProcessTemplateCreate, db: Session = Depends(get_db)):
+    """Create a process template"""
+    service = ProductionService(db)
+    try:
+        template = service.create_process_template(payload.model_dump())
+        return template
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/templates", response_model=List[ProcessTemplateResponse])
+def get_templates(
+    product_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get process templates"""
+    service = ProductionService(db)
+    pt = ProductProcessType(product_type) if product_type else None
+    templates = service.get_process_templates(pt)
+    return templates
+
+
+@router.get("/analytics/enhanced", response_model=ProductionAnalytics)
+def get_enhanced_analytics(
+    process_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive production analytics"""
+    service = ProductionService(db)
+    pt = ProductProcessType(process_type) if process_type else None
+    analytics = service.get_enhanced_analytics(pt)
+    return analytics
 

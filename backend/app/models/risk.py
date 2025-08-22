@@ -270,7 +270,7 @@ class FSMSRiskIntegration(Base):
     integrated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_item = relationship("RiskRegisterItem", overlaps="fsms_integrations,resource_allocations,communications", foreign_keys=[risk_register_item_id])
     food_safety_objective = relationship("FoodSafetyObjective", foreign_keys=[food_safety_objective_id])
     integrated_by_user = relationship("User", foreign_keys=[integrated_by])
 
@@ -314,7 +314,7 @@ class RiskResourceAllocation(Base):
     allocation_period = Column(String(100), nullable=True)
 
     # Relationships
-    risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_item = relationship("RiskRegisterItem", overlaps="fsms_integrations,resource_allocations,communications", foreign_keys=[risk_register_item_id])
     approver = relationship("User", foreign_keys=[allocation_approver_id])
 
     def __repr__(self):
@@ -337,7 +337,7 @@ class RiskCommunication(Base):
     delivery_confirmation = Column(Boolean, default=False)
 
     # Relationships
-    risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_item = relationship("RiskRegisterItem", overlaps="fsms_integrations,resource_allocations,communications", foreign_keys=[risk_register_item_id])
     sent_by_user = relationship("User", foreign_keys=[sent_by])
 
     def __repr__(self):

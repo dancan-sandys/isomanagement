@@ -277,29 +277,35 @@ class DashboardAuditLog(Base):
 
 # Department model (if not exists)
 class Department(Base):
-    """Departments for filtering dashboard data"""
+    """Departments for filtering dashboard data and objectives management"""
     __tablename__ = "departments"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, unique=True, index=True)
-    code = Column(String(50), nullable=True, unique=True)
-    description = Column(Text, nullable=True)
+    department_code = Column(String(50), unique=True, index=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
     
-    # Hierarchy
-    parent_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    level = Column(Integer, default=0)
+    # Hierarchy support
+    parent_department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     
-    # Contact information
+    # Department management
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    location = Column(String(255), nullable=True)
     
-    # Status
-    is_active = Column(Boolean, default=True)
+    # Status and metadata
+    status = Column(String(20), default="active")  # active, inactive, archived
+    color_code = Column(String(7), nullable=True)  # Hex color for UI display
     
+    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     # Relationships
-    parent = relationship("Department", remote_side=[id])
-    children = relationship("Department")
-    manager = relationship("User")
+    parent_department = relationship("Department", remote_side=[id], back_populates="child_departments")
+    child_departments = relationship("Department", back_populates="parent_department")
+    manager = relationship("User", foreign_keys=[manager_id])
+    created_by_user = relationship("User", foreign_keys=[created_by])
+    users = relationship("User", foreign_keys="User.department_id")
+    objectives = relationship("FoodSafetyObjective", foreign_keys="FoodSafetyObjective.department_id")
+    objective_targets = relationship("ObjectiveTarget", foreign_keys="ObjectiveTarget.department_id")
+    objective_progress = relationship("ObjectiveProgress", foreign_keys="ObjectiveProgress.department_id")

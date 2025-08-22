@@ -6,7 +6,9 @@ from datetime import datetime
 from fastapi.responses import FileResponse
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.equipment import CalibrationRecord
+from app.models.user import User
 from app.services.equipment_service import EquipmentService
 from app.schemas.equipment import (
     EquipmentCreate, EquipmentResponse,
@@ -314,7 +316,8 @@ async def delete_equipment(
 # Backward compatibility endpoints for frontend
 @router.get("/maintenance-plans", response_model=list[MaintenancePlanResponse])
 async def list_all_maintenance_plans(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Backward compatibility endpoint - returns all maintenance plans"""
     svc = EquipmentService(db)
@@ -351,7 +354,8 @@ async def list_all_maintenance_plans(
 
 @router.get("/work-orders", response_model=list[MaintenanceWorkOrderResponse])
 async def list_all_work_orders(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Backward compatibility endpoint - returns all work orders"""
     svc = EquipmentService(db)
@@ -383,7 +387,8 @@ async def list_all_work_orders(
 
 @router.get("/calibration-plans", response_model=list[CalibrationPlanResponse])
 async def list_all_calibration_plans(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Backward compatibility endpoint - returns all calibration plans"""
     svc = EquipmentService(db)

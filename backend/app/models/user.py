@@ -35,7 +35,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     status = Column(Enum(UserStatus), nullable=False, default=UserStatus.PENDING_APPROVAL)
-    department = Column(String(100))
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
+    department_name = Column(String(100))  # Keep for backward compatibility
     position = Column(String(100))
     phone = Column(String(20))
     employee_id = Column(String(50), nullable=True)  # Removed unique=True, made nullable
@@ -59,6 +60,7 @@ class User(Base):
     
     # Relationships
     role = relationship("Role", back_populates="users")
+    department = relationship("Department", foreign_keys=[department_id])
     custom_permissions = relationship("UserPermission", back_populates="user", cascade="all, delete-orphan", foreign_keys="UserPermission.user_id")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     dashboard_configurations = relationship("DashboardConfiguration", back_populates="user")

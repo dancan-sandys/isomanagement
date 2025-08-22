@@ -89,7 +89,11 @@ function App() {
                       <Route path="/dashboard/analytics" element={<DashboardAnalytics />} />
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
                       <Route path="/objectives" element={<ObjectivesPage />} />
+                      <Route path="/objectives/dashboard" element={<ObjectivesPage />} />
+                      <Route path="/objectives/progress" element={<ObjectivesPage />} />
                       <Route path="/production" element={<ProductionPage />} />
+                      <Route path="/production/monitoring" element={<ProductionPage />} />
+                      <Route path="/production/yield" element={<ProductionPage />} />
                       
                       {/* Document Control - All authenticated users */}
                       <Route path="/documents" element={<Documents />} />

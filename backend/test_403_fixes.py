@@ -18,9 +18,17 @@ def login_as_admin():
     }
     
     try:
-        response = requests.post(LOGIN_URL, json=login_data)
+        response = requests.post(LOGIN_URL, data=login_data)
         if response.status_code == 200:
-            token = response.json()["access_token"]
+            response_data = response.json()
+            # Check different possible response formats
+            if "access_token" in response_data:
+                token = response_data["access_token"]
+            elif "data" in response_data and "access_token" in response_data["data"]:
+                token = response_data["data"]["access_token"]
+            else:
+                print(f"❌ Unexpected response format: {response_data}")
+                return None
             print("✅ Successfully logged in as admin")
             return token
         else:

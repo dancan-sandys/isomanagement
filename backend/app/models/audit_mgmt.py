@@ -119,7 +119,7 @@ class Audit(Base):
     attachments = relationship("AuditAttachment", back_populates="audit", cascade="all, delete-orphan")
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
     risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
-    risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
+    risk_assessments = relationship("AuditRiskAssessment", overlaps="audit,audit_finding", foreign_keys="AuditRiskAssessment.audit_id", cascade="all, delete-orphan")
     team_members = relationship("AuditTeamMember", back_populates="audit", cascade="all, delete-orphan")
     evidence = relationship("AuditEvidence", back_populates="audit", cascade="all, delete-orphan")
     activity_logs = relationship("AuditActivityLog", back_populates="audit", cascade="all, delete-orphan")
@@ -220,7 +220,7 @@ class AuditFinding(Base):
     audit = relationship("Audit", back_populates="findings")
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
     risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
-    risk_assessments = relationship("AuditRiskAssessment", foreign_keys="AuditRiskAssessment.audit_finding_id", cascade="all, delete-orphan")
+    risk_assessments = relationship("AuditRiskAssessment", overlaps="audit,audit_finding", foreign_keys="AuditRiskAssessment.audit_finding_id", cascade="all, delete-orphan")
     prp_integrations = relationship("PRPAuditIntegration", foreign_keys="PRPAuditIntegration.audit_finding_id", cascade="all, delete-orphan")
     evidence = relationship("AuditEvidence", back_populates="finding", cascade="all, delete-orphan")
 

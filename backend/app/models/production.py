@@ -10,6 +10,8 @@ class ProductProcessType(str, enum.Enum):
     YOGHURT = "yoghurt"
     MALA = "mala"
     CHEESE = "cheese"
+    PASTEURIZED_MILK = "pasteurized_milk"
+    FERMENTED_PRODUCTS = "fermented_products"
 
 
 class ProcessStatus(str, enum.Enum):
@@ -29,6 +31,12 @@ class StepType(str, enum.Enum):
     PACK = "pack"
     TRANSFER_COLD_ROOM = "transfer_cold_room"
     AGE = "age"
+    PASTEURIZE = "pasteurize"
+    FERMENT = "ferment"
+    DRAIN = "drain"
+    MOLD = "mold"
+    CULTURE_ADDITION = "culture_addition"
+    COAGULATION = "coagulation"
 
 
 class LogEvent(str, enum.Enum):
@@ -36,6 +44,9 @@ class LogEvent(str, enum.Enum):
     READING = "reading"
     COMPLETE = "complete"
     DIVERT = "divert"
+    DEVIATION = "deviation"
+    ALERT = "alert"
+    PARAMETER_RECORDED = "parameter_recorded"
 
 
 class ProductionProcess(Base):
@@ -146,3 +157,114 @@ class AgingRecord(Base):
 
     process = relationship("ProductionProcess", back_populates="aging_records")
 
+
+class ProcessParameter(Base):
+    __tablename__ = "process_parameters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    step_id = Column(Integer, ForeignKey("process_steps.id"), nullable=True)
+    parameter_name = Column(String(100), nullable=False)  # temperature, time, pressure, etc.
+    parameter_value = Column(Float, nullable=False)
+    unit = Column(String(20), nullable=False)  # °C, seconds, bar, etc.
+    target_value = Column(Float, nullable=True)
+    tolerance_min = Column(Float, nullable=True)
+    tolerance_max = Column(Float, nullable=True)
+    is_within_tolerance = Column(Boolean, nullable=True)
+    recorded_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    recorded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    process = relationship("ProductionProcess")
+    step = relationship("ProcessStep")
+    recorder = relationship("User")
+
+    __table_args__ = (
+        Index("ix_process_parameters_process_time", "process_id", "recorded_at"),
+    )
+
+
+class ProcessDeviation(Base):
+    __tablename__ = "process_deviations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    step_id = Column(Integer, ForeignKey("process_steps.id"), nullable=True)
+    parameter_id = Column(Integer, ForeignKey("process_parameters.id"), nullable=True)
+    deviation_type = Column(String(50), nullable=False)  # temperature, time, pressure, etc.
+    expected_value = Column(Float, nullable=False)
+    actual_value = Column(Float, nullable=False)
+    deviation_percent = Column(Float, nullable=True)
+    severity = Column(String(20), nullable=False, default="low")  # low, medium, high, critical
+    impact_assessment = Column(Text, nullable=True)
+    corrective_action = Column(Text, nullable=True)
+    resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    process = relationship("ProductionProcess")
+    step = relationship("ProcessStep")
+    parameter = relationship("ProcessParameter")
+    creator = relationship("User", foreign_keys=[created_by])
+    resolver = relationship("User", foreign_keys=[resolved_by])
+
+
+class ProcessAlert(Base):
+    __tablename__ = "process_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    alert_type = Column(String(50), nullable=False)  # temperature_high, temperature_low, time_exceeded, etc.
+    alert_level = Column(String(20), nullable=False, default="warning")  # info, warning, error, critical
+    message = Column(Text, nullable=False)
+    parameter_value = Column(Float, nullable=True)
+    threshold_value = Column(Float, nullable=True)
+    acknowledged = Column(Boolean, default=False)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    process = relationship("ProductionProcess")
+    creator = relationship("User", foreign_keys=[created_by])
+    acknowledger = relationship("User", foreign_keys=[acknowledged_by])
+
+
+class ProductSpecification(Base):
+    __tablename__ = "product_specifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_type = Column(SAEnum(ProductProcessType), nullable=False)
+    specification_name = Column(String(100), nullable=False)
+    specification_version = Column(String(20), nullable=False, default="1.0")
+    is_active = Column(Boolean, default=True)
+    steps = Column(JSON, nullable=False)  # Array of step specifications
+    parameters = Column(JSON, nullable=True)  # Parameter specifications
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    creator = relationship("User", foreign_keys=[created_by])
+    updater = relationship("User", foreign_keys=[updated_by])
+
+
+class ProcessTemplate(Base):
+    __tablename__ = "process_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_name = Column(String(100), nullable=False)
+    product_type = Column(SAEnum(ProductProcessType), nullable=False)
+    description = Column(Text, nullable=True)
+    steps = Column(JSON, nullable=False)  # Array of step configurations
+    parameters = Column(JSON, nullable=True)  # Parameter configurations
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    creator = relationship("User", foreign_keys=[created_by])
+    updater = relationship("User", foreign_keys=[updated_by])

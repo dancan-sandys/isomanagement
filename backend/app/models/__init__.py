@@ -14,6 +14,11 @@ from .training import TrainingProgram, TrainingSession, TrainingAttendance, Role
 from .equipment import Equipment, MaintenancePlan, MaintenanceWorkOrder, CalibrationPlan, CalibrationRecord
 from .settings import ApplicationSetting, UserPreference
 from .food_safety_objectives import FoodSafetyObjective, ObjectiveTarget, ObjectiveProgress
+from .production import (
+    ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
+    ProcessParameter, ProcessDeviation, ProcessAlert, ProductSpecification, ProcessTemplate,
+    ProductProcessType, ProcessStatus, StepType, LogEvent
+)
 from .risk import (
     RiskRegisterItem, RiskAction, RiskManagementFramework, RiskContext,
     FSMSRiskIntegration, RiskCorrelation, RiskResourceAllocation,

@@ -13,6 +13,8 @@ import {
   VerifiedUser,
   ReportProblem,
   SupportAgent,
+  Flag,
+  Science,
 } from '@mui/icons-material';
 
 // Navigation item interface
@@ -76,10 +78,22 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     ],
   },
   
+  production: {
+    title: 'Production Management',
+    icon: Science,
+    order: 5,
+    requiredRoles: ['Production Manager', 'Production Operator', 'QA Manager', 'QA Specialist', 'System Administrator'],
+    items: [
+      { text: 'Production Overview', path: '/production' },
+      { text: 'Process Monitoring', path: '/production/monitoring' },
+      { text: 'Yield Analysis', path: '/production/yield' },
+    ],
+  },
+  
   suppliers: {
     title: 'Supplier Management',
     icon: Business,
-    order: 5,
+    order: 6,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
       { text: 'Suppliers', path: '/suppliers' },
@@ -91,7 +105,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   traceability: {
     title: 'Traceability',
     icon: Timeline,
-    order: 6,
+    order: 7,
     requiredRoles: ['Production Manager', 'Production Operator', 'QA Manager', 'QA Specialist', 'System Administrator'],
     items: [
       { text: 'Batch Tracking', path: '/traceability' },
@@ -101,10 +115,22 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     ],
   },
   
+  objectives: {
+    title: 'Objectives Management',
+    icon: Flag,
+    order: 8,
+    requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
+    items: [
+      { text: 'Objectives Overview', path: '/objectives' },
+      { text: 'Performance Dashboard', path: '/objectives/dashboard' },
+      { text: 'Progress Tracking', path: '/objectives/progress' },
+    ],
+  },
+  
   nonconformance: {
     title: 'Non-Conformance & CAPA',
     icon: ReportProblem,
-    order: 7,
+    order: 9,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
       { text: 'Non-Conformances', path: '/nonconformance' },
@@ -114,7 +140,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   complaints: {
     title: 'Customer Complaints',
     icon: SupportAgent,
-    order: 8,
+    order: 10,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
       { text: 'Complaints', path: '/complaints' },
@@ -124,7 +150,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   audits: {
     title: 'Audit Management',
     icon: Assessment,
-    order: 8,
+    order: 11,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Auditor', 'System Administrator'],
     items: [
       { text: 'Audits', path: '/audits' },
@@ -137,7 +163,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   training: {
     title: 'Training & Competence',
     icon: School,
-    order: 9,
+    order: 12,
     requiredRoles: ['QA Manager', 'HR Manager', 'System Administrator'],
     items: [
       { text: 'Training Programs', path: '/training' },
@@ -152,7 +178,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   maintenance: {
     title: 'Maintenance',
     icon: Build,
-    order: 10,
+    order: 13,
     requiredRoles: ['Maintenance Manager', 'Maintenance Technician', 'Production Manager', 'System Administrator'],
     items: [
       { text: 'Equipment Register', path: '/maintenance/equipment' },
@@ -166,7 +192,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   compliance: {
     title: 'Compliance',
     icon: VerifiedUser,
-    order: 12,
+    order: 14,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Compliance Officer', 'System Administrator'],
     items: [
       { text: 'Risks', path: '/compliance/risks' },
@@ -177,7 +203,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   management_reviews: {
     title: 'Management Reviews',
     icon: Assessment,
-    order: 13,
+    order: 15,
     requiredRoles: ['QA Manager', 'Compliance Officer', 'System Administrator'],
     items: [
       { text: 'Reviews', path: '/management-reviews' },
@@ -191,7 +217,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   users: {
     title: 'User Management',
     icon: People,
-    order: 14,
+    order: 16,
     requiredRoles: ['System Administrator', 'QA Manager'],
     items: [
       { text: 'Users', path: '/users' },
@@ -202,7 +228,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   settings: {
     title: 'System Settings',
     icon: Settings,
-    order: 15,
+    order: 17,
     requiredRoles: ['System Administrator'],
     items: [
       { text: 'Settings', path: '/settings' },
