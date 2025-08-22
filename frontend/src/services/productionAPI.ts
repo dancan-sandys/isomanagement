@@ -161,6 +161,11 @@ const productionAPI = {
     const res = await api.post(`/production/processes/${processId}/release`, payload);
     return res.data;
   },
+
+  exportProductionSheetPDF: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/export/pdf`, { responseType: 'blob' });
+    return res.data as Blob;
+  },
 };
 
 export default productionAPI;

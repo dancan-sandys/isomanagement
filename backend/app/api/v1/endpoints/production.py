@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
+from fastapi.responses import StreamingResponse
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 from app.core.database import get_db
 from app.services.production_service import ProductionService
@@ -429,4 +433,87 @@ def release_process(
         return {"message": "Released successfully", "release_id": record.id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/export/pdf")
+def export_production_sheet_pdf(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Export a production sheet PDF including core process details, parameters, deviations, alerts, and release info."""
+    service = ProductionService(db)
+    details = service.get_process_with_details(process_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Process not found")
+    release = service.get_latest_release(process_id)
+    # Generate PDF
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    x = 40
+    y = height - 40
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(x, y, f"Production Sheet - Process #{details['process'].id}")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    proc = details['process']
+    c.drawString(x, y, f"Type: {getattr(proc.process_type, 'value', str(proc.process_type))} | Status: {getattr(proc.status, 'value', str(proc.status))}")
+    y -= 14
+    c.drawString(x, y, f"Batch ID: {proc.batch_id} | Operator: {proc.operator_id or '-'} | Start: {proc.start_time}")
+    y -= 14
+    spec_link = service.get_spec_link(process_id)
+    c.drawString(x, y, f"Spec Doc: {(spec_link.document_id if spec_link else '-') } v{(spec_link.document_version if spec_link else '-')}")
+    y -= 20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Parameters (latest 15)")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    for p in (details["parameters"] or [])[-15:]:
+        line = f"{p.parameter_name}: {p.parameter_value}{p.unit}  target={p.target_value} tol=({p.tolerance_min}-{p.tolerance_max}) {'OOT' if p.is_within_tolerance is False else ''}"
+        if y < 60:
+            c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+        c.drawString(x, y, line[:120]); y -= 12
+    y -= 8
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Deviations (latest 10)")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    for d in (details["deviations"] or [])[-10:]:
+        line = f"{d.deviation_type}: actual {d.actual_value} vs {d.expected_value} • {d.severity} • {'resolved' if d.resolved else 'open'}"
+        if y < 60:
+            c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+        c.drawString(x, y, line[:120]); y -= 12
+    y -= 8
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Alerts (latest 10)")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    for a in (details["alerts"] or [])[-10:]:
+        line = f"{a.alert_level.upper()} {a.alert_type}: {a.message} • ack={'yes' if a.acknowledged else 'no'}"
+        if y < 60:
+            c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+        c.drawString(x, y, line[:120]); y -= 12
+    y -= 8
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Release")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    if release:
+        c.drawString(x, y, f"Released Qty: {release.released_qty or '-'} {release.unit or ''} • Signed: {release.signed_at} • SignHash: {release.signature_hash[:12] if release.signature_hash else '-'}")
+        y -= 12
+        # Print checklist summary
+        try:
+            checklist = release.checklist_results or {}
+            for item in checklist.get("checklist", [])[:8]:
+                if y < 60:
+                    c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+                c.drawString(x, y, f"- {item.get('item')}: {'OK' if item.get('passed') else 'FAIL'}"); y -= 12
+        except Exception:
+            pass
+    else:
+        c.drawString(x, y, "Not released")
+        y -= 12
+    c.showPage(); c.save(); buffer.seek(0)
+    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=production_sheet_{process_id}.pdf"})
 

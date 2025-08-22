@@ -551,6 +551,21 @@ const ProductionPage: React.FC = () => {
                     setError('Release failed');
                   }
                 }}>Release</Button>
+                <Button size="small" variant="outlined" onClick={async () => {
+                  try {
+                    const blob = await productionAPI.exportProductionSheetPDF(processDetails.id);
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `production_sheet_${processDetails.id}.pdf`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                  } catch (e) {
+                    setError('Export PDF failed');
+                  }
+                }}>Download PDF</Button>
               </Stack>
               <Divider />
               {processDetails.release_check && (

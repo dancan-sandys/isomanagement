@@ -491,3 +491,11 @@ class ProductionService:
         self.db.refresh(record)
         return record
 
+    def get_latest_release(self, process_id: int) -> Optional[ReleaseRecord]:
+        return (
+            self.db.query(ReleaseRecord)
+            .filter(ReleaseRecord.process_id == process_id)
+            .order_by(ReleaseRecord.signed_at.desc())
+            .first()
+        )
+
