@@ -12,6 +12,7 @@ from app.schemas.production import (
     ProcessUpdate, ProcessResponse, ProcessParameterResponse, ProcessDeviationResponse,
     ProcessAlertResponse, ProcessTemplateResponse, ProductionAnalytics
 )
+from app.schemas.production import ProcessSpecBindRequest, ReleaseCheckResponse, ReleaseRequest, ReleaseResponse
 from app.models.production import ProductProcessType, ProcessStatus
 from app.core.security import get_current_active_user
 from app.core.permissions import require_permission_dependency
@@ -379,4 +380,53 @@ def get_process_details(process_id: int, db: Session = Depends(get_db), current_
         ],
     }
     return response
+
+
+@router.post("/processes/{process_id}/spec/bind")
+def bind_process_spec(
+    process_id: int,
+    payload: ProcessSpecBindRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("documents:view"))
+):
+    service = ProductionService(db)
+    try:
+        link = service.bind_spec_version(process_id, payload.document_id, payload.document_version, payload.locked_parameters)
+        return {"message": "Spec bound", "process_id": process_id, "document_id": link.document_id, "document_version": link.document_version}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/release/check", response_model=ReleaseCheckResponse)
+def check_release(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
+    service = ProductionService(db)
+    try:
+        result = service.check_release_ready(process_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/release", response_model=ReleaseResponse)
+def release_process(
+    process_id: int,
+    payload: ReleaseRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("documents:approve"))
+):
+    service = ProductionService(db)
+    try:
+        check = service.check_release_ready(process_id)
+        record = service.create_release(
+            process_id,
+            check,
+            payload.released_qty,
+            payload.unit,
+            verifier_id=getattr(current_user, "id", None),
+            approver_id=getattr(current_user, "id", None),
+            signature_hash=payload.signature_hash,
+        )
+        return {"message": "Released successfully", "release_id": record.id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 

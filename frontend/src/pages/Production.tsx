@@ -533,7 +533,38 @@ const ProductionPage: React.FC = () => {
                 <Typography variant="body1">#{processDetails.id} • {processDetails.process_type} • {processDetails.status}</Typography>
                 <Typography variant="body2" color="text.secondary">Started: {new Date(processDetails.start_time).toLocaleString()}</Typography>
               </Box>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" variant="outlined" onClick={async () => {
+                  try {
+                    await productionAPI.bindSpec(processDetails.id, { document_id: 1, document_version: '1.0' });
+                    const res = await productionAPI.checkRelease(processDetails.id);
+                    setProcessDetails({ ...processDetails, release_check: res });
+                  } catch (e) {
+                    setError('Spec bind or release check failed');
+                  }
+                }}>Bind Spec & Check Release</Button>
+                <Button size="small" variant="contained" color="success" onClick={async () => {
+                  try {
+                    const res = await productionAPI.releaseProcess(processDetails.id, { signature_hash: 'demo-signature' });
+                    setProcessDetails({ ...processDetails, release_result: res });
+                  } catch (e) {
+                    setError('Release failed');
+                  }
+                }}>Release</Button>
+              </Stack>
               <Divider />
+              {processDetails.release_check && (
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">Release Check</Typography>
+                  <List dense>
+                    {(processDetails.release_check.checklist || []).map((c: any, idx: number) => (
+                      <ListItem key={idx}>
+                        <ListItemText primary={`${c.item}`} secondary={c.passed ? 'OK' : 'FAIL'} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
               <Box>
                 <Typography variant="subtitle2" color="text.secondary">Parameters</Typography>
                 <List dense>

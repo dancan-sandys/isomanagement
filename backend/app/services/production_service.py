@@ -8,6 +8,8 @@ from app.models.production import (
     ProductProcessType, ProcessStatus, StepType, LogEvent
 )
 from app.models.traceability import Batch, BatchStatus, BatchType
+from app.models.production import ProcessSpecLink, ReleaseRecord
+from app.models.document import Document
 
 
 class ProductionService:
@@ -406,4 +408,86 @@ class ProductionService:
             "unacknowledged_alerts": unacknowledged_alerts,
             "process_type_breakdown": process_breakdown,
         }
+
+    # Spec binding and release
+    def bind_spec_version(self, process_id: int, document_id: int, document_version: str, locked_parameters: Optional[Dict[str, Any]]) -> ProcessSpecLink:
+        process = self.get_process(process_id)
+        if not process:
+            raise ValueError("Process not found")
+        doc = self.db.query(Document).filter(Document.id == document_id).first()
+        if not doc:
+            raise ValueError("Document not found")
+        link = ProcessSpecLink(
+            process_id=process_id,
+            document_id=document_id,
+            document_version=document_version,
+            locked_parameters=locked_parameters or {},
+        )
+        self.db.add(link)
+        self.db.commit()
+        self.db.refresh(link)
+        return link
+
+    def get_spec_link(self, process_id: int) -> Optional[ProcessSpecLink]:
+        return self.db.query(ProcessSpecLink).filter(ProcessSpecLink.process_id == process_id).order_by(ProcessSpecLink.created_at.desc()).first()
+
+    def check_release_ready(self, process_id: int) -> Dict[str, Any]:
+        process = self.get_process(process_id)
+        if not process:
+            raise ValueError("Process not found")
+        checklist = []
+        failures = []
+        # Spec/version bound
+        spec_link = self.get_spec_link(process_id)
+        has_spec = spec_link is not None
+        checklist.append({"item": "Spec version bound", "passed": has_spec})
+        if not has_spec:
+            failures.append("Spec version is not bound to process")
+        # All critical deviations resolved
+        critical_open = (
+            self.db.query(ProcessDeviation)
+            .filter(ProcessDeviation.process_id == process_id, ProcessDeviation.severity == "critical", ProcessDeviation.resolved == False)
+            .count()
+        )
+        checklist.append({"item": "Critical deviations resolved", "passed": critical_open == 0})
+        if critical_open > 0:
+            failures.append("Critical deviations are open")
+        # Parameters exist (basic evidence)
+        params_count = self.db.query(ProcessParameter).filter(ProcessParameter.process_id == process_id).count()
+        checklist.append({"item": "Process parameters recorded", "passed": params_count > 0})
+        if params_count == 0:
+            failures.append("No parameters recorded")
+        # Status not diverted
+        not_diverted = process.status != ProcessStatus.DIVERTED
+        checklist.append({"item": "Process not diverted", "passed": not_diverted})
+        if not not_diverted:
+            failures.append("Process was diverted")
+        # Alerts acknowledged
+        unack = self.db.query(ProcessAlert).filter(ProcessAlert.process_id == process_id, ProcessAlert.acknowledged == False).count()
+        checklist.append({"item": "Alerts acknowledged", "passed": unack == 0})
+        if unack > 0:
+            failures.append("Unacknowledged alerts present")
+        ready = len(failures) == 0
+        return {"ready": ready, "failures": failures, "checklist": checklist}
+
+    def create_release(self, process_id: int, checklist: Dict[str, Any], released_qty: Optional[float], unit: Optional[str], verifier_id: Optional[int], approver_id: Optional[int], signature_hash: str) -> ReleaseRecord:
+        if not checklist.get("ready"):
+            raise ValueError("Process is not ready for release")
+        record = ReleaseRecord(
+            process_id=process_id,
+            checklist_results=checklist,
+            released_qty=released_qty,
+            unit=unit,
+            verifier_id=verifier_id,
+            approver_id=approver_id,
+            signature_hash=signature_hash,
+        )
+        self.db.add(record)
+        # Optionally mark process completed
+        process = self.get_process(process_id)
+        if process and process.status != ProcessStatus.COMPLETED:
+            process.status = ProcessStatus.COMPLETED
+        self.db.commit()
+        self.db.refresh(record)
+        return record
 

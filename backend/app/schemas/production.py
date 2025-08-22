@@ -239,3 +239,32 @@ class ProductionAnalytics(BaseModel):
     class Config:
         from_attributes = True
 
+
+class ProcessSpecBindRequest(BaseModel):
+    document_id: int
+    document_version: str
+    locked_parameters: Optional[Dict[str, Any]] = None
+
+
+class ReleaseChecklistResult(BaseModel):
+    item: str
+    passed: bool
+    notes: Optional[str] = None
+
+
+class ReleaseCheckResponse(BaseModel):
+    ready: bool
+    failures: List[str] = []
+    checklist: List[Dict[str, Any]] = []
+
+
+class ReleaseRequest(BaseModel):
+    released_qty: Optional[float] = None
+    unit: Optional[str] = None
+    signature_hash: str
+
+
+class ReleaseResponse(BaseModel):
+    message: str
+    release_id: int
+

@@ -145,6 +145,22 @@ const productionAPI = {
     const res = await api.get('/production/analytics/enhanced', { params: { process_type: processType } });
     return res.data;
   },
+
+  // Spec binding and release
+  bindSpec: async (processId: number, payload: { document_id: number; document_version: string; locked_parameters?: any }) => {
+    const res = await api.post(`/production/processes/${processId}/spec/bind`, payload);
+    return res.data;
+  },
+
+  checkRelease: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/release/check`);
+    return res.data;
+  },
+
+  releaseProcess: async (processId: number, payload: { released_qty?: number; unit?: string; signature_hash: string }) => {
+    const res = await api.post(`/production/processes/${processId}/release`, payload);
+    return res.data;
+  },
 };
 
 export default productionAPI;
