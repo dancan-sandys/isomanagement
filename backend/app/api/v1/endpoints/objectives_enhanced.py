@@ -536,14 +536,30 @@ def export_objectives(
         department_id=department_id
     )
     
-    # This would implement actual export logic
-    # For now, return a placeholder
-    return {
+    # Assemble related data
+    all_targets = []
+    all_progress = []
+    for obj in objectives:
+        all_targets.extend(service.get_targets(obj.id))
+        all_progress.extend(service.get_progress(obj.id, limit=100))
+
+    # Departments
+    depts = service.list_departments()
+
+    export_payload = {
         "export_date": datetime.utcnow(),
-        "format": format,
-        "objectives_count": len(objectives),
-        "download_url": f"/api/v1/objectives/export/download/{format}"
+        "export_format": format,
+        "objectives": objectives,
+        "targets": all_targets,
+        "progress": all_progress,
+        "departments": depts,
     }
+
+    # For now, return JSON payload; CSV/Excel can be added via a download route
+    if format.lower() == "json":
+        return export_payload
+    else:
+        return export_payload
 
 
 # =========================================================================
