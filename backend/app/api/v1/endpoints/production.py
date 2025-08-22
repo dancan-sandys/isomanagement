@@ -14,6 +14,7 @@ from app.schemas.production import (
 )
 from app.models.production import ProductProcessType, ProcessStatus
 from app.core.security import get_current_active_user
+from app.core.permissions import require_permission_dependency
 
 router = APIRouter()
 
@@ -26,7 +27,7 @@ def get_analytics(process_type: Optional[str] = Query(None), db: Session = Depen
 
 
 @router.post("/process")
-def create_process(payload: ProcessCreate, db: Session = Depends(get_db)):
+def create_process(payload: ProcessCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:create"))):
     service = ProductionService(db)
     try:
         pt = ProductProcessType(payload.process_type)
@@ -37,7 +38,7 @@ def create_process(payload: ProcessCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/{process_id}/log")
-def add_log(process_id: int, payload: ProcessLogCreate, db: Session = Depends(get_db)):
+def add_log(process_id: int, payload: ProcessLogCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:update"))):
     service = ProductionService(db)
     try:
         log = service.add_log(process_id, payload.model_dump())
@@ -47,7 +48,7 @@ def add_log(process_id: int, payload: ProcessLogCreate, db: Session = Depends(ge
 
 
 @router.post("/{process_id}/yield")
-def record_yield(process_id: int, payload: YieldCreate, db: Session = Depends(get_db)):
+def record_yield(process_id: int, payload: YieldCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:update"))):
     service = ProductionService(db)
     try:
         yr = service.record_yield(process_id, payload.output_qty, payload.unit, payload.expected_qty)
@@ -57,7 +58,7 @@ def record_yield(process_id: int, payload: YieldCreate, db: Session = Depends(ge
 
 
 @router.post("/{process_id}/transfer")
-def record_transfer(process_id: int, payload: TransferCreate, db: Session = Depends(get_db)):
+def record_transfer(process_id: int, payload: TransferCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:update"))):
     service = ProductionService(db)
     try:
         tr = service.record_transfer(process_id, payload.quantity, payload.unit, payload.location, payload.lot_number, payload.verified_by)
@@ -67,7 +68,7 @@ def record_transfer(process_id: int, payload: TransferCreate, db: Session = Depe
 
 
 @router.post("/{process_id}/aging")
-def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(get_db)):
+def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:update"))):
     service = ProductionService(db)
     try:
         ar = service.record_aging(process_id, payload.model_dump())
@@ -77,7 +78,7 @@ def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(ge
 
 
 @router.get("/{process_id}")
-def get_process(process_id: int, db: Session = Depends(get_db)):
+def get_process(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
     service = ProductionService(db)
     proc = service.get_process(process_id)
     if not proc:
@@ -86,7 +87,7 @@ def get_process(process_id: int, db: Session = Depends(get_db)):
 
 # Enhanced Production Endpoints
 @router.post("/processes", response_model=ProcessResponse)
-def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depends(get_db)):
+def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:create"))):
     """Create a new production process with enhanced features"""
     service = ProductionService(db)
     try:
@@ -113,7 +114,8 @@ def list_processes(
     status: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """List production processes with filtering"""
     service = ProductionService(db)
@@ -127,7 +129,7 @@ def update_process(
     process_id: int, 
     payload: ProcessUpdate, 
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(require_permission_dependency("traceability:update"))
 ):
     """Update a production process"""
     service = ProductionService(db)
@@ -147,7 +149,7 @@ def record_parameter(
     process_id: int, 
     payload: ProcessParameterCreate, 
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(require_permission_dependency("traceability:update"))
 ):
     """Record a process parameter"""
     service = ProductionService(db)
@@ -161,7 +163,7 @@ def record_parameter(
 
 
 @router.get("/processes/{process_id}/parameters", response_model=List[ProcessParameterResponse])
-def get_process_parameters(process_id: int, db: Session = Depends(get_db)):
+def get_process_parameters(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
     """Get all parameters for a process"""
     service = ProductionService(db)
     proc = service.get_process(process_id)
@@ -176,7 +178,7 @@ def create_deviation(
     process_id: int, 
     payload: ProcessDeviationCreate, 
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(require_permission_dependency("traceability:update"))
 ):
     """Create a process deviation"""
     service = ProductionService(db)
@@ -194,7 +196,7 @@ def resolve_deviation(
     deviation_id: int, 
     corrective_action: str = Query(..., description="Corrective action taken"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(require_permission_dependency("traceability:update"))
 ):
     """Resolve a process deviation"""
     service = ProductionService(db)
@@ -211,7 +213,7 @@ def create_alert(
     process_id: int, 
     payload: ProcessAlertCreate, 
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(require_permission_dependency("traceability:update"))
 ):
     """Create a process alert"""
     service = ProductionService(db)
@@ -225,7 +227,7 @@ def create_alert(
 
 
 @router.put("/alerts/{alert_id}/acknowledge")
-def acknowledge_alert(alert_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
+def acknowledge_alert(alert_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:update"))):
     """Acknowledge a process alert"""
     service = ProductionService(db)
     try:
@@ -237,7 +239,7 @@ def acknowledge_alert(alert_id: int, db: Session = Depends(get_db), current_user
 
 
 @router.post("/templates", response_model=ProcessTemplateResponse)
-def create_template(payload: ProcessTemplateCreate, db: Session = Depends(get_db)):
+def create_template(payload: ProcessTemplateCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:create"))):
     """Create a process template"""
     service = ProductionService(db)
     try:
@@ -250,7 +252,8 @@ def create_template(payload: ProcessTemplateCreate, db: Session = Depends(get_db
 @router.get("/templates", response_model=List[ProcessTemplateResponse])
 def get_templates(
     product_type: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get process templates"""
     service = ProductionService(db)
@@ -262,7 +265,8 @@ def get_templates(
 @router.get("/analytics/enhanced", response_model=ProductionAnalytics)
 def get_enhanced_analytics(
     process_type: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get comprehensive production analytics"""
     service = ProductionService(db)
@@ -270,9 +274,8 @@ def get_enhanced_analytics(
     analytics = service.get_enhanced_analytics(pt)
     return analytics
 
-
 @router.get("/processes/{process_id}/details", response_model=ProcessResponse)
-def get_process_details(process_id: int, db: Session = Depends(get_db)):
+def get_process_details(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
     """Get process with details (steps, logs, parameters, deviations, alerts)"""
     service = ProductionService(db)
     details = service.get_process_with_details(process_id)

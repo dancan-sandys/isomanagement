@@ -71,6 +71,8 @@ const ProductionPage: React.FC = () => {
   const [parameterDialogOpen, setParameterDialogOpen] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [processDetails, setProcessDetails] = useState<any | null>(null);
 
   // Form states
   const [newProcess, setNewProcess] = useState<ProcessCreatePayload>({
@@ -144,6 +146,19 @@ const ProductionPage: React.FC = () => {
     } catch (e) {
       setError('Failed to record parameter');
       console.error('Error recording parameter:', e);
+    }
+  };
+
+  const handleOpenDetails = async (processId: number) => {
+    try {
+      setLoading(true);
+      const res = await (await fetch(`/api/v1/production/processes/${processId}/details`)).json();
+      setProcessDetails(res);
+      setDetailsOpen(true);
+    } catch (e) {
+      setError('Failed to load process details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -282,7 +297,7 @@ const ProductionPage: React.FC = () => {
                       <TableCell>
                         <Stack direction="row" spacing={1}>
                           <Tooltip title="View Details">
-                            <IconButton size="small">
+                            <IconButton size="small" onClick={() => handleOpenDetails(process.id)}>
                               <Visibility />
                             </IconButton>
                           </Tooltip>
@@ -501,6 +516,68 @@ const ProductionPage: React.FC = () => {
           <Button onClick={handleRecordParameter} variant="contained">
             Record Parameter
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Process Details Dialog */}
+      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Process Details</DialogTitle>
+        <DialogContent>
+          {!processDetails && (
+            <Typography variant="body2" color="text.secondary">No details loaded.</Typography>
+          )}
+          {processDetails && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Process</Typography>
+                <Typography variant="body1">#{processDetails.id} • {processDetails.process_type} • {processDetails.status}</Typography>
+                <Typography variant="body2" color="text.secondary">Started: {new Date(processDetails.start_time).toLocaleString()}</Typography>
+              </Box>
+              <Divider />
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Parameters</Typography>
+                <List dense>
+                  {(processDetails.parameters || []).slice(0, 10).map((p: any) => (
+                    <ListItem key={p.id}>
+                      <ListItemText
+                        primary={`${p.parameter_name}: ${p.parameter_value} ${p.unit}`}
+                        secondary={`Recorded: ${new Date(p.recorded_at).toLocaleString()}${p.is_within_tolerance === false ? ' • OUT OF TOLERANCE' : ''}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Deviations</Typography>
+                <List dense>
+                  {(processDetails.deviations || []).slice(0, 10).map((d: any) => (
+                    <ListItem key={d.id}>
+                      <ListItemText
+                        primary={`${d.deviation_type}: ${d.actual_value} (target ${d.expected_value}) • ${d.severity}`}
+                        secondary={`Resolved: ${d.resolved ? 'Yes' : 'No'}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Alerts</Typography>
+                <List dense>
+                  {(processDetails.alerts || []).slice(0, 10).map((a: any) => (
+                    <ListItem key={a.id}>
+                      <ListItemText
+                        primary={`${a.alert_type}: ${a.message} • ${a.alert_level}`}
+                        secondary={`Ack: ${a.acknowledged ? 'Yes' : 'No'}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
