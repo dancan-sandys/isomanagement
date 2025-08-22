@@ -10,6 +10,9 @@ from app.models.production import (
 from app.models.traceability import Batch, BatchStatus, BatchType
 from app.models.production import ProcessSpecLink, ReleaseRecord
 from app.models.document import Document
+from app.services.nonconformance_service import NonConformanceService
+from app.schemas.nonconformance import NonConformanceCreate as NCCreateSchema, NonConformanceSource as NCSource
+from app.models.nonconformance import NonConformance, NonConformanceStatus, NonConformanceSource
 
 
 class ProductionService:
@@ -224,6 +227,24 @@ class ProductionService:
             # Create deviation if out of tolerance
             if not is_within_tolerance:
                 self._create_deviation(process_id, data)
+                # Auto-create NC for production deviation (link batch)
+                try:
+                    process = self.get_process(process_id)
+                    batch = self.db.query(Batch).filter(Batch.id == process.batch_id).first()
+                    nc_svc = NonConformanceService(self.db)
+                    nc_payload = NCCreateSchema(
+                        title=f"Production deviation: {data['parameter_name']}",
+                        description=f"Parameter {data['parameter_name']} value {value} outside tolerance ({min_val}-{max_val}).",
+                        source=NCSource.PRODUCTION_DEVIATION,
+                        batch_reference=(batch.batch_number if batch else None),
+                        product_reference=(batch.product_name if batch else None),
+                        process_reference=str(process_id),
+                        severity="high",
+                        impact_area="food_safety"
+                    )
+                    nc_svc.create_non_conformance(nc_payload, reported_by=data.get("recorded_by") or process.operator_id or 1)
+                except Exception:
+                    pass
         
         parameter = ProcessParameter(
             process_id=process_id,
@@ -467,6 +488,18 @@ class ProductionService:
         checklist.append({"item": "Alerts acknowledged", "passed": unack == 0})
         if unack > 0:
             failures.append("Unacknowledged alerts present")
+        # Open NCs blocking
+        try:
+            open_ncs = self.db.query(NonConformance).filter(
+                NonConformance.source == NonConformanceSource.PRODUCTION_DEVIATION,
+                NonConformance.process_reference == str(process_id),
+                NonConformance.status.in_([NonConformanceStatus.OPEN, NonConformanceStatus.UNDER_INVESTIGATION, NonConformanceStatus.IN_PROGRESS])
+            ).count()
+            checklist.append({"item": "No open nonconformances", "passed": open_ncs == 0})
+            if open_ncs > 0:
+                failures.append("Open nonconformances exist")
+        except Exception:
+            pass
         ready = len(failures) == 0
         return {"ready": ready, "failures": failures, "checklist": checklist}
 
