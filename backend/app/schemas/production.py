@@ -56,6 +56,7 @@ class ProcessParameterCreate(BaseModel):
     tolerance_min: Optional[float] = None
     tolerance_max: Optional[float] = None
     notes: Optional[str] = None
+    equipment_id: Optional[int] = None
 
     @validator('parameter_value')
     def validate_parameter_value(cls, v):

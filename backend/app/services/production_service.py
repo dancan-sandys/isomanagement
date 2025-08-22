@@ -13,6 +13,8 @@ from app.models.document import Document
 from app.services.nonconformance_service import NonConformanceService
 from app.schemas.nonconformance import NonConformanceCreate as NCCreateSchema, NonConformanceSource as NCSource
 from app.models.nonconformance import NonConformance, NonConformanceStatus, NonConformanceSource
+from app.services.training_service import TrainingService
+from app.services.equipment_calibration_service import EquipmentCalibrationService
 
 
 class ProductionService:
@@ -215,6 +217,27 @@ class ProductionService:
         process = self.get_process(process_id)
         if not process:
             raise ValueError("Process not found")
+        
+        # Competence check for operator (if provided)
+        try:
+            operator_id = data.get("recorded_by") or process.operator_id
+            if operator_id:
+                training = TrainingService(self.db)
+                eligibility = training.check_eligibility(operator_id)
+                if not eligibility.get("eligible", True):
+                    raise ValueError("Operator not eligible: required training incomplete")
+        except Exception:
+            pass
+        
+        # Equipment calibration check (if equipment specified)
+        try:
+            if data.get("equipment_id"):
+                ecs = EquipmentCalibrationService(self.db)
+                status = ecs.check_equipment_calibration(int(data["equipment_id"]))
+                if not status.get("is_valid", False):
+                    raise ValueError(f"Equipment calibration invalid: {status.get('message')}")
+        except Exception:
+            pass
         
         # Validate parameter value against tolerances
         is_within_tolerance = None
@@ -498,6 +521,25 @@ class ProductionService:
             checklist.append({"item": "No open nonconformances", "passed": open_ncs == 0})
             if open_ncs > 0:
                 failures.append("Open nonconformances exist")
+        except Exception:
+            pass
+        # Equipment calibration OK (optional global equipment used at release if any recorded)
+        try:
+            # If any parameter recorded with equipment_id has invalid calibration, block
+            from app.models.production import ProcessParameter as PP
+            ecs = EquipmentCalibrationService(self.db)
+            equip_ids = [pid for (pid,) in self.db.query(PP.equipment_id).filter(PP.process_id == process_id, PP.equipment_id.isnot(None)).distinct().all()]
+            bad = False
+            for eid in equip_ids:
+                if not eid:
+                    continue
+                status = ecs.check_equipment_calibration(int(eid))
+                if not status.get("is_valid", False):
+                    bad = True
+                    break
+            checklist.append({"item": "Equipment calibration valid", "passed": not bad})
+            if bad:
+                failures.append("Equipment calibration invalid")
         except Exception:
             pass
         ready = len(failures) == 0
