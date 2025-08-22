@@ -65,6 +65,11 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     dashboard_configurations = relationship("DashboardConfiguration", back_populates="user")
     
+    # Actions Log relationships
+    assigned_actions = relationship("ActionLog", foreign_keys="ActionLog.assigned_to", back_populates="assigned_user")
+    created_actions = relationship("ActionLog", foreign_keys="ActionLog.assigned_by", back_populates="created_by_user")
+    action_progress_updates = relationship("ActionProgress", foreign_keys="ActionProgress.updated_by", back_populates="user")
+    
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role_id={self.role_id})>"
 

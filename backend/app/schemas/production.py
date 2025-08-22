@@ -223,18 +223,15 @@ class ProcessTemplateResponse(BaseModel):
 
 
 class ProductionAnalytics(BaseModel):
-    total_processes: int
-    active_processes: int
-    completed_processes: int
-    diverted_processes: int
-    average_yield_percent: Optional[float]
+    total_records: int
+    avg_overrun_percent: float
+    overruns: int
+    underruns: int
     total_deviations: int
     critical_deviations: int
     total_alerts: int
     unacknowledged_alerts: int
     process_type_breakdown: Dict[str, int]
-    yield_trends: List[Dict[str, Any]]
-    deviation_trends: List[Dict[str, Any]]
 
     class Config:
         from_attributes = True

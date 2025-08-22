@@ -53,6 +53,15 @@ from .production import (
     ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
     ProductProcessType, ProcessStatus, StepType, LogEvent
 )
+from .actions_log import (
+    ActionLog, ActionProgress, ActionRelationship, InterestedParty, PartyExpectation, PartyAction,
+    SWOTAnalysis, SWOTItem, SWOTAction, PESTELAnalysis, PESTELItem, PESTELAction,
+    ActionStatus, ActionPriority, ActionSource, PartyCategory, SWOTCategory, PESTELCategory
+)
+from .analytics import (
+    AnalyticsReport, KPI, AnalyticsKPIValue, AnalyticsDashboard, AnalyticsDashboardWidget, TrendAnalysis,
+    ReportType, ReportStatus
+)
 
 __all__ = [
     # User models
@@ -111,4 +120,11 @@ __all__ = [
     # Production models
     "ProductionProcess", "ProcessStep", "ProcessLog", "YieldRecord", "ColdRoomTransfer", "AgingRecord",
     "ProductProcessType", "ProcessStatus", "StepType", "LogEvent",
+    # Actions Log models
+    "ActionLog", "ActionProgress", "ActionRelationship", "InterestedParty", "PartyExpectation", "PartyAction",
+    "SWOTAnalysis", "SWOTItem", "SWOTAction", "PESTELAnalysis", "PESTELItem", "PESTELAction",
+    "ActionStatus", "ActionPriority", "ActionSource", "PartyCategory", "SWOTCategory", "PESTELCategory",
+    # Analytics models
+    "AnalyticsReport", "KPI", "AnalyticsKPIValue", "AnalyticsDashboard", "AnalyticsDashboardWidget", "TrendAnalysis",
+    "ReportType", "ReportStatus",
 ] 

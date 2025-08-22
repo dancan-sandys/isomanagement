@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from app.core.database import get_db
@@ -35,7 +35,7 @@ def create_process(payload: ProcessCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{process_id}/log")
+@router.post("/processes/{process_id}/log")
 def add_log(process_id: int, payload: ProcessLogCreate, db: Session = Depends(get_db)):
     service = ProductionService(db)
     try:
@@ -45,7 +45,7 @@ def add_log(process_id: int, payload: ProcessLogCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{process_id}/yield")
+@router.post("/processes/{process_id}/yield")
 def record_yield(process_id: int, payload: YieldCreate, db: Session = Depends(get_db)):
     service = ProductionService(db)
     try:
@@ -55,7 +55,7 @@ def record_yield(process_id: int, payload: YieldCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{process_id}/transfer")
+@router.post("/processes/{process_id}/transfer")
 def record_transfer(process_id: int, payload: TransferCreate, db: Session = Depends(get_db)):
     service = ProductionService(db)
     try:
@@ -65,7 +65,7 @@ def record_transfer(process_id: int, payload: TransferCreate, db: Session = Depe
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{process_id}/aging")
+@router.post("/processes/{process_id}/aging")
 def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(get_db)):
     service = ProductionService(db)
     try:
@@ -75,7 +75,7 @@ def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{process_id}")
+@router.get("/processes/{process_id}")
 def get_process(process_id: int, db: Session = Depends(get_db)):
     service = ProductionService(db)
     proc = service.get_process(process_id)
@@ -118,6 +118,18 @@ def list_processes(
     service = ProductionService(db)
     # TODO: Implement process listing with filters
     return []
+
+
+@router.get("/templates", response_model=List[ProcessTemplateResponse])
+def get_templates(
+    product_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get process templates"""
+    service = ProductionService(db)
+    pt = ProductProcessType(product_type) if product_type else None
+    templates = service.get_process_templates(pt)
+    return templates
 
 
 @router.put("/processes/{process_id}", response_model=ProcessResponse)
@@ -216,18 +228,6 @@ def create_template(payload: ProcessTemplateCreate, db: Session = Depends(get_db
         return template
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/templates", response_model=List[ProcessTemplateResponse])
-def get_templates(
-    product_type: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
-):
-    """Get process templates"""
-    service = ProductionService(db)
-    pt = ProductProcessType(product_type) if product_type else None
-    templates = service.get_process_templates(pt)
-    return templates
 
 
 @router.get("/analytics/enhanced", response_model=ProductionAnalytics)

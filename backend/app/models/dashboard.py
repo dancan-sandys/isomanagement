@@ -309,3 +309,4 @@ class Department(Base):
     objectives = relationship("FoodSafetyObjective", foreign_keys="FoodSafetyObjective.department_id")
     objective_targets = relationship("ObjectiveTarget", foreign_keys="ObjectiveTarget.department_id")
     objective_progress = relationship("ObjectiveProgress", foreign_keys="ObjectiveProgress.department_id")
+    actions = relationship("ActionLog", foreign_keys="ActionLog.department_id", back_populates="department")
