@@ -278,6 +278,24 @@ class ReleaseRecord(Base):
     process = relationship("ProductionProcess")
 
 
+class MaterialConsumption(Base):
+    __tablename__ = "material_consumptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    material_id = Column(Integer, ForeignKey("materials.id"), nullable=False)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
+    delivery_id = Column(Integer, ForeignKey("incoming_deliveries.id"), nullable=True)
+    lot_number = Column(String(50))
+    quantity = Column(Float, nullable=False)
+    unit = Column(String(20), nullable=False)
+    consumed_at = Column(DateTime(timezone=True), server_default=func.now())
+    recorded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text)
+
+    process = relationship("ProductionProcess")
+
+
 class ProcessTemplate(Base):
     __tablename__ = "process_templates"
 

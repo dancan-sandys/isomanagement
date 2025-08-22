@@ -17,6 +17,7 @@ from app.schemas.production import (
     ProcessAlertResponse, ProcessTemplateResponse, ProductionAnalytics
 )
 from app.schemas.production import ProcessSpecBindRequest, ReleaseCheckResponse, ReleaseRequest, ReleaseResponse
+from app.schemas.production import MaterialConsumptionCreate
 from app.models.production import ProductProcessType, ProcessStatus
 from app.core.security import get_current_active_user
 from app.core.permissions import require_permission_dependency
@@ -431,6 +432,23 @@ def release_process(
             signature_hash=payload.signature_hash,
         )
         return {"message": "Released successfully", "release_id": record.id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/materials")
+def record_material_consumption_endpoint(
+    process_id: int,
+    payload: MaterialConsumptionCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("suppliers:update"))
+):
+    service = ProductionService(db)
+    try:
+        data = payload.model_dump()
+        data["recorded_by"] = getattr(current_user, "id", None)
+        row = service.record_material_consumption(process_id, data)
+        return {"message": "Material consumption recorded", "id": row.id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -15,6 +15,7 @@ from app.schemas.nonconformance import NonConformanceCreate as NCCreateSchema, N
 from app.models.nonconformance import NonConformance, NonConformanceStatus, NonConformanceSource
 from app.services.training_service import TrainingService
 from app.services.equipment_calibration_service import EquipmentCalibrationService
+from app.models.supplier import IncomingDelivery, Supplier, Material as SupplierMaterial
 
 
 class ProductionService:
@@ -452,6 +453,37 @@ class ProductionService:
             "unacknowledged_alerts": unacknowledged_alerts,
             "process_type_breakdown": process_breakdown,
         }
+
+    # Materials
+    def record_material_consumption(self, process_id: int, data: Dict[str, Any]) -> Any:
+        from app.models.production import MaterialConsumption
+        process = self.get_process(process_id)
+        if not process:
+            raise ValueError("Process not found")
+        # Optional supplier/delivery validation
+        if data.get("delivery_id"):
+            delivery = self.db.query(IncomingDelivery).filter(IncomingDelivery.id == data["delivery_id"]).first()
+            if not delivery:
+                raise ValueError("Delivery not found")
+            if delivery.inspection_status not in ("passed",):
+                raise ValueError("Cannot consume materials from unapproved delivery")
+            if data.get("material_id") and delivery.material_id != data["material_id"]:
+                raise ValueError("Delivery does not match selected material")
+        mc = MaterialConsumption(
+            process_id=process_id,
+            material_id=int(data["material_id"]),
+            supplier_id=data.get("supplier_id"),
+            delivery_id=data.get("delivery_id"),
+            lot_number=data.get("lot_number"),
+            quantity=float(data["quantity"]),
+            unit=data["unit"],
+            recorded_by=data.get("recorded_by"),
+            notes=data.get("notes"),
+        )
+        self.db.add(mc)
+        self.db.commit()
+        self.db.refresh(mc)
+        return mc
 
     # Spec binding and release
     def bind_spec_version(self, process_id: int, document_id: int, document_version: str, locked_parameters: Optional[Dict[str, Any]]) -> ProcessSpecLink:

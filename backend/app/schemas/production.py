@@ -269,3 +269,13 @@ class ReleaseResponse(BaseModel):
     message: str
     release_id: int
 
+
+class MaterialConsumptionCreate(BaseModel):
+    material_id: int
+    quantity: float
+    unit: str
+    supplier_id: Optional[int] = None
+    delivery_id: Optional[int] = None
+    lot_number: Optional[str] = None
+    notes: Optional[str] = None
+
