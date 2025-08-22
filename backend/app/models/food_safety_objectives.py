@@ -170,6 +170,35 @@ class FoodSafetyObjective(Base):
         return f"<FoodSafetyObjective(id={self.id}, code='{self.objective_code}', title='{self.title}', type='{self.objective_type}')>"
 
 
+class ObjectiveEvidence(Base):
+    __tablename__ = "objective_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    objective_id = Column(Integer, ForeignKey("food_safety_objectives.id", ondelete="CASCADE"), index=True, nullable=False)
+    progress_id = Column(Integer, ForeignKey("objective_progress.id", ondelete="SET NULL"), index=True, nullable=True)
+    file_path = Column(Text, nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    checksum = Column(String(128), nullable=True)
+    notes = Column(Text, nullable=True)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_verified = Column(Boolean, default=False)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    objective = relationship("FoodSafetyObjective", backref="evidence")
+    progress = relationship("ObjectiveProgress")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+    __table_args__ = (
+        Index("ix_objective_evidence_obj", "objective_id", "uploaded_at"),
+    )
+
+
 class ObjectiveTarget(Base):
     __tablename__ = "objective_targets"
 

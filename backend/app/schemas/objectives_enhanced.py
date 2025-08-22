@@ -217,7 +217,7 @@ class ObjectiveProgressUpdate(BaseModel):
     evidence: Optional[str] = None
 
 
-class ObjectiveProgress(ObjectiveProgressBase):
+class ObjectiveProgress(BaseModel):
     id: int
     objective_id: int
     department_id: Optional[int] = None
@@ -229,6 +229,39 @@ class ObjectiveProgress(ObjectiveProgressBase):
     
     class Config:
         from_attributes = True
+
+
+class ObjectiveEvidenceBase(BaseModel):
+    notes: Optional[str] = None
+    progress_id: Optional[int] = None
+
+
+class ObjectiveEvidenceCreate(ObjectiveEvidenceBase):
+    pass
+
+
+class ObjectiveEvidence(BaseModel):
+    id: int
+    objective_id: int
+    progress_id: Optional[int] = None
+    file_path: str
+    original_filename: str
+    content_type: Optional[str] = None
+    file_size: Optional[int] = None
+    checksum: Optional[str] = None
+    notes: Optional[str] = None
+    uploaded_by: int
+    uploaded_at: datetime
+    is_verified: bool
+    verified_by: Optional[int] = None
+    verified_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ObjectiveEvidenceList(BaseModel):
+    data: List[ObjectiveEvidence]
 
 
 # Dashboard and analytics schemas

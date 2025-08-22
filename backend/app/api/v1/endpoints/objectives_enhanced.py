@@ -21,10 +21,13 @@ from app.schemas.objectives_enhanced import (
     DashboardKPIs, PerformanceMetrics, TrendAnalysis, PerformanceAlert,
     ObjectivesListResponse, ObjectivesDashboardResponse, ObjectiveDetailResponse,
     ObjectiveHierarchy, BulkProgressCreate, BulkTargetCreate, ObjectiveLinks, ObjectiveLinksUpdate,
-    ObjectiveType, HierarchyLevel, PerformanceColor, TrendDirection
+    ObjectiveType, HierarchyLevel, PerformanceColor, TrendDirection, ObjectiveEvidence, ObjectiveEvidenceList
 )
 from app.models.rbac import Module
 from app.models.food_safety_objectives import FoodSafetyObjective
+from fastapi import UploadFile, File, Form
+from app.services.storage_service import StorageService
+from app.models.audit import AuditLog
 
 router = APIRouter()
 
@@ -593,6 +596,99 @@ def update_objective_links(
     return updated
  
  
+# =========================================================================
+# EVIDENCE ENDPOINTS
+# =========================================================================
+
+@router.post("/{objective_id}/evidence", response_model=ObjectiveEvidence, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def upload_evidence(
+    objective_id: int = Path(..., description="Objective ID"),
+    file: UploadFile = File(...),
+    notes: Optional[str] = Form(None),
+    progress_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    # Validate objective
+    service = ObjectivesServiceEnhanced(db)
+    obj = service.get_objective(objective_id)
+    if not obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+
+    storage = StorageService(base_upload_dir="uploads/objectives")
+    file_path, file_size, content_type, original_filename, checksum = storage.save_upload(file, subdir=str(objective_id))
+
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    evidence = EvidenceModel(
+        objective_id=objective_id,
+        progress_id=progress_id,
+        file_path=file_path,
+        original_filename=original_filename,
+        content_type=content_type,
+        file_size=file_size,
+        checksum=checksum,
+        notes=notes,
+        uploaded_by=current_user.id,
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+
+    # Audit log
+    db.add(AuditLog(user_id=current_user.id, action="objective_evidence_upload", resource_type="objective", resource_id=str(objective_id), details={"evidence_id": evidence.id, "filename": original_filename}))
+    db.commit()
+
+    return evidence
+
+
+@router.get("/{objective_id}/evidence", response_model=ObjectiveEvidenceList, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def list_evidence(
+    objective_id: int = Path(..., description="Objective ID"),
+    db: Session = Depends(get_db)
+):
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    items = db.query(EvidenceModel).filter(EvidenceModel.objective_id == objective_id).order_by(EvidenceModel.uploaded_at.desc()).all()
+    return {"data": items}
+
+
+@router.delete("/{objective_id}/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "DELETE")))])
+def delete_evidence(
+    objective_id: int,
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    ev = db.query(EvidenceModel).filter(EvidenceModel.id == evidence_id, EvidenceModel.objective_id == objective_id).first()
+    if not ev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    # Delete file
+    storage = StorageService(base_upload_dir="uploads/objectives")
+    storage.delete_file(ev.file_path)
+    db.delete(ev)
+    db.add(AuditLog(user_id=current_user.id, action="objective_evidence_delete", resource_type="objective", resource_id=str(objective_id), details={"evidence_id": evidence_id}))
+    db.commit()
+    return None
+
+
+@router.post("/{objective_id}/evidence/{evidence_id}/verify", response_model=ObjectiveEvidence, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "APPROVE")))])
+def verify_evidence(
+    objective_id: int,
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    ev = db.query(EvidenceModel).filter(EvidenceModel.id == evidence_id, EvidenceModel.objective_id == objective_id).first()
+    if not ev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    ev.is_verified = True
+    ev.verified_by = current_user.id
+    ev.verified_at = datetime.utcnow()
+    db.add(AuditLog(user_id=current_user.id, action="objective_evidence_verify", resource_type="objective", resource_id=str(objective_id), details={"evidence_id": evidence_id}))
+    db.commit(); db.refresh(ev)
+    return ev
+
 # =========================================================================
 # WORKFLOW ENDPOINTS
 # =========================================================================
