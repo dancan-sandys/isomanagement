@@ -113,7 +113,23 @@ def create_migration():
             ("automated_calculation", "BOOLEAN DEFAULT 0"),
             ("data_source", "VARCHAR(50) DEFAULT 'manual'"),
             ("last_updated_by", "INTEGER"),
-            ("last_updated_at", "TIMESTAMP")
+            ("last_updated_at", "TIMESTAMP"),
+            # ISO 6.2 fields
+            ("owner_user_id", "INTEGER"),
+            ("sponsor_user_id", "INTEGER"),
+            ("method_of_evaluation", "VARCHAR(100)"),
+            ("acceptance_criteria", "TEXT"),
+            ("resource_plan", "TEXT"),
+            ("budget_estimate", "REAL"),
+            ("budget_currency", "VARCHAR(10)"),
+            ("communication_plan", "TEXT"),
+            ("linked_risk_ids", "TEXT"),
+            ("linked_control_ids", "TEXT"),
+            ("linked_document_ids", "TEXT"),
+            ("management_review_refs", "TEXT"),
+            ("version", "INTEGER DEFAULT 1"),
+            ("superseded_by_id", "INTEGER"),
+            ("change_reason", "TEXT")
         ]
         
         for column_name, column_def in new_columns:

@@ -101,6 +101,23 @@ class FoodSafetyObjective(Base):
     last_updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     last_updated_at = Column(DateTime(timezone=True), nullable=True)
 
+    # ISO 6.2 planning and evaluation fields
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sponsor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    method_of_evaluation = Column(String(100), nullable=True)
+    acceptance_criteria = Column(Text, nullable=True)  # JSON/text
+    resource_plan = Column(Text, nullable=True)
+    budget_estimate = Column(Float, nullable=True)
+    budget_currency = Column(String(10), nullable=True)
+    communication_plan = Column(Text, nullable=True)
+    linked_risk_ids = Column(Text, nullable=True)       # JSON array string
+    linked_control_ids = Column(Text, nullable=True)    # JSON array string
+    linked_document_ids = Column(Text, nullable=True)   # JSON array string
+    management_review_refs = Column(Text, nullable=True)  # JSON array string
+    version = Column(Integer, default=1)
+    superseded_by_id = Column(Integer, ForeignKey("food_safety_objectives.id"), nullable=True)
+    change_reason = Column(Text, nullable=True)
+
     # Relationships
     parent_objective = relationship("FoodSafetyObjective", remote_side=[id], back_populates="child_objectives")
     child_objectives = relationship("FoodSafetyObjective", back_populates="parent_objective")
@@ -111,6 +128,8 @@ class FoodSafetyObjective(Base):
     fsms_integrations = relationship("FSMSRiskIntegration", back_populates="food_safety_objective")
     targets = relationship("ObjectiveTarget", back_populates="objective", cascade="all, delete-orphan")
     progress_entries = relationship("ObjectiveProgress", back_populates="objective", cascade="all, delete-orphan")
+    owner_user = relationship("User", foreign_keys=[owner_user_id])
+    sponsor_user = relationship("User", foreign_keys=[sponsor_user_id])
 
     __table_args__ = (
         Index("ix_objectives_hierarchy", "parent_objective_id", "objective_type"),
