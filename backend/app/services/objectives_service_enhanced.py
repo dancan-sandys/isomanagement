@@ -149,6 +149,44 @@ class ObjectivesServiceEnhanced:
         self.db.commit()
         return True
 
+    # ------------------------------
+    # Linkages
+    # ------------------------------
+    def get_objective_links(self, objective_id: int) -> Dict[str, Any]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return {}
+        def parse(text_value: Optional[str]) -> list:
+            try:
+                return json.loads(text_value) if text_value else []
+            except Exception:
+                return []
+        return {
+            "linked_risk_ids": parse(obj.linked_risk_ids),
+            "linked_control_ids": parse(obj.linked_control_ids),
+            "linked_document_ids": parse(obj.linked_document_ids),
+            "management_review_refs": parse(obj.management_review_refs),
+        }
+
+    def update_objective_links(self, objective_id: int, links: Dict[str, Any]) -> Optional[FoodSafetyObjective]:
+        obj = self.get_objective(objective_id)
+        if not obj:
+            return None
+        def dump(val):
+            return json.dumps(val) if isinstance(val, (list, dict)) else None
+        if 'linked_risk_ids' in links:
+            obj.linked_risk_ids = dump(links.get('linked_risk_ids'))
+        if 'linked_control_ids' in links:
+            obj.linked_control_ids = dump(links.get('linked_control_ids'))
+        if 'linked_document_ids' in links:
+            obj.linked_document_ids = dump(links.get('linked_document_ids'))
+        if 'management_review_refs' in links:
+            obj.management_review_refs = dump(links.get('management_review_refs'))
+        obj.last_updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
     def create_target(self, target_data: Dict[str, Any]) -> ObjectiveTarget:
         """Create objective target"""
         

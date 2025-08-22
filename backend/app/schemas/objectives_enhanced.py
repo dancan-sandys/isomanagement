@@ -363,3 +363,18 @@ class ObjectivesExport(BaseModel):
     departments: List[Department]
     export_date: datetime
     export_format: str = "json"
+
+
+# Linkage schemas
+class ObjectiveLinks(BaseModel):
+    linked_risk_ids: List[int] = []
+    linked_control_ids: List[int] = []
+    linked_document_ids: List[int] = []
+    management_review_refs: List[int] = []
+
+
+class ObjectiveLinksUpdate(BaseModel):
+    linked_risk_ids: Optional[List[int]] = None
+    linked_control_ids: Optional[List[int]] = None
+    linked_document_ids: Optional[List[int]] = None
+    management_review_refs: Optional[List[int]] = None

@@ -19,7 +19,7 @@ from app.schemas.objectives_enhanced import (
     DepartmentCreate, DepartmentUpdate, Department,
     DashboardKPIs, PerformanceMetrics, TrendAnalysis, PerformanceAlert,
     ObjectivesListResponse, ObjectivesDashboardResponse, ObjectiveDetailResponse,
-    ObjectiveHierarchy, BulkProgressCreate, BulkTargetCreate,
+    ObjectiveHierarchy, BulkProgressCreate, BulkTargetCreate, ObjectiveLinks, ObjectiveLinksUpdate,
     ObjectiveType, HierarchyLevel, PerformanceColor, TrendDirection
 )
 from app.models.food_safety_objectives import FoodSafetyObjective
@@ -535,3 +535,32 @@ def export_objectives(
         "objectives_count": len(objectives),
         "download_url": f"/api/v1/objectives/export/download/{format}"
     }
+
+
+# =========================================================================
+# LINKAGES ENDPOINTS
+# =========================================================================
+
+@router.get("/{objective_id}/links", response_model=ObjectiveLinks)
+def get_objective_links(
+    objective_id: int = Path(..., description="Objective ID"),
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesServiceEnhanced(db)
+    links = service.get_objective_links(objective_id)
+    if not links:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return links
+
+
+@router.put("/{objective_id}/links", response_model=Objective)
+def update_objective_links(
+    objective_id: int = Path(..., description="Objective ID"),
+    payload: ObjectiveLinksUpdate = None,
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.update_objective_links(objective_id, payload.model_dump(exclude_unset=True) if payload else {})
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
