@@ -73,6 +73,8 @@ const ProductionPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [processDetails, setProcessDetails] = useState<any | null>(null);
+  const [mocOpen, setMocOpen] = useState(false);
+  const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
 
   // Form states
   const [newProcess, setNewProcess] = useState<ProcessCreatePayload>({
@@ -566,6 +568,7 @@ const ProductionPage: React.FC = () => {
                     setError('Export PDF failed');
                   }
                 }}>Download PDF</Button>
+                <Button size="small" variant="outlined" color="warning" onClick={() => setMocOpen(true)}>Request Change</Button>
               </Stack>
               <Divider />
               {processDetails.release_check && (
@@ -624,6 +627,39 @@ const ProductionPage: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Minimal MOC Dialog */}
+      <Dialog open={mocOpen} onClose={() => setMocOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Request Change (MOC)</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Title" value={mocForm.title} onChange={(e) => setMocForm({ ...mocForm, title: e.target.value })} fullWidth />
+            <TextField label="Reason" value={mocForm.reason} onChange={(e) => setMocForm({ ...mocForm, reason: e.target.value })} fullWidth multiline rows={3} />
+            <TextField label="Risk Rating" value={mocForm.risk_rating} onChange={(e) => setMocForm({ ...mocForm, risk_rating: e.target.value })} fullWidth />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMocOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            try {
+              const res = await fetch('/api/v1/change-requests/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: mocForm.title,
+                  reason: mocForm.reason,
+                  process_id: processDetails?.id,
+                  risk_rating: mocForm.risk_rating,
+                })
+              });
+              if (!res.ok) throw new Error('Failed');
+              setMocOpen(false);
+            } catch (e) {
+              setError('Failed to submit change request');
+            }
+          }}>Submit</Button>
         </DialogActions>
       </Dialog>
     </Box>
