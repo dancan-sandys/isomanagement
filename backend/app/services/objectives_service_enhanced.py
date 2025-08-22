@@ -422,6 +422,30 @@ class ObjectivesServiceEnhanced:
         
         return alerts
 
+    def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Aggregate KPIs, performance metrics, sample trends and alerts."""
+        kpis = self.get_dashboard_kpis()
+        performance = self.get_performance_metrics()
+        # Build trends for up to 5 recent active objectives
+        recent_objectives = self.db.query(FoodSafetyObjective).filter(
+            FoodSafetyObjective.status == 'active'
+        ).order_by(desc(FoodSafetyObjective.created_at)).limit(5).all()
+        trends: List[Dict[str, Any]] = []
+        for obj in recent_objectives:
+            ta = self.get_trend_analysis(obj.id, periods=6)
+            ta.update({
+                "objective_id": obj.id,
+                "objective_title": obj.title,
+            })
+            trends.append(ta)
+        alerts = self.get_alerts()
+        return {
+            "kpis": kpis,
+            "performance_metrics": performance,
+            "trends": trends,
+            "alerts": alerts,
+        }
+
     # ------------------------------
     # Departments CRUD
     # ------------------------------

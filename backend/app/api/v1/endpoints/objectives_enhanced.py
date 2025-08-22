@@ -382,6 +382,15 @@ def get_dashboard_alerts(
     return service.get_alerts()
 
 
+@router.get("/dashboard/summary", response_model=Dict[str, Any])
+def get_dashboard_summary(
+    db: Session = Depends(get_db)
+):
+    """Get aggregated dashboard data"""
+    service = ObjectivesServiceEnhanced(db)
+    return service.get_dashboard_summary()
+
+
 @router.get("/dashboard/comparison", response_model=Dict[str, Any])
 def get_performance_comparison(
     period_start: datetime = Query(..., description="Comparison period start"),
