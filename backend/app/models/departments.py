@@ -33,7 +33,7 @@ class Department(Base):
     child_departments = relationship("Department", back_populates="parent_department")
     manager = relationship("User", foreign_keys=[manager_id])
     created_by_user = relationship("User", foreign_keys=[created_by])
-    users = relationship("User", back_populates="department")
+    users = relationship("User", back_populates="department", foreign_keys="User.department_id")
     objectives = relationship("FoodSafetyObjective", back_populates="department")
     objective_targets = relationship("ObjectiveTarget", back_populates="department")
     objective_progress = relationship("ObjectiveProgress", back_populates="department")
@@ -71,7 +71,7 @@ class DepartmentUser(Base):
 
     # Relationships
     department = relationship("Department")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     created_by_user = relationship("User", foreign_keys=[created_by])
 
     __table_args__ = (

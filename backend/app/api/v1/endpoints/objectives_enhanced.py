@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
+from app.core.security import require_permission, get_current_active_user
 from app.services.objectives_service_enhanced import ObjectivesServiceEnhanced
 from app.schemas.objectives_enhanced import (
     ObjectiveCreate, ObjectiveUpdate, Objective,
@@ -19,10 +20,14 @@ from app.schemas.objectives_enhanced import (
     DepartmentCreate, DepartmentUpdate, Department,
     DashboardKPIs, PerformanceMetrics, TrendAnalysis, PerformanceAlert,
     ObjectivesListResponse, ObjectivesDashboardResponse, ObjectiveDetailResponse,
-    ObjectiveHierarchy, BulkProgressCreate, BulkTargetCreate,
-    ObjectiveType, HierarchyLevel, PerformanceColor, TrendDirection
+    ObjectiveHierarchy, BulkProgressCreate, BulkTargetCreate, ObjectiveLinks, ObjectiveLinksUpdate,
+    ObjectiveType, HierarchyLevel, PerformanceColor, TrendDirection, ObjectiveEvidence, ObjectiveEvidenceList
 )
+from app.models.rbac import Module
 from app.models.food_safety_objectives import FoodSafetyObjective
+from fastapi import UploadFile, File, Form
+from app.services.storage_service import StorageService
+from app.models.audit import AuditLog
 
 router = APIRouter()
 
@@ -31,16 +36,20 @@ router = APIRouter()
 # OBJECTIVES MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@router.post("/", response_model=Objective, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Objective, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "CREATE")))])
 def create_objective(
     objective: ObjectiveCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
 ):
     """Create a new objective"""
     service = ObjectivesServiceEnhanced(db)
     
     try:
-        result = service.create_objective(objective.model_dump())
+        payload = objective.model_dump()
+        if not payload.get("created_by"):
+            payload["created_by"] = current_user.id
+        result = service.create_objective(payload)
         return result
     except Exception as e:
         raise HTTPException(
@@ -52,7 +61,7 @@ def create_objective(
 
 
 
-@router.get("/", response_model=ObjectivesListResponse)
+@router.get("/", response_model=ObjectivesListResponse, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def list_objectives_root(
     objective_type: Optional[ObjectiveType] = Query(None, description="Filter by objective type"),
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
@@ -96,7 +105,7 @@ def list_objectives_root(
     )
 
 
-@router.get("/{objective_id}", response_model=ObjectiveDetailResponse)
+@router.get("/{objective_id}", response_model=ObjectiveDetailResponse, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_objective(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -126,7 +135,7 @@ def get_objective(
     )
 
 
-@router.put("/{objective_id}", response_model=Objective)
+@router.put("/{objective_id}", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def update_objective(
     objective_id: int = Path(..., description="Objective ID"),
     objective_update: ObjectiveUpdate = None,
@@ -145,7 +154,7 @@ def update_objective(
     return result
 
 
-@router.delete("/{objective_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{objective_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "DELETE")))])
 def delete_objective(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -165,7 +174,7 @@ def delete_objective(
 # CORPORATE AND DEPARTMENTAL OBJECTIVES ENDPOINTS
 # ============================================================================
 
-@router.get("/corporate", response_model=List[Objective])
+@router.get("/corporate", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_corporate_objectives(
     db: Session = Depends(get_db)
 ):
@@ -174,7 +183,7 @@ def get_corporate_objectives(
     return service.get_corporate_objectives()
 
 
-@router.get("/departmental/{department_id}", response_model=List[Objective])
+@router.get("/departmental/{department_id}", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_departmental_objectives(
     department_id: int = Path(..., description="Department ID"),
     db: Session = Depends(get_db)
@@ -184,7 +193,7 @@ def get_departmental_objectives(
     return service.get_departmental_objectives(department_id)
 
 
-@router.get("/hierarchy", response_model=ObjectiveHierarchy)
+@router.get("/hierarchy", response_model=ObjectiveHierarchy, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_hierarchical_objectives(
     db: Session = Depends(get_db)
 ):
@@ -198,7 +207,7 @@ def get_hierarchical_objectives(
 # PROGRESS TRACKING ENDPOINTS
 # ============================================================================
 
-@router.post("/{objective_id}/progress", response_model=ObjectiveProgress, status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/progress", response_model=ObjectiveProgress, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_progress(
     objective_id: int = Path(..., description="Objective ID"),
     progress: ObjectiveProgressCreate = None,
@@ -224,7 +233,7 @@ def create_progress(
         )
 
 
-@router.get("/{objective_id}/progress", response_model=List[ObjectiveProgress])
+@router.get("/{objective_id}/progress", response_model=List[ObjectiveProgress], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_progress(
     objective_id: int = Path(..., description="Objective ID"),
     limit: int = Query(50, ge=1, le=100, description="Number of entries to return"),
@@ -235,7 +244,7 @@ def get_progress(
     return service.get_progress(objective_id, limit)
 
 
-@router.get("/{objective_id}/progress/trend", response_model=TrendAnalysis)
+@router.get("/{objective_id}/progress/trend", response_model=TrendAnalysis, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_trend_analysis(
     objective_id: int = Path(..., description="Objective ID"),
     periods: int = Query(6, ge=2, le=12, description="Number of periods to analyze"),
@@ -246,7 +255,7 @@ def get_trend_analysis(
     return service.get_trend_analysis(objective_id, periods)
 
 
-@router.post("/{objective_id}/progress/bulk", response_model=List[ObjectiveProgress], status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/progress/bulk", response_model=List[ObjectiveProgress], status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_bulk_progress(
     objective_id: int = Path(..., description="Objective ID"),
     bulk_progress: BulkProgressCreate = None,
@@ -274,7 +283,7 @@ def create_bulk_progress(
 # TARGET MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@router.post("/{objective_id}/targets", response_model=ObjectiveTarget, status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/targets", response_model=ObjectiveTarget, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_target(
     objective_id: int = Path(..., description="Objective ID"),
     target: ObjectiveTargetCreate = None,
@@ -299,7 +308,7 @@ def create_target(
         )
 
 
-@router.get("/{objective_id}/targets", response_model=List[ObjectiveTarget])
+@router.get("/{objective_id}/targets", response_model=List[ObjectiveTarget], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_targets(
     objective_id: int = Path(..., description="Objective ID"),
     db: Session = Depends(get_db)
@@ -309,7 +318,7 @@ def get_targets(
     return service.get_targets(objective_id)
 
 
-@router.post("/{objective_id}/targets/bulk", response_model=List[ObjectiveTarget], status_code=status.HTTP_201_CREATED)
+@router.post("/{objective_id}/targets/bulk", response_model=List[ObjectiveTarget], status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_bulk_targets(
     objective_id: int = Path(..., description="Objective ID"),
     bulk_targets: BulkTargetCreate = None,
@@ -337,7 +346,7 @@ def create_bulk_targets(
 # DASHBOARD INTEGRATION ENDPOINTS
 # ============================================================================
 
-@router.get("/dashboard/kpis", response_model=DashboardKPIs)
+@router.get("/dashboard/kpis", response_model=DashboardKPIs, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_kpis(
     db: Session = Depends(get_db)
 ):
@@ -346,7 +355,7 @@ def get_dashboard_kpis(
     return service.get_dashboard_kpis()
 
 
-@router.get("/dashboard/performance", response_model=PerformanceMetrics)
+@router.get("/dashboard/performance", response_model=PerformanceMetrics, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_performance_metrics(
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
     db: Session = Depends(get_db)
@@ -356,7 +365,7 @@ def get_performance_metrics(
     return service.get_performance_metrics(department_id)
 
 
-@router.get("/dashboard/trends", response_model=List[TrendAnalysis])
+@router.get("/dashboard/trends", response_model=List[TrendAnalysis], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_trends(
     objective_ids: List[int] = Query(..., description="List of objective IDs to analyze"),
     periods: int = Query(6, ge=2, le=12, description="Number of periods to analyze"),
@@ -373,7 +382,7 @@ def get_dashboard_trends(
     return trends
 
 
-@router.get("/dashboard/alerts", response_model=List[PerformanceAlert])
+@router.get("/dashboard/alerts", response_model=List[PerformanceAlert], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_dashboard_alerts(
     db: Session = Depends(get_db)
 ):
@@ -382,7 +391,16 @@ def get_dashboard_alerts(
     return service.get_alerts()
 
 
-@router.get("/dashboard/comparison", response_model=Dict[str, Any])
+@router.get("/dashboard/summary", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def get_dashboard_summary(
+    db: Session = Depends(get_db)
+):
+    """Get aggregated dashboard data"""
+    service = ObjectivesServiceEnhanced(db)
+    return service.get_dashboard_summary()
+
+
+@router.get("/dashboard/comparison", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_performance_comparison(
     period_start: datetime = Query(..., description="Comparison period start"),
     period_end: datetime = Query(..., description="Comparison period end"),
@@ -412,11 +430,11 @@ def get_performance_comparison(
     }
 
 
-# ============================================================================
+# =========================================================================
 # DEPARTMENT MANAGEMENT ENDPOINTS
-# ============================================================================
+# =========================================================================
 
-@router.post("/departments", response_model=Department, status_code=status.HTTP_201_CREATED)
+@router.post("/departments", response_model=Department, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
 def create_department(
     department: DepartmentCreate,
     db: Session = Depends(get_db)
@@ -425,20 +443,8 @@ def create_department(
     service = ObjectivesServiceEnhanced(db)
     
     try:
-        # This would be implemented in the service
-        # For now, return a placeholder
-        return Department(
-            id=1,
-            department_code=department.department_code,
-            name=department.name,
-            description=department.description,
-            parent_department_id=department.parent_department_id,
-            manager_id=department.manager_id,
-            color_code=department.color_code,
-            status="active",
-            created_at=datetime.utcnow(),
-            created_by=1
-        )
+        created = service.create_department(department.model_dump())
+        return created
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -446,45 +452,59 @@ def create_department(
         )
 
 
-@router.get("/departments", response_model=List[Department])
+@router.get("/departments", response_model=List[Department], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def list_departments(
     status: Optional[str] = Query(None, description="Filter by status"),
     db: Session = Depends(get_db)
 ):
     """List departments"""
-    # This would be implemented in the service
-    # For now, return sample data
-    return [
-        Department(
-            id=1,
-            department_code="CORP",
-            name="Corporate",
-            description="Corporate level objectives and strategic goals",
-            parent_department_id=None,
-            manager_id=None,
-            color_code="#1976D2",
-            status="active",
-            created_at=datetime.utcnow(),
-            created_by=1
-        ),
-        Department(
-            id=2,
-            department_code="PROD",
-            name="Production",
-            description="Production department objectives",
-            parent_department_id=None,
-            manager_id=None,
-            color_code="#388E3C",
-            status="active",
-            created_at=datetime.utcnow(),
-            created_by=1
-        )
-    ]
+    service = ObjectivesServiceEnhanced(db)
+    return service.list_departments(status=status)
 
 
-# ============================================================================
+@router.get("/departments/{department_id}", response_model=Department, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def get_department(
+    department_id: int = Path(..., description="Department ID"),
+    db: Session = Depends(get_db)
+):
+    """Get a specific department"""
+    service = ObjectivesServiceEnhanced(db)
+    dept = service.get_department(department_id)
+    if not dept:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+    return dept
+
+
+@router.put("/departments/{department_id}", response_model=Department, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def update_department(
+    department_id: int = Path(..., description="Department ID"),
+    payload: DepartmentUpdate = None,
+    db: Session = Depends(get_db)
+):
+    """Update a department"""
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.update_department(department_id, (payload.model_dump(exclude_unset=True) if payload else {}))
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+    return updated
+
+
+@router.delete("/departments/{department_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "DELETE")))])
+def delete_department(
+    department_id: int = Path(..., description="Department ID"),
+    db: Session = Depends(get_db)
+):
+    """Delete (soft) a department"""
+    service = ObjectivesServiceEnhanced(db)
+    ok = service.delete_department(department_id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+    return None
+
+
+# =========================================================================
 # UTILITY ENDPOINTS
-# ============================================================================
+# =========================================================================
 
 @router.get("/progress/summary", response_model=Dict[str, Any])
 def get_progress_summary(
@@ -509,7 +529,7 @@ def get_progress_summary(
     }
 
 
-@router.get("/export", response_model=Dict[str, Any])
+@router.get("/export", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "EXPORT")))])
 def export_objectives(
     format: str = Query("json", description="Export format (json, csv, excel)"),
     objective_type: Optional[ObjectiveType] = Query(None, description="Filter by objective type"),
@@ -525,11 +545,236 @@ def export_objectives(
         department_id=department_id
     )
     
-    # This would implement actual export logic
-    # For now, return a placeholder
-    return {
+    # Assemble related data
+    all_targets = []
+    all_progress = []
+    for obj in objectives:
+        all_targets.extend(service.get_targets(obj.id))
+        all_progress.extend(service.get_progress(obj.id, limit=100))
+
+    # Departments
+    depts = service.list_departments()
+
+    export_payload = {
         "export_date": datetime.utcnow(),
-        "format": format,
-        "objectives_count": len(objectives),
-        "download_url": f"/api/v1/objectives/export/download/{format}"
+        "export_format": format,
+        "objectives": objectives,
+        "targets": all_targets,
+        "progress": all_progress,
+        "departments": depts,
     }
+
+    # For now, return JSON payload; CSV/Excel can be added via a download route
+    if format.lower() == "json":
+        return export_payload
+    else:
+        return export_payload
+
+
+# =========================================================================
+# LINKAGES ENDPOINTS
+# =========================================================================
+
+@router.get("/{objective_id}/links", response_model=ObjectiveLinks, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def get_objective_links(
+    objective_id: int = Path(..., description="Objective ID"),
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesServiceEnhanced(db)
+    links = service.get_objective_links(objective_id)
+    if not links:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return links
+
+
+@router.put("/{objective_id}/links", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def update_objective_links(
+    objective_id: int = Path(..., description="Objective ID"),
+    payload: ObjectiveLinksUpdate = None,
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.update_objective_links(objective_id, payload.model_dump(exclude_unset=True) if payload else {})
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    return updated
+ 
+ 
+# =========================================================================
+# EVIDENCE ENDPOINTS
+# =========================================================================
+
+@router.post("/{objective_id}/evidence", response_model=ObjectiveEvidence, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def upload_evidence(
+    objective_id: int = Path(..., description="Objective ID"),
+    file: UploadFile = File(...),
+    notes: Optional[str] = Form(None),
+    progress_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    # Validate objective
+    service = ObjectivesServiceEnhanced(db)
+    obj = service.get_objective(objective_id)
+    if not obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+
+    storage = StorageService(base_upload_dir="uploads/objectives")
+    file_path, file_size, content_type, original_filename, checksum = storage.save_upload(file, subdir=str(objective_id))
+
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    evidence = EvidenceModel(
+        objective_id=objective_id,
+        progress_id=progress_id,
+        file_path=file_path,
+        original_filename=original_filename,
+        content_type=content_type,
+        file_size=file_size,
+        checksum=checksum,
+        notes=notes,
+        uploaded_by=current_user.id,
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+
+    # Audit log
+    db.add(AuditLog(user_id=current_user.id, action="objective_evidence_upload", resource_type="objective", resource_id=str(objective_id), details={"evidence_id": evidence.id, "filename": original_filename}))
+    db.commit()
+
+    return evidence
+
+
+@router.get("/{objective_id}/evidence", response_model=ObjectiveEvidenceList, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def list_evidence(
+    objective_id: int = Path(..., description="Objective ID"),
+    db: Session = Depends(get_db)
+):
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    items = db.query(EvidenceModel).filter(EvidenceModel.objective_id == objective_id).order_by(EvidenceModel.uploaded_at.desc()).all()
+    return {"data": items}
+
+
+@router.delete("/{objective_id}/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "DELETE")))])
+def delete_evidence(
+    objective_id: int,
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    ev = db.query(EvidenceModel).filter(EvidenceModel.id == evidence_id, EvidenceModel.objective_id == objective_id).first()
+    if not ev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    # Delete file
+    storage = StorageService(base_upload_dir="uploads/objectives")
+    storage.delete_file(ev.file_path)
+    db.delete(ev)
+    db.add(AuditLog(user_id=current_user.id, action="objective_evidence_delete", resource_type="objective", resource_id=str(objective_id), details={"evidence_id": evidence_id}))
+    db.commit()
+    return None
+
+
+@router.post("/{objective_id}/evidence/{evidence_id}/verify", response_model=ObjectiveEvidence, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "APPROVE")))])
+def verify_evidence(
+    objective_id: int,
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    from app.models.food_safety_objectives import ObjectiveEvidence as EvidenceModel
+    ev = db.query(EvidenceModel).filter(EvidenceModel.id == evidence_id, EvidenceModel.objective_id == objective_id).first()
+    if not ev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    ev.is_verified = True
+    ev.verified_by = current_user.id
+    ev.verified_at = datetime.utcnow()
+    db.add(AuditLog(user_id=current_user.id, action="objective_evidence_verify", resource_type="objective", resource_id=str(objective_id), details={"evidence_id": evidence_id}))
+    db.commit(); db.refresh(ev)
+    return ev
+
+# =========================================================================
+# WORKFLOW ENDPOINTS
+# =========================================================================
+
+@router.post("/{objective_id}/assign", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "ASSIGN")))])
+def assign_owner(
+    objective_id: int = Path(..., description="Objective ID"),
+    owner_user_id: int = Query(..., description="New owner user ID"),
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.assign_owner(objective_id, owner_user_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=owner_user_id, action="objective_assign_owner", resource_type="objective", resource_id=str(objective_id), details={"owner_user_id": owner_user_id}))
+    db.commit()
+    return updated
+
+
+@router.post("/{objective_id}/submit", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def submit_for_approval(
+    objective_id: int = Path(..., description="Objective ID"),
+    notes: Optional[str] = Query(None, description="Submission notes"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.submit_for_approval(objective_id, current_user.id, notes)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_submit", resource_type="objective", resource_id=str(objective_id), details={"notes": notes}))
+    db.commit()
+    return updated
+
+
+@router.post("/{objective_id}/approve", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "APPROVE")))])
+def approve_objective(
+    objective_id: int = Path(..., description="Objective ID"),
+    notes: Optional[str] = Query(None, description="Approval notes"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.approve(objective_id, current_user.id, notes)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_approve", resource_type="objective", resource_id=str(objective_id), details={"notes": notes}))
+    db.commit()
+    return updated
+
+
+@router.post("/{objective_id}/reject", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "APPROVE")))])
+def reject_objective(
+    objective_id: int = Path(..., description="Objective ID"),
+    notes: Optional[str] = Query(None, description="Rejection notes"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.reject(objective_id, current_user.id, notes)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_reject", resource_type="objective", resource_id=str(objective_id), details={"notes": notes}))
+    db.commit()
+    return updated
+
+
+@router.post("/{objective_id}/close", response_model=Objective, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "UPDATE")))])
+def close_objective(
+    objective_id: int = Path(..., description="Objective ID"),
+    reason: Optional[str] = Query(None, description="Closure reason"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    service = ObjectivesServiceEnhanced(db)
+    updated = service.close(objective_id, current_user.id, reason)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objective not found")
+    db.add(AuditLog(user_id=current_user.id, action="objective_close", resource_type="objective", resource_id=str(objective_id), details={"reason": reason}))
+    db.commit()
+    return updated
+
+# =========================================================================
+# UTILITY ENDPOINTS
+# =========================================================================

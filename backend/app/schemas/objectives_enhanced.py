@@ -60,6 +60,24 @@ class ObjectiveBase(BaseModel):
     review_frequency: Optional[str] = Field(None, max_length=100, description="Review frequency")
     automated_calculation: bool = Field(False, description="Whether calculation is automated")
     data_source: DataSource = Field(DataSource.MANUAL, description="Data source for tracking")
+    
+    # ISO 6.2 planning & evaluation fields
+    owner_user_id: Optional[int] = Field(None, description="Objective owner user ID")
+    sponsor_user_id: Optional[int] = Field(None, description="Objective sponsor user ID")
+    method_of_evaluation: Optional[str] = Field(None, max_length=100, description="Method of evaluation")
+    acceptance_criteria: Optional[str] = Field(None, description="Acceptance criteria JSON/text")
+    resource_plan: Optional[str] = Field(None, description="Resource plan")
+    budget_estimate: Optional[float] = Field(None, description="Budget estimate")
+    budget_currency: Optional[str] = Field(None, max_length=10, description="Budget currency")
+    communication_plan: Optional[str] = Field(None, description="Communication plan")
+    linked_risk_ids: Optional[str] = Field(None, description="Linked risk IDs (JSON array)")
+    linked_control_ids: Optional[str] = Field(None, description="Linked control IDs (JSON array)")
+    linked_document_ids: Optional[str] = Field(None, description="Linked document IDs (JSON array)")
+    management_review_refs: Optional[str] = Field(None, description="Management review references (JSON array)")
+
+    # Workflow
+    approval_status: Optional[str] = Field(None, description="Workflow status: draft|pending|approved|rejected|closed")
+    approval_notes: Optional[str] = None
 
 
 class ObjectiveCreate(ObjectiveBase):
@@ -85,6 +103,24 @@ class ObjectiveUpdate(BaseModel):
     status: Optional[str] = Field(None, description="Objective status")
     automated_calculation: Optional[bool] = None
     data_source: Optional[DataSource] = None
+    
+    # ISO 6.2 fields
+    owner_user_id: Optional[int] = None
+    sponsor_user_id: Optional[int] = None
+    method_of_evaluation: Optional[str] = Field(None, max_length=100)
+    acceptance_criteria: Optional[str] = None
+    resource_plan: Optional[str] = None
+    budget_estimate: Optional[float] = None
+    budget_currency: Optional[str] = Field(None, max_length=10)
+    communication_plan: Optional[str] = None
+    linked_risk_ids: Optional[str] = None
+    linked_control_ids: Optional[str] = None
+    linked_document_ids: Optional[str] = None
+    management_review_refs: Optional[str] = None
+    
+    # Workflow fields
+    approval_status: Optional[str] = None
+    approval_notes: Optional[str] = None
 
 
 class Objective(ObjectiveBase):
@@ -106,6 +142,19 @@ class Objective(ObjectiveBase):
     department_name: Optional[str] = None
     parent_objective_title: Optional[str] = None
     
+    # Versioning
+    version: Optional[int] = None
+    superseded_by_id: Optional[int] = None
+    change_reason: Optional[str] = None
+    
+    # Workflow stamps
+    submitted_by_id: Optional[int] = None
+    submitted_at: Optional[datetime] = None
+    approved_by_id: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    closed_by_id: Optional[int] = None
+    closed_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -168,7 +217,7 @@ class ObjectiveProgressUpdate(BaseModel):
     evidence: Optional[str] = None
 
 
-class ObjectiveProgress(ObjectiveProgressBase):
+class ObjectiveProgress(BaseModel):
     id: int
     objective_id: int
     department_id: Optional[int] = None
@@ -180,6 +229,39 @@ class ObjectiveProgress(ObjectiveProgressBase):
     
     class Config:
         from_attributes = True
+
+
+class ObjectiveEvidenceBase(BaseModel):
+    notes: Optional[str] = None
+    progress_id: Optional[int] = None
+
+
+class ObjectiveEvidenceCreate(ObjectiveEvidenceBase):
+    pass
+
+
+class ObjectiveEvidence(BaseModel):
+    id: int
+    objective_id: int
+    progress_id: Optional[int] = None
+    file_path: str
+    original_filename: str
+    content_type: Optional[str] = None
+    file_size: Optional[int] = None
+    checksum: Optional[str] = None
+    notes: Optional[str] = None
+    uploaded_by: int
+    uploaded_at: datetime
+    is_verified: bool
+    verified_by: Optional[int] = None
+    verified_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ObjectiveEvidenceList(BaseModel):
+    data: List[ObjectiveEvidence]
 
 
 # Dashboard and analytics schemas
@@ -330,3 +412,18 @@ class ObjectivesExport(BaseModel):
     departments: List[Department]
     export_date: datetime
     export_format: str = "json"
+
+
+# Linkage schemas
+class ObjectiveLinks(BaseModel):
+    linked_risk_ids: List[int] = []
+    linked_control_ids: List[int] = []
+    linked_document_ids: List[int] = []
+    management_review_refs: List[int] = []
+
+
+class ObjectiveLinksUpdate(BaseModel):
+    linked_risk_ids: Optional[List[int]] = None
+    linked_control_ids: Optional[List[int]] = None
+    linked_document_ids: Optional[List[int]] = None
+    management_review_refs: Optional[List[int]] = None

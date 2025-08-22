@@ -70,6 +70,8 @@ class FoodSafetyObjective(Base):
     measurement_unit = Column(String(50))
     weight = Column(Float, default=1.0)  # Weight for KPI calculations
     measurement_frequency = Column(String(100))  # daily, weekly, monthly, quarterly, annually
+    start_date = Column(DateTime(timezone=True), nullable=True)
+    target_date = Column(DateTime(timezone=True), nullable=True)
     
     # Enhanced progress tracking
     trend_direction = Column(
@@ -101,9 +103,35 @@ class FoodSafetyObjective(Base):
     last_updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     last_updated_at = Column(DateTime(timezone=True), nullable=True)
 
+    # ISO 6.2 planning and evaluation fields
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sponsor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    method_of_evaluation = Column(String(100), nullable=True)
+    acceptance_criteria = Column(Text, nullable=True)  # JSON/text
+    resource_plan = Column(Text, nullable=True)
+    budget_estimate = Column(Float, nullable=True)
+    budget_currency = Column(String(10), nullable=True)
+    communication_plan = Column(Text, nullable=True)
+    linked_risk_ids = Column(Text, nullable=True)       # JSON array string
+    linked_control_ids = Column(Text, nullable=True)    # JSON array string
+    linked_document_ids = Column(Text, nullable=True)   # JSON array string
+    management_review_refs = Column(Text, nullable=True)  # JSON array string
+    version = Column(Integer, default=1)
+    superseded_by_id = Column(Integer, ForeignKey("food_safety_objectives.id"), nullable=True)
+    change_reason = Column(Text, nullable=True)
+
     # Relationships
-    parent_objective = relationship("FoodSafetyObjective", remote_side=[id], back_populates="child_objectives")
-    child_objectives = relationship("FoodSafetyObjective", back_populates="parent_objective")
+    parent_objective = relationship(
+        "FoodSafetyObjective",
+        remote_side=[id],
+        back_populates="child_objectives",
+        foreign_keys=[parent_objective_id]
+    )
+    child_objectives = relationship(
+        "FoodSafetyObjective",
+        back_populates="parent_objective",
+        foreign_keys=[parent_objective_id]
+    )
     department = relationship("Department", back_populates="objectives")
     responsible_person = relationship("User", foreign_keys=[responsible_person_id])
     created_by_user = relationship("User", foreign_keys=[created_by])
@@ -111,6 +139,28 @@ class FoodSafetyObjective(Base):
     fsms_integrations = relationship("FSMSRiskIntegration", back_populates="food_safety_objective")
     targets = relationship("ObjectiveTarget", back_populates="objective", cascade="all, delete-orphan")
     progress_entries = relationship("ObjectiveProgress", back_populates="objective", cascade="all, delete-orphan")
+    owner_user = relationship("User", foreign_keys=[owner_user_id])
+    sponsor_user = relationship("User", foreign_keys=[sponsor_user_id])
+    superseded_by = relationship(
+        "FoodSafetyObjective",
+        remote_side=[id],
+        foreign_keys=[superseded_by_id]
+    )
+
+    # Workflow / approvals
+    approval_status = Column(String(20), default="draft")  # draft, pending, approved, rejected, closed
+    submitted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    closure_reason = Column(Text, nullable=True)
+
+    submitted_by = relationship("User", foreign_keys=[submitted_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
+    closed_by = relationship("User", foreign_keys=[closed_by_id])
 
     __table_args__ = (
         Index("ix_objectives_hierarchy", "parent_objective_id", "objective_type"),
@@ -120,6 +170,35 @@ class FoodSafetyObjective(Base):
 
     def __repr__(self):
         return f"<FoodSafetyObjective(id={self.id}, code='{self.objective_code}', title='{self.title}', type='{self.objective_type}')>"
+
+
+class ObjectiveEvidence(Base):
+    __tablename__ = "objective_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    objective_id = Column(Integer, ForeignKey("food_safety_objectives.id", ondelete="CASCADE"), index=True, nullable=False)
+    progress_id = Column(Integer, ForeignKey("objective_progress.id", ondelete="SET NULL"), index=True, nullable=True)
+    file_path = Column(Text, nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    checksum = Column(String(128), nullable=True)
+    notes = Column(Text, nullable=True)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_verified = Column(Boolean, default=False)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    objective = relationship("FoodSafetyObjective", backref="evidence")
+    progress = relationship("ObjectiveProgress")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+    __table_args__ = (
+        Index("ix_objective_evidence_obj", "objective_id", "uploaded_at"),
+    )
 
 
 class ObjectiveTarget(Base):

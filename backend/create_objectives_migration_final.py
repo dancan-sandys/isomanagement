@@ -108,12 +108,40 @@ def create_migration():
             ("baseline_value", "REAL"),
             ("weight", "REAL DEFAULT 1.0"),
             ("measurement_frequency", "VARCHAR(100)"),
+            ("start_date", "TIMESTAMP"),
+            ("target_date", "TIMESTAMP"),
             ("trend_direction", "VARCHAR(50)"),
             ("performance_color", "VARCHAR(20)"),
             ("automated_calculation", "BOOLEAN DEFAULT 0"),
             ("data_source", "VARCHAR(50) DEFAULT 'manual'"),
             ("last_updated_by", "INTEGER"),
-            ("last_updated_at", "TIMESTAMP")
+            ("last_updated_at", "TIMESTAMP"),
+            # ISO 6.2 fields
+            ("owner_user_id", "INTEGER"),
+            ("sponsor_user_id", "INTEGER"),
+            ("method_of_evaluation", "VARCHAR(100)"),
+            ("acceptance_criteria", "TEXT"),
+            ("resource_plan", "TEXT"),
+            ("budget_estimate", "REAL"),
+            ("budget_currency", "VARCHAR(10)"),
+            ("communication_plan", "TEXT"),
+            ("linked_risk_ids", "TEXT"),
+            ("linked_control_ids", "TEXT"),
+            ("linked_document_ids", "TEXT"),
+            ("management_review_refs", "TEXT"),
+            ("version", "INTEGER DEFAULT 1"),
+            ("superseded_by_id", "INTEGER"),
+            ("change_reason", "TEXT"),
+            # Workflow fields
+            ("approval_status", "VARCHAR(20) DEFAULT 'draft'"),
+            ("submitted_by_id", "INTEGER"),
+            ("submitted_at", "TIMESTAMP"),
+            ("approved_by_id", "INTEGER"),
+            ("approved_at", "TIMESTAMP"),
+            ("approval_notes", "TEXT"),
+            ("closed_at", "TIMESTAMP"),
+            ("closed_by_id", "INTEGER"),
+            ("closure_reason", "TEXT"),
         ]
         
         for column_name, column_def in new_columns:
@@ -136,7 +164,10 @@ def create_migration():
             ("ix_department_users_period", "department_users (assigned_from, assigned_until)"),
             ("ix_objectives_hierarchy", "food_safety_objectives (parent_objective_id, objective_type)"),
             ("ix_objectives_department", "food_safety_objectives (department_id, objective_type)"),
-            ("ix_objectives_type_level", "food_safety_objectives (objective_type, hierarchy_level)")
+            ("ix_objectives_type_level", "food_safety_objectives (objective_type, hierarchy_level)"),
+            ("ix_objectives_status_created", "food_safety_objectives (status, created_at)"),
+            ("ix_objectives_status_next_review", "food_safety_objectives (status, next_review_date)"),
+            ("ix_objective_evidence_verification", "objective_evidence (objective_id, is_verified, uploaded_at)"),
         ]
         
         for index_name, index_def in indexes:

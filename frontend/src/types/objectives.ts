@@ -231,4 +231,30 @@ export interface ChartData {
   datasets: ChartDataset[];
 }
 
+// Evidence Types
+export interface ObjectiveEvidence {
+  id: number;
+  objective_id: number;
+  progress_id?: number | null;
+  file_path: string;
+  original_filename: string;
+  content_type?: string | null;
+  file_size?: number | null;
+  checksum?: string | null;
+  notes?: string | null;
+  uploaded_by: number;
+  uploaded_at: string;
+  is_verified: boolean;
+  verified_by?: number | null;
+  verified_at?: string | null;
+}
+export interface ObjectiveEvidenceList {
+  data: ObjectiveEvidence[];
+}
+export interface UploadEvidencePayload {
+  file: File;
+  notes?: string;
+  progress_id?: number;
+}
+
 // Export all types - Remove duplicate exports
