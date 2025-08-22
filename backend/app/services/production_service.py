@@ -17,6 +17,7 @@ from app.models.nonconformance import NonConformance, NonConformanceStatus, NonC
 from app.services.training_service import TrainingService
 from app.services.equipment_calibration_service import EquipmentCalibrationService
 from app.models.supplier import IncomingDelivery, Supplier, Material as SupplierMaterial
+from app.services import log_audit_event
 
 
 class ProductionService:
@@ -50,6 +51,17 @@ class ProductionService:
             self.db.add(ps)
         self.db.commit()
         self.db.refresh(process)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=operator_id,
+                action="process.created",
+                resource_type="production_process",
+                resource_id=str(process.id),
+                details={"batch_id": batch_id, "type": process_type.value}
+            )
+        except Exception:
+            pass
         return process
 
     def add_log(self, process_id: int, data: Dict[str, Any]) -> ProcessLog:
@@ -71,6 +83,18 @@ class ProductionService:
         self._evaluate_diversion(process, log)
         self.db.commit()
         self.db.refresh(log)
+        # Audit
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("created_by") or data.get("recorded_by") or process.operator_id,
+                action="process.log.added",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"log_id": log.id, "event": log.event.value}
+            )
+        except Exception:
+            pass
         return log
 
     def record_yield(self, process_id: int, output_qty: float, unit: str, expected_qty: Optional[float] = None) -> YieldRecord:
@@ -85,6 +109,17 @@ class ProductionService:
         self.db.add(yr)
         self.db.commit()
         self.db.refresh(yr)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=None,
+                action="process.yield.recorded",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"yield_id": yr.id, "qty": output_qty, "unit": unit}
+            )
+        except Exception:
+            pass
         return yr
 
     def record_transfer(self, process_id: int, quantity: float, unit: str, location: Optional[str], lot_number: Optional[str], verified_by: Optional[int]) -> ColdRoomTransfer:
@@ -99,6 +134,17 @@ class ProductionService:
         self.db.add(transfer)
         self.db.commit()
         self.db.refresh(transfer)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=verified_by,
+                action="process.transfer.recorded",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"transfer_id": transfer.id, "qty": quantity, "unit": unit}
+            )
+        except Exception:
+            pass
         return transfer
 
     def record_aging(self, process_id: int, data: Dict[str, Any]) -> AgingRecord:
@@ -116,6 +162,17 @@ class ProductionService:
         self.db.add(ar)
         self.db.commit()
         self.db.refresh(ar)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=None,
+                action="process.aging.recorded",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"aging_id": ar.id, "target_days": data.get("target_days")}
+            )
+        except Exception:
+            pass
         return ar
 
     def get_process(self, process_id: int) -> Optional[ProductionProcess]:
@@ -159,6 +216,17 @@ class ProductionService:
             pass
         self.db.commit()
         self.db.refresh(proc)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("updated_by") or proc.operator_id,
+                action="process.updated",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"changes": list(data.keys())}
+            )
+        except Exception:
+            pass
         return proc
 
     def get_analytics(self, product_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:
@@ -268,6 +336,17 @@ class ProductionService:
                         impact_area="food_safety"
                     )
                     nc_svc.create_non_conformance(nc_payload, reported_by=data.get("recorded_by") or process.operator_id or 1)
+                    try:
+                        log_audit_event(
+                            self.db,
+                            user_id=data.get("recorded_by") or process.operator_id,
+                            action="process.nc.auto_created",
+                            resource_type="production_process",
+                            resource_id=str(process_id),
+                            details={"parameter": data["parameter_name"], "value": value}
+                        )
+                    except Exception:
+                        pass
                 except Exception:
                     pass
         
@@ -288,6 +367,17 @@ class ProductionService:
         self.db.add(parameter)
         self.db.commit()
         self.db.refresh(parameter)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("recorded_by") or process.operator_id,
+                action="process.parameter.recorded",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"parameter_id": parameter.id, "name": parameter.parameter_name, "within_tol": is_within_tolerance}
+            )
+        except Exception:
+            pass
         return parameter
 
     def _create_deviation(self, process_id: int, parameter_data: Dict[str, Any]) -> ProcessDeviation:
@@ -312,6 +402,17 @@ class ProductionService:
         self.db.add(deviation)
         self.db.commit()
         self.db.refresh(deviation)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=parameter_data.get("created_by") or parameter_data.get("recorded_by"),
+                action="process.deviation.created",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"deviation_id": deviation.id, "type": deviation.deviation_type, "severity": deviation.severity}
+            )
+        except Exception:
+            pass
         return deviation
 
     def _calculate_severity(self, parameter_data: Dict[str, Any]) -> str:
@@ -343,6 +444,17 @@ class ProductionService:
         self.db.add(alert)
         self.db.commit()
         self.db.refresh(alert)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("created_by"),
+                action="process.alert.created",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"alert_id": alert.id, "type": alert.alert_type, "level": alert.alert_level}
+            )
+        except Exception:
+            pass
         return alert
 
     def acknowledge_alert(self, alert_id: int, user_id: int) -> ProcessAlert:
@@ -357,6 +469,17 @@ class ProductionService:
         
         self.db.commit()
         self.db.refresh(alert)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=user_id,
+                action="process.alert.acknowledged",
+                resource_type="production_process",
+                resource_id=str(alert.process_id),
+                details={"alert_id": alert.id}
+            )
+        except Exception:
+            pass
         return alert
 
     def resolve_deviation(self, deviation_id: int, user_id: int, corrective_action: str) -> ProcessDeviation:
@@ -372,6 +495,17 @@ class ProductionService:
         
         self.db.commit()
         self.db.refresh(deviation)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=user_id,
+                action="process.deviation.resolved",
+                resource_type="production_process",
+                resource_id=str(deviation.process_id),
+                details={"deviation_id": deviation.id}
+            )
+        except Exception:
+            pass
         return deviation
 
     def create_process_template(self, data: Dict[str, Any]) -> ProcessTemplate:
@@ -439,12 +573,16 @@ class ProductionService:
         total_alerts = alert_query.count()
         unacknowledged_alerts = alert_query.filter(ProcessAlert.acknowledged == False).count()
         
-        # Get process type breakdown
+        # Get process type breakdown (grouped query)
+        rows = (
+            self.db.query(ProductionProcess.process_type, func.count(ProductionProcess.id))
+            .group_by(ProductionProcess.process_type)
+            .all()
+        )
         process_breakdown = {}
-        for pt in ProductProcessType:
-            count = self.db.query(ProductionProcess).filter(ProductionProcess.process_type == pt).count()
-            if count > 0:
-                process_breakdown[pt.value] = count
+        for pt, cnt in rows:
+            key = pt.value if hasattr(pt, "value") else str(pt)
+            process_breakdown[key] = cnt
         
         # Trends: last 30 days
         try:
@@ -510,6 +648,17 @@ class ProductionService:
         self.db.add(mc)
         self.db.commit()
         self.db.refresh(mc)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("recorded_by") or process.operator_id,
+                action="process.material.consumed",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"consumption_id": mc.id, "material_id": mc.material_id, "qty": mc.quantity, "unit": mc.unit}
+            )
+        except Exception:
+            pass
         return mc
 
     # Spec binding and release
@@ -529,6 +678,17 @@ class ProductionService:
         self.db.add(link)
         self.db.commit()
         self.db.refresh(link)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=None,
+                action="process.spec.bound",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"document_id": document_id, "version": document_version}
+            )
+        except Exception:
+            pass
         return link
 
     def get_spec_link(self, process_id: int) -> Optional[ProcessSpecLink]:
@@ -623,6 +783,17 @@ class ProductionService:
             process.status = ProcessStatus.COMPLETED
         self.db.commit()
         self.db.refresh(record)
+        try:
+            log_audit_event(
+                self.db,
+                user_id=approver_id or verifier_id,
+                action="process.released",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"release_id": record.id, "qty": released_qty, "unit": unit}
+            )
+        except Exception:
+            pass
         return record
 
     def get_latest_release(self, process_id: int) -> Optional[ReleaseRecord]:

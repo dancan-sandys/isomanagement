@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Index
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -15,6 +15,12 @@ class AuditLog(Base):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_audit_logs_created_at", "created_at"),
+        Index("ix_audit_logs_resource", "resource_type", "resource_id"),
+        Index("ix_audit_logs_action", "action"),
+    )
 
 
 
