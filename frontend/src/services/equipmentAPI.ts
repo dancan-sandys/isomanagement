@@ -3,30 +3,30 @@ import api from './api';
 export const equipmentAPI = {
   // Equipment
   list: async () => {
-    const res = await api.get('/equipment');
+    const res = await api.get('/equipment/');
     return res.data;
   },
   create: async (payload: { name: string; equipment_type: string; serial_number?: string; location?: string; notes?: string }) => {
-    const res = await api.post('/equipment', payload);
+    const res = await api.post('/equipment/', payload);
     return res.data;
   },
   get: async (id: number) => {
-    const res = await api.get(`/equipment/${id}`);
+    const res = await api.get(`/equipment/${id}/`);
     return res.data;
   },
   update: async (id: number, payload: { name?: string; equipment_type?: string; serial_number?: string; location?: string; notes?: string }) => {
-    const res = await api.put(`/equipment/${id}`, payload);
+    const res = await api.put(`/equipment/${id}/`, payload);
     return res.data;
   },
   delete: async (id: number) => {
-    const res = await api.delete(`/equipment/${id}`);
+    const res = await api.delete(`/equipment/${id}/`);
     return res.data;
   },
 
   // Maintenance Plans
   listMaintenancePlans: async (equipmentId?: number) => {
     const params = equipmentId ? { equipment_id: equipmentId } : {};
-    const res = await api.get('/equipment/maintenance-plans', { params });
+    const res = await api.get('/equipment/maintenance-plans/', { params });
     return res.data;
   },
   createMaintenancePlan: async (equipmentId: number, payload: { frequency_days: number; maintenance_type: 'preventive'|'corrective'; notes?: string }) => {
@@ -44,11 +44,11 @@ export const equipmentAPI = {
 
   // Work Orders
   createWorkOrder: async (payload: { equipment_id: number; plan_id?: number; title: string; description?: string; priority?: 'LOW'|'MEDIUM'|'HIGH'; assigned_to?: number; due_date?: string }) => {
-    const res = await api.post('/equipment/work-orders', payload);
+    const res = await api.post('/equipment/work-orders/', payload);
     return res.data;
   },
   listWorkOrders: async (params?: { equipment_id?: number; plan_id?: number; status?: 'pending' | 'completed' }) => {
-    const res = await api.get('/equipment/work-orders', { params });
+    const res = await api.get('/equipment/work-orders/', { params });
     return res.data;
   },
   getWorkOrder: async (id: number) => {
