@@ -43,6 +43,15 @@ import {
   TimelineDot,
   TimelineOppositeContent
 } from '@mui/material';
+import { actionsLogAPI } from '../../services/actionsLogAPI';
+import { 
+  ActionLog, 
+  ActionLogCreate, 
+  ActionLogUpdate, 
+  ActionStatus, 
+  ActionPriority, 
+  ActionSource 
+} from '../../types/actionsLog';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -66,25 +75,7 @@ import {
   KeyboardArrowDown as PriorityLowIcon
 } from '@mui/icons-material';
 
-interface ActionLog {
-  id: number;
-  title: string;
-  description?: string;
-  source_type: 'interested_party' | 'swot_analysis' | 'pestel_analysis' | 'risk_assessment' | 'manual';
-  source_id?: number;
-  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  assigned_to?: number;
-  assigned_by?: number;
-  due_date?: string;
-  completed_date?: string;
-  created_at: string;
-  updated_at?: string;
-  progress_percentage: number;
-  assigned_user_name?: string;
-  assigned_by_name?: string;
-  source_name?: string;
-}
+// ActionLog interface is now imported from types
 
 interface ActionsLogManagementProps {
   onRefresh?: () => void;
@@ -122,11 +113,11 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    source_type: 'manual',
-    priority: 'medium',
-    status: 'open',
+    action_source: ActionSource.CONTINUOUS_IMPROVEMENT,
+    priority: ActionPriority.MEDIUM,
+    status: ActionStatus.PENDING,
     due_date: '',
-    progress_percentage: 0
+    progress_percent: 0
   });
 
   useEffect(() => {
@@ -137,64 +128,10 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     try {
       setLoading(true);
       setError(null);
-      // Mock data for now - replace with actual API call
-      const mockActions: ActionLog[] = [
-        {
-          id: 1,
-          title: 'Implement new food safety training program',
-          description: 'Develop and implement comprehensive food safety training for all production staff',
-          source_type: 'interested_party',
-          source_id: 1,
-          status: 'in_progress',
-          priority: 'high',
-          assigned_to: 1,
-          assigned_by: 2,
-          due_date: '2025-09-15',
-          created_at: '2025-08-20',
-          progress_percentage: 65,
-          assigned_user_name: 'John Doe',
-          assigned_by_name: 'Jane Smith',
-          source_name: 'Customer Feedback'
-        },
-        {
-          id: 2,
-          title: 'Update HACCP documentation',
-          description: 'Review and update all HACCP documentation to ensure compliance',
-          source_type: 'risk_assessment',
-          source_id: 2,
-          status: 'open',
-          priority: 'medium',
-          assigned_to: 3,
-          assigned_by: 1,
-          due_date: '2025-08-30',
-          created_at: '2025-08-18',
-          progress_percentage: 0,
-          assigned_user_name: 'Mike Johnson',
-          assigned_by_name: 'Admin User',
-          source_name: 'Risk Assessment'
-        },
-        {
-          id: 3,
-          title: 'Install new temperature monitoring system',
-          description: 'Install and configure new temperature monitoring system in production area',
-          source_type: 'swot_analysis',
-          source_id: 3,
-          status: 'completed',
-          priority: 'critical',
-          assigned_to: 4,
-          assigned_by: 1,
-          due_date: '2025-08-10',
-          completed_date: '2025-08-08',
-          created_at: '2025-08-01',
-          progress_percentage: 100,
-          assigned_user_name: 'Sarah Wilson',
-          assigned_by_name: 'Admin User',
-          source_name: 'SWOT Analysis'
-        }
-      ];
-      setActions(mockActions);
-    } catch (err) {
-      setError('Failed to load actions. Please try again.');
+      const actionsData = await actionsLogAPI.getActions();
+      setActions(actionsData);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load actions. Please try again.');
       console.error('Error loading actions:', err);
     } finally {
       setLoading(false);
@@ -206,11 +143,11 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     setFormData({
       title: '',
       description: '',
-      source_type: 'manual',
-      priority: 'medium',
-      status: 'open',
+      action_source: ActionSource.CONTINUOUS_IMPROVEMENT,
+      priority: ActionPriority.MEDIUM,
+      status: ActionStatus.PENDING,
       due_date: '',
-      progress_percentage: 0
+      progress_percent: 0
     });
     setDialogOpen(true);
   };
@@ -220,41 +157,49 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     setFormData({
       title: action.title,
       description: action.description || '',
-      source_type: action.source_type,
+      action_source: action.action_source,
       priority: action.priority,
       status: action.status,
       due_date: action.due_date || '',
-      progress_percentage: action.progress_percentage
+      progress_percent: action.progress_percent
     });
     setDialogOpen(true);
   };
 
   const handleSaveAction = async () => {
     try {
-      // Mock save - replace with actual API call
       if (editingAction) {
-        const updatedActions = actions.map(action =>
-          action.id === editingAction.id
-            ? { ...action, ...formData }
-            : action
-        );
-        setActions(updatedActions);
-      } else {
-        const newAction: ActionLog = {
-          id: Math.max(...actions.map(a => a.id)) + 1,
-          ...formData,
-          created_at: new Date().toISOString(),
-          assigned_user_name: 'Current User',
-          assigned_by_name: 'Current User',
-          source_name: 'Manual Entry'
+        // Update existing action
+        const updateData: ActionLogUpdate = {
+          title: formData.title,
+          description: formData.description,
+          status: formData.status,
+          priority: formData.priority,
+          due_date: formData.due_date || undefined,
+          progress_percent: formData.progress_percent
         };
+        const updatedAction = await actionsLogAPI.updateAction(editingAction.id, updateData);
+        setActions(actions.map(action =>
+          action.id === editingAction.id ? updatedAction : action
+        ));
+      } else {
+        // Create new action
+        const createData: ActionLogCreate = {
+          title: formData.title,
+          description: formData.description,
+          action_source: formData.action_source,
+          priority: formData.priority,
+          due_date: formData.due_date || undefined,
+          assigned_by: 1 // TODO: Get current user ID from auth context
+        };
+        const newAction = await actionsLogAPI.createAction(createData);
         setActions([...actions, newAction]);
       }
 
       setDialogOpen(false);
       if (onRefresh) onRefresh();
-    } catch (err) {
-      setError('Failed to save action. Please try again.');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to save action. Please try again.');
       console.error('Error saving action:', err);
     }
   };
@@ -263,65 +208,71 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     setActiveTab(newValue);
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: ActionStatus) => {
     switch (status) {
-      case 'completed':
+      case ActionStatus.COMPLETED:
         return 'success';
-      case 'in_progress':
+      case ActionStatus.IN_PROGRESS:
         return 'primary';
-      case 'open':
+      case ActionStatus.PENDING:
         return 'warning';
-      case 'cancelled':
+      case ActionStatus.CANCELLED:
         return 'error';
+      case ActionStatus.OVERDUE:
+        return 'error';
+      case ActionStatus.ON_HOLD:
+        return 'info';
       default:
         return 'default';
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: ActionPriority) => {
     switch (priority) {
-      case 'critical':
+      case ActionPriority.CRITICAL:
+      case ActionPriority.URGENT:
         return 'error';
-      case 'high':
+      case ActionPriority.HIGH:
         return 'warning';
-      case 'medium':
+      case ActionPriority.MEDIUM:
         return 'info';
-      case 'low':
+      case ActionPriority.LOW:
         return 'success';
       default:
         return 'default';
     }
   };
 
-  const getPriorityIcon = (priority: string) => {
+  const getPriorityIcon = (priority: ActionPriority) => {
     switch (priority) {
-      case 'critical':
-      case 'high':
+      case ActionPriority.CRITICAL:
+      case ActionPriority.URGENT:
+      case ActionPriority.HIGH:
         return <PriorityHighIcon />;
-      case 'low':
+      case ActionPriority.LOW:
         return <PriorityLowIcon />;
       default:
         return <AssignmentIcon />;
     }
   };
 
-  const getSourceIcon = (sourceType: string) => {
+  const getSourceIcon = (sourceType: ActionSource) => {
     switch (sourceType) {
-      case 'interested_party':
+      case ActionSource.INTERESTED_PARTY:
         return <PersonIcon />;
-      case 'swot_analysis':
+      case ActionSource.SWOT_ANALYSIS:
         return <BusinessIcon />;
-      case 'pestel_analysis':
+      case ActionSource.PESTEL_ANALYSIS:
         return <FlagIcon />;
-      case 'risk_assessment':
+      case ActionSource.RISK_ASSESSMENT:
         return <WarningIcon />;
       default:
         return <AssignmentIcon />;
     }
   };
 
-  const formatSourceType = (sourceType: string) => {
-    return sourceType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const formatSourceType = (sourceType: ActionSource) => {
+    return sourceType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const filteredActions = () => {
@@ -329,14 +280,14 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
       case 0: // All Actions
         return actions;
       case 1: // Open
-        return actions.filter(action => action.status === 'open');
+        return actions.filter(action => action.status === ActionStatus.PENDING);
       case 2: // In Progress
-        return actions.filter(action => action.status === 'in_progress');
+        return actions.filter(action => action.status === ActionStatus.IN_PROGRESS);
       case 3: // Completed
-        return actions.filter(action => action.status === 'completed');
+        return actions.filter(action => action.status === ActionStatus.COMPLETED);
       case 4: // Overdue
         return actions.filter(action => 
-          action.status !== 'completed' && 
+          action.status !== ActionStatus.COMPLETED && 
           action.due_date && 
           new Date(action.due_date) < new Date()
         );
@@ -396,13 +347,13 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                   <CardContent>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                       <Box display="flex" alignItems="center">
-                        {getSourceIcon(action.source_type)}
+                        {getSourceIcon(action.action_source)}
                         <Typography variant="h6" sx={{ ml: 1, maxWidth: '70%' }}>
                           {action.title}
                         </Typography>
                       </Box>
                       <Chip
-                        label={action.status.replace('_', ' ')}
+                        label={action.status.replace(/_/g, ' ')}
                         color={getStatusColor(action.status) as any}
                         size="small"
                       />
@@ -425,13 +376,13 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                           Progress
                         </Typography>
                         <Typography variant="body2">
-                          {action.progress_percentage}%
+                          {action.progress_percent}%
                         </Typography>
                       </Box>
                       <LinearProgress 
                         variant="determinate" 
-                        value={action.progress_percentage}
-                        color={action.progress_percentage === 100 ? 'success' : 'primary'}
+                        value={action.progress_percent}
+                        color={action.progress_percent === 100 ? 'success' : 'primary'}
                       />
                     </Box>
 
@@ -443,7 +394,7 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                         size="small"
                       />
                       <Chip
-                        label={formatSourceType(action.source_type)}
+                        label={formatSourceType(action.action_source)}
                         size="small"
                         variant="outlined"
                       />
@@ -494,13 +445,13 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                   <CardContent>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                       <Box display="flex" alignItems="center">
-                        {getSourceIcon(action.source_type)}
+                        {getSourceIcon(action.action_source)}
                         <Typography variant="h6" sx={{ ml: 1, maxWidth: '70%' }}>
                           {action.title}
                         </Typography>
                       </Box>
                       <Chip
-                        label={action.status.replace('_', ' ')}
+                        label={action.status.replace(/_/g, ' ')}
                         color={getStatusColor(action.status) as any}
                         size="small"
                       />
@@ -545,13 +496,13 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                   <CardContent>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                       <Box display="flex" alignItems="center">
-                        {getSourceIcon(action.source_type)}
+                        {getSourceIcon(action.action_source)}
                         <Typography variant="h6" sx={{ ml: 1, maxWidth: '70%' }}>
                           {action.title}
                         </Typography>
                       </Box>
                       <Chip
-                        label={action.status.replace('_', ' ')}
+                        label={action.status.replace(/_/g, ' ')}
                         color={getStatusColor(action.status) as any}
                         size="small"
                       />
@@ -563,12 +514,12 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                           Progress
                         </Typography>
                         <Typography variant="body2">
-                          {action.progress_percentage}%
+                          {action.progress_percent}%
                         </Typography>
                       </Box>
                       <LinearProgress 
                         variant="determinate" 
-                        value={action.progress_percentage}
+                        value={action.progress_percent}
                         color="primary"
                       />
                     </Box>
@@ -621,11 +572,11 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                       {action.description}
                     </Typography>
 
-                    {action.completed_date && (
+                    {action.completed_at && (
                       <Box display="flex" alignItems="center" mb={2}>
                         <CheckCircleIcon color="success" sx={{ mr: 1 }} />
                         <Typography variant="body2" color="text.secondary">
-                          Completed: {new Date(action.completed_date).toLocaleDateString()}
+                          Completed: {new Date(action.completed_at).toLocaleDateString()}
                         </Typography>
                       </Box>
                     )}
@@ -736,15 +687,21 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
               <FormControl fullWidth margin="normal">
                 <InputLabel>Source Type</InputLabel>
                 <Select
-                  value={formData.source_type}
-                  onChange={(e) => setFormData({ ...formData, source_type: e.target.value })}
+                  value={formData.action_source}
+                  onChange={(e) => setFormData({ ...formData, action_source: e.target.value as ActionSource })}
                   label="Source Type"
                 >
-                  <MenuItem value="manual">Manual Entry</MenuItem>
-                  <MenuItem value="interested_party">Interested Party</MenuItem>
-                  <MenuItem value="swot_analysis">SWOT Analysis</MenuItem>
-                  <MenuItem value="pestel_analysis">PESTEL Analysis</MenuItem>
-                  <MenuItem value="risk_assessment">Risk Assessment</MenuItem>
+                  <MenuItem value={ActionSource.CONTINUOUS_IMPROVEMENT}>Continuous Improvement</MenuItem>
+                  <MenuItem value={ActionSource.INTERESTED_PARTY}>Interested Party</MenuItem>
+                  <MenuItem value={ActionSource.SWOT_ANALYSIS}>SWOT Analysis</MenuItem>
+                  <MenuItem value={ActionSource.PESTEL_ANALYSIS}>PESTEL Analysis</MenuItem>
+                  <MenuItem value={ActionSource.RISK_ASSESSMENT}>Risk Assessment</MenuItem>
+                  <MenuItem value={ActionSource.AUDIT_FINDING}>Audit Finding</MenuItem>
+                  <MenuItem value={ActionSource.NON_CONFORMANCE}>Non Conformance</MenuItem>
+                  <MenuItem value={ActionSource.MANAGEMENT_REVIEW}>Management Review</MenuItem>
+                  <MenuItem value={ActionSource.COMPLAINT}>Complaint</MenuItem>
+                  <MenuItem value={ActionSource.REGULATORY}>Regulatory</MenuItem>
+                  <MenuItem value={ActionSource.STRATEGIC_PLANNING}>Strategic Planning</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -753,13 +710,14 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                 <InputLabel>Priority</InputLabel>
                 <Select
                   value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as ActionPriority })}
                   label="Priority"
                 >
-                  <MenuItem value="low">Low</MenuItem>
-                  <MenuItem value="medium">Medium</MenuItem>
-                  <MenuItem value="high">High</MenuItem>
-                  <MenuItem value="critical">Critical</MenuItem>
+                  <MenuItem value={ActionPriority.LOW}>Low</MenuItem>
+                  <MenuItem value={ActionPriority.MEDIUM}>Medium</MenuItem>
+                  <MenuItem value={ActionPriority.HIGH}>High</MenuItem>
+                  <MenuItem value={ActionPriority.CRITICAL}>Critical</MenuItem>
+                  <MenuItem value={ActionPriority.URGENT}>Urgent</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -768,13 +726,15 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                 <InputLabel>Status</InputLabel>
                 <Select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as ActionStatus })}
                   label="Status"
                 >
-                  <MenuItem value="open">Open</MenuItem>
-                  <MenuItem value="in_progress">In Progress</MenuItem>
-                  <MenuItem value="completed">Completed</MenuItem>
-                  <MenuItem value="cancelled">Cancelled</MenuItem>
+                  <MenuItem value={ActionStatus.PENDING}>Pending</MenuItem>
+                  <MenuItem value={ActionStatus.IN_PROGRESS}>In Progress</MenuItem>
+                  <MenuItem value={ActionStatus.COMPLETED}>Completed</MenuItem>
+                  <MenuItem value={ActionStatus.CANCELLED}>Cancelled</MenuItem>
+                  <MenuItem value={ActionStatus.ON_HOLD}>On Hold</MenuItem>
+                  <MenuItem value={ActionStatus.OVERDUE}>Overdue</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -794,8 +754,8 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                 fullWidth
                 label="Progress Percentage"
                 type="number"
-                value={formData.progress_percentage}
-                onChange={(e) => setFormData({ ...formData, progress_percentage: parseInt(e.target.value) })}
+                value={formData.progress_percent}
+                onChange={(e) => setFormData({ ...formData, progress_percent: parseInt(e.target.value) })}
                 margin="normal"
                 inputProps={{ min: 0, max: 100 }}
               />
