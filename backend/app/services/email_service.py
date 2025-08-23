@@ -20,13 +20,13 @@ class EmailService:
     """
     
     def __init__(self):
-        self.enabled = getattr(settings, 'EMAIL_ENABLED', False)
-        self.smtp_host = getattr(settings, 'SMTP_HOST', 'localhost')
+        self.enabled = getattr(settings, 'EMAIL_ENABLED', True)  # Default to True
+        self.smtp_host = getattr(settings, 'SMTP_HOST', 'smtp.gmail.com')
         self.smtp_port = getattr(settings, 'SMTP_PORT', 587)
-        self.smtp_username = getattr(settings, 'SMTP_USERNAME', '')
+        self.smtp_username = getattr(settings, 'SMTP_USER', '')  # Use SMTP_USER instead of SMTP_USERNAME
         self.smtp_password = getattr(settings, 'SMTP_PASSWORD', '')
         self.from_email = getattr(settings, 'FROM_EMAIL', 'noreply@iso-system.com')
-        self.from_name = getattr(settings, 'FROM_NAME', 'ISO Management System')
+        self.from_name = getattr(settings, 'FROM_NAME', 'ISO 22000 FSMS')
         
         # Priority threshold for email notifications
         self.email_priority_threshold = NotificationPriority.MEDIUM

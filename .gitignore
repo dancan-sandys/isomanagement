@@ -160,5 +160,5 @@ tmp/
 *.backup
 *.old
 
-
-
+*.db-shm
+*.db-wal
