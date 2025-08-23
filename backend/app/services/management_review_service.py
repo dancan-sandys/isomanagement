@@ -16,6 +16,8 @@ from app.schemas.management_review import (
     DataCollectionRequest, ComplianceCheckResponse
 )
 from app.services.management_review_data_aggregation_service import ManagementReviewDataAggregationService
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 
 class ManagementReviewService:
@@ -290,12 +292,13 @@ class ManagementReviewService:
 
     # ==================== ENHANCED ACTION MANAGEMENT ====================
     
-    def add_action(self, review_id: int, payload: ReviewActionCreate) -> ReviewAction:
-        """Add an enhanced action to a review"""
+    def add_action(self, review_id: int, payload: ReviewActionCreate, created_by: int = 1) -> ReviewAction:
+        """Add an enhanced action to a review and sync with actions log"""
         review = self.get(review_id)
         if not review:
             raise ValueError("Management review not found")
         
+        # Create the review action first
         action = ReviewAction(
             review_id=review_id,
             title=payload.title,
@@ -310,12 +313,58 @@ class ManagementReviewService:
         )
         
         self.db.add(action)
+        self.db.flush()  # Get the ID without committing
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Map management review priority to actions log priority
+        priority_mapping = {
+            "low": "low",
+            "medium": "medium", 
+            "high": "high",
+            "critical": "critical"
+        }
+        
+        # Map management review status to actions log status
+        status_mapping = {
+            "assigned": "pending",
+            "in_progress": "in_progress",
+            "completed": "completed",
+            "overdue": "overdue",
+            "cancelled": "cancelled"
+        }
+        
+        action_log_data = {
+            "title": payload.title,
+            "description": payload.description or "",
+            "action_source": ActionSource.MANAGEMENT_REVIEW.value,
+            "source_id": action.id,  # Link back to the review action
+            "priority": priority_mapping.get(payload.priority.value if hasattr(payload.priority, 'value') else str(payload.priority), "medium"),
+            "status": status_mapping.get(action.status.value if hasattr(action.status, 'value') else str(action.status), "pending"),
+            "assigned_to": payload.assigned_to,
+            "assigned_by": created_by,
+            "due_date": payload.due_date,
+            "estimated_hours": payload.estimated_effort_hours,
+            "notes": f"Action from Management Review: {review.title}",
+            "tags": {
+                "review_id": review_id,
+                "review_title": review.title,
+                "action_type": payload.action_type.value if hasattr(payload.action_type, 'value') else str(payload.action_type) if payload.action_type else None
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the review action
+        action.action_log_id = action_log.id
+        
         self.db.commit()
         self.db.refresh(action)
         return action
 
     def update_action(self, action_id: int, payload: ReviewActionUpdate) -> ReviewAction:
-        """Update an action with enhanced tracking"""
+        """Update an action with enhanced tracking and sync with actions log"""
         action = self.db.query(ReviewAction).filter(ReviewAction.id == action_id).first()
         if not action:
             raise ValueError("Action not found")
@@ -330,12 +379,60 @@ class ManagementReviewService:
             action.status = ActionStatus.OVERDUE
         
         action.updated_at = datetime.utcnow()
+        
+        # Sync changes to actions log if linked
+        if action.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            
+            # Map status and priority
+            priority_mapping = {
+                "low": "low",
+                "medium": "medium", 
+                "high": "high",
+                "critical": "critical"
+            }
+            
+            status_mapping = {
+                "assigned": "pending",
+                "in_progress": "in_progress",
+                "completed": "completed",
+                "overdue": "overdue",
+                "cancelled": "cancelled"
+            }
+            
+            update_data = {}
+            if 'title' in data:
+                update_data['title'] = data['title']
+            if 'description' in data:
+                update_data['description'] = data['description']
+            if 'assigned_to' in data:
+                update_data['assigned_to'] = data['assigned_to']
+            if 'due_date' in data:
+                update_data['due_date'] = data['due_date']
+            if 'priority' in data:
+                update_data['priority'] = priority_mapping.get(
+                    data['priority'].value if hasattr(data['priority'], 'value') else str(data['priority']), 
+                    "medium"
+                )
+            if 'status' in data or action.status:
+                update_data['status'] = status_mapping.get(
+                    action.status.value if hasattr(action.status, 'value') else str(action.status), 
+                    "pending"
+                )
+            if 'progress_percentage' in data:
+                update_data['progress_percent'] = data['progress_percentage']
+            if 'estimated_effort_hours' in data:
+                update_data['estimated_hours'] = data['estimated_effort_hours']
+            
+            if update_data:
+                actions_log_service.update_action(action.action_log_id, update_data)
+        
         self.db.commit()
         self.db.refresh(action)
         return action
 
     def complete_action(self, action_id: int, completed_by: int) -> ReviewAction:
-        """Complete an action with enhanced tracking"""
+        """Complete an action with enhanced tracking and sync with actions log"""
         action = self.db.query(ReviewAction).filter(ReviewAction.id == action_id).first()
         if not action:
             raise ValueError("Action not found")
@@ -345,6 +442,14 @@ class ManagementReviewService:
         action.completed_by = completed_by
         action.status = ActionStatus.COMPLETED
         action.progress_percentage = 100.0
+        
+        # Sync completion to actions log if linked
+        if action.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            actions_log_service.update_action(action.action_log_id, {
+                "status": "completed",
+                "progress_percent": 100.0
+            })
         
         self.db.commit()
         self.db.refresh(action)
