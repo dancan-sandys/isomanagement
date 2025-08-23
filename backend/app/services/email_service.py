@@ -6,9 +6,10 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from app.models.notification import Notification, NotificationPriority, NotificationType
+from app.models.notification import Notification, NotificationPriority, NotificationType, NotificationCategory
 from app.models.user import User
 from app.core.config import settings
+from app.services.email_templates import EmailTemplates
 
 logger = logging.getLogger(__name__)
 
@@ -62,42 +63,58 @@ class EmailService:
     
     def format_email_content(self, notification: Notification) -> Dict[str, str]:
         """
-        Format notification content for email
+        Format notification content for email using templates
         """
-        # Create HTML and plain text versions
-        html_content = f"""
-        <html>
-        <body>
-            <h2>{notification.title}</h2>
-            <p><strong>Priority:</strong> {notification.priority.value.upper()}</p>
-            <p><strong>Type:</strong> {notification.notification_type.value.upper()}</p>
-            <p><strong>Category:</strong> {notification.category.value.upper()}</p>
-            <hr>
-            <p>{notification.message}</p>
-            <hr>
-            <p><small>Sent at: {notification.created_at.strftime('%Y-%m-%d %H:%M:%S')}</small></p>
-            <p><small>This is an automated notification from the ISO Management System.</small></p>
-        </body>
-        </html>
-        """
+        # Determine template based on notification category and type
+        template_name = self._get_template_name(notification)
         
-        plain_content = f"""
-{notification.title}
-
-Priority: {notification.priority.value.upper()}
-Type: {notification.notification_type.value.upper()}
-Category: {notification.category.value.upper()}
-
-{notification.message}
-
-Sent at: {notification.created_at.strftime('%Y-%m-%d %H:%M:%S')}
-This is an automated notification from the ISO Management System.
-        """
-        
-        return {
-            "html": html_content,
-            "plain": plain_content
+        # Prepare template data
+        template_data = {
+            'title': notification.title,
+            'message': notification.message,
+            'priority': notification.priority.value,
+            'type': notification.notification_type.value,
+            'category': notification.category.value,
+            'created_at': notification.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'action_url': notification.action_url,
+            'action_text': notification.action_text,
         }
+        
+        # Add notification data if available
+        if notification.notification_data:
+            template_data.update(notification.notification_data)
+        
+        # Get template content
+        return EmailTemplates.get_template(template_name, template_data)
+    
+    def _get_template_name(self, notification: Notification) -> str:
+        """
+        Determine which template to use based on notification properties
+        """
+        # HACCP alerts
+        if notification.category == NotificationCategory.HACCP:
+            if notification.priority in [NotificationPriority.HIGH, NotificationPriority.CRITICAL]:
+                return 'haccp_alert'
+            return 'default'
+        
+        # Document approvals
+        if notification.category == NotificationCategory.DOCUMENT:
+            if 'approval' in notification.title.lower() or 'approve' in notification.title.lower():
+                return 'document_approval'
+            if 'expiry' in notification.title.lower() or 'expire' in notification.title.lower():
+                return 'document_expiry'
+            return 'default'
+        
+        # Audit notifications
+        if notification.category == NotificationCategory.AUDIT:
+            return 'audit_notification'
+        
+        # Training reminders
+        if notification.category == NotificationCategory.TRAINING:
+            return 'training_reminder'
+        
+        # Default template
+        return 'default'
     
     def send_email(self, to_email: str, subject: str, html_content: str, plain_content: str) -> bool:
         """
