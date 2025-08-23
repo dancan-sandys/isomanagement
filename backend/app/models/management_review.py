@@ -136,6 +136,7 @@ class ReviewAction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     review_id = Column(Integer, ForeignKey("management_reviews.id"), nullable=False)
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)  # Link to actions log
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -173,6 +174,7 @@ class ReviewAction(Base):
 
     # Relationships
     review = relationship("ManagementReview", back_populates="actions")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     assignee = relationship("User", foreign_keys=[assigned_to])
     completer = relationship("User", foreign_keys=[completed_by])
     verifier = relationship("User", foreign_keys=[verified_by])

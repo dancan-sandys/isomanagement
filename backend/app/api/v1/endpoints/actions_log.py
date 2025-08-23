@@ -135,3 +135,40 @@ def get_recent_actions(limit: int = Query(10, ge=1, le=50), db: Session = Depend
     service = ActionsLogService(db)
     actions = service.list_actions(limit=limit)
     return actions
+
+
+@router.get("/by-source/{source}")
+def get_actions_by_source(
+    source: ActionSource,
+    source_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get actions by source type and optionally by source ID"""
+    service = ActionsLogService(db)
+    actions = service.list_actions(source=source, limit=100)
+    
+    if source_id:
+        actions = [action for action in actions if hasattr(action, 'source_id') and action.source_id == source_id]
+    
+    return actions
+
+
+@router.get("/management-review/{review_id}")
+def get_management_review_actions(review_id: int, db: Session = Depends(get_db)):
+    """Get all actions linked to a specific management review"""
+    service = ActionsLogService(db)
+    actions = service.list_actions(source=ActionSource.MANAGEMENT_REVIEW, limit=100)
+    
+    # Filter by review ID using tags or source_id
+    review_actions = []
+    for action in actions:
+        # Check if action is linked to this review through tags
+        if hasattr(action, 'tags') and action.tags and action.tags.get('review_id') == review_id:
+            review_actions.append(action)
+        # Also check source_id if it matches a review action
+        elif hasattr(action, 'source_id') and action.source_id:
+            # We'd need to check if the source_id corresponds to a review action from this review
+            # For now, we'll rely on tags
+            pass
+    
+    return review_actions
