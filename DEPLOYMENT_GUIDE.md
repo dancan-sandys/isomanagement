@@ -4,6 +4,8 @@
 
 This guide will walk you through deploying your ISO 22000 Food Safety Management System to DigitalOcean App Platform. The deployment includes:
 
+> **Note**: This project no longer uses Docker containers. For the complete DigitalOcean App Platform deployment guide without Docker, see [DIGITALOCEAN_DEPLOYMENT_GUIDE.md](./DIGITALOCEAN_DEPLOYMENT_GUIDE.md).
+
 - **Backend API**: FastAPI application with PostgreSQL database
 - **Frontend**: React application served by nginx
 - **Database**: Managed PostgreSQL cluster
