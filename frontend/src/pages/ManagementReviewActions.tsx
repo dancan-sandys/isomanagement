@@ -15,9 +15,13 @@ import {
   FilterList as FilterIcon, Download as DownloadIcon, Add as AddIcon
 } from '@mui/icons-material';
 import managementReviewAPI, { ReviewActionPayload } from '../services/managementReviewAPI';
+import { actionsLogAPI } from '../services/actionsLogAPI';
+import { ActionLog } from '../types/actionsLog';
 
 const ManagementReviewActions: React.FC = () => {
   const [actions, setActions] = useState<any[]>([]);
+  const [actionsLogEntries, setActionsLogEntries] = useState<ActionLog[]>([]);
+  const [showActionsLog, setShowActionsLog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -87,8 +91,18 @@ const ManagementReviewActions: React.FC = () => {
     }
   };
 
+  const loadActionsLogEntries = async () => {
+    try {
+      const allActionsLogEntries = await actionsLogAPI.getActionsBySource('management_review');
+      setActionsLogEntries(allActionsLogEntries);
+    } catch (e: any) {
+      console.error('Failed to load actions log entries:', e);
+    }
+  };
+
   useEffect(() => {
     loadActions();
+    loadActionsLogEntries();
   }, [statusFilter, priorityFilter, overdueOnly]);
 
   const handleSelectAction = (actionId: number) => {
@@ -183,6 +197,15 @@ const ManagementReviewActions: React.FC = () => {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showActionsLog}
+                onChange={(e) => setShowActionsLog(e.target.checked)}
+              />
+            }
+            label="Show Actions Log View"
+          />
           <Button variant="outlined" startIcon={<DownloadIcon />}>
             Export
           </Button>
@@ -313,6 +336,66 @@ const ManagementReviewActions: React.FC = () => {
 
       {loading && <LinearProgress sx={{ mb: 2 }} />}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {/* Actions Log Section */}
+      {showActionsLog && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Actions Log Entries from Management Reviews
+          </Typography>
+          <Grid container spacing={2}>
+            {actionsLogEntries.map((logEntry) => (
+              <Grid item xs={12} md={6} lg={4} key={logEntry.id}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                      <Typography variant="h6" sx={{ maxWidth: '70%' }}>
+                        {logEntry.title}
+                      </Typography>
+                      <Chip
+                        label={logEntry.status.replace(/_/g, ' ')}
+                        color={logEntry.status === 'completed' ? 'success' : 
+                               logEntry.status === 'in_progress' ? 'primary' : 
+                               logEntry.status === 'overdue' ? 'error' : 'warning'}
+                        size="small"
+                      />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {logEntry.description}
+                    </Typography>
+                    <Box display="flex" alignItems="center" mb={2}>
+                      <PersonIcon color="action" sx={{ mr: 1 }} />
+                      <Typography variant="body2">
+                        {logEntry.assigned_user_name || 'Unassigned'}
+                      </Typography>
+                    </Box>
+                    <Box mb={2}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Progress
+                        </Typography>
+                        <Typography variant="body2">
+                          {logEntry.progress_percent}%
+                        </Typography>
+                      </Box>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={logEntry.progress_percent}
+                        color={logEntry.progress_percent === 100 ? 'success' : 'primary'}
+                      />
+                    </Box>
+                    {logEntry.tags?.review_title && (
+                      <Typography variant="caption" color="text.secondary">
+                        From: {logEntry.tags.review_title}
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+      )}
 
       {/* Actions Table */}
       <Paper>

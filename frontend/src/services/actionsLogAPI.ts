@@ -90,6 +90,19 @@ export const actionsLogAPI = {
   addProgressUpdate: async (actionId: number, progressData: any) => {
     const response: AxiosResponse = await api.post(`/actions-log/actions/${actionId}/progress`, progressData);
     return response.data;
+  },
+
+  // Management Review Integration
+  getActionsBySource: async (source: string, sourceId?: number) => {
+    const response: AxiosResponse = await api.get(`/actions-log/by-source/${source}`, {
+      params: sourceId ? { source_id: sourceId } : {}
+    });
+    return response.data as ActionLog[];
+  },
+
+  getManagementReviewActions: async (reviewId: number) => {
+    const response: AxiosResponse = await api.get(`/actions-log/management-review/${reviewId}`);
+    return response.data as ActionLog[];
   }
 };
 
