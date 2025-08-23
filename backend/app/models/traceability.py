@@ -334,6 +334,9 @@ class RecallAction(Base):
     results = Column(Text)
     evidence_files = Column(Text)  # JSON array of file paths
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -341,6 +344,7 @@ class RecallAction(Base):
     
     # Relationships
     recall = relationship("Recall", back_populates="actions")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<RecallAction(id={self.id}, recall_id={self.recall_id}, action_type='{self.action_type}')>"

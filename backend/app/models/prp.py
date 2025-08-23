@@ -563,6 +563,9 @@ class CorrectiveAction(Base):
     approved_by = Column(Integer, ForeignKey("users.id"))
     approved_at = Column(DateTime(timezone=True))
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -571,6 +574,7 @@ class CorrectiveAction(Base):
     # Relationships
     checklist = relationship("PRPChecklist")
     program = relationship("PRPProgram")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<CorrectiveAction(id={self.id}, action_code='{self.action_code}')>"
@@ -629,6 +633,9 @@ class PRPPreventiveAction(Base):
     approved_by = Column(Integer, ForeignKey("users.id"))
     approved_at = Column(DateTime(timezone=True))
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -636,6 +643,7 @@ class PRPPreventiveAction(Base):
     
     # Relationships
     program = relationship("PRPProgram")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<PRPPreventiveAction(id={self.id}, action_code='{self.action_code}')>" 

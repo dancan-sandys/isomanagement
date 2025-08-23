@@ -50,6 +50,14 @@ class Complaint(Base):
     non_conformance_id = Column(Integer, ForeignKey("non_conformances.id"))
 
     attachments = Column(JSON)
+    
+    # Resolution information
+    resolution_description = Column(Text)
+    resolved_by = Column(Integer, ForeignKey("users.id"))
+    resolved_at = Column(DateTime(timezone=True))
+    
+    # Action log integration for complaint resolution actions
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -58,6 +66,7 @@ class Complaint(Base):
     # Relationships
     communications = relationship("ComplaintCommunication", back_populates="complaint", cascade="all, delete-orphan")
     investigation = relationship("ComplaintInvestigation", back_populates="complaint", uselist=False, cascade="all, delete-orphan")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
 
     def __repr__(self):
         return f"<Complaint(id={self.id}, number='{self.complaint_number}', customer='{self.customer_name}')>"

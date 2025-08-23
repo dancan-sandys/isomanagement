@@ -22,8 +22,14 @@ def run_migration():
         "immediate_actions", # Non-Conformance Immediate Actions  
         "preventive_actions", # Non-Conformance Preventive Actions
         "risk_actions",    # Risk Management Actions
-        "audit_findings",  # Audit Findings (assuming this table exists)
-        "audit_actions"    # Audit Corrective Actions (if exists)
+        "audit_findings",  # Audit Findings
+        "prp_corrective_actions", # PRP Corrective Actions
+        "prp_preventive_actions", # PRP Preventive Actions
+        "complaints",      # Complaint resolutions
+        "recall_actions",  # Recall Actions
+        "training_records", # Training Actions (if table exists)
+        "supplier_evaluations", # Supplier Actions (if table exists)
+        "haccp_monitoring_records", # HACCP Actions (if table exists)
     ]
     
     try:
