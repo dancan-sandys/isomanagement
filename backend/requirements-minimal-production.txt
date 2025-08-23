@@ -1,11 +1,14 @@
+# Production requirements for ISO 22000 FSMS - Minimal version without pandas
+# This avoids compilation issues while maintaining core functionality
+
 # FastAPI and ASGI server
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
-# Database (updated for Python 3.13 compatibility)
+# Database
 sqlalchemy==2.0.42
 alembic==1.12.1
-# psycopg2-binary==2.9.9  # Only needed for PostgreSQL in production
+psycopg2-binary==2.9.9  # PostgreSQL adapter for production
 
 # Authentication and security
 python-jose[cryptography]==3.3.0
@@ -13,14 +16,13 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.6
 
-# Pydantic for data validation (versions with Python 3.13 wheels)
+# Pydantic for data validation
 pydantic==2.10.4
 pydantic-settings==2.5.2
 
 # File handling and storage
 python-magic==0.4.27
 boto3==1.34.0
-# Bump Pillow for Python 3.13 compatibility
 Pillow==10.4.0
 
 # Email and notifications
@@ -29,10 +31,9 @@ fastapi-mail==1.4.1
 # Date and time handling
 python-dateutil==2.8.2
 
-# Excel and PDF generation
+# Excel generation (without pandas)
 openpyxl==3.1.2
 reportlab==4.0.7
-pandas==2.0.3
 
 # QR code generation
 qrcode[pil]==7.4.2
@@ -41,7 +42,6 @@ qrcode[pil]==7.4.2
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
-psutil==5.9.8
 
 # Development tools
 python-dotenv==1.0.0
@@ -53,4 +53,7 @@ flake8==6.1.0
 structlog==23.2.0
 
 # CORS
-fastapi-cors==0.0.6 
+fastapi-cors==0.0.6
+
+# Production specific
+gunicorn==21.2.0
