@@ -30,7 +30,6 @@ import {
   Alert,
   CircularProgress,
   Tooltip,
-  Badge,
   List,
   ListItem,
   ListItemText,
@@ -39,26 +38,17 @@ import {
 } from '@mui/material';
 import {
   Add,
-  PlayArrow,
-  Stop,
   Warning,
-  CheckCircle,
   Error,
   Info,
-  Timeline,
   Science,
-  Settings,
   Refresh,
   Visibility,
   Edit,
-  Delete,
 } from '@mui/icons-material';
 import productionAPI, {
   ProcessCreatePayload,
   ProcessParameterPayload,
-  ProcessDeviationPayload,
-  ProcessAlertPayload,
-  ProcessTemplatePayload,
 } from '../services/productionAPI';
 import { suppliersAPI } from '../services/productionAPI';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -81,7 +71,7 @@ const ProductionPage: React.FC = () => {
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
   const [matForm, setMatForm] = useState({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
-  const [materialOptions, setMaterialOptions] = useState<any[]>([]);
+    const [materialOptions, setMaterialOptions] = useState<any[]>([]);
   const [materialQuery, setMaterialQuery] = useState('');
 
   // Form states
@@ -789,7 +779,9 @@ const ProductionPage: React.FC = () => {
                   risk_rating: mocForm.risk_rating,
                 })
               });
-              if (!res.ok) throw new Error('Failed');
+              if (!res.ok) {
+                throw 'Failed to submit change request';
+              }
               setMocOpen(false);
             } catch (e) {
               setError('Failed to submit change request');

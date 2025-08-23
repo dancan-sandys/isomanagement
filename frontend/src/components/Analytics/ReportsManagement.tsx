@@ -95,7 +95,7 @@ const ReportsManagement: React.FC<ReportsManagementProps> = ({ onRefresh }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    report_type: 'kpi_dashboard',
+    report_type: 'kpi_dashboard' as 'kpi_dashboard' | 'compliance_report' | 'performance_report' | 'trend_analysis' | 'audit_report' | 'risk_report' | 'action_report',
     is_public: false,
     export_formats: ['PDF']
   });
@@ -123,7 +123,7 @@ const ReportsManagement: React.FC<ReportsManagementProps> = ({ onRefresh }) => {
     setFormData({
       title: '',
       description: '',
-      report_type: 'kpi_dashboard',
+      report_type: 'kpi_dashboard' as 'kpi_dashboard' | 'compliance_report' | 'performance_report' | 'trend_analysis' | 'audit_report' | 'risk_report' | 'action_report',
       is_public: false,
       export_formats: ['PDF']
     });
@@ -135,7 +135,7 @@ const ReportsManagement: React.FC<ReportsManagementProps> = ({ onRefresh }) => {
     setFormData({
       title: report.title,
       description: report.description || '',
-      report_type: report.report_type,
+      report_type: report.report_type as 'kpi_dashboard' | 'compliance_report' | 'performance_report' | 'trend_analysis' | 'audit_report' | 'risk_report' | 'action_report',
       is_public: report.is_public,
       export_formats: report.export_formats || ['PDF']
     });
@@ -505,7 +505,7 @@ const ReportsManagement: React.FC<ReportsManagementProps> = ({ onRefresh }) => {
                 <InputLabel>Report Type</InputLabel>
                 <Select
                   value={formData.report_type}
-                  onChange={(e) => setFormData({ ...formData, report_type: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, report_type: e.target.value as 'kpi_dashboard' | 'compliance_report' | 'performance_report' | 'trend_analysis' | 'audit_report' | 'risk_report' | 'action_report' })}
                   label="Report Type"
                 >
                   <MenuItem value="kpi_dashboard">KPI Dashboard</MenuItem>

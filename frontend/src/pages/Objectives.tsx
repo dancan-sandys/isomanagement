@@ -21,7 +21,7 @@ const ObjectivesPage: React.FC = () => {
         setError(null);
         const response = await objectivesService.getObjectives();
         if (mounted) {
-          setObjectives(response.objectives || []);
+          setObjectives(response.data || []);
         }
       } catch (e) {
         if (mounted) {
