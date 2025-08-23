@@ -200,10 +200,14 @@ class RiskAction(Base):
     due_date = Column(DateTime(timezone=True), nullable=True)
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     item = relationship("RiskRegisterItem", back_populates="actions")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
 
     def __repr__(self):
         return f"<RiskAction(id={self.id}, item_id={self.item_id}, title='{self.title}')>"

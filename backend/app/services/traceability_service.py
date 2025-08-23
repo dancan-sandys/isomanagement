@@ -22,6 +22,8 @@ from app.schemas.traceability import (
     RecallEntryCreate, RecallActionCreate, TraceabilityReportCreate,
     BatchFilter, RecallFilter, TraceabilityReportRequest
 )
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 logger = logging.getLogger(__name__)
 
@@ -1004,6 +1006,55 @@ class TraceabilityService:
         )
         
         self.db.add(action)
+        self.db.flush()  # Get the ID without committing
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Map recall action type to priority
+        priority_mapping = {
+            "notification": "high",
+            "retrieval": "critical",
+            "disposal": "high",
+            "investigation": "medium"
+        }
+        
+        # Map recall status to action status
+        status_mapping = {
+            "pending": "pending",
+            "in_progress": "in_progress",
+            "completed": "completed",
+            "overdue": "overdue"
+        }
+        
+        mapped_priority = priority_mapping.get(action_data.action_type.lower(), "high")
+        mapped_status = status_mapping.get(action.status.lower(), "pending")
+        
+        action_log_data = {
+            "title": f"Recall Action: {action_data.action_type.title()} - {recall.recall_number}" if hasattr(recall, 'recall_number') else f"Recall {action_data.action_type.title()}",
+            "description": action_data.description,
+            "action_source": ActionSource.REGULATORY.value,  # Recalls are typically regulatory-driven
+            "source_id": action.id,
+            "priority": mapped_priority,
+            "status": mapped_status,
+            "assigned_to": action_data.assigned_to,
+            "assigned_by": created_by,
+            "due_date": action_data.due_date,
+            "estimated_hours": None,
+            "notes": f"Product recall action - Type: {action_data.action_type}",
+            "tags": {
+                "recall_id": recall_id,
+                "action_type": action_data.action_type,
+                "recall_classification": str(getattr(recall, 'classification', '')),
+                "recall_status": str(getattr(recall, 'status', ''))
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the recall action
+        action.action_log_id = action_log.id
+        
         self.db.commit()
         self.db.refresh(action)
         
