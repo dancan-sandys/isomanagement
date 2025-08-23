@@ -1,8 +1,8 @@
-# DigitalOcean App Platform Deployment Guide (No Docker)
+# DigitalOcean App Platform Deployment Guide
 
 ## 🚀 Overview
 
-This guide will walk you through deploying your ISO 22000 Food Safety Management System to DigitalOcean App Platform without using Docker containers.
+This guide will walk you through deploying your ISO 22000 Food Safety Management System to DigitalOcean App Platform using Docker containers.
 
 ## 📋 Prerequisites
 
@@ -33,6 +33,8 @@ This guide will walk you through deploying your ISO 22000 Food Safety Management
 
 2. **Verify all deployment files are present**:
    - `.do/app.yaml`
+   - `frontend/Dockerfile`
+   - `backend/Dockerfile`
    - `frontend/nginx.conf`
    - `backend/requirements.txt`
    - `frontend/package.json`

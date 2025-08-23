@@ -13,8 +13,6 @@ services:
     instance_size_slug: basic-xxs
     health_check:
       http_path: /health
-    build_command: pip install -r requirements.txt
-    dockerfile_path: null
     envs:
       - key: DATABASE_URL
         value: ${db.DATABASE_URL}
@@ -96,8 +94,6 @@ services:
     instance_size_slug: basic-xxs
     health_check:
       http_path: /
-    build_command: npm install && npm run build
-    dockerfile_path: null
     envs:
       - key: REACT_APP_API_URL
         value: https://iso22000-fsms-backend.ondigitalocean.app/api/v1
