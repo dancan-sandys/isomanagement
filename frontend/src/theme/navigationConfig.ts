@@ -15,6 +15,7 @@ import {
   SupportAgent,
   Flag,
   Science,
+  Analytics,
 } from '@mui/icons-material';
 
 // Navigation item interface
@@ -214,10 +215,34 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     ],
   },
   
+  actionsLog: {
+    title: "Actions Log",
+    icon: Assignment,
+    order: 6,
+    items: [
+      { text: "Actions Management", path: "/actions-log" },
+      { text: "Interested Parties", path: "/actions-log/parties" },
+      { text: "SWOT/PESTEL Analysis", path: "/actions-log/analysis" },
+    ],
+  },
+  analytics: {
+    title: 'Analytics & Reporting',
+    icon: Analytics,
+    order: 16,
+    requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
+    items: [
+      { text: 'Analytics Overview', path: '/analytics' },
+      { text: 'KPI Management', path: '/analytics/kpis' },
+      { text: 'Dashboards', path: '/analytics/dashboards' },
+      { text: 'Reports', path: '/analytics/reports' },
+      { text: 'Trend Analysis', path: '/analytics/trends' },
+    ],
+  },
+  
   users: {
     title: 'User Management',
     icon: People,
-    order: 16,
+    order: 17,
     requiredRoles: ['System Administrator', 'QA Manager'],
     items: [
       { text: 'Users', path: '/users' },
@@ -228,7 +253,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
   settings: {
     title: 'System Settings',
     icon: Settings,
-    order: 17,
+    order: 18,
     requiredRoles: ['System Administrator'],
     items: [
       { text: 'Settings', path: '/settings' },

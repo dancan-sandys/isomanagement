@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Improved Database Initialization Script for ISO 22000 FSMS Platform
 
@@ -28,7 +29,7 @@ from datetime import datetime
 
 def validate_enum_values():
     """Validate that all enum values are correctly set to lowercase"""
-    print("🔍 Validating enum values...")
+    print("Validating enum values...")
     
     # Define expected enum values (all lowercase)
     expected_enums = {
@@ -120,7 +121,7 @@ def validate_enum_values():
             # Get the actual enum class
             enum_class = globals().get(enum_name)
             if not enum_class:
-                validation_errors.append(f"❌ Enum class {enum_name} not found")
+                validation_errors.append(f"Enum class {enum_name} not found")
                 continue
                 
             # Check each enum value
@@ -128,43 +129,43 @@ def validate_enum_values():
                 actual_value = getattr(enum_class, expected_key, None)
                 if actual_value != expected_value:
                     validation_errors.append(
-                        f"❌ {enum_name}.{expected_key}: expected '{expected_value}', got '{actual_value}'"
+                        f"{enum_name}.{expected_key}: expected '{expected_value}', got '{actual_value}'"
                     )
             
-            print(f"✅ {enum_name}: All values correctly set to lowercase")
+            print(f"{enum_name}: All values correctly set to lowercase")
             
         except Exception as e:
-            validation_errors.append(f"❌ Error validating {enum_name}: {e}")
+            validation_errors.append(f"Error validating {enum_name}: {e}")
     
     if validation_errors:
-        print("\n❌ Enum validation failed:")
+        print("\nEnum validation failed:")
         for error in validation_errors:
             print(f"  {error}")
         raise ValueError("Enum values are not correctly set to lowercase")
     
-    print("✅ All enum values validated successfully!")
+    print("All enum values validated successfully!")
 
 def create_database_tables():
     """Create all database tables"""
-    print("📋 Creating database tables...")
+    print("Creating database tables...")
     
     try:
         # Create all tables
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables created successfully!")
+        print("Database tables created successfully!")
         
         # List created tables
         try:
             inspector = inspect(engine)
             tables = inspector.get_table_names()
-            print(f"📋 Created {len(tables)} tables:")
+            print(f"Created {len(tables)} tables:")
             for table in sorted(tables):
                 print(f"  - {table}")
         except Exception as e:
             print(f"⚠️  Could not list tables: {e}")
             
     except Exception as e:
-        print(f"❌ Error creating database tables: {e}")
+        print(f"Error creating database tables: {e}")
         raise
 
 def create_permissions():
@@ -192,11 +193,11 @@ def create_permissions():
         
         db.add_all(permissions)
         db.commit()
-        print(f"✅ Created {len(permissions)} permissions")
+        print(f"✓ Created {len(permissions)} permissions")
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Error creating permissions: {e}")
+        print(f"✗ Error creating permissions: {e}")
         raise
     finally:
         db.close()
@@ -365,14 +366,14 @@ def create_default_roles():
             
             role.permissions = role_permissions
             db.add(role)
-            print(f"✅ Created role: {role_data['name']} with {len(role_permissions)} permissions")
+            print(f"✓ Created role: {role_data['name']} with {len(role_permissions)} permissions")
         
         db.commit()
-        print("✅ All default roles created successfully")
+        print("✓ All default roles created successfully")
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Error creating roles: {e}")
+        print(f"✗ Error creating roles: {e}")
         raise
     finally:
         db.close()
@@ -392,7 +393,7 @@ def create_admin_user():
         # Get System Administrator role
         admin_role = db.query(Role).filter(Role.name == "System Administrator").first()
         if not admin_role:
-            print("❌ System Administrator role not found!")
+            print("✗ System Administrator role not found!")
             return
         
         # Create admin user with lowercase status
@@ -412,7 +413,7 @@ def create_admin_user():
         db.add(admin_user)
         db.commit()
         
-        print("✅ Admin user created successfully!")
+        print("✓ Admin user created successfully!")
         print("Username: admin")
         print("Password: admin123")
         print("Role: System Administrator")
@@ -420,14 +421,14 @@ def create_admin_user():
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Error creating admin user: {e}")
+        print(f"✗ Error creating admin user: {e}")
         raise
     finally:
         db.close()
 
 def verify_database_integrity():
     """Verify that the database was created correctly with proper enum values"""
-    print("🔍 Verifying database integrity...")
+    print("Checking Verifying database integrity...")
     
     db = SessionLocal()
     try:
@@ -435,17 +436,17 @@ def verify_database_integrity():
         admin_user = db.query(User).filter(User.username == "admin").first()
         if admin_user:
             if admin_user.status == 'active':
-                print("✅ Admin user status correctly set to 'active'")
+                print("✓ Admin user status correctly set to 'active'")
             else:
                 print(f"⚠️  Admin user status is '{admin_user.status}' (should be 'active')")
         
         # Check that roles were created
         role_count = db.query(Role).count()
-        print(f"✅ Found {role_count} roles")
+        print(f"✓ Found {role_count} roles")
         
         # Check that permissions were created
         permission_count = db.query(Permission).count()
-        print(f"✅ Found {permission_count} permissions")
+        print(f"✓ Found {permission_count} permissions")
         
         # Verify enum columns are using lowercase values
         inspector = inspect(engine)
@@ -458,23 +459,23 @@ def verify_database_integrity():
                     # Check a sample record if any exists
                     result = db.execute(text(f"SELECT * FROM {table} LIMIT 1"))
                     if result.fetchone():
-                        print(f"✅ Table {table} has data with correct enum values")
+                        print(f"✓ Table {table} has data with correct enum values")
                     else:
-                        print(f"✅ Table {table} created (no data yet)")
+                        print(f"✓ Table {table} created (no data yet)")
                 except Exception as e:
                     print(f"⚠️  Could not verify table {table}: {e}")
         
-        print("✅ Database integrity verification completed")
+        print("✓ Database integrity verification completed")
         
     except Exception as e:
-        print(f"❌ Error during database verification: {e}")
+        print(f"✗ Error during database verification: {e}")
         raise
     finally:
         db.close()
 
 def main():
     """Main function to initialize the database with proper enum values"""
-    print("🚀 Starting improved database initialization...")
+    print("Starting Starting improved database initialization...")
     print("=" * 60)
     
     try:
@@ -498,27 +499,27 @@ def main():
         
         print("\n" + "=" * 60)
         print("🎉 Improved database initialization completed successfully!")
-        print("\n📋 Summary:")
-        print("  ✅ Enum values validated (all lowercase)")
-        print("  ✅ Database tables created")
-        print("  ✅ Permissions created")
-        print("  ✅ Default roles created")
-        print("  ✅ Admin user created")
-        print("  ✅ Database integrity verified")
-        print("\n🔑 Login credentials:")
+        print("\nCreating Summary:")
+        print("  ✓ Enum values validated (all lowercase)")
+        print("  ✓ Database tables created")
+        print("  ✓ Permissions created")
+        print("  ✓ Default roles created")
+        print("  ✓ Admin user created")
+        print("  ✓ Database integrity verified")
+        print("\nLogin Login credentials:")
         print("  Username: admin")
         print("  Password: admin123")
         print("  Role: System Administrator")
         print("  Status: active (lowercase)")
-        print("\n💡 Benefits:")
+        print("\nBenefits Benefits:")
         print("  - All enum values are lowercase from the start")
         print("  - No need for enum migration scripts")
         print("  - Consistent data format across frontend and backend")
         print("  - Ready for production use")
         
     except Exception as e:
-        print(f"\n❌ Database initialization failed: {e}")
-        print("\n💡 Troubleshooting:")
+        print(f"\n✗ Database initialization failed: {e}")
+        print("\nBenefits Troubleshooting:")
         print("  - Check that all model files have lowercase enum values")
         print("  - Ensure database connection is working")
         print("  - Verify all required dependencies are installed")

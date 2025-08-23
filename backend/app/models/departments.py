@@ -37,6 +37,7 @@ class Department(Base):
     objectives = relationship("FoodSafetyObjective", back_populates="department")
     objective_targets = relationship("ObjectiveTarget", back_populates="department")
     objective_progress = relationship("ObjectiveProgress", back_populates="department")
+    actions = relationship("ActionLog", back_populates="department")
 
     __table_args__ = (
         Index("ix_departments_hierarchy", "parent_department_id", "status"),

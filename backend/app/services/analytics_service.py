@@ -28,6 +28,12 @@ class AnalyticsService:
     # Analytics Report Management
     def create_report(self, report_data: Dict[str, Any]) -> AnalyticsReport:
         """Create a new analytics report"""
+        # Set default created_by if not provided
+        if 'created_by' not in report_data or report_data['created_by'] is None:
+            report_data['created_by'] = 1  # Default to user ID 1
+        
+        print(f"Creating report with data: {report_data}")  # Debug log
+        
         report = AnalyticsReport(**report_data)
         self.db.add(report)
         self.db.commit()
@@ -82,6 +88,12 @@ class AnalyticsService:
     # KPI Management
     def create_kpi(self, kpi_data: Dict[str, Any]) -> KPI:
         """Create a new KPI"""
+        # Set default created_by if not provided
+        if 'created_by' not in kpi_data or kpi_data['created_by'] is None:
+            kpi_data['created_by'] = 1  # Default to user ID 1
+        
+        print(f"Creating KPI with data: {kpi_data}")  # Debug log
+        
         kpi = KPI(**kpi_data)
         self.db.add(kpi)
         self.db.commit()
@@ -191,6 +203,12 @@ class AnalyticsService:
     # Dashboard Management
     def create_dashboard(self, dashboard_data: Dict[str, Any]) -> AnalyticsDashboard:
         """Create a new analytics dashboard"""
+        # Set default created_by if not provided
+        if 'created_by' not in dashboard_data or dashboard_data['created_by'] is None:
+            dashboard_data['created_by'] = 1  # Default to user ID 1
+        
+        print(f"Creating dashboard with data: {dashboard_data}")  # Debug log
+        
         dashboard = AnalyticsDashboard(**dashboard_data)
         self.db.add(dashboard)
         self.db.commit()
@@ -391,6 +409,10 @@ class AnalyticsService:
     # Trend Analysis
     def create_trend_analysis(self, analysis_data: Dict[str, Any]) -> TrendAnalysis:
         """Create a new trend analysis"""
+        # Set default created_by if not provided
+        if 'created_by' not in analysis_data:
+            analysis_data['created_by'] = 1  # Default to user ID 1
+        
         analysis = TrendAnalysis(**analysis_data)
         self.db.add(analysis)
         self.db.commit()

@@ -55,6 +55,8 @@ import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
 import HiddenDemoTools from './pages/HiddenDemoTools';
 import ProductionPage from './pages/Production';
+import Analytics from './pages/Analytics';
+import ActionsLog from "./pages/ActionsLog";
 
 function App() {
   return (
@@ -193,6 +195,16 @@ function App() {
                       <Route path="/compliance/monitoring" element={<Navigate to="/dashboard/analytics" replace />} />
                       <Route path="/compliance/reports" element={<Navigate to="/dashboard/reports" replace />} />
                       <Route path="/compliance/updates" element={<Navigate to="/documents?category=regulatory" replace />} />
+                      
+                      {/* Analytics & Reporting - QA and Production roles */}
+                      <Route path="/analytics" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Production Manager", "System Administrator"]} component={Analytics} />} />
+                      <Route path="/analytics/kpis" element={<Navigate to="/analytics?tab=1" replace />} />
+                      <Route path="/analytics/dashboards" element={<Navigate to="/analytics?tab=2" replace />} />
+                      <Route path="/analytics/reports" element={<Navigate to="/analytics?tab=3" replace />} />
+                      <Route path="/analytics/trends" element={<Navigate to="/analytics?tab=4" replace />} />
+                      <Route path="/actions-log" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Production Manager", "System Administrator"]} component={ActionsLog} />} />
+                      <Route path="/actions-log/parties" element={<Navigate to="/actions-log?tab=1" replace />} />
+                      <Route path="/actions-log/analysis" element={<Navigate to="/actions-log?tab=2" replace />} />
                       
                       {/* User Management - System Administrators and QA Managers only */}
                       <Route path="/users" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager"]} component={Users} />} />

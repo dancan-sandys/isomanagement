@@ -313,7 +313,7 @@ async def delete_equipment(
     return ResponseModel(success=True, message="Equipment deleted")
 
 
-# Backward compatibility endpoints for frontend
+# Backward compatibility endpoints for frontend - these must come BEFORE specific equipment routes
 @router.get("/maintenance-plans", response_model=list[MaintenancePlanResponse])
 async def list_all_maintenance_plans(
     db: Session = Depends(get_db),

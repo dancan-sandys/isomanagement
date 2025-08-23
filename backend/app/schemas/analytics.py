@@ -43,7 +43,7 @@ class AnalyticsReportBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     report_type: ReportType
-    report_config: Dict[str, Any] = Field(..., description="Report configuration")
+    report_config: Optional[Dict[str, Any]] = Field({}, description="Report configuration")
     chart_configs: Optional[Dict[str, Any]] = None
     export_formats: Optional[List[str]] = None
     is_public: bool = False
@@ -51,7 +51,7 @@ class AnalyticsReportBase(BaseModel):
 
 
 class AnalyticsReportCreate(AnalyticsReportBase):
-    created_by: int = Field(..., description="User ID who created the report")
+    created_by: Optional[int] = Field(None, description="User ID who created the report")
 
 
 class AnalyticsReportUpdate(BaseModel):
@@ -103,7 +103,7 @@ class KPIBase(BaseModel):
 
 
 class KPICreate(KPIBase):
-    created_by: int = Field(..., description="User ID who created the KPI")
+    created_by: Optional[int] = Field(None, description="User ID who created the KPI")
 
 
 class KPIUpdate(BaseModel):
@@ -169,7 +169,7 @@ class KPIValueResponse(KPIValueBase):
 class AnalyticsDashboardBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    layout_config: Dict[str, Any] = Field(..., description="Dashboard layout configuration")
+    layout_config: Optional[Dict[str, Any]] = Field({}, description="Dashboard layout configuration")
     theme: str = Field("light", max_length=50)
     refresh_interval: int = Field(300, ge=30)
     is_public: bool = False
@@ -177,7 +177,7 @@ class AnalyticsDashboardBase(BaseModel):
 
 
 class AnalyticsDashboardCreate(AnalyticsDashboardBase):
-    created_by: int = Field(..., description="User ID who created the dashboard")
+    created_by: Optional[int] = Field(None, description="User ID who created the dashboard")
 
 
 class AnalyticsDashboardUpdate(BaseModel):
@@ -265,7 +265,7 @@ class TrendAnalysisBase(BaseModel):
 
 
 class TrendAnalysisCreate(TrendAnalysisBase):
-    created_by: int = Field(..., description="User ID who created the analysis")
+    created_by: Optional[int] = Field(None, description="User ID who created the analysis")
 
 
 class TrendAnalysisUpdate(BaseModel):
