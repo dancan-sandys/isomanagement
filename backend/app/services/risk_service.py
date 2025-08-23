@@ -9,6 +9,8 @@ from app.models.risk import (
     RiskStatus, RiskSeverity, RiskLikelihood, RiskDetectability,
 )
 from app.schemas.risk import RiskFilter, RiskItemCreate, RiskItemUpdate
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 
 class RiskService:
@@ -153,7 +155,7 @@ class RiskService:
             "by_item_type": normalize(by_item_type),
         }
 
-    def add_action(self, item_id: int, title: str, description: str = None, assigned_to: int = None, due_date: datetime = None) -> RiskAction:
+    def add_action(self, item_id: int, title: str, description: str = None, assigned_to: int = None, due_date: datetime = None, created_by: int = 1) -> RiskAction:
         item = self.db.query(RiskRegisterItem).filter(RiskRegisterItem.id == item_id).first()
         if not item:
             raise ValueError("Risk item not found")
@@ -165,6 +167,46 @@ class RiskService:
             due_date=due_date,
         )
         self.db.add(action)
+        self.db.flush()  # Get the ID without committing
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Determine priority based on risk severity
+        priority_mapping = {
+            "low": "low",
+            "medium": "medium",
+            "high": "high", 
+            "critical": "critical"
+        }
+        
+        risk_priority = getattr(item, 'severity', 'medium')
+        mapped_priority = priority_mapping.get(str(risk_priority).lower(), "medium")
+        
+        action_log_data = {
+            "title": title,
+            "description": description or "",
+            "action_source": ActionSource.RISK_ASSESSMENT.value,
+            "source_id": action.id,
+            "priority": mapped_priority,
+            "status": "pending",
+            "assigned_to": assigned_to,
+            "assigned_by": created_by,
+            "due_date": due_date,
+            "estimated_hours": None,
+            "notes": f"Risk Action for: {item.title}" if hasattr(item, 'title') else "Risk Mitigation Action",
+            "tags": {
+                "risk_item_id": item_id,
+                "risk_category": str(getattr(item, 'category', '')),
+                "risk_severity": str(getattr(item, 'severity', ''))
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the risk action
+        action.action_log_id = action_log.id
+        
         self.db.commit()
         self.db.refresh(action)
         return action
@@ -175,6 +217,15 @@ class RiskService:
             raise ValueError("Risk action not found")
         action.completed = True
         action.completed_at = datetime.utcnow()
+        
+        # Sync completion to actions log if linked
+        if action.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            actions_log_service.update_action(action.action_log_id, {
+                "status": "completed",
+                "progress_percent": 100.0
+            })
+        
         self.db.commit()
         self.db.refresh(action)
         return action
@@ -193,6 +244,28 @@ class RiskService:
             setattr(action, k, v)
         if data.get("completed"):
             action.completed_at = datetime.utcnow()
+        
+        # Sync changes to actions log if linked
+        if action.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            
+            sync_data = {}
+            if 'title' in data:
+                sync_data['title'] = data['title']
+            if 'description' in data:
+                sync_data['description'] = data['description']
+            if 'assigned_to' in data:
+                sync_data['assigned_to'] = data['assigned_to']
+            if 'due_date' in data:
+                sync_data['due_date'] = data['due_date']
+            if 'completed' in data:
+                sync_data['status'] = "completed" if data['completed'] else "in_progress"
+                if data['completed']:
+                    sync_data['progress_percent'] = 100.0
+            
+            if sync_data:
+                actions_log_service.update_action(action.action_log_id, sync_data)
+        
         self.db.commit()
         self.db.refresh(action)
         return action

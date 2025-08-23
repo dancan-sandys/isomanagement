@@ -16,6 +16,8 @@ from app.schemas.nonconformance import (
     CAPAVerificationCreate, CAPAVerificationUpdate, NonConformanceAttachmentCreate,
     NonConformanceFilter, CAPAFilter, BulkNonConformanceAction, BulkCAPAAction
 )
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 
 class NonConformanceService:
@@ -343,7 +345,7 @@ class NonConformanceService:
 
     # CAPA Action operations
     def create_capa_action(self, capa_data: CAPAActionCreate, created_by: int) -> CAPAAction:
-        """Create a new CAPA action"""
+        """Create a new CAPA action with actions log integration"""
         capa_number = self._generate_capa_number()
         
         capa_action = CAPAAction(
@@ -353,6 +355,52 @@ class NonConformanceService:
             assigned_date=datetime.now()
         )
         self.db.add(capa_action)
+        self.db.flush()  # Get the ID without committing
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Map CAPA status to actions log status
+        status_mapping = {
+            "pending": "pending",
+            "in_progress": "in_progress", 
+            "completed": "completed",
+            "verified": "completed",
+            "rejected": "cancelled"
+        }
+        
+        # Map CAPA priority to actions log priority
+        priority_mapping = {
+            "low": "low",
+            "medium": "medium",
+            "high": "high", 
+            "critical": "critical"
+        }
+        
+        action_log_data = {
+            "title": capa_action.title,
+            "description": capa_action.description or "",
+            "action_source": ActionSource.NON_CONFORMANCE.value,
+            "source_id": capa_action.id,
+            "priority": priority_mapping.get("medium", "medium"),  # Default priority
+            "status": status_mapping.get(str(capa_action.status).lower(), "pending"),
+            "assigned_to": capa_action.responsible_person,
+            "assigned_by": created_by,
+            "due_date": capa_action.target_completion_date,
+            "estimated_hours": None,  # CAPA doesn't have estimated hours
+            "notes": f"CAPA Action: {capa_number} - Type: {capa_action.action_type}",
+            "tags": {
+                "capa_number": capa_number,
+                "non_conformance_id": capa_action.non_conformance_id,
+                "action_type": capa_action.action_type
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the CAPA action
+        capa_action.action_log_id = action_log.id
+        
         self.db.commit()
         self.db.refresh(capa_action)
         return capa_action
@@ -400,7 +448,7 @@ class NonConformanceService:
         return self.db.query(CAPAAction).filter(CAPAAction.id == capa_id).first()
 
     def update_capa_action(self, capa_id: int, capa_data: CAPAActionUpdate) -> Optional[CAPAAction]:
-        """Update CAPA action"""
+        """Update CAPA action with actions log sync"""
         capa_action = self.get_capa_action(capa_id)
         if not capa_action:
             return None
@@ -414,6 +462,46 @@ class NonConformanceService:
             if capa_action.progress_percentage >= 100:
                 capa_action.status = CAPAStatus.COMPLETED
                 capa_action.actual_completion_date = datetime.now()
+
+        # Sync changes to actions log if linked
+        if capa_action.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            
+            # Map CAPA status to actions log status
+            status_mapping = {
+                "pending": "pending",
+                "in_progress": "in_progress", 
+                "completed": "completed",
+                "verified": "completed",
+                "rejected": "cancelled"
+            }
+            
+            # Map CAPA priority to actions log priority
+            priority_mapping = {
+                "low": "low",
+                "medium": "medium",
+                "high": "high", 
+                "critical": "critical"
+            }
+            
+            sync_data = {}
+            if 'title' in update_data:
+                sync_data['title'] = update_data['title']
+            if 'description' in update_data:
+                sync_data['description'] = update_data['description']
+            if 'responsible_person' in update_data:
+                sync_data['assigned_to'] = update_data['responsible_person']
+            if 'target_completion_date' in update_data:
+                sync_data['due_date'] = update_data['target_completion_date']
+            if 'status' in update_data or capa_action.status:
+                sync_data['status'] = status_mapping.get(
+                    str(capa_action.status).lower(), "pending"
+                )
+            if 'progress_percentage' in update_data:
+                sync_data['progress_percent'] = update_data['progress_percentage']
+            
+            if sync_data:
+                actions_log_service.update_action(capa_action.action_log_id, sync_data)
 
         self.db.commit()
         self.db.refresh(capa_action)

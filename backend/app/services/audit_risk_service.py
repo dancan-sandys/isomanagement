@@ -14,6 +14,8 @@ from app.models.audit_risk import (
     AuditElementType, AuditRiskReviewOutcome, PRPAuditIntegration
 )
 from app.services.risk_management_service import RiskManagementService
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 
 class AuditRiskService:
@@ -400,5 +402,140 @@ class AuditRiskService:
                 "description": finding.description[:50] + "..." if len(finding.description) > 50 else finding.description,
                 "message": f"High risk finding: {finding.description[:50]}..."
             })
+
+    # ==================== AUDIT FINDING ACTION LOG INTEGRATION ====================
+    
+    def create_audit_finding_action(self, finding_id: int, created_by: int) -> AuditFinding:
+        """Create action log entry for an audit finding requiring corrective action"""
+        finding = self.db.query(AuditFinding).filter(AuditFinding.id == finding_id).first()
+        if not finding:
+            raise ValueError("Audit finding not found")
+        
+        # Skip if already linked to action log
+        if finding.action_log_id:
+            return finding
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Map finding severity to action priority
+        priority_mapping = {
+            "minor": "low",
+            "major": "high",
+            "critical": "critical"
+        }
+        
+        # Map finding status to action status
+        status_mapping = {
+            "open": "pending",
+            "in_progress": "in_progress",
+            "closed": "completed"
+        }
+        
+        mapped_priority = priority_mapping.get(str(finding.severity).lower(), "medium")
+        mapped_status = status_mapping.get(str(finding.status).lower(), "pending")
+        
+        action_log_data = {
+            "title": f"Audit Finding: {finding.clause_ref or 'No Clause'}" if hasattr(finding, 'clause_ref') else f"Audit Finding #{finding.id}",
+            "description": finding.description or "",
+            "action_source": ActionSource.AUDIT_FINDING.value,
+            "source_id": finding.id,
+            "priority": mapped_priority,
+            "status": mapped_status,
+            "assigned_to": finding.responsible_person_id,
+            "assigned_by": created_by,
+            "due_date": finding.target_completion_date,
+            "estimated_hours": None,
+            "notes": f"Corrective action required for audit finding - Severity: {finding.severity}",
+            "tags": {
+                "audit_id": finding.audit_id,
+                "finding_type": str(getattr(finding, 'finding_type', 'nonconformity')),
+                "severity": str(finding.severity),
+                "clause_ref": getattr(finding, 'clause_ref', '')
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the audit finding
+        finding.action_log_id = action_log.id
+        
+        self.db.commit()
+        self.db.refresh(finding)
+        return finding
+    
+    def update_audit_finding_action(self, finding_id: int, update_data: Dict[str, Any]) -> AuditFinding:
+        """Update audit finding and sync with action log"""
+        finding = self.db.query(AuditFinding).filter(AuditFinding.id == finding_id).first()
+        if not finding:
+            raise ValueError("Audit finding not found")
+        
+        # Update the finding
+        for field, value in update_data.items():
+            if hasattr(finding, field):
+                setattr(finding, field, value)
+        
+        # Sync changes to actions log if linked
+        if finding.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            
+            # Map finding status to action status
+            status_mapping = {
+                "open": "pending",
+                "in_progress": "in_progress",
+                "closed": "completed"
+            }
+            
+            # Map finding severity to action priority
+            priority_mapping = {
+                "minor": "low",
+                "major": "high",
+                "critical": "critical"
+            }
+            
+            sync_data = {}
+            if 'description' in update_data:
+                sync_data['description'] = update_data['description']
+            if 'responsible_person_id' in update_data:
+                sync_data['assigned_to'] = update_data['responsible_person_id']
+            if 'target_completion_date' in update_data:
+                sync_data['due_date'] = update_data['target_completion_date']
+            if 'status' in update_data:
+                sync_data['status'] = status_mapping.get(
+                    str(update_data['status']).lower(), "pending"
+                )
+            if 'severity' in update_data:
+                sync_data['priority'] = priority_mapping.get(
+                    str(update_data['severity']).lower(), "medium"
+                )
+            
+            if sync_data:
+                actions_log_service.update_action(finding.action_log_id, sync_data)
+        
+        self.db.commit()
+        self.db.refresh(finding)
+        return finding
+    
+    def close_audit_finding_action(self, finding_id: int, closed_by: int) -> AuditFinding:
+        """Close audit finding and mark action as completed"""
+        finding = self.db.query(AuditFinding).filter(AuditFinding.id == finding_id).first()
+        if not finding:
+            raise ValueError("Audit finding not found")
+        
+        # Update finding status
+        finding.status = FindingStatus.CLOSED
+        finding.closed_at = datetime.utcnow()
+        
+        # Sync completion to actions log if linked
+        if finding.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            actions_log_service.update_action(finding.action_log_id, {
+                "status": "completed",
+                "progress_percent": 100.0
+            })
+        
+        self.db.commit()
+        self.db.refresh(finding)
+        return finding
 
         return alerts
