@@ -4,7 +4,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.models.actions_log import SWOTAnalysis, SWOTItem, PESTELAnalysis, PESTELItem
+from app.models.actions_log import SWOTAnalysis, SWOTItem, PESTELAnalysis, PESTELItem, SWOTAction, PESTELAction
+from sqlalchemy import func, and_
 from app.schemas.actions_log import (
     SWOTAnalysisCreate, SWOTAnalysisUpdate, SWOTAnalysisResponse,
     SWOTItemCreate, SWOTItemUpdate, SWOTItemResponse,
@@ -235,3 +236,219 @@ def get_pestel_analytics(db: Session = Depends(get_db)):
     """Get PESTEL analysis summary and statistics"""
     service = ActionsLogService(db)
     return service.get_pestel_analytics()
+
+# ISO-Specific Endpoints
+@router.get("/iso/compliance-metrics")
+def get_iso_compliance_metrics(db: Session = Depends(get_db)):
+    """Get ISO 9001:2015 compliance metrics for SWOT/PESTEL analyses"""
+    service = ActionsLogService(db)
+    return service.get_iso_compliance_metrics()
+
+@router.get("/iso/dashboard-metrics")
+def get_iso_dashboard_metrics(db: Session = Depends(get_db)):
+    """Get comprehensive ISO dashboard metrics including compliance, insights, and improvements"""
+    service = ActionsLogService(db)
+    return service.get_iso_dashboard_metrics()
+
+@router.get("/iso/clause-4-1-assessment")
+def get_clause_4_1_assessment(db: Session = Depends(get_db)):
+    """Get assessment of compliance with ISO 9001:2015 Clause 4.1 - Understanding the organization and its context"""
+    service = ActionsLogService(db)
+    
+    # Get all analyses with their strategic context information
+    swot_analyses = service.get_swot_analyses(limit=1000)
+    pestel_analyses = service.get_pestel_analyses(limit=1000)
+    
+    # Assess compliance with Clause 4.1 requirements
+    clause_4_1_assessment = {
+        "total_analyses": len(swot_analyses) + len(pestel_analyses),
+        "analyses_with_context": sum(1 for a in swot_analyses if a.strategic_context) + 
+                                sum(1 for a in pestel_analyses if a.strategic_context),
+        "analyses_with_scope_defined": sum(1 for a in swot_analyses if a.scope) + 
+                                      sum(1 for a in pestel_analyses if a.scope),
+        "analyses_with_review_schedule": sum(1 for a in swot_analyses if a.next_review_date) + 
+                                        sum(1 for a in pestel_analyses if a.next_review_date),
+        "swot_analyses": {
+            "total": len(swot_analyses),
+            "with_strategic_context": sum(1 for a in swot_analyses if a.strategic_context),
+            "with_iso_references": sum(1 for a in swot_analyses if a.iso_clause_reference),
+            "organization_wide_scope": sum(1 for a in swot_analyses if a.scope == "organization_wide")
+        },
+        "pestel_analyses": {
+            "total": len(pestel_analyses),
+            "with_strategic_context": sum(1 for a in pestel_analyses if a.strategic_context),
+            "with_iso_references": sum(1 for a in pestel_analyses if a.iso_clause_reference),
+            "organization_wide_scope": sum(1 for a in pestel_analyses if a.scope == "organization_wide")
+        },
+        "compliance_recommendations": [
+            "Ensure all analyses include strategic context per Clause 4.1",
+            "Define clear scope for each analysis",
+            "Establish regular review schedules",
+            "Document interested parties and their requirements",
+            "Link analyses to risk management processes"
+        ]
+    }
+    
+    return clause_4_1_assessment
+
+@router.post("/swot-analyses/{analysis_id}/iso-review")
+def conduct_iso_review(
+    analysis_id: int,
+    db: Session = Depends(get_db)
+):
+    """Conduct an ISO compliance review of a SWOT analysis"""
+    service = ActionsLogService(db)
+    analysis = service.get_swot_analysis(analysis_id)
+    
+    if not analysis:
+        raise HTTPException(status_code=404, detail="SWOT analysis not found")
+    
+    # Perform ISO compliance review
+    review_results = {
+        "analysis_id": analysis_id,
+        "review_date": datetime.now(),
+        "compliance_score": 0,
+        "findings": [],
+        "recommendations": []
+    }
+    
+    # Check strategic context
+    if not analysis.strategic_context:
+        review_results["findings"].append("Missing strategic context (Clause 4.1)")
+        review_results["recommendations"].append("Define organizational purpose and strategic direction")
+    else:
+        review_results["compliance_score"] += 20
+    
+    # Check scope definition
+    if not analysis.scope:
+        review_results["findings"].append("Analysis scope not defined")
+        review_results["recommendations"].append("Define clear analysis scope")
+    else:
+        review_results["compliance_score"] += 15
+    
+    # Check review schedule
+    if not analysis.next_review_date:
+        review_results["findings"].append("No review schedule established")
+        review_results["recommendations"].append("Establish regular review schedule")
+    else:
+        review_results["compliance_score"] += 15
+    
+    # Check items with evidence
+    items_with_evidence = service.db.query(
+        func.count(SWOTItem.id)
+    ).filter(
+        and_(
+            SWOTItem.analysis_id == analysis_id,
+            func.json_array_length(SWOTItem.evidence_sources) > 0
+        )
+    ).scalar() or 0
+    
+    total_items = service.db.query(
+        func.count(SWOTItem.id)
+    ).filter(SWOTItem.analysis_id == analysis_id).scalar() or 0
+    
+    if total_items > 0 and items_with_evidence / total_items >= 0.8:
+        review_results["compliance_score"] += 25
+    elif items_with_evidence > 0:
+        review_results["compliance_score"] += 15
+        review_results["recommendations"].append("Increase documentation of evidence sources")
+    else:
+        review_results["findings"].append("Insufficient evidence documentation")
+        review_results["recommendations"].append("Document evidence sources for all items")
+    
+    # Check action integration
+    actions_count = service.db.query(func.count(SWOTAction.id)).filter(
+        SWOTAction.analysis_id == analysis_id
+    ).scalar() or 0
+    
+    if actions_count > 0:
+        review_results["compliance_score"] += 25
+    else:
+        review_results["findings"].append("No actions generated from analysis")
+        review_results["recommendations"].append("Generate actionable items from analysis")
+    
+    # Determine compliance level
+    if review_results["compliance_score"] >= 80:
+        review_results["compliance_level"] = "Fully Compliant"
+    elif review_results["compliance_score"] >= 60:
+        review_results["compliance_level"] = "Mostly Compliant"
+    elif review_results["compliance_score"] >= 40:
+        review_results["compliance_level"] = "Partially Compliant"
+    else:
+        review_results["compliance_level"] = "Non-Compliant"
+    
+    return review_results
+
+@router.post("/pestel-analyses/{analysis_id}/iso-review")
+def conduct_pestel_iso_review(
+    analysis_id: int,
+    db: Session = Depends(get_db)
+):
+    """Conduct an ISO compliance review of a PESTEL analysis"""
+    service = ActionsLogService(db)
+    analysis = service.get_pestel_analysis(analysis_id)
+    
+    if not analysis:
+        raise HTTPException(status_code=404, detail="PESTEL analysis not found")
+    
+    # Similar review logic as SWOT but focused on external factors
+    review_results = {
+        "analysis_id": analysis_id,
+        "review_date": datetime.now(),
+        "compliance_score": 0,
+        "findings": [],
+        "recommendations": []
+    }
+    
+    # Check for external environment focus
+    if analysis.strategic_context:
+        review_results["compliance_score"] += 25
+    else:
+        review_results["findings"].append("Missing strategic context for external environment")
+        review_results["recommendations"].append("Define external environment context")
+    
+    # Check for regulatory landscape assessment
+    if analysis.regulatory_landscape:
+        review_results["compliance_score"] += 20
+    else:
+        review_results["findings"].append("Missing regulatory landscape assessment")
+        review_results["recommendations"].append("Assess regulatory environment impact")
+    
+    # Check stakeholder impact assessment
+    if analysis.stakeholder_impact:
+        review_results["compliance_score"] += 20
+    else:
+        review_results["findings"].append("Missing stakeholder impact assessment")
+        review_results["recommendations"].append("Assess impact on interested parties")
+    
+    # Check for monitoring processes
+    items_with_monitoring = service.db.query(
+        func.count(PESTELItem.id)
+    ).filter(
+        and_(
+            PESTELItem.analysis_id == analysis_id,
+            func.json_array_length(PESTELItem.monitoring_indicators) > 0
+        )
+    ).scalar() or 0
+    
+    total_items = service.db.query(
+        func.count(PESTELItem.id)
+    ).filter(PESTELItem.analysis_id == analysis_id).scalar() or 0
+    
+    if total_items > 0 and items_with_monitoring / total_items >= 0.7:
+        review_results["compliance_score"] += 35
+    else:
+        review_results["findings"].append("Insufficient monitoring indicators defined")
+        review_results["recommendations"].append("Define monitoring indicators for external factors")
+    
+    # Determine compliance level
+    if review_results["compliance_score"] >= 80:
+        review_results["compliance_level"] = "Fully Compliant"
+    elif review_results["compliance_score"] >= 60:
+        review_results["compliance_level"] = "Mostly Compliant"
+    elif review_results["compliance_score"] >= 40:
+        review_results["compliance_level"] = "Partially Compliant"
+    else:
+        review_results["compliance_level"] = "Non-Compliant"
+    
+    return review_results
