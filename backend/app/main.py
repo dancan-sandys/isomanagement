@@ -66,7 +66,7 @@ app.add_middleware(
 # Add Trusted Host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"]
+    allowed_hosts=["*"] if settings.DEBUG else ["*"]
 )
 
 # Request timing middleware (client-disconnect safe)

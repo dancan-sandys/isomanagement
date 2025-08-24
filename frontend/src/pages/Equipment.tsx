@@ -92,16 +92,16 @@ const EquipmentPage: React.FC = () => {
             Manage and monitor all equipment in the facility
           </Typography>
         </Stack>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setEquipmentDialog(true)}
-        >
-          Add Equipment
-        </Button>
-      </Stack>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setEquipmentDialog(true)}
+            >
+              Add Equipment
+            </Button>
+        </Stack>
 
-      {loading && <LinearProgress sx={{ mb: 2 }} />}
+        {loading && <LinearProgress sx={{ mb: 2 }} />}
 
       <Paper sx={{ width: '100%', p: 3 }}>
         <Typography variant="h6" gutterBottom>
@@ -112,41 +112,41 @@ const EquipmentPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary">
             Debug: Equipment count: {equipment.length}
           </Typography>
-        </Box>
-        
-        <Grid container spacing={3}>
-          {equipment.map((item) => (
-            <Grid item xs={12} md={6} lg={4} key={item.id}>
-              <Card>
-                <CardContent>
-                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
-                    <Typography variant="h6" fontWeight="bold">
-                      {item.name}
-                    </Typography>
-                    <Chip
-                      label={item.equipment_type}
-                      color={getEquipmentTypeColor(item.equipment_type)}
-                      size="small"
-                    />
-                  </Stack>
-                  <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Serial:</strong> {item.serial_number || 'N/A'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Location:</strong> {item.location || 'N/A'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Created:</strong> {new Date(item.created_at).toLocaleDateString()}
-                    </Typography>
-                    {item.notes && (
-                      <Typography variant="body2" color="text.secondary">
-                        <strong>Notes:</strong> {item.notes}
-                      </Typography>
-                    )}
-                  </Stack>
-                </CardContent>
-                <CardActions>
+          </Box>
+
+            <Grid container spacing={3}>
+              {equipment.map((item) => (
+                <Grid item xs={12} md={6} lg={4} key={item.id}>
+                  <Card>
+                    <CardContent>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                        <Typography variant="h6" fontWeight="bold">
+                          {item.name}
+                        </Typography>
+                        <Chip
+                          label={item.equipment_type}
+                          color={getEquipmentTypeColor(item.equipment_type)}
+                          size="small"
+                        />
+                      </Stack>
+                      <Stack spacing={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          <strong>Serial:</strong> {item.serial_number || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          <strong>Location:</strong> {item.location || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          <strong>Created:</strong> {new Date(item.created_at).toLocaleDateString()}
+                        </Typography>
+                        {item.notes && (
+                          <Typography variant="body2" color="text.secondary">
+                            <strong>Notes:</strong> {item.notes}
+                          </Typography>
+                        )}
+                      </Stack>
+                    </CardContent>
+                    <CardActions>
                   <Button 
                     size="small" 
                     startIcon={<ViewIcon />} 
@@ -157,57 +157,57 @@ const EquipmentPage: React.FC = () => {
                         }}
                   >
                     View Details
-                  </Button>
-                </CardActions>
-              </Card>
+                      </Button>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
       </Paper>
 
-      {/* Equipment Dialog */}
-      <Dialog open={equipmentDialog} onClose={() => setEquipmentDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add New Equipment</DialogTitle>
+        {/* Equipment Dialog */}
+        <Dialog open={equipmentDialog} onClose={() => setEquipmentDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Add New Equipment</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Equipment Name"
-              value={equipmentForm.name}
-              onChange={(e) => setEquipmentForm({ ...equipmentForm, name: e.target.value })}
-              fullWidth
-              required
-            />
+              <TextField
+                label="Equipment Name"
+                value={equipmentForm.name}
+                onChange={(e) => setEquipmentForm({ ...equipmentForm, name: e.target.value })}
+                fullWidth
+                required
+              />
             <TextField
               label="Equipment Type"
-              value={equipmentForm.equipment_type}
-              onChange={(e) => setEquipmentForm({ ...equipmentForm, equipment_type: e.target.value })}
+                  value={equipmentForm.equipment_type}
+                  onChange={(e) => setEquipmentForm({ ...equipmentForm, equipment_type: e.target.value })}
               fullWidth
             />
-            <TextField
-              label="Serial Number"
-              value={equipmentForm.serial_number}
-              onChange={(e) => setEquipmentForm({ ...equipmentForm, serial_number: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="Location"
-              value={equipmentForm.location}
-              onChange={(e) => setEquipmentForm({ ...equipmentForm, location: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="Notes"
+              <TextField
+                label="Serial Number"
+                value={equipmentForm.serial_number}
+                onChange={(e) => setEquipmentForm({ ...equipmentForm, serial_number: e.target.value })}
+                fullWidth
+              />
+              <TextField
+                label="Location"
+                value={equipmentForm.location}
+                onChange={(e) => setEquipmentForm({ ...equipmentForm, location: e.target.value })}
+                fullWidth
+              />
+              <TextField
+                label="Notes"
               multiline
               rows={3}
-              value={equipmentForm.notes}
-              onChange={(e) => setEquipmentForm({ ...equipmentForm, notes: e.target.value })}
-              fullWidth
-            />
+                value={equipmentForm.notes}
+                onChange={(e) => setEquipmentForm({ ...equipmentForm, notes: e.target.value })}
+                fullWidth
+              />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEquipmentDialog(false)}>Cancel</Button>
-          <Button onClick={handleEquipmentSubmit} variant="contained">Add Equipment</Button>
+            <Button onClick={() => setEquipmentDialog(false)}>Cancel</Button>
+            <Button onClick={handleEquipmentSubmit} variant="contained">Add Equipment</Button>
         </DialogActions>
       </Dialog>
     </Box>
