@@ -86,14 +86,6 @@ def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{process_id}")
-def get_process(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
-    service = ProductionService(db)
-    proc = service.get_process(process_id)
-    if not proc:
-        raise HTTPException(status_code=404, detail="Process not found")
-    return proc
-
 # Enhanced Production Endpoints
 @router.post("/processes", response_model=ProcessResponse)
 def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:create"))):
@@ -144,7 +136,32 @@ def list_processes(
         except ValueError:
             raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
     
-    return service.list_processes(pt, st, limit, offset)
+    processes = service.list_processes(pt, st, limit, offset)
+    
+    # Convert to response format with empty related data
+    result = []
+    for process in processes:
+        process_dict = {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value if hasattr(process.process_type, 'value') else str(process.process_type),
+            "operator_id": process.operator_id,
+            "status": process.status.value if hasattr(process.status, 'value') else str(process.status),
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "spec": process.spec,
+            "notes": process.notes,
+            "created_at": process.created_at,
+            "updated_at": process.updated_at,
+            "steps": [],
+            "logs": [],
+            "parameters": [],
+            "deviations": [],
+            "alerts": []
+        }
+        result.append(process_dict)
+    
+    return result
 
 
 @router.get("/templates", response_model=List[ProcessTemplateResponse])
@@ -167,6 +184,15 @@ def get_templates(
     return templates
 
 
+@router.get("/{process_id}")
+def get_process(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return proc
+
+
 @router.put("/processes/{process_id}", response_model=ProcessResponse)
 def update_process(
     process_id: int, 
@@ -182,7 +208,27 @@ def update_process(
     
     try:
         updated = service.update_process(process_id, payload.model_dump(exclude_unset=True))
-        return updated
+        
+        # Convert to response format
+        process_dict = {
+            "id": updated.id,
+            "batch_id": updated.batch_id,
+            "process_type": updated.process_type.value if hasattr(updated.process_type, 'value') else str(updated.process_type),
+            "operator_id": updated.operator_id,
+            "status": updated.status.value if hasattr(updated.status, 'value') else str(updated.status),
+            "start_time": updated.start_time,
+            "end_time": updated.end_time,
+            "spec": updated.spec,
+            "notes": updated.notes,
+            "created_at": updated.created_at,
+            "updated_at": updated.updated_at,
+            "steps": [],
+            "logs": [],
+            "parameters": [],
+            "deviations": [],
+            "alerts": []
+        }
+        return process_dict
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

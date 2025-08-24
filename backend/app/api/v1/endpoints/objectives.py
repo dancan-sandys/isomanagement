@@ -26,6 +26,36 @@ def list_objectives(db: Session = Depends(get_db)):
     return service.list_objectives()
 
 
+@router.get("/kpis", response_model=List[ObjectiveProgress])
+def get_kpis(
+    objective_id: Optional[int] = Query(None),
+    department_id: Optional[int] = Query(None),
+    period_start: Optional[datetime] = Query(None),
+    period_end: Optional[datetime] = Query(None),
+    db: Session = Depends(get_db)
+):
+    service = ObjectivesService(db)
+    # Reuse ObjectiveProgress schema for lean KPI payload
+    results = service.get_kpis(objective_id, department_id, period_start, period_end)
+    # Map to schema objects
+    mapped: List[ObjectiveProgress] = []
+    for r in results:
+        mapped.append(ObjectiveProgress(
+            id=0,
+            objective_id=r["objective_id"],
+            department_id=r.get("department_id"),
+            period_start=r["period_start"],
+            period_end=r["period_end"],
+            actual_value=r.get("actual_value"),
+            attainment_percent=r.get("attainment_percent"),
+            status=r.get("status"),
+            created_by=0,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        ))
+    return mapped
+
+
 @router.get("/{objective_id}", response_model=Objective)
 def get_objective(objective_id: int, db: Session = Depends(get_db)):
     service = ObjectivesService(db)
@@ -70,32 +100,4 @@ def upsert_progress(objective_id: int, payload: ObjectiveProgressCreate, db: Ses
 def list_progress(objective_id: int, db: Session = Depends(get_db)):
     service = ObjectivesService(db)
     return service.list_progress(objective_id)
-
-
-@router.get("/kpis", response_model=List[ObjectiveProgress])
-def get_kpis(
-    objective_id: Optional[int] = Query(None),
-    department_id: Optional[int] = Query(None),
-    period_start: Optional[datetime] = Query(None),
-    period_end: Optional[datetime] = Query(None),
-    db: Session = Depends(get_db)
-):
-    service = ObjectivesService(db)
-    # Reuse ObjectiveProgress schema for lean KPI payload
-    results = service.get_kpis(objective_id, department_id, period_start, period_end)
-    # Map to schema objects
-    mapped: List[ObjectiveProgress] = []
-    for r in results:
-        mapped.append(ObjectiveProgress(
-            id=0,
-            objective_id=r["objective_id"],
-            department_id=r.get("department_id"),
-            period_start=r["period_start"],
-            period_end=r["period_end"],
-            actual_value=r.get("actual_value"),
-            attainment_percent=r.get("attainment_percent"),
-            status=r.get("status"),
-            created_by=0
-        ))
-    return mapped
 

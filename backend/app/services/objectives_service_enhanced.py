@@ -337,12 +337,12 @@ class ObjectivesServiceEnhanced:
         ).order_by(desc(ObjectiveProgress.period_start)).limit(periods).all()
         
         if not progress_entries:
-            return {"trend": "no_data", "direction": None, "slope": 0}
+            return {"trend": "no_data", "direction": None, "slope": 0, "values": [], "periods": 0}
         
         # Calculate trend
         values = [entry.actual_value for entry in reversed(progress_entries)]
         if len(values) < 2:
-            return {"trend": "stable", "direction": TrendDirection.STABLE, "slope": 0}
+            return {"trend": "stable", "direction": TrendDirection.STABLE, "slope": 0, "values": values, "periods": len(values)}
         
         # Simple linear trend calculation
         x_values = list(range(len(values)))

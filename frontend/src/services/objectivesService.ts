@@ -93,156 +93,156 @@ export const objectivesService = {
       if (pagination.sort_order) params.append('sort_order', pagination.sort_order);
     }
     
-            const response = await apiClient.get(`/objectives-v2/objectives?${params.toString()}`);
+    const response = await apiClient.get(`/objectives-v2/?${params.toString()}`);
     return response.data;
   },
 
   // Get a specific objective by ID
   getObjective: async (id: number): Promise<ObjectiveResponse> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/${id}`);
+    const response = await apiClient.get(`/objectives-v2/${id}`);
     return response.data;
   },
 
   // Create a new objective
   createObjective: async (objective: CreateObjective): Promise<ObjectiveResponse> => {
-              const response = await apiClient.post('/objectives-v2/objectives/', objective);
+    const response = await apiClient.post('/objectives-v2/', objective);
     return response.data;
   },
 
   // Update an existing objective
   updateObjective: async (id: number, objective: UpdateObjective): Promise<ObjectiveResponse> => {
-              const response = await apiClient.put(`/objectives-v2/objectives/${id}`, objective);
+    const response = await apiClient.put(`/objectives-v2/${id}`, objective);
     return response.data;
   },
 
   // Delete an objective
   deleteObjective: async (id: number): Promise<void> => {
-              await apiClient.delete(`/objectives-v2/objectives/${id}`);
+    await apiClient.delete(`/objectives-v2/${id}`);
   },
 
   // Get corporate objectives
   getCorporateObjectives: async (): Promise<ObjectivesResponse> => {
-              const response = await apiClient.get('/objectives-v2/objectives/corporate');
+    const response = await apiClient.get('/objectives-v2/corporate');
     return response.data;
   },
 
   // Get departmental objectives
   getDepartmentalObjectives: async (departmentId: number): Promise<ObjectivesResponse> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/departmental/${departmentId}`);
+    const response = await apiClient.get(`/objectives-v2/departmental/${departmentId}`);
     return response.data;
   },
 
   // Get hierarchical objectives view
   getHierarchicalObjectives: async (): Promise<ObjectivesResponse> => {
-              const response = await apiClient.get('/objectives-v2/objectives/hierarchy');
+    const response = await apiClient.get('/objectives-v2/hierarchy');
     return response.data;
   },
 
   // Progress Management API
   // Get progress history for an objective
   getObjectiveProgress: async (objectiveId: number): Promise<ProgressResponse> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/${objectiveId}/progress`);
+    const response = await apiClient.get(`/objectives-v2/${objectiveId}/progress`);
     return response.data;
   },
 
   // Record progress for an objective
   createProgress: async (objectiveId: number, progress: CreateProgress): Promise<ProgressResponse> => {
-              const response = await apiClient.post(`/objectives-v2/objectives/${objectiveId}/progress`, progress);
+    const response = await apiClient.post(`/objectives-v2/${objectiveId}/progress`, progress);
     return response.data;
   },
 
   // Get trend analysis for an objective
   getObjectiveTrend: async (objectiveId: number): Promise<TrendAnalysis> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/${objectiveId}/progress/trend`);
+    const response = await apiClient.get(`/objectives-v2/${objectiveId}/progress/trend`);
     return response.data;
   },
 
   // Bulk progress update
   bulkProgressUpdate: async (updates: CreateProgress[]): Promise<ProgressResponse> => {
-              const response = await apiClient.post('/objectives-v2/objectives/progress/bulk', { updates });
+    const response = await apiClient.post('/objectives-v2/progress/bulk', { updates });
     return response.data;
   },
 
   // Objective Linkages API
   getObjectiveLinks: async (objectiveId: number): Promise<{ linked_risk_ids: number[]; linked_control_ids: number[]; linked_document_ids: number[]; management_review_refs: number[] }> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/${objectiveId}/links`);
+    const response = await apiClient.get(`/objectives-v2/${objectiveId}/links`);
     return response.data;
   },
   updateObjectiveLinks: async (objectiveId: number, payload: Partial<{ linked_risk_ids: number[]; linked_control_ids: number[]; linked_document_ids: number[]; management_review_refs: number[] }>): Promise<ObjectiveResponse> => {
-              const response = await apiClient.put(`/objectives-v2/objectives/${objectiveId}/links`, payload);
+    const response = await apiClient.put(`/objectives-v2/${objectiveId}/links`, payload);
     return response.data;
   },
 
   // Dashboard API
   // Get dashboard KPIs
   getDashboardKPIs: async (): Promise<DashboardKPI> => {
-              const response = await apiClient.get('/objectives-v2/objectives/dashboard/kpis');
+    const response = await apiClient.get('/objectives-v2/dashboard/kpis');
     return response.data;
   },
 
   // Get performance metrics
   getPerformanceMetrics: async (): Promise<PerformanceMetrics[]> => {
-              const response = await apiClient.get('/objectives-v2/objectives/dashboard/performance');
+    const response = await apiClient.get('/objectives-v2/dashboard/performance');
     return response.data;
   },
 
   // Get trend data
   getTrendData: async (): Promise<TrendAnalysis[]> => {
-              const response = await apiClient.get('/objectives-v2/objectives/dashboard/trends');
+    const response = await apiClient.get('/objectives-v2/dashboard/trends');
     return response.data;
   },
 
   // Get performance alerts
   getPerformanceAlerts: async (): Promise<ObjectiveAlert[]> => {
-              const response = await apiClient.get('/objectives-v2/objectives/dashboard/alerts');
+    const response = await apiClient.get('/objectives-v2/dashboard/alerts');
     return response.data;
   },
 
   // Get period comparisons
   getPeriodComparisons: async (period1: string, period2: string): Promise<any> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/dashboard/comparison?period1=${period1}&period2=${period2}`);
+    const response = await apiClient.get(`/objectives-v2/dashboard/comparison?period1=${period1}&period2=${period2}`);
     return response.data;
   },
 
   // Get complete dashboard data
   getDashboardData: async (): Promise<DashboardResponse> => {
-              const response = await apiClient.get('/objectives-v2/objectives/dashboard/summary');
+    const response = await apiClient.get('/objectives-v2/dashboard/summary');
     return response.data;
   },
 
   // Department Management API
   // Get all departments
   getDepartments: async (): Promise<{ data: Department[] }> => {
-              const response = await apiClient.get('/objectives-v2/departments');
+    const response = await apiClient.get('/objectives-v2/departments');
     return response.data;
   },
 
   // Get a specific department
   getDepartment: async (id: number): Promise<{ data: Department }> => {
-              const response = await apiClient.get(`/objectives-v2/departments/${id}`);
+    const response = await apiClient.get(`/objectives-v2/departments/${id}`);
     return response.data;
   },
 
   // Create a new department
   createDepartment: async (department: Partial<Department>): Promise<{ data: Department }> => {
-              const response = await apiClient.post('/objectives-v2/departments/', department);
+    const response = await apiClient.post('/objectives-v2/departments/', department);
     return response.data;
   },
 
   // Update a department
   updateDepartment: async (id: number, department: Partial<Department>): Promise<{ data: Department }> => {
-              const response = await apiClient.put(`/objectives-v2/departments/${id}`, department);
+    const response = await apiClient.put(`/objectives-v2/departments/${id}`, department);
     return response.data;
   },
 
   // Delete a department
   deleteDepartment: async (id: number): Promise<void> => {
-              await apiClient.delete(`/objectives-v2/departments/${id}`);
+    await apiClient.delete(`/objectives-v2/departments/${id}`);
   },
 
   // Evidence API
   listEvidence: async (objectiveId: number): Promise<{ data: ObjectiveEvidence[] }> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/${objectiveId}/evidence`);
+    const response = await apiClient.get(`/objectives-v2/${objectiveId}/evidence`);
     return response.data;
   },
   uploadEvidence: async (objectiveId: number, payload: { file: File; notes?: string; progress_id?: number }): Promise<ObjectiveEvidence> => {
@@ -250,21 +250,21 @@ export const objectivesService = {
     formData.append('file', payload.file);
     if (payload.notes) formData.append('notes', payload.notes);
     if (payload.progress_id) formData.append('progress_id', String(payload.progress_id));
-              const response = await apiClient.post(`/objectives-v2/objectives/${objectiveId}/evidence`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const response = await apiClient.post(`/objectives-v2/${objectiveId}/evidence`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
     return response.data;
   },
   verifyEvidence: async (objectiveId: number, evidenceId: number): Promise<ObjectiveEvidence> => {
-              const response = await apiClient.post(`/objectives-v2/objectives/${objectiveId}/evidence/${evidenceId}/verify`);
+    const response = await apiClient.post(`/objectives-v2/${objectiveId}/evidence/${evidenceId}/verify`);
     return response.data;
   },
   deleteEvidence: async (objectiveId: number, evidenceId: number): Promise<void> => {
-              await apiClient.delete(`/objectives-v2/objectives/${objectiveId}/evidence/${evidenceId}`);
+    await apiClient.delete(`/objectives-v2/${objectiveId}/evidence/${evidenceId}`);
   },
 
   // Utility functions
   // Export objectives data
   exportObjectives: async (format: 'csv' | 'excel' = 'csv'): Promise<Blob> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/export?format=${format}`, {
+    const response = await apiClient.get(`/objectives-v2/export?format=${format}`, {
       responseType: 'blob'
     });
     return response.data;
@@ -275,7 +275,7 @@ export const objectivesService = {
     const formData = new FormData();
     formData.append('file', file);
     
-              const response = await apiClient.post('/objectives-v2/objectives/import', formData, {
+    const response = await apiClient.post('/objectives-v2/import', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -290,13 +290,13 @@ export const objectivesService = {
     by_level: Record<string, number>;
     by_status: Record<string, number>;
   }> => {
-              const response = await apiClient.get('/objectives-v2/objectives/stats');
+    const response = await apiClient.get('/objectives-v2/stats');
     return response.data;
   },
 
   // Search objectives
   searchObjectives: async (query: string): Promise<Objective[]> => {
-              const response = await apiClient.get(`/objectives-v2/objectives/search?q=${encodeURIComponent(query)}`);
+    const response = await apiClient.get(`/objectives-v2/search?q=${encodeURIComponent(query)}`);
     return response.data;
   },
 };

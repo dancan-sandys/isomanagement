@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, documents, haccp, prp, suppliers, traceability, settings, profile, notifications, dashboard, audits, risk, risk_framework, haccp_risk, complaints, allergen_label, management_review, rbac, websocket, objectives, equipment
+from app.api.v1.endpoints import auth, users, documents, haccp, prp, suppliers, traceability, settings, profile, notifications, dashboard, audits, risk, risk_framework, haccp_risk, complaints, allergen_label, management_review, rbac, websocket, objectives, equipment, production
 from app.api.v1.endpoints import change
 
 api_router = APIRouter()
@@ -29,3 +29,4 @@ api_router.include_router(websocket.router, tags=["websocket"])
 api_router.include_router(change.router, prefix="/change-requests", tags=["change_requests"])
 api_router.include_router(objectives.router, prefix="/objectives-v2", tags=["objectives"])
 api_router.include_router(equipment.router, prefix="/equipment", tags=["equipment"])
+api_router.include_router(production.router, prefix="/production", tags=["production"])

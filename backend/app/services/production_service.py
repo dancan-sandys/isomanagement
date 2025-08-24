@@ -385,10 +385,10 @@ class ProductionService:
         deviation = ProcessDeviation(
             process_id=process_id,
             step_id=parameter_data.get("step_id"),
-            deviation_type=parameter_data["parameter_name"],
-            expected_value=parameter_data.get("target_value", 0),
-            actual_value=parameter_data["parameter_value"],
-            severity=self._calculate_severity(parameter_data),
+            deviation_type=parameter_data.get("deviation_type", parameter_data.get("parameter_name", "unknown")),
+            expected_value=parameter_data.get("expected_value", parameter_data.get("target_value", 0)),
+            actual_value=parameter_data.get("actual_value", parameter_data.get("parameter_value", 0)),
+            severity=parameter_data.get("severity", self._calculate_severity(parameter_data)),
             created_by=parameter_data.get("created_by") or parameter_data.get("recorded_by"),
         )
         
@@ -417,7 +417,7 @@ class ProductionService:
 
     def _calculate_severity(self, parameter_data: Dict[str, Any]) -> str:
         """Calculate deviation severity based on parameter type and deviation"""
-        param_name = parameter_data["parameter_name"].lower()
+        param_name = parameter_data.get("parameter_name", parameter_data.get("deviation_type", "")).lower()
         
         # Critical parameters for food safety
         if "temperature" in param_name and "pasteurization" in param_name:

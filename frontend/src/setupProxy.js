@@ -8,15 +8,11 @@ module.exports = function(app) {
     app.use(
       '/api/v1',
       createProxyMiddleware({
-        target: 'http://localhost:8000/api/v1/',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         logLevel: 'debug',
         onProxyReq: (proxyReq, req, res) => {
-          // Ensure the full path is preserved
-          if (!proxyReq.path.startsWith('/api/v1')) {
-            proxyReq.path = '/api/v1' + proxyReq.path;
-          }
           console.log('🚀 Proxying request:', req.method, req.url, '→', proxyReq.path);
           console.log('🎯 Target URL:', proxyReq.getHeader('host'));
         },
