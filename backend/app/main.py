@@ -176,7 +176,20 @@ async def root():
     return {
         "message": "ISO 22000 FSMS API",
         "version": settings.APP_VERSION,
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
+        "status": "running",
+        "timestamp": time.time()
+    }
+
+# Debug endpoint
+@app.get("/debug")
+async def debug():
+    return {
+        "message": "Debug endpoint working",
+        "app_name": settings.APP_NAME,
+        "environment": settings.ENVIRONMENT,
+        "debug": settings.DEBUG,
+        "timestamp": time.time()
     }
 
 # Health check endpoint
@@ -202,6 +215,17 @@ async def health_check():
                 "environment": settings.ENVIRONMENT
             }
         )
+
+# Catch-all endpoint for debugging
+@app.get("/{path:path}")
+async def catch_all(path: str):
+    """Catch-all endpoint for debugging routing issues"""
+    return {
+        "message": f"Path '{path}' not found",
+        "available_endpoints": ["/", "/health", "/debug", "/api/v1"],
+        "timestamp": time.time(),
+        "environment": settings.ENVIRONMENT
+    }
 
 if __name__ == "__main__":
     import uvicorn

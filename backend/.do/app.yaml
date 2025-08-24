@@ -3,7 +3,6 @@ region: nyc
 services:
   # Backend API Service
   - name: backend
-    source_dir: /
     github:
       repo: dancan-sandys/isomanagement
       branch: master
