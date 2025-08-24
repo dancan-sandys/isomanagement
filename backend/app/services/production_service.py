@@ -1,12 +1,17 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_, desc
+import math
+import statistics
+import numpy as np
 
 from app.models.production import (
     ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
     ProcessParameter, ProcessDeviation, ProcessAlert, ProductSpecification, ProcessTemplate,
-    ProductProcessType, ProcessStatus, StepType, LogEvent
+    ProductProcessType, ProcessStatus, StepType, LogEvent,
+    ProcessControlChart, ProcessControlPoint, ProcessCapabilityStudy, YieldAnalysisReport,
+    YieldDefectCategory, ProcessMonitoringDashboard, ProcessMonitoringAlert
 )
 from app.models.traceability import Batch, BatchStatus, BatchType
 from app.models.production import ProcessSpecLink, ReleaseRecord
@@ -814,4 +819,746 @@ class ProductionService:
             .order_by(ReleaseRecord.signed_at.desc())
             .first()
         )
+
+    # ===== ENHANCED PROCESS MONITORING AND SPC METHODS =====
+
+    def create_control_chart(self, process_id: int, parameter_name: str, data: Dict[str, Any]) -> ProcessControlChart:
+        """Create a new control chart for SPC monitoring - ISO 22000:2018 Clause 8.5"""
+        process = self.get_process(process_id)
+        if not process:
+            raise ValueError("Process not found")
+
+        # Get historical data for control limit calculation
+        historical_params = (
+            self.db.query(ProcessParameter)
+            .filter(
+                ProcessParameter.process_id == process_id,
+                ProcessParameter.parameter_name == parameter_name
+            )
+            .order_by(ProcessParameter.recorded_at.desc())
+            .limit(data.get("sample_size", 50))
+            .all()
+        )
+
+        if len(historical_params) < 5:
+            raise ValueError("Insufficient historical data for control chart creation")
+
+        # Calculate control limits
+        values = [p.parameter_value for p in historical_params]
+        mean_value = statistics.mean(values)
+        std_dev = statistics.stdev(values) if len(values) > 1 else 0
+
+        # Calculate control limits (3-sigma by default)
+        sigma_factor = data.get("sigma_factor", 3.0)
+        upper_control_limit = mean_value + (sigma_factor * std_dev)
+        lower_control_limit = mean_value - (sigma_factor * std_dev)
+
+        # Warning limits (2-sigma)
+        upper_warning_limit = mean_value + (2.0 * std_dev)
+        lower_warning_limit = mean_value - (2.0 * std_dev)
+
+        control_chart = ProcessControlChart(
+            process_id=process_id,
+            parameter_name=parameter_name,
+            chart_type=data.get("chart_type", "X-bar"),
+            sample_size=data.get("sample_size", 5),
+            target_value=data.get("target_value", mean_value),
+            upper_control_limit=upper_control_limit,
+            lower_control_limit=lower_control_limit,
+            upper_warning_limit=upper_warning_limit,
+            lower_warning_limit=lower_warning_limit,
+            specification_upper=data.get("specification_upper"),
+            specification_lower=data.get("specification_lower"),
+        )
+
+        self.db.add(control_chart)
+        self.db.commit()
+        self.db.refresh(control_chart)
+
+        # Create initial control points from historical data
+        for param in historical_params:
+            self._add_control_point(control_chart.id, param.parameter_value, param.id, param.recorded_at)
+
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("created_by"),
+                action="control_chart.created",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"chart_id": control_chart.id, "parameter": parameter_name, "chart_type": control_chart.chart_type}
+            )
+        except Exception:
+            pass
+
+        return control_chart
+
+    def _add_control_point(self, control_chart_id: int, measured_value: float, parameter_id: Optional[int] = None, timestamp: Optional[datetime] = None) -> ProcessControlPoint:
+        """Add a data point to control chart and check for control violations"""
+        control_chart = self.db.query(ProcessControlChart).filter(ProcessControlChart.id == control_chart_id).first()
+        if not control_chart:
+            raise ValueError("Control chart not found")
+
+        # Create control point
+        control_point = ProcessControlPoint(
+            control_chart_id=control_chart_id,
+            parameter_id=parameter_id,
+            timestamp=timestamp or datetime.utcnow(),
+            measured_value=measured_value,
+        )
+
+        # Check for control violations using Nelson rules
+        violation_rule = self._check_nelson_rules(control_chart, measured_value)
+        if violation_rule:
+            control_point.is_out_of_control = True
+            control_point.control_rule_violated = violation_rule
+            
+            # Create monitoring alert
+            self._create_spc_alert(control_chart, measured_value, violation_rule)
+
+        # Calculate additional statistics based on chart type
+        if control_chart.chart_type in ["CUSUM", "EWMA"]:
+            control_point = self._calculate_advanced_statistics(control_point, control_chart)
+
+        self.db.add(control_point)
+        self.db.commit()
+        self.db.refresh(control_point)
+
+        return control_point
+
+    def _check_nelson_rules(self, control_chart: ProcessControlChart, value: float) -> Optional[str]:
+        """Check Nelson rules for statistical process control"""
+        # Rule 1: Point beyond 3-sigma control limits
+        if value > control_chart.upper_control_limit or value < control_chart.lower_control_limit:
+            return "Nelson_Rule_1_Beyond_3sigma"
+
+        # Get recent points for trend analysis (Rules 2-8)
+        recent_points = (
+            self.db.query(ProcessControlPoint)
+            .filter(ProcessControlPoint.control_chart_id == control_chart.id)
+            .order_by(ProcessControlPoint.timestamp.desc())
+            .limit(9)
+            .all()
+        )
+
+        if len(recent_points) < 2:
+            return None
+
+        # Rule 2: 9 points in a row on same side of center line
+        if len(recent_points) >= 9:
+            all_above = all(p.measured_value > control_chart.target_value for p in recent_points[:9])
+            all_below = all(p.measured_value < control_chart.target_value for p in recent_points[:9])
+            if all_above or all_below:
+                return "Nelson_Rule_2_Nine_Same_Side"
+
+        # Rule 3: 6 points in a row steadily increasing or decreasing
+        if len(recent_points) >= 6:
+            values = [p.measured_value for p in recent_points[:6]]
+            increasing = all(values[i] < values[i+1] for i in range(5))
+            decreasing = all(values[i] > values[i+1] for i in range(5))
+            if increasing or decreasing:
+                return "Nelson_Rule_3_Six_Trend"
+
+        # Rule 4: 14 points alternating up and down
+        if len(recent_points) >= 14:
+            values = [p.measured_value for p in recent_points[:14]]
+            alternating = all(
+                (values[i] > values[i+1] and values[i+1] < values[i+2]) or
+                (values[i] < values[i+1] and values[i+1] > values[i+2])
+                for i in range(12)
+            )
+            if alternating:
+                return "Nelson_Rule_4_Fourteen_Alternating"
+
+        # Rule 5: 2 out of 3 points beyond 2-sigma warning limits
+        if len(recent_points) >= 3:
+            beyond_warning = sum(
+                1 for p in recent_points[:3]
+                if p.measured_value > control_chart.upper_warning_limit or 
+                   p.measured_value < control_chart.lower_warning_limit
+            )
+            if beyond_warning >= 2:
+                return "Nelson_Rule_5_Two_of_Three_Beyond_2sigma"
+
+        return None
+
+    def _calculate_advanced_statistics(self, control_point: ProcessControlPoint, control_chart: ProcessControlChart) -> ProcessControlPoint:
+        """Calculate CUSUM and EWMA statistics for advanced control charts"""
+        if control_chart.chart_type == "CUSUM":
+            # Get previous CUSUM value
+            prev_point = (
+                self.db.query(ProcessControlPoint)
+                .filter(ProcessControlPoint.control_chart_id == control_chart.id)
+                .order_by(ProcessControlPoint.timestamp.desc())
+                .first()
+            )
+            prev_cusum = prev_point.cumulative_sum if prev_point else 0.0
+            control_point.cumulative_sum = prev_cusum + (control_point.measured_value - control_chart.target_value)
+
+        elif control_chart.chart_type == "EWMA":
+            # Exponentially Weighted Moving Average (λ = 0.2 default)
+            lambda_factor = 0.2
+            prev_point = (
+                self.db.query(ProcessControlPoint)
+                .filter(ProcessControlPoint.control_chart_id == control_chart.id)
+                .order_by(ProcessControlPoint.timestamp.desc())
+                .first()
+            )
+            prev_ewma = prev_point.moving_average if prev_point else control_chart.target_value
+            control_point.moving_average = (lambda_factor * control_point.measured_value) + ((1 - lambda_factor) * prev_ewma)
+
+        return control_point
+
+    def _create_spc_alert(self, control_chart: ProcessControlChart, value: float, rule: str):
+        """Create monitoring alert for SPC violations"""
+        severity_map = {
+            "Nelson_Rule_1_Beyond_3sigma": "critical",
+            "Nelson_Rule_2_Nine_Same_Side": "warning",
+            "Nelson_Rule_3_Six_Trend": "warning",
+            "Nelson_Rule_4_Fourteen_Alternating": "info",
+            "Nelson_Rule_5_Two_of_Three_Beyond_2sigma": "warning"
+        }
+
+        alert = ProcessMonitoringAlert(
+            process_id=control_chart.process_id,
+            control_chart_id=control_chart.id,
+            alert_type="control_limit",
+            severity_level=severity_map.get(rule, "warning"),
+            alert_title=f"SPC Violation: {rule}",
+            alert_message=f"Parameter {control_chart.parameter_name} violated {rule}. Current value: {value:.3f}",
+            parameter_name=control_chart.parameter_name,
+            current_value=value,
+            threshold_value=control_chart.upper_control_limit if value > control_chart.target_value else control_chart.lower_control_limit,
+            control_rule=rule,
+            auto_generated=True,
+            requires_immediate_action=(rule == "Nelson_Rule_1_Beyond_3sigma"),
+            # ISO 22000 impact assessment
+            food_safety_impact=self._assess_food_safety_impact(control_chart.parameter_name),
+            ccp_affected=self._is_critical_control_point(control_chart.parameter_name),
+            corrective_action_required=True,
+            verification_required=True,
+        )
+
+        self.db.add(alert)
+        self.db.commit()
+
+        try:
+            log_audit_event(
+                self.db,
+                user_id=None,
+                action="spc_alert.created",
+                resource_type="production_process",
+                resource_id=str(control_chart.process_id),
+                details={"alert_id": alert.id, "rule": rule, "parameter": control_chart.parameter_name, "value": value}
+            )
+        except Exception:
+            pass
+
+    def _assess_food_safety_impact(self, parameter_name: str) -> bool:
+        """Assess if parameter deviation impacts food safety - ISO 22000:2018"""
+        critical_parameters = [
+            "temperature", "time", "ph", "water_activity", "pressure", 
+            "pasteurization", "sterilization", "cooling", "heating"
+        ]
+        return any(param in parameter_name.lower() for param in critical_parameters)
+
+    def _is_critical_control_point(self, parameter_name: str) -> bool:
+        """Determine if parameter is part of a Critical Control Point (CCP)"""
+        ccp_parameters = [
+            "pasteurization_temperature", "pasteurization_time", "cooling_temperature",
+            "sterilization_temperature", "sterilization_time", "ph_control"
+        ]
+        return parameter_name.lower() in ccp_parameters
+
+    def calculate_process_capability(self, process_id: int, parameter_name: str, data: Dict[str, Any]) -> ProcessCapabilityStudy:
+        """Calculate process capability indices (Cp, Cpk) - ISO 22000:2018 requirements"""
+        process = self.get_process(process_id)
+        if not process:
+            raise ValueError("Process not found")
+
+        period_start = data.get("period_start") or (datetime.utcnow() - timedelta(days=30))
+        period_end = data.get("period_end") or datetime.utcnow()
+
+        # Get parameter data for the study period
+        parameters = (
+            self.db.query(ProcessParameter)
+            .filter(
+                ProcessParameter.process_id == process_id,
+                ProcessParameter.parameter_name == parameter_name,
+                ProcessParameter.recorded_at >= period_start,
+                ProcessParameter.recorded_at <= period_end
+            )
+            .order_by(ProcessParameter.recorded_at.asc())
+            .all()
+        )
+
+        if len(parameters) < 30:
+            raise ValueError("Insufficient data for capability study (minimum 30 points required)")
+
+        values = [p.parameter_value for p in parameters]
+        mean_value = statistics.mean(values)
+        std_dev = statistics.stdev(values)
+
+        spec_upper = data.get("specification_upper")
+        spec_lower = data.get("specification_lower")
+
+        if not spec_upper or not spec_lower:
+            raise ValueError("Specification limits required for capability study")
+
+        # Calculate capability indices
+        cp_index = (spec_upper - spec_lower) / (6 * std_dev) if std_dev > 0 else 0
+        
+        # Cpk considers process centering
+        cpu = (spec_upper - mean_value) / (3 * std_dev) if std_dev > 0 else 0
+        cpl = (mean_value - spec_lower) / (3 * std_dev) if std_dev > 0 else 0
+        cpk_index = min(cpu, cpl)
+
+        # Performance indices (uses actual spread vs. 6-sigma)
+        pp_index = (spec_upper - spec_lower) / (6 * std_dev) if std_dev > 0 else 0
+        ppk_index = cpk_index  # Same calculation for small samples
+
+        # Process sigma level (DPMO based)
+        defect_rate_ppm = self._calculate_defect_rate_ppm(values, spec_lower, spec_upper)
+        process_sigma_level = self._calculate_sigma_level(defect_rate_ppm)
+
+        # Capability assessment
+        is_capable = cp_index >= 1.33 and cpk_index >= 1.33  # Industry standard
+
+        capability_study = ProcessCapabilityStudy(
+            process_id=process_id,
+            parameter_name=parameter_name,
+            study_period_start=period_start,
+            study_period_end=period_end,
+            sample_size=len(parameters),
+            mean_value=mean_value,
+            standard_deviation=std_dev,
+            specification_upper=spec_upper,
+            specification_lower=spec_lower,
+            cp_index=cp_index,
+            cpk_index=cpk_index,
+            pp_index=pp_index,
+            ppk_index=ppk_index,
+            process_sigma_level=process_sigma_level,
+            defect_rate_ppm=defect_rate_ppm,
+            is_capable=is_capable,
+            conducted_by=data.get("conducted_by"),
+            approved_by=data.get("approved_by"),
+            study_notes=data.get("study_notes"),
+        )
+
+        self.db.add(capability_study)
+        self.db.commit()
+        self.db.refresh(capability_study)
+
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("conducted_by"),
+                action="capability_study.completed",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={
+                    "study_id": capability_study.id,
+                    "parameter": parameter_name,
+                    "cp": cp_index,
+                    "cpk": cpk_index,
+                    "capable": is_capable
+                }
+            )
+        except Exception:
+            pass
+
+        return capability_study
+
+    def _calculate_defect_rate_ppm(self, values: List[float], spec_lower: float, spec_upper: float) -> float:
+        """Calculate defect rate in parts per million"""
+        out_of_spec = sum(1 for v in values if v < spec_lower or v > spec_upper)
+        total = len(values)
+        return (out_of_spec / total) * 1_000_000 if total > 0 else 0
+
+    def _calculate_sigma_level(self, defect_rate_ppm: float) -> float:
+        """Calculate process sigma level from defect rate"""
+        if defect_rate_ppm <= 0:
+            return 6.0  # Perfect process
+        elif defect_rate_ppm >= 999_999:
+            return 0.0  # Extremely poor process
+        
+        # Convert PPM to probability and calculate Z-score
+        prob_defect = defect_rate_ppm / 1_000_000
+        prob_good = 1 - prob_defect
+        
+        # Use inverse normal distribution (approximation)
+        try:
+            from scipy.stats import norm
+            z_score = norm.ppf(prob_good)
+            return max(0, min(6, z_score))
+        except ImportError:
+            # Fallback approximation
+            if defect_rate_ppm <= 3.4:
+                return 6.0
+            elif defect_rate_ppm <= 233:
+                return 5.0
+            elif defect_rate_ppm <= 6210:
+                return 4.0
+            elif defect_rate_ppm <= 66807:
+                return 3.0
+            elif defect_rate_ppm <= 308537:
+                return 2.0
+            else:
+                return 1.0
+
+    # ===== YIELD ANALYSIS METHODS =====
+
+    def create_yield_analysis_report(self, process_id: int, data: Dict[str, Any]) -> YieldAnalysisReport:
+        """Create comprehensive yield analysis report - ISO 22000:2018 monitoring"""
+        process = self.get_process(process_id)
+        if not process:
+            raise ValueError("Process not found")
+
+        period_start = data.get("period_start") or (datetime.utcnow() - timedelta(days=7))
+        period_end = data.get("period_end") or datetime.utcnow()
+
+        # Gather yield data from the period
+        yield_records = (
+            self.db.query(YieldRecord)
+            .filter(
+                YieldRecord.process_id == process_id,
+                YieldRecord.created_at >= period_start,
+                YieldRecord.created_at <= period_end
+            )
+            .all()
+        )
+
+        if not yield_records:
+            raise ValueError("No yield data found for the specified period")
+
+        # Calculate aggregate quantities
+        total_output = sum(y.output_qty for y in yield_records)
+        total_expected = sum(y.expected_qty for y in yield_records if y.expected_qty)
+        
+        # Get input quantities from material consumption
+        from app.models.production import MaterialConsumption
+        material_consumptions = (
+            self.db.query(MaterialConsumption)
+            .filter(
+                MaterialConsumption.process_id == process_id,
+                MaterialConsumption.consumed_at >= period_start,
+                MaterialConsumption.consumed_at <= period_end
+            )
+            .all()
+        )
+        total_input = sum(m.quantity for m in material_consumptions) or total_expected or total_output
+
+        # Get defect/deviation data for quality calculations
+        deviations = (
+            self.db.query(ProcessDeviation)
+            .filter(
+                ProcessDeviation.process_id == process_id,
+                ProcessDeviation.created_at >= period_start,
+                ProcessDeviation.created_at <= period_end
+            )
+            .all()
+        )
+
+        # Calculate quality metrics
+        conforming_output = data.get("conforming_output_quantity") or (total_output * 0.95)  # Assume 95% if not provided
+        non_conforming = total_output - conforming_output
+        rework_quantity = data.get("rework_quantity", 0.0)
+        waste_quantity = data.get("waste_quantity", 0.0)
+
+        # Calculate KPIs
+        first_pass_yield = (conforming_output / total_output * 100) if total_output > 0 else 0
+        overall_yield = (total_output / total_input * 100) if total_input > 0 else 0
+        quality_rate = first_pass_yield
+        rework_rate = (rework_quantity / total_output * 100) if total_output > 0 else 0
+        waste_rate = (waste_quantity / total_input * 100) if total_input > 0 else 0
+
+        # Perform trend analysis
+        baseline_comparison = self._get_baseline_yield_comparison(process_id, period_start)
+        trend_analysis = self._calculate_yield_trends(process_id, period_end)
+
+        yield_report = YieldAnalysisReport(
+            process_id=process_id,
+            analysis_period_start=period_start,
+            analysis_period_end=period_end,
+            total_input_quantity=total_input,
+            total_output_quantity=total_output,
+            conforming_output_quantity=conforming_output,
+            non_conforming_quantity=non_conforming,
+            rework_quantity=rework_quantity,
+            waste_quantity=waste_quantity,
+            unit=yield_records[0].unit if yield_records else "kg",
+            first_pass_yield=first_pass_yield,
+            overall_yield=overall_yield,
+            quality_rate=quality_rate,
+            rework_rate=rework_rate,
+            waste_rate=waste_rate,
+            analysis_method=data.get("analysis_method", "standard"),
+            baseline_comparison=baseline_comparison,
+            trend_analysis=trend_analysis,
+            analyzed_by=data.get("analyzed_by"),
+            reviewed_by=data.get("reviewed_by"),
+            approved_by=data.get("approved_by"),
+        )
+
+        self.db.add(yield_report)
+        self.db.commit()
+        self.db.refresh(yield_report)
+
+        # Create defect categorization (Pareto analysis)
+        if deviations:
+            self._create_defect_categories(yield_report.id, deviations, total_output)
+
+        try:
+            log_audit_event(
+                self.db,
+                user_id=data.get("analyzed_by"),
+                action="yield_analysis.completed",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={
+                    "report_id": yield_report.id,
+                    "fpy": first_pass_yield,
+                    "overall_yield": overall_yield,
+                    "period_days": (period_end - period_start).days
+                }
+            )
+        except Exception:
+            pass
+
+        return yield_report
+
+    def _get_baseline_yield_comparison(self, process_id: int, current_period_start: datetime) -> Dict[str, Any]:
+        """Compare current yield performance with historical baseline"""
+        # Get previous period (same duration)
+        period_duration = datetime.utcnow() - current_period_start
+        baseline_end = current_period_start
+        baseline_start = baseline_end - period_duration
+
+        baseline_report = (
+            self.db.query(YieldAnalysisReport)
+            .filter(
+                YieldAnalysisReport.process_id == process_id,
+                YieldAnalysisReport.analysis_period_start >= baseline_start,
+                YieldAnalysisReport.analysis_period_end <= baseline_end
+            )
+            .order_by(YieldAnalysisReport.created_at.desc())
+            .first()
+        )
+
+        if not baseline_report:
+            return {"baseline_available": False}
+
+        return {
+            "baseline_available": True,
+            "baseline_fpy": baseline_report.first_pass_yield,
+            "baseline_overall_yield": baseline_report.overall_yield,
+            "baseline_quality_rate": baseline_report.quality_rate,
+            "baseline_waste_rate": baseline_report.waste_rate,
+            "comparison_period": f"{baseline_start.date()} to {baseline_end.date()}"
+        }
+
+    def _calculate_yield_trends(self, process_id: int, end_date: datetime) -> Dict[str, Any]:
+        """Calculate yield trends over last 90 days"""
+        trend_start = end_date - timedelta(days=90)
+        
+        reports = (
+            self.db.query(YieldAnalysisReport)
+            .filter(
+                YieldAnalysisReport.process_id == process_id,
+                YieldAnalysisReport.analysis_period_start >= trend_start
+            )
+            .order_by(YieldAnalysisReport.analysis_period_start.asc())
+            .all()
+        )
+
+        if len(reports) < 3:
+            return {"trend_available": False}
+
+        # Calculate trends
+        fpy_values = [r.first_pass_yield for r in reports]
+        overall_yield_values = [r.overall_yield for r in reports]
+        
+        fpy_trend = self._calculate_trend_direction(fpy_values)
+        yield_trend = self._calculate_trend_direction(overall_yield_values)
+
+        return {
+            "trend_available": True,
+            "fpy_trend": fpy_trend,
+            "overall_yield_trend": yield_trend,
+            "data_points": len(reports),
+            "period_days": 90,
+            "latest_fpy": fpy_values[-1],
+            "fpy_change": fpy_values[-1] - fpy_values[0] if len(fpy_values) > 1 else 0
+        }
+
+    def _calculate_trend_direction(self, values: List[float]) -> str:
+        """Calculate trend direction using linear regression slope"""
+        if len(values) < 2:
+            return "stable"
+        
+        x = list(range(len(values)))
+        y = values
+        
+        # Simple linear regression
+        n = len(values)
+        sum_x = sum(x)
+        sum_y = sum(y)
+        sum_xy = sum(x[i] * y[i] for i in range(n))
+        sum_x2 = sum(x[i] ** 2 for i in range(n))
+        
+        slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
+        
+        if slope > 0.5:
+            return "increasing"
+        elif slope < -0.5:
+            return "decreasing"
+        else:
+            return "stable"
+
+    def _create_defect_categories(self, yield_report_id: int, deviations: List[ProcessDeviation], total_output: float):
+        """Create defect categorization for Pareto analysis"""
+        # Group deviations by type
+        defect_groups = {}
+        for deviation in deviations:
+            defect_type = deviation.deviation_type
+            if defect_type not in defect_groups:
+                defect_groups[defect_type] = {
+                    "count": 0,
+                    "severity_sum": 0,
+                    "descriptions": [],
+                    "critical": False
+                }
+            
+            defect_groups[defect_type]["count"] += 1
+            defect_groups[defect_type]["severity_sum"] += self._severity_to_weight(deviation.severity)
+            defect_groups[defect_type]["descriptions"].append(deviation.impact_assessment or "")
+            defect_groups[defect_type]["critical"] = defect_groups[defect_type]["critical"] or (deviation.severity == "critical")
+
+        # Sort by count (Pareto principle)
+        sorted_defects = sorted(defect_groups.items(), key=lambda x: x[1]["count"], reverse=True)
+        
+        total_defects = sum(group["count"] for _, group in sorted_defects)
+        cumulative_percentage = 0
+
+        for defect_type, group_data in sorted_defects:
+            percentage = (group_data["count"] / total_defects * 100) if total_defects > 0 else 0
+            cumulative_percentage += percentage
+            
+            # Estimate defect quantity (assuming 1 defect affects 1 unit on average)
+            defect_quantity = group_data["count"]  # Simplified assumption
+            
+            defect_category = YieldDefectCategory(
+                yield_report_id=yield_report_id,
+                defect_type=defect_type,
+                defect_description="; ".join(set(group_data["descriptions"][:3])),  # Top 3 unique descriptions
+                defect_count=group_data["count"],
+                defect_quantity=defect_quantity,
+                percentage_of_total=percentage,
+                cumulative_percentage=cumulative_percentage,
+                is_critical_to_quality=group_data["critical"],
+                root_cause_category=self._categorize_root_cause(defect_type),
+                corrective_action_required=group_data["critical"] or percentage > 10,  # Focus on critical or >10%
+            )
+            
+            self.db.add(defect_category)
+
+        self.db.commit()
+
+    def _severity_to_weight(self, severity: str) -> int:
+        """Convert severity to numerical weight"""
+        weights = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+        return weights.get(severity, 1)
+
+    def _categorize_root_cause(self, defect_type: str) -> str:
+        """Categorize defect into root cause category (5Ms)"""
+        defect_lower = defect_type.lower()
+        
+        if any(term in defect_lower for term in ["operator", "skill", "training", "human"]):
+            return "man"
+        elif any(term in defect_lower for term in ["equipment", "machine", "mechanical", "calibration"]):
+            return "machine"
+        elif any(term in defect_lower for term in ["material", "ingredient", "raw", "supplier"]):
+            return "material"
+        elif any(term in defect_lower for term in ["process", "procedure", "method", "recipe"]):
+            return "method"
+        elif any(term in defect_lower for term in ["environment", "temperature", "humidity", "contamination"]):
+            return "environment"
+        else:
+            return "unknown"
+
+    def get_process_monitoring_analytics(self, process_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:
+        """Get comprehensive process monitoring analytics dashboard"""
+        base_analytics = self.get_enhanced_analytics(process_type)
+        
+        # SPC Analytics
+        control_chart_query = self.db.query(ProcessControlChart)
+        if process_type:
+            control_chart_query = control_chart_query.join(ProductionProcess).filter(ProductionProcess.process_type == process_type)
+        
+        active_charts = control_chart_query.filter(ProcessControlChart.is_active == True).count()
+        
+        # Out of control statistics
+        out_of_control_points = (
+            self.db.query(ProcessControlPoint)
+            .join(ProcessControlChart)
+            .filter(ProcessControlPoint.is_out_of_control == True)
+        )
+        if process_type:
+            out_of_control_points = out_of_control_points.join(ProductionProcess).filter(ProductionProcess.process_type == process_type)
+        
+        ooc_count = out_of_control_points.count()
+        
+        # Capability studies
+        capability_query = self.db.query(ProcessCapabilityStudy)
+        if process_type:
+            capability_query = capability_query.join(ProductionProcess).filter(ProductionProcess.process_type == process_type)
+        
+        capability_studies = capability_query.all()
+        capable_processes = sum(1 for study in capability_studies if study.is_capable)
+        avg_cpk = statistics.mean([study.cpk_index for study in capability_studies if study.cpk_index]) if capability_studies else 0
+        
+        # Yield analytics
+        yield_query = self.db.query(YieldAnalysisReport)
+        if process_type:
+            yield_query = yield_query.join(ProductionProcess).filter(ProductionProcess.process_type == process_type)
+        
+        recent_yields = yield_query.filter(YieldAnalysisReport.created_at >= datetime.utcnow() - timedelta(days=30)).all()
+        avg_fpy = statistics.mean([y.first_pass_yield for y in recent_yields]) if recent_yields else 0
+        avg_overall_yield = statistics.mean([y.overall_yield for y in recent_yields]) if recent_yields else 0
+        
+        # Alert statistics
+        alert_query = self.db.query(ProcessMonitoringAlert)
+        if process_type:
+            alert_query = alert_query.join(ProductionProcess).filter(ProductionProcess.process_type == process_type)
+        
+        active_alerts = alert_query.filter(ProcessMonitoringAlert.resolved == False).count()
+        critical_alerts = alert_query.filter(
+            ProcessMonitoringAlert.resolved == False,
+            ProcessMonitoringAlert.severity_level == "critical"
+        ).count()
+        
+        return {
+            **base_analytics,
+            "spc_metrics": {
+                "active_control_charts": active_charts,
+                "out_of_control_points": ooc_count,
+                "capability_studies_count": len(capability_studies),
+                "capable_processes": capable_processes,
+                "average_cpk": round(avg_cpk, 3)
+            },
+            "yield_metrics": {
+                "average_first_pass_yield": round(avg_fpy, 2),
+                "average_overall_yield": round(avg_overall_yield, 2),
+                "yield_reports_count": len(recent_yields)
+            },
+            "alert_metrics": {
+                "active_alerts": active_alerts,
+                "critical_alerts": critical_alerts,
+                "food_safety_alerts": alert_query.filter(
+                    ProcessMonitoringAlert.resolved == False,
+                    ProcessMonitoringAlert.food_safety_impact == True
+                ).count()
+            }
+        }
 
