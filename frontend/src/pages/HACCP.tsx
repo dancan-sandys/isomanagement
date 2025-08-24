@@ -51,6 +51,9 @@ import {
   Edit,
   Science,
   Delete,
+  Schedule,
+  Assessment,
+  Dashboard,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
@@ -1096,16 +1099,157 @@ const HACCP: React.FC = () => {
 
       <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Dashboard" />
+        <Tab label="Products" />
+        <Tab label="System Overview" />
       </Tabs>
 
       <TabPanel value={selectedTab} index={0}>
         {renderDashboard()}
-        <Box sx={{ mt: 4 }}>
-          {renderProducts()}
-        </Box>
       </TabPanel>
 
-      {/* Product Details moved to /haccp/products/:id */}
+      <TabPanel value={selectedTab} index={1}>
+        {renderProducts()}
+      </TabPanel>
+
+      <TabPanel value={selectedTab} index={2}>
+        {/* System Overview */}
+        <Box>
+          <Grid container spacing={3}>
+            {/* Quick Access Cards */}
+            <Grid item xs={12} md={6} lg={3}>
+              <Card 
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 3 }
+                }}
+                onClick={() => navigate('/haccp/monitoring')}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Science color="primary" sx={{ fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="h6">Monitoring Console</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Real-time CCP monitoring
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card 
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 3 }
+                }}
+                onClick={() => navigate('/haccp/verification')}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Security color="secondary" sx={{ fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="h6">Verification Console</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        System verification activities
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card 
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 3 }
+                }}
+                onClick={() => navigate('/haccp/schedules')}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Schedule color="info" sx={{ fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="h6">Schedules</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Automated task scheduling
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card 
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 3 }
+                }}
+                onClick={() => navigate('/haccp/alerts')}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Warning color="warning" sx={{ fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="h6">Alerts</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        System alerts & notifications
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card 
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 3 }
+                }}
+                onClick={() => navigate('/haccp/reports')}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Assessment color="success" sx={{ fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="h6">Reports</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Generate compliance reports
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card 
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 3 }
+                }}
+                onClick={() => navigate('/haccp/dashboard')}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Dashboard color="error" sx={{ fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="h6">Advanced Dashboard</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Detailed system analytics
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
+      </TabPanel>
 
       {/* Dialogs for creating/editing products, process flows, hazards, and CCPs */}
       <Dialog open={productDialogOpen} onClose={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }} maxWidth="md" fullWidth>
