@@ -33,6 +33,7 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import RBAC from './pages/RBAC';
 import EquipmentPage from './pages/Equipment';
+import EquipmentDetailsPage from './pages/EquipmentDetails';
 import ComplaintsPage from './pages/Complaints';
 import ComplaintDetail from './pages/ComplaintDetail';
 import RoleBasedRoute from './components/Auth/RoleBasedRoute';
@@ -162,6 +163,7 @@ function App() {
                       
                       {/* Maintenance - Maintenance roles */}
                       <Route path="/maintenance/equipment" element={<EquipmentPage />} />
+                      <Route path="/maintenance/equipment/:id" element={<EquipmentDetailsPage />} />
                       <Route path="/maintenance/preventive" element={<Navigate to="/maintenance/equipment?tab=preventive" replace />} />
                       <Route path="/maintenance/work-orders" element={<Navigate to="/maintenance/equipment?tab=work-orders" replace />} />
                       <Route path="/maintenance/calibration" element={<Navigate to="/maintenance/equipment?tab=calibration" replace />} />

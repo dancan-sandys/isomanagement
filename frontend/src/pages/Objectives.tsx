@@ -21,7 +21,7 @@ const ObjectivesPage: React.FC = () => {
         setError(null);
         const response = await objectivesService.getObjectives();
         if (mounted) {
-          setObjectives(response.objectives || []);
+          setObjectives(response.data || []);
         }
       } catch (e) {
         if (mounted) {
@@ -72,7 +72,7 @@ const ObjectivesPage: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle2" color="text.secondary">
-                  {objective.objective_code}
+                  {objective.id}
                 </Typography>
                 <Typography variant="h6" gutterBottom>
                   {objective.title}
@@ -101,12 +101,16 @@ const ObjectivesPage: React.FC = () => {
                 
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                   <Typography variant="body2">Status:</Typography>
-                  <StatusChip status={objective.status} />
+                  <Chip 
+                    label={objective.performance_color} 
+                    size="small" 
+                    color={objective.performance_color === 'green' ? 'success' : objective.performance_color === 'yellow' ? 'warning' : 'error'}
+                  />
                 </Stack>
                 
                 {objective.target_value && (
                   <Typography variant="caption" color="text.secondary">
-                    Target: {objective.target_value} {objective.measurement_unit}
+                    Target: {objective.target_value} {objective.unit_of_measure}
                   </Typography>
                 )}
               </CardContent>

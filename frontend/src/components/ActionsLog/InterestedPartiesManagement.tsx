@@ -163,7 +163,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({
     name: '',
-    category: 'customer',
+    category: 'customer' as 'customer' | 'supplier' | 'regulator' | 'employee' | 'community' | 'investor' | 'competitor',
     contact_person: '',
     email: '',
     phone: '',
@@ -781,7 +781,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                 <InputLabel>Category</InputLabel>
                 <Select
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as 'customer' | 'supplier' | 'regulator' | 'employee' | 'community' | 'investor' | 'competitor' })}
                   label="Category"
                 >
                   <MenuItem value="customer">Customer</MenuItem>

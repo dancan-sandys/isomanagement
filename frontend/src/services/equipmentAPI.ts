@@ -24,13 +24,12 @@ export const equipmentAPI = {
   },
 
   // Maintenance Plans
-  listMaintenancePlans: async (equipmentId?: number) => {
-    const params = equipmentId ? { equipment_id: equipmentId } : {};
-    const res = await api.get('/equipment/maintenance-plans/', { params });
+  listMaintenancePlans: async (equipmentId: number) => {
+    const res = await api.get(`/equipment/${equipmentId}/maintenance-plans`);
     return res.data;
   },
   createMaintenancePlan: async (equipmentId: number, payload: { frequency_days: number; maintenance_type: 'preventive'|'corrective'; notes?: string }) => {
-    const res = await api.post(`/equipment/${equipmentId}/maintenance-plans`, payload);
+    const res = await api.post(`/equipment/${equipmentId}/maintenance-plans/`, payload);
     return res.data;
   },
   updateMaintenancePlan: async (planId: number, payload: { frequency_days?: number; maintenance_type?: 'preventive'|'corrective'; notes?: string }) => {
@@ -44,11 +43,11 @@ export const equipmentAPI = {
 
   // Work Orders
   createWorkOrder: async (payload: { equipment_id: number; plan_id?: number; title: string; description?: string; priority?: 'LOW'|'MEDIUM'|'HIGH'; assigned_to?: number; due_date?: string }) => {
-    const res = await api.post('/equipment/work-orders/', payload);
+    const res = await api.post(`/equipment/${payload.equipment_id}/work-orders`, payload);
     return res.data;
   },
-  listWorkOrders: async (params?: { equipment_id?: number; plan_id?: number; status?: 'pending' | 'completed' }) => {
-    const res = await api.get('/equipment/work-orders/', { params });
+  listWorkOrders: async (equipmentId: number) => {
+    const res = await api.get(`/equipment/${equipmentId}/work-orders`);
     return res.data;
   },
   getWorkOrder: async (id: number) => {
@@ -69,9 +68,8 @@ export const equipmentAPI = {
   },
 
   // Calibration Plans
-  listCalibrationPlans: async (equipmentId?: number) => {
-    const params = equipmentId ? { equipment_id: equipmentId } : {};
-    const res = await api.get('/equipment/calibration-plans', { params });
+  listCalibrationPlans: async (equipmentId: number) => {
+    const res = await api.get(`/equipment/${equipmentId}/calibration-plans`);
     return res.data;
   },
   createCalibrationPlan: async (equipmentId: number, payload: { schedule_date: string; frequency_days: number; notes?: string }) => {

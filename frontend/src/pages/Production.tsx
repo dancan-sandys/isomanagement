@@ -789,7 +789,9 @@ const ProductionPage: React.FC = () => {
                   risk_rating: mocForm.risk_rating,
                 })
               });
-              if (!res.ok) throw new Error('Failed');
+              if (!res.ok) {
+                throw 'Failed to submit change request';
+              }
               setMocOpen(false);
             } catch (e) {
               setError('Failed to submit change request');

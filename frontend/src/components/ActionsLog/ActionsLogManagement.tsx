@@ -34,7 +34,9 @@ import {
   ListItemSecondaryAction,
   Tabs,
   Tab,
-  LinearProgress,
+  LinearProgress
+} from '@mui/material';
+import {
   Timeline,
   TimelineItem,
   TimelineSeparator,
@@ -42,7 +44,7 @@ import {
   TimelineContent,
   TimelineDot,
   TimelineOppositeContent
-} from '@mui/material';
+} from '@mui/lab';
 import { actionsLogAPI } from '../../services/actionsLogAPI';
 import { 
   ActionLog, 
@@ -72,8 +74,7 @@ import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
   KeyboardArrowUp as PriorityHighIcon,
-  KeyboardArrowDown as PriorityLowIcon,
-  PlayArrow
+  KeyboardArrowDown as PriorityLowIcon
 } from '@mui/icons-material';
 
 // ActionLog interface is now imported from types
@@ -120,8 +121,6 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     due_date: '',
     progress_percent: 0
   });
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [selectedActionForDetails, setSelectedActionForDetails] = useState<ActionLog | null>(null);
 
   useEffect(() => {
     loadActions();
@@ -204,63 +203,6 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save action. Please try again.');
       console.error('Error saving action:', err);
-    }
-  };
-
-  const handleViewDetails = (action: ActionLog) => {
-    setSelectedActionForDetails(action);
-    setDetailsDialogOpen(true);
-  };
-
-  const getNextStatus = (currentStatus: ActionStatus): ActionStatus | null => {
-    switch (currentStatus) {
-      case ActionStatus.PENDING:
-        return ActionStatus.IN_PROGRESS;
-      case ActionStatus.IN_PROGRESS:
-        return ActionStatus.COMPLETED;
-      case ActionStatus.ON_HOLD:
-        return ActionStatus.IN_PROGRESS;
-      case ActionStatus.OVERDUE:
-        return ActionStatus.IN_PROGRESS;
-      default:
-        return null; // No next step for completed/cancelled
-    }
-  };
-
-  const getNextStatusLabel = (currentStatus: ActionStatus): string => {
-    const nextStatus = getNextStatus(currentStatus);
-    if (!nextStatus) return '';
-    
-    switch (nextStatus) {
-      case ActionStatus.IN_PROGRESS:
-        return 'Start Progress';
-      case ActionStatus.COMPLETED:
-        return 'Mark Complete';
-      default:
-        return 'Next Step';
-    }
-  };
-
-  const handleNextStep = async (action: ActionLog) => {
-    const nextStatus = getNextStatus(action.status);
-    if (!nextStatus) return;
-
-    try {
-      const updateData: ActionLogUpdate = {
-        status: nextStatus,
-        progress_percent: nextStatus === ActionStatus.COMPLETED ? 100 : action.progress_percent
-      };
-      
-      const updatedAction = await actionsLogAPI.updateAction(action.id, updateData);
-      setActions(actions.map(a => a.id === action.id ? updatedAction : a));
-      
-      // Close details dialog if open
-      if (selectedActionForDetails?.id === action.id) {
-        setSelectedActionForDetails(updatedAction);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update action status. Please try again.');
-      console.error('Error updating action status:', err);
     }
   };
 
@@ -471,35 +413,19 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
 
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Box>
-                        <Tooltip title="Edit Action">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditAction(action)}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="View Details">
-                          <IconButton 
-                            size="small" 
-                            color="info"
-                            onClick={() => handleViewDetails(action)}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                        {getNextStatus(action.status) && (
-                          <Tooltip title={getNextStatusLabel(action.status)}>
-                            <IconButton 
-                              size="small" 
-                              color="success"
-                              onClick={() => handleNextStep(action)}
-                            >
-                              <CheckCircleIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditAction(action)}
+                          color="primary"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton size="small" color="info">
+                          <VisibilityIcon />
+                        </IconButton>
+                        <IconButton size="small" color="secondary">
+                          <AssignmentIcon />
+                        </IconButton>
                       </Box>
                       <Typography variant="caption" color="text.secondary">
                         {new Date(action.created_at).toLocaleDateString()}
@@ -539,35 +465,16 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
 
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Box>
-                        <Tooltip title="Edit Action">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditAction(action)}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="View Details">
-                          <IconButton 
-                            size="small" 
-                            color="info"
-                            onClick={() => handleViewDetails(action)}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                        {getNextStatus(action.status) && (
-                          <Tooltip title={getNextStatusLabel(action.status)}>
-                            <IconButton 
-                              size="small" 
-                              color="success"
-                              onClick={() => handleNextStep(action)}
-                            >
-                              <CheckCircleIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditAction(action)}
+                          color="primary"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton size="small" color="info">
+                          <VisibilityIcon />
+                        </IconButton>
                       </Box>
                       <Chip
                         icon={getPriorityIcon(action.priority)}
@@ -621,35 +528,16 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
 
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Box>
-                        <Tooltip title="Edit Action">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditAction(action)}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="View Details">
-                          <IconButton 
-                            size="small" 
-                            color="info"
-                            onClick={() => handleViewDetails(action)}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                        {getNextStatus(action.status) && (
-                          <Tooltip title={getNextStatusLabel(action.status)}>
-                            <IconButton 
-                              size="small" 
-                              color="success"
-                              onClick={() => handleNextStep(action)}
-                            >
-                              <CheckCircleIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditAction(action)}
+                          color="primary"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton size="small" color="info">
+                          <VisibilityIcon />
+                        </IconButton>
                       </Box>
                       <Typography variant="caption" color="text.secondary">
                         {new Date(action.created_at).toLocaleDateString()}
@@ -697,15 +585,9 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
 
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Box>
-                        <Tooltip title="View Details">
-                          <IconButton 
-                            size="small" 
-                            color="info"
-                            onClick={() => handleViewDetails(action)}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
+                        <IconButton size="small" color="info">
+                          <VisibilityIcon />
+                        </IconButton>
                       </Box>
                       <Typography variant="caption" color="text.secondary">
                         {new Date(action.created_at).toLocaleDateString()}
@@ -753,35 +635,16 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
 
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Box>
-                        <Tooltip title="Edit Action">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditAction(action)}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="View Details">
-                          <IconButton 
-                            size="small" 
-                            color="info"
-                            onClick={() => handleViewDetails(action)}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                        {getNextStatus(action.status) && (
-                          <Tooltip title={getNextStatusLabel(action.status)}>
-                            <IconButton 
-                              size="small" 
-                              color="success"
-                              onClick={() => handleNextStep(action)}
-                            >
-                              <CheckCircleIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditAction(action)}
+                          color="primary"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton size="small" color="error">
+                          <PriorityHighIcon />
+                        </IconButton>
                       </Box>
                       <Typography variant="caption" color="error">
                         URGENT
@@ -906,204 +769,6 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
           <Button variant="contained" onClick={handleSaveAction}>
             {editingAction ? 'Update' : 'Create'}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Action Details Dialog */}
-      <Dialog 
-        open={detailsDialogOpen} 
-        onClose={() => setDetailsDialogOpen(false)} 
-        maxWidth="md" 
-        fullWidth
-      >
-        <DialogTitle>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Action Details</Typography>
-            <Box>
-              <Chip
-                label={selectedActionForDetails?.status.replace(/_/g, ' ') || ''}
-                color={getStatusColor(selectedActionForDetails?.status || ActionStatus.PENDING) as any}
-                size="small"
-              />
-            </Box>
-          </Box>
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedActionForDetails && (
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Typography variant="h6" gutterBottom>
-                  {selectedActionForDetails.title}
-                </Typography>
-                <Typography variant="body1" color="text.secondary" paragraph>
-                  {selectedActionForDetails.description}
-                </Typography>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Action Details
-                </Typography>
-                <List dense>
-                  <ListItem>
-                    <ListItemIcon>
-                      {getSourceIcon(selectedActionForDetails.action_source)}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Source" 
-                      secondary={formatSourceType(selectedActionForDetails.action_source)} 
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      {getPriorityIcon(selectedActionForDetails.priority)}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Priority" 
-                      secondary={selectedActionForDetails.priority.toUpperCase()} 
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      <PersonIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Assigned To" 
-                      secondary={selectedActionForDetails.assigned_user_name || 'Unassigned'} 
-                    />
-                  </ListItem>
-                  {selectedActionForDetails.department_name && (
-                    <ListItem>
-                      <ListItemIcon>
-                        <BusinessIcon />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Department" 
-                        secondary={selectedActionForDetails.department_name} 
-                      />
-                    </ListItem>
-                  )}
-                </List>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Timeline & Progress
-                </Typography>
-                <List dense>
-                  <ListItem>
-                    <ListItemIcon>
-                      <ScheduleIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Created" 
-                      secondary={new Date(selectedActionForDetails.created_at).toLocaleString()} 
-                    />
-                  </ListItem>
-                  {selectedActionForDetails.due_date && (
-                    <ListItem>
-                      <ListItemIcon>
-                        <ScheduleIcon color="warning" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Due Date" 
-                        secondary={new Date(selectedActionForDetails.due_date).toLocaleString()} 
-                      />
-                    </ListItem>
-                  )}
-                  {selectedActionForDetails.started_at && (
-                    <ListItem>
-                      <ListItemIcon>
-                        <PlayArrow color="primary" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Started" 
-                        secondary={new Date(selectedActionForDetails.started_at).toLocaleString()} 
-                      />
-                    </ListItem>
-                  )}
-                  {selectedActionForDetails.completed_at && (
-                    <ListItem>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Completed" 
-                        secondary={new Date(selectedActionForDetails.completed_at).toLocaleString()} 
-                      />
-                    </ListItem>
-                  )}
-                </List>
-
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Progress: {selectedActionForDetails.progress_percent}%
-                  </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={selectedActionForDetails.progress_percent}
-                    color={selectedActionForDetails.progress_percent === 100 ? 'success' : 'primary'}
-                    sx={{ height: 8, borderRadius: 1 }}
-                  />
-                </Box>
-              </Grid>
-
-              {selectedActionForDetails.notes && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Notes
-                  </Typography>
-                  <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
-                    <Typography variant="body2">
-                      {selectedActionForDetails.notes}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              )}
-
-              {selectedActionForDetails.tags && Object.keys(selectedActionForDetails.tags).length > 0 && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Tags
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {Object.entries(selectedActionForDetails.tags).map(([key, value]) => (
-                      <Chip key={key} label={`${key}: ${value}`} size="small" variant="outlined" />
-                    ))}
-                  </Box>
-                </Grid>
-              )}
-            </Grid>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetailsDialogOpen(false)}>
-            Close
-          </Button>
-          {selectedActionForDetails && (
-            <>
-              <Button 
-                onClick={() => {
-                  handleEditAction(selectedActionForDetails);
-                  setDetailsDialogOpen(false);
-                }}
-                color="primary"
-                startIcon={<EditIcon />}
-              >
-                Edit
-              </Button>
-              {getNextStatus(selectedActionForDetails.status) && (
-                <Button 
-                  onClick={() => handleNextStep(selectedActionForDetails)}
-                  color="success"
-                  variant="contained"
-                  startIcon={<CheckCircleIcon />}
-                >
-                  {getNextStatusLabel(selectedActionForDetails.status)}
-                </Button>
-              )}
-            </>
-          )}
         </DialogActions>
       </Dialog>
 

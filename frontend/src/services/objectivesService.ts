@@ -15,7 +15,8 @@ import {
   ObjectivesResponse,
   ObjectiveResponse,
   ProgressResponse,
-  DashboardResponse
+  DashboardResponse,
+  ObjectiveEvidence
 } from '../types/objectives';
 
 // Base API configuration
