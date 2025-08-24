@@ -122,8 +122,6 @@ const AuditSchedule: React.FC = () => {
               {audits.map((a: any) => {
                 const overdue = a.status !== 'completed' && a.end_date && new Date(a.end_date) < new Date();
                 const [start, end] = [String(a.start_date || '').slice(0,10), String(a.end_date || '').slice(0,10)];
-                const [newStart, setNewStart] = useState<string>(start);
-                const [newEnd, setNewEnd] = useState<string>(end);
                 return (
                   <TableRow key={a.id}>
                     <TableCell>{a.title}</TableCell>
@@ -135,12 +133,34 @@ const AuditSchedule: React.FC = () => {
                     <TableCell>{overdue ? <Chip color="error" label="Overdue" size="small" /> : '-'}</TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1}>
-                        <TextField size="small" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
-                        <TextField size="small" type="date" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
-                        <Button size="small" variant="outlined" onClick={async () => {
-                          await auditsAPI.bulkUpdateSchedule([{ id: a.id, start_date: newStart || undefined, end_date: newEnd || undefined }]);
-                          load(); checkConflicts();
-                        }}>Save</Button>
+                        <TextField 
+                          size="small" 
+                          type="date" 
+                          defaultValue={start} 
+                          onChange={(e) => {
+                            const newStart = e.target.value;
+                            const newEnd = end;
+                            auditsAPI.bulkUpdateSchedule([{ id: a.id, start_date: newStart || undefined, end_date: newEnd || undefined }])
+                              .then(() => {
+                                load(); 
+                                checkConflicts();
+                              });
+                          }} 
+                        />
+                        <TextField 
+                          size="small" 
+                          type="date" 
+                          defaultValue={end} 
+                          onChange={(e) => {
+                            const newEnd = e.target.value;
+                            const newStart = start;
+                            auditsAPI.bulkUpdateSchedule([{ id: a.id, start_date: newStart || undefined, end_date: newEnd || undefined }])
+                              .then(() => {
+                                load(); 
+                                checkConflicts();
+                              });
+                          }} 
+                        />
                       </Stack>
                     </TableCell>
                   </TableRow>
