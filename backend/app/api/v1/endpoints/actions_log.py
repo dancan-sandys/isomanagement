@@ -13,7 +13,8 @@ from app.core.database import get_db
 from app.services.actions_log_service import ActionsLogService
 from app.schemas.actions_log import (
     ActionLogCreate, ActionLogUpdate, ActionLogResponse,
-    ActionsAnalytics, ActionStatus, ActionPriority, ActionSource
+    ActionsAnalytics, ActionStatus, ActionPriority, ActionSource,
+    InterestedPartyResponse
 )
 
 router = APIRouter()
@@ -172,3 +173,33 @@ def get_management_review_actions(review_id: int, db: Session = Depends(get_db))
             pass
     
     return review_actions
+
+
+# Interested Parties Endpoints
+@router.get("/interested-parties", response_model=List[InterestedPartyResponse])
+def list_interested_parties(db: Session = Depends(get_db)):
+    """List all interested parties"""
+    service = ActionsLogService(db)
+    return service.list_interested_parties()
+
+
+@router.get("/interested-parties/{party_id}", response_model=InterestedPartyResponse)
+def get_interested_party(party_id: int, db: Session = Depends(get_db)):
+    """Get interested party by ID"""
+    service = ActionsLogService(db)
+    party = service.get_interested_party(party_id)
+    if not party:
+        raise HTTPException(status_code=404, detail="Interested party not found")
+    return party
+
+
+@router.get("/interested-parties/{party_id}/actions", response_model=List[ActionLogResponse])
+def get_party_actions(party_id: int, db: Session = Depends(get_db)):
+    """Get all actions related to a specific interested party"""
+    service = ActionsLogService(db)
+    party = service.get_interested_party(party_id)
+    if not party:
+        raise HTTPException(status_code=404, detail="Interested party not found")
+    
+    actions = service.get_party_actions(party_id)
+    return actions

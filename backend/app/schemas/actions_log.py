@@ -110,3 +110,43 @@ class ActionsAnalytics(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# Interested Parties Schemas
+class InterestedPartyBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    category: str = Field(..., min_length=1, max_length=50)
+    contact_person: Optional[str] = Field(None, max_length=255)
+    contact_email: Optional[str] = Field(None, max_length=255)
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    address: Optional[str] = None
+    description: Optional[str] = None
+    satisfaction_level: Optional[int] = Field(None, ge=1, le=10)
+    is_active: bool = True
+
+
+class InterestedPartyCreate(InterestedPartyBase):
+    pass
+
+
+class InterestedPartyUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    category: Optional[str] = Field(None, min_length=1, max_length=50)
+    contact_person: Optional[str] = Field(None, max_length=255)
+    contact_email: Optional[str] = Field(None, max_length=255)
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    address: Optional[str] = None
+    description: Optional[str] = None
+    satisfaction_level: Optional[int] = Field(None, ge=1, le=10)
+    is_active: Optional[bool] = None
+
+
+class InterestedPartyResponse(InterestedPartyBase):
+    id: int
+    last_assessment_date: Optional[datetime] = None
+    next_assessment_date: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True

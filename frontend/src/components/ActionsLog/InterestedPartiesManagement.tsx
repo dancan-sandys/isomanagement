@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { actionsLogAPI } from '../../services/actionsLogAPI';
+import { interestedPartiesAPI, InterestedParty as APIInterestedParty } from '../../services/interestedPartiesAPI';
 import {
   Box,
   Card,
@@ -162,65 +164,109 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
     loadParties();
   }, []);
 
-  // Mock actions data - this would come from API based on party_id
-  const mockActions: PartyAction[] = [
-    {
-      id: 1,
-      party_id: 1,
-      title: 'Implement Customer Feedback System',
-      description: 'Set up automated feedback collection from ABC Supermarket Chain to improve product quality',
-      status: 'in_progress',
-      priority: 'high',
-      due_date: '2025-09-15',
-      created_at: '2025-08-01'
-    },
-    {
-      id: 2,
-      party_id: 1,
-      title: 'Quality Audit Preparation',
-      description: 'Prepare documentation for quarterly quality audit requested by ABC Supermarket',
-      status: 'completed',
-      priority: 'medium',
-      completed_date: '2025-08-10',
-      created_at: '2025-07-20'
-    },
-    {
-      id: 3,
-      party_id: 2,
-      title: 'KEBS Compliance Update',
-      description: 'Update food safety protocols to meet new KEBS regulations',
-      status: 'open',
-      priority: 'critical',
-      due_date: '2025-08-30',
-      created_at: '2025-08-15'
-    },
-    {
-      id: 4,
-      party_id: 2,
-      title: 'Training Program Implementation',
-      description: 'Implement mandatory training program as per KEBS requirements',
-      status: 'in_progress',
-      priority: 'high',
-      due_date: '2025-09-30',
-      created_at: '2025-08-05'
-    },
-    {
-      id: 5,
-      party_id: 3,
-      title: 'Supplier Quality Assessment',
-      description: 'Conduct quality assessment of raw milk supplies from Dairy Farmers Co-operative',
-      status: 'completed',
-      priority: 'medium',
-      completed_date: '2025-08-12',
-      created_at: '2025-07-25'
-    }
-  ];
+
 
   const loadParties = async () => {
     try {
       setLoading(true);
       setError(null);
-      // Mock data for now - replace with actual API call
+      const apiParties = await interestedPartiesAPI.getInterestedParties();
+      
+      // Transform API response to match our interface (for now, fallback to mock data if empty)
+      if (apiParties.length === 0) {
+        // Use mock data as fallback
+        const mockParties: InterestedParty[] = [
+          {
+            id: 1,
+            name: 'ABC Supermarket Chain',
+            category: 'customer',
+            contact_person: 'John Smith',
+            email: 'john.smith@abcsupermarket.com',
+            phone: '+254-700-123-456',
+            address: 'Nairobi, Kenya',
+            website: 'www.abcsupermarket.com',
+            description: 'Major retail chain with 50+ stores across Kenya',
+            importance_level: 5,
+            satisfaction_level: 4,
+            last_assessment_date: '2025-07-15',
+            next_assessment_date: '2025-10-15',
+            is_active: true,
+            created_at: '2025-01-15',
+            expectations_count: 8,
+            actions_count: 12,
+            completed_actions_count: 9
+          },
+          {
+            id: 2,
+            name: 'Kenya Bureau of Standards (KEBS)',
+            category: 'regulator',
+            contact_person: 'Dr. Mary Wanjiku',
+            email: 'mwanjiku@kebs.org',
+            phone: '+254-20-694-8000',
+            address: 'Nairobi, Kenya',
+            website: 'www.kebs.org',
+            description: 'National standards body responsible for food safety regulations',
+            importance_level: 5,
+            satisfaction_level: 3,
+            last_assessment_date: '2025-06-20',
+            next_assessment_date: '2025-09-20',
+            is_active: true,
+            created_at: '2025-01-10',
+            expectations_count: 15,
+            actions_count: 20,
+            completed_actions_count: 18
+          },
+          {
+            id: 3,
+            name: 'Dairy Farmers Co-operative',
+            category: 'supplier',
+            contact_person: 'Peter Kamau',
+            email: 'peter.kamau@dairyfarmers.co.ke',
+            phone: '+254-733-456-789',
+            address: 'Nakuru, Kenya',
+            website: 'www.dairyfarmers.co.ke',
+            description: 'Co-operative of 500+ dairy farmers supplying raw milk',
+            importance_level: 4,
+            satisfaction_level: 4,
+            last_assessment_date: '2025-07-01',
+            next_assessment_date: '2025-10-01',
+            is_active: true,
+            created_at: '2025-01-05',
+            expectations_count: 6,
+            actions_count: 8,
+            completed_actions_count: 7
+          }
+        ];
+        setParties(mockParties);
+      } else {
+        // Transform API parties to match our interface
+        const transformedParties: InterestedParty[] = apiParties.map(party => ({
+          id: party.id,
+          name: party.name,
+          category: party.category,
+          contact_person: party.contact_person,
+          email: party.contact_email,
+          phone: party.contact_phone,
+          address: party.address,
+          website: party.website,
+          description: party.description,
+          importance_level: party.satisfaction_level || 3, // Use satisfaction as importance for now
+          satisfaction_level: party.satisfaction_level,
+          last_assessment_date: party.last_assessment_date,
+          next_assessment_date: party.next_assessment_date,
+          is_active: party.is_active,
+          created_at: party.created_at,
+          updated_at: party.updated_at,
+          expectations_count: party.expectations_count || 0,
+          actions_count: party.actions_count || 0,
+          completed_actions_count: party.completed_actions_count || 0
+        }));
+        setParties(transformedParties);
+      }
+    } catch (err: any) {
+      console.error('Error loading interested parties:', err);
+      setError('Failed to load interested parties. Please try again.');
+      // Fallback to mock data on error
       const mockParties: InterestedParty[] = [
         {
           id: 1,
@@ -284,9 +330,6 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
         }
       ];
       setParties(mockParties);
-    } catch (err) {
-      setError('Failed to load interested parties. Please try again.');
-      console.error('Error loading interested parties:', err);
     } finally {
       setLoading(false);
     }
@@ -362,12 +405,32 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
     setActiveTab(newValue);
   };
 
-  const handleViewPartyDetails = (party: InterestedParty) => {
+  const handleViewPartyDetails = async (party: InterestedParty) => {
     setSelectedParty(party);
-    // Filter actions for this party
-    const actionsForParty = mockActions.filter(action => action.party_id === party.id);
-    setPartyActions(actionsForParty);
     setDetailViewOpen(true);
+    
+    // Load real actions for this party
+    try {
+      setLoading(true);
+      const actionsData = await actionsLogAPI.getPartyActions(party.id);
+      setPartyActions(actionsData.map(action => ({
+        id: action.id,
+        party_id: party.id,
+        title: action.title,
+        description: action.description,
+        status: action.status,
+        priority: action.priority,
+        due_date: action.due_date,
+        completed_date: action.completed_at,
+        created_at: action.created_at
+      })));
+    } catch (err: any) {
+      console.error('Error loading party actions:', err);
+      setError('Failed to load actions for this party.');
+      setPartyActions([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getActionStatusColor = (status: string) => {
@@ -376,9 +439,13 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
         return 'success';
       case 'in_progress':
         return 'primary';
-      case 'open':
+      case 'pending':
         return 'warning';
       case 'cancelled':
+        return 'error';
+      case 'on_hold':
+        return 'default';
+      case 'overdue':
         return 'error';
       default:
         return 'default';
@@ -388,6 +455,8 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
   const getActionPriorityColor = (priority: string) => {
     switch (priority) {
       case 'critical':
+        return 'error';
+      case 'urgent':
         return 'error';
       case 'high':
         return 'warning';
@@ -1198,7 +1267,9 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                                   <CheckCircleIcon color="success" />
                                 ) : action.status === 'in_progress' ? (
                                   <AssignmentIcon color="primary" />
-                                ) : action.priority === 'critical' ? (
+                                ) : action.status === 'overdue' ? (
+                                  <ErrorIcon color="error" />
+                                ) : action.priority === 'critical' || action.priority === 'urgent' ? (
                                   <WarningIcon color="error" />
                                 ) : (
                                   <AssignmentIcon color="action" />
@@ -1211,12 +1282,12 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                                       {action.title}
                                     </Typography>
                                     <Chip
-                                      label={action.status.replace(/_/g, ' ')}
+                                      label={action.status.replace(/_/g, ' ').toUpperCase()}
                                       color={getActionStatusColor(action.status) as any}
                                       size="small"
                                     />
                                     <Chip
-                                      label={action.priority}
+                                      label={action.priority.toUpperCase()}
                                       color={getActionPriorityColor(action.priority) as any}
                                       size="small"
                                       variant="outlined"
