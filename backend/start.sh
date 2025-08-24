@@ -10,14 +10,11 @@ export PYTHONPATH=/app
 if [ ! -z "$DATABASE_URL" ]; then
     echo "Running database migrations..."
     cd /app
-    alembic upgrade head
-    if [ $? -ne 0 ]; then
-        echo "Warning: Database migration failed, but continuing..."
-    fi
+    alembic upgrade head || echo "Migration failed, continuing..."
 else
     echo "No DATABASE_URL set, skipping migrations"
 fi
 
 # Start the application
-echo "Starting uvicorn server..."
+echo "Starting uvicorn server on port $PORT..."
 exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1

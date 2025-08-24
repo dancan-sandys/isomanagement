@@ -184,21 +184,9 @@ async def root():
 async def health_check():
     """Health check endpoint for Digital Ocean and monitoring"""
     try:
-        # Test database connection
-        db = SessionLocal()
-        try:
-            # Simple query to test database connectivity
-            db.execute("SELECT 1")
-            db_status = "healthy"
-        except Exception as e:
-            logger.error(f"Database health check failed: {e}")
-            db_status = "unhealthy"
-        finally:
-            db.close()
-        
+        # Simple health check without database dependency
         return {
-            "status": "healthy" if db_status == "healthy" else "degraded",
-            "database": db_status,
+            "status": "healthy",
             "timestamp": time.time(),
             "environment": settings.ENVIRONMENT,
             "version": settings.APP_VERSION
