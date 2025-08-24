@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # CORS Configuration
-    ALLOWED_ORIGINS: List[str] = ["*"]
-    ALLOWED_CREDENTIALS: bool = True
+    ALLOWED_ORIGINS = ["*"]
+    ALLOWED_CREDENTIALS = False
     
     # File Storage Configuration (AWS S3)
     AWS_ACCESS_KEY_ID: Optional[str] = None
