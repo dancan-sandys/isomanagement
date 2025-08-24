@@ -201,14 +201,14 @@ def create_test_users():
                 hashed_password=hashed_password,
                 role_id=role_id,
                 status=user_data["status"],
-                department=user_data["department"],
+                department_name=user_data["department"],
                 position=user_data["position"],
                 phone=user_data["phone"],
                 employee_id=user_data["employee_id"],
                 is_active=user_data["is_active"],
                 is_verified=user_data["is_verified"],
                 last_login=user_data["last_login"],
-                created_by=1  # Admin user
+                created_by=None  # No creator for initial users
             )
             
             db.add(user)

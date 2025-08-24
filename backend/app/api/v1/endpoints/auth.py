@@ -134,7 +134,7 @@ async def signup(
     db: Session = Depends(get_db)
 ):
     """
-    Sign up a new user (defaults to System Administrator role)
+    Sign up a new user (defaults to default role)
     """
     # Check if username already exists
     existing_user = db.query(User).filter(User.username == user_data.username).first()
@@ -161,13 +161,16 @@ async def signup(
                 detail="Employee ID already registered"
             )
     
-    # Get System Administrator role (ID 1)
-    admin_role = db.query(Role).filter(Role.name == "System Administrator").first()
-    if not admin_role:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="System Administrator role not found"
-        )
+    # Get default role (System Administrator or first available role)
+    default_role = db.query(Role).filter(Role.is_default == True).first()
+    if not default_role:
+        # Fallback to first available role
+        default_role = db.query(Role).first()
+        if not default_role:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No roles found in the system"
+            )
     
     # Enforce password policy
     if not validate_password_policy(user_data.password):
@@ -179,7 +182,7 @@ async def signup(
         email=user_data.email,
         full_name=user_data.full_name,
         hashed_password=hashed_password,
-        role_id=admin_role.id,  # Assign System Administrator role
+        role_id=default_role.id,  # Assign default role
         status="ACTIVE",
         department=user_data.department,
         position=user_data.position,
@@ -199,7 +202,7 @@ async def signup(
         notification_service.send_welcome_notification(
             user_id=db_user.id,
             username=db_user.username,
-            role_name=admin_role.name,
+            role_name=default_role.name,
             department=db_user.department or "Not specified",
             login_url="/login"
         )
@@ -214,7 +217,7 @@ async def signup(
         email=db_user.email,
         full_name=db_user.full_name,
         role_id=db_user.role_id,
-        role_name=admin_role.name,
+        role_name=default_role.name,
         status=db_user.status,
         department=db_user.department,
         position=db_user.position,

@@ -1,12 +1,12 @@
-name: iso22000-fsms-backend
+name: isomanagement-backend
 region: nyc
 services:
   # Backend API Service
   - name: backend
     source_dir: /
     github:
-      repo: your-username/iso22000-fsms
-      branch: main
+      repo: dancan-sandys/isomanagement/backend
+      branch: master
     build_command: pip install -r requirements-production.txt
     run_command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4
     environment_slug: python
@@ -43,7 +43,7 @@ services:
       - key: ENVIRONMENT
         value: "production"
       - key: ALLOWED_ORIGINS
-        value: '["https://iso22000-fsms-frontend.ondigitalocean.app", "https://your-domain.com"]'
+        value: '["https://iso22000-fsms-frontend.ondigitalocean.app","*"]'
       - key: ALLOWED_CREDENTIALS
         value: "True"
       - key: MAX_FILE_SIZE
@@ -58,10 +58,10 @@ services:
       - key: SMTP_PORT
         value: "587"
       - key: SMTP_USER
-        value: ${SMTP_USER}
+        value: ${isocreatesoftwares@gmail.com}
         type: SECRET
       - key: SMTP_PASSWORD
-        value: ${SMTP_PASSWORD}
+        value: ${olmq engf ouun ionj}
         type: SECRET
       - key: SMTP_TLS
         value: "True"
