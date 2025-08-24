@@ -5,6 +5,11 @@ from typing import List, Optional
 import json
 from datetime import datetime, timedelta
 import uuid
+import base64
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -206,13 +211,27 @@ async def get_batch_barcode(
     try:
         traceability_service = TraceabilityService(db)
         data = traceability_service.generate_barcode_print_data(batch_id)
+        
+        # Convert image path to base64 if exists
+        barcode_image_base64 = None
+        if data.get("barcode_image") and os.path.exists(data["barcode_image"]):
+            try:
+                with open(data["barcode_image"], "rb") as image_file:
+                    barcode_image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Failed to read barcode image: {str(e)}")
+        
         # Enrich with client-friendly fields
         data_enriched = {
             "batch_id": batch_id,
             "barcode": data.get("barcode"),
-            "barcode_type": "enhanced",
+            "barcode_type": "Code128",
+            "barcode_image": f"data:image/png;base64,{barcode_image_base64}" if barcode_image_base64 else None,
             "generated_at": data.get("print_timestamp"),
             "product_name": data.get("product_name"),
+            "batch_number": data.get("batch_number"),
+            "quantity": data.get("quantity"),
+            "unit": data.get("unit"),
         }
         return ResponseModel(success=True, message="Barcode data retrieved", data=data_enriched)
     except ValueError as e:
@@ -243,10 +262,19 @@ async def get_batch_qrcode(
             "unit": batch.unit,
         }
 
+        # Convert QR code image to base64 if exists
+        qr_code_image_base64 = None
+        if batch.qr_code_path and os.path.exists(batch.qr_code_path):
+            try:
+                with open(batch.qr_code_path, "rb") as image_file:
+                    qr_code_image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Failed to read QR code image: {str(e)}")
+
         data = {
             "batch_id": batch.id,
-            "qr_code": batch.qr_code_path,  # path to image on server
-            "qr_code_image": batch.qr_code_path,
+            "qr_code": json.dumps(payload),  # QR code content
+            "qr_code_image": f"data:image/png;base64,{qr_code_image_base64}" if qr_code_image_base64 else None,
             "data_payload": json.dumps(payload),
             "generated_at": batch.created_at.isoformat() if batch.created_at else None,
         }
