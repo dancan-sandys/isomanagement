@@ -616,3 +616,66 @@ class ActionsLogService:
             strategic_insights=strategic_insights,
             improvement_metrics=improvement_metrics
         )
+
+    # Interested Parties Management
+    def list_interested_parties(self) -> List[InterestedParty]:
+        """List all interested parties"""
+        return self.db.query(InterestedParty).filter(InterestedParty.is_active == True).all()
+    
+    def get_interested_party(self, party_id: int) -> Optional[InterestedParty]:
+        """Get interested party by ID"""
+        return self.db.query(InterestedParty).filter(InterestedParty.id == party_id).first()
+    
+    def create_interested_party(self, party_data: Dict[str, Any]) -> InterestedParty:
+        """Create a new interested party"""
+        party = InterestedParty(**party_data)
+        self.db.add(party)
+        self.db.commit()
+        self.db.refresh(party)
+        return party
+    
+    def update_interested_party(self, party_id: int, update_data: Dict[str, Any]) -> Optional[InterestedParty]:
+        """Update an interested party"""
+        party = self.get_interested_party(party_id)
+        if not party:
+            return None
+        
+        for key, value in update_data.items():
+            if hasattr(party, key):
+                setattr(party, key, value)
+        
+        self.db.commit()
+        self.db.refresh(party)
+        return party
+        
+    def get_party_actions(self, party_id: int) -> List[ActionLog]:
+        """Get all actions related to a specific interested party"""
+        # Get actions linked through PartyAction table
+        party_action_ids = self.db.query(PartyAction.action_log_id).filter(
+            PartyAction.party_id == party_id
+        ).all()
+        action_ids = [pa.action_log_id for pa in party_action_ids]
+        
+        # Build query to get actions from both sources
+        query_conditions = []
+        
+        # Add linked actions if any exist
+        if action_ids:
+            query_conditions.append(ActionLog.id.in_(action_ids))
+            
+        # Add actions with source = interested_party and source_id = party_id
+        query_conditions.append(
+            and_(
+                ActionLog.action_source == ActionSource.INTERESTED_PARTY,
+                ActionLog.source_id == party_id
+            )
+        )
+        
+        if not query_conditions:
+            return []
+            
+        actions = self.db.query(ActionLog).filter(
+            or_(*query_conditions)
+        ).order_by(desc(ActionLog.created_at)).all()
+        
+        return actions
