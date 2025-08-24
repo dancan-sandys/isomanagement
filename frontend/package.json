@@ -2,6 +2,10 @@
   "name": "compli-fsms-frontend",
   "version": "1.0.0",
   "description": "Compli FSMS Food Safety Management System Frontend",
+  "engines": {
+    "node": "18.x",
+    "npm": "9.x"
+  },
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.11.1",
@@ -43,7 +47,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "GENERATE_SOURCEMAP=false react-scripts build",
+    "build:prod": "GENERATE_SOURCEMAP=false react-scripts build",
     "test": "react-scripts test",
     "test:coverage": "react-scripts test --coverage --watchAll=false",
     "test:unit": "react-scripts test --testPathPattern=__tests__ --watchAll=false",
