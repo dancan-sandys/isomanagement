@@ -128,8 +128,22 @@ def list_processes(
 ):
     """List production processes with filtering"""
     service = ProductionService(db)
-    pt = ProductProcessType(process_type) if process_type else None
-    st = ProcessStatus(status) if status else None
+    
+    # Safe enum conversion with error handling
+    pt = None
+    if process_type:
+        try:
+            pt = ProductProcessType(process_type)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid process_type: {process_type}")
+    
+    st = None
+    if status:
+        try:
+            st = ProcessStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
+    
     return service.list_processes(pt, st, limit, offset)
 
 
@@ -140,7 +154,15 @@ def get_templates(
 ):
     """Get process templates"""
     service = ProductionService(db)
-    pt = ProductProcessType(product_type) if product_type else None
+    
+    # Safe enum conversion with error handling
+    pt = None
+    if product_type:
+        try:
+            pt = ProductProcessType(product_type)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid product_type: {product_type}")
+    
     templates = service.get_process_templates(pt)
     return templates
 

@@ -13,6 +13,7 @@ from app.core.exceptions import setup_exception_handlers
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import user, document, haccp, prp, supplier, traceability, notification, rbac, settings as settings_model, audit, nonconformance, training, equipment as equipment_model
+from app.models.production import ProductProcessType, ProcessStatus
 from app.core.security import verify_token
 from app.services import log_audit_event
 
@@ -189,6 +190,17 @@ async def debug():
         "app_name": settings.APP_NAME,
         "environment": settings.ENVIRONMENT,
         "debug": settings.DEBUG,
+        "timestamp": time.time()
+    }
+
+# Test production endpoints
+@app.get("/test-production")
+async def test_production():
+    """Test endpoint to check production API access"""
+    return {
+        "message": "Production test endpoint",
+        "available_process_types": [pt.value for pt in ProductProcessType],
+        "available_statuses": [st.value for st in ProcessStatus],
         "timestamp": time.time()
     }
 
