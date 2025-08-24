@@ -342,6 +342,10 @@ const HACCPProductDetail: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
+      <HACCPBreadcrumbs 
+        customTitle="Product Details" 
+        productName={selectedProduct?.name}
+      />
       <Typography variant="h4" gutterBottom>Product Details</Typography>
       {selectedProduct && (
         <Box sx={{ mb: 3 }}>

@@ -10,6 +10,12 @@ import Dashboard from './pages/Dashboard';
 import Documents from './pages/Documents';
 import HACCP from './pages/HACCP';
 import HACCPProductDetail from './pages/HACCPProductDetail';
+import HACCPMonitoring from './pages/HACCPMonitoring';
+import HACCPVerification from './pages/HACCPVerification';
+import HACCPSchedules from './pages/HACCPSchedules';
+import HACCPAlerts from './pages/HACCPAlerts';
+import HACCPReports from './pages/HACCPReports';
+import HACCPDashboard from './pages/HACCPDashboard';
 import PRP from './pages/PRP';
 import PRPProgramDetail from './pages/PRPProgramDetail';
 import Suppliers from './pages/Suppliers';
@@ -104,10 +110,15 @@ function App() {
                       {/* HACCP System - QA and Production roles */}
                       <Route path="/haccp" element={<HACCP />} />
                       <Route path="/haccp/products/:id" element={<HACCPProductDetail />} />
+                      <Route path="/haccp/monitoring" element={<HACCPMonitoring />} />
+                      <Route path="/haccp/verification" element={<HACCPVerification />} />
+                      <Route path="/haccp/schedules" element={<HACCPSchedules />} />
+                      <Route path="/haccp/alerts" element={<HACCPAlerts />} />
+                      <Route path="/haccp/reports" element={<HACCPReports />} />
+                      <Route path="/haccp/dashboard" element={<HACCPDashboard />} />
                       <Route path="/haccp/ccp" element={<Navigate to="/haccp" replace />} />
                       <Route path="/haccp/hazards" element={<Navigate to="/haccp" replace />} />
                       <Route path="/haccp/limits" element={<Navigate to="/haccp" replace />} />
-                      <Route path="/haccp/monitoring" element={<Navigate to="/haccp" replace />} />
                       <Route path="/haccp/corrective" element={<Navigate to="/haccp" replace />} />
                       
                       {/* PRP Programs - Production and Maintenance roles */}
