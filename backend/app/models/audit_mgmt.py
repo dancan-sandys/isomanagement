@@ -217,7 +217,11 @@ class AuditFinding(Base):
     risk_acceptable = Column(Boolean, nullable=True)
     risk_justification = Column(Text, nullable=True)
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     audit = relationship("Audit", back_populates="findings")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
     risk_assessor = relationship("User", foreign_keys=[risk_assessor_id])
     risk_assessments = relationship("AuditRiskAssessment", overlaps="audit,audit_finding", foreign_keys="AuditRiskAssessment.audit_finding_id", cascade="all, delete-orphan")

@@ -54,11 +54,16 @@ class TrainingAttendance(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     attended = Column(Boolean, default=True, nullable=False)
     comments = Column(Text)
+    
+    # Action log integration for training completion tracking
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     session = relationship("TrainingSession", back_populates="attendance")
     user = relationship("User")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
 
     def __repr__(self) -> str:
         return f"<TrainingAttendance(id={self.id}, session_id={self.session_id}, user_id={self.user_id})>"

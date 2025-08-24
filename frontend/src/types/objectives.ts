@@ -9,6 +9,7 @@ export type DataSource = 'manual' | 'system' | 'integration';
 // Main Objective Interface
 export interface Objective {
   id: number;
+  objective_code: string;
   title: string;
   description: string;
   objective_type: ObjectiveType;
@@ -22,10 +23,12 @@ export interface Objective {
   weight: number;
   measurement_frequency: MeasurementFrequency;
   unit_of_measure: string;
+  measurement_unit: string;
   start_date: string;
   target_date: string;
   trend_direction: TrendDirection;
   performance_color: PerformanceColor;
+  status: 'active' | 'completed' | 'cancelled' | 'on_hold';
   automated_calculation: boolean;
   data_source: DataSource;
   last_updated_by?: string;

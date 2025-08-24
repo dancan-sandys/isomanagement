@@ -135,7 +135,7 @@ const ReportsManagement: React.FC<ReportsManagementProps> = ({ onRefresh }) => {
     setFormData({
       title: report.title,
       description: report.description || '',
-      report_type: report.report_type,
+      report_type: report.report_type as 'kpi_dashboard' | 'compliance_report' | 'performance_report' | 'trend_analysis' | 'audit_report' | 'risk_report' | 'action_report',
       is_public: report.is_public,
       export_formats: report.export_formats || ['PDF']
     });

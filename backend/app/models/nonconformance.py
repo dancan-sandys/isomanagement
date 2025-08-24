@@ -193,6 +193,9 @@ class CAPAAction(Base):
     effectiveness_measured = Column(Boolean, default=False)
     effectiveness_score = Column(Float)
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -201,6 +204,7 @@ class CAPAAction(Base):
     # Relationships
     non_conformance = relationship("NonConformance", back_populates="capa_actions")
     verifications = relationship("CAPAVerification", back_populates="capa_action")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<CAPAAction(id={self.id}, capa_number='{self.capa_number}', title='{self.title}')>"
@@ -293,8 +297,12 @@ class ImmediateAction(Base):
     verification_date = Column(DateTime(timezone=True))
     verification_by = Column(Integer, ForeignKey("users.id"))
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Relationships
     non_conformance = relationship("NonConformance", back_populates="immediate_actions")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<ImmediateAction(id={self.id}, action_type='{self.action_type}', non_conformance_id={self.non_conformance_id})>"
@@ -443,6 +451,9 @@ class PreventiveAction(Base):
     effectiveness_target = Column(Float)  # percentage target for effectiveness
     effectiveness_measured = Column(Float)  # actual effectiveness percentage
     
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -451,6 +462,7 @@ class PreventiveAction(Base):
     
     # Relationships
     non_conformance = relationship("NonConformance", back_populates="preventive_actions")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<PreventiveAction(id={self.id}, action_title='{self.action_title}', status='{self.status}')>"

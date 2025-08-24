@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../../utils/test-utils';
+import { renderWithProviders } from '../../../__tests__/utils/test-utils';
 import QRCodeScanner from '../QRCodeScanner';
-import { mockBatch } from '../../../utils/test-utils';
+import { mockBatch } from '../../../__tests__/utils/test-utils';
 
 // Mock the traceabilityAPI
 jest.mock('../../../services/traceabilityAPI', () => ({

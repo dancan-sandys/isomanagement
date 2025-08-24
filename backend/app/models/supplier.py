@@ -189,6 +189,9 @@ class SupplierEvaluation(Base):
     follow_up_required = Column(Boolean, default=False)
     follow_up_date = Column(DateTime(timezone=True))
     
+    # Action log integration for supplier corrective actions
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     # Assignment
     evaluated_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     reviewed_by = Column(Integer, ForeignKey("users.id"))
@@ -200,6 +203,7 @@ class SupplierEvaluation(Base):
     
     # Relationships
     supplier = relationship("Supplier", back_populates="evaluations")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
     
     def __repr__(self):
         return f"<SupplierEvaluation(id={self.id}, supplier_id={self.supplier_id}, period='{self.evaluation_period}')>"

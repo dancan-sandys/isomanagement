@@ -22,56 +22,24 @@ import {
   Alert,
   CircularProgress,
   Paper,
-  Tooltip,
   Fab,
-  Divider,
-  Avatar,
-  Badge,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemSecondaryAction,
   Tabs,
   Tab,
-  Rating,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
+  Rating
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   Person as PersonIcon,
   Business as BusinessIcon,
   Group as GroupIcon,
   Assessment as AssessmentIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  ExpandMore as ExpandMoreIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
-  Assignment as AssignmentIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Timeline as TimelineIcon,
-  FilterList as FilterIcon,
-  Search as SearchIcon,
-  Refresh as RefreshIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationIcon,
-  KeyboardArrowUp as PriorityHighIcon,
-  KeyboardArrowDown as PriorityLowIcon
+  Error as ErrorIcon,
+  KeyboardArrowUp as PriorityHighIcon
 } from '@mui/icons-material';
 
 interface InterestedParty {
@@ -151,15 +119,10 @@ function TabPanel(props: TabPanelProps) {
 
 const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = ({ onRefresh }) => {
   const [parties, setParties] = useState<InterestedParty[]>([]);
-  const [expectations, setExpectations] = useState<PartyExpectation[]>([]);
-  const [actions, setActions] = useState<PartyAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [expectationDialogOpen, setExpectationDialogOpen] = useState(false);
-  const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [editingParty, setEditingParty] = useState<InterestedParty | null>(null);
-  const [selectedParty, setSelectedParty] = useState<InterestedParty | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({
     name: '',
@@ -277,7 +240,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
     setEditingParty(party);
     setFormData({
       name: party.name,
-      category: party.category,
+      category: party.category as 'customer' | 'supplier' | 'regulator' | 'employee' | 'community' | 'investor' | 'competitor',
       contact_person: party.contact_person || '',
       email: party.email || '',
       phone: party.phone || '',
@@ -371,17 +334,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
     return category.charAt(0).toUpperCase() + category.slice(1);
   };
 
-  const getSatisfactionColor = (level: number) => {
-    if (level >= 4) return 'success';
-    if (level >= 3) return 'warning';
-    return 'error';
-  };
 
-  const getImportanceColor = (level: number) => {
-    if (level >= 4) return 'error';
-    if (level >= 3) return 'warning';
-    return 'success';
-  };
 
   const filteredParties = () => {
     switch (activeTab) {

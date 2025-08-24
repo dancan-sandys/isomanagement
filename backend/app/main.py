@@ -2,7 +2,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import time
+import logging
 
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
@@ -14,13 +16,39 @@ from app.models import user, document, haccp, prp, supplier, traceability, notif
 from app.core.security import verify_token
 from app.services import log_audit_event
 
-# Create FastAPI app
+# Configure logging
+logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()))
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Database: {settings.DATABASE_TYPE}")
+    
+    # Initialize database (only in development/testing)
+    if settings.ENVIRONMENT in ["development", "testing"]:
+        try:
+            init_db()
+            logger.info("Database initialized successfully (models metadata created)")
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
+            # Don't crash the app in production - let it continue
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down ISO 22000 FSMS")
+
+# Create FastAPI app with lifespan
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="ISO 22000 Food Safety Management System for Dairy Processing",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # Setup custom exception handlers
@@ -154,30 +182,38 @@ async def root():
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "environment": settings.ENVIRONMENT
-    }
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"Environment: {settings.ENVIRONMENT}")
-    print(f"Database: {settings.DATABASE_TYPE}")
-
-    # Initialize database (dev convenience). Ensure models are imported above.
+    """Health check endpoint for Digital Ocean and monitoring"""
     try:
-        init_db()
-        print("Database initialized successfully (models metadata created)")
+        # Test database connection
+        db = SessionLocal()
+        try:
+            # Simple query to test database connectivity
+            db.execute("SELECT 1")
+            db_status = "healthy"
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            db_status = "unhealthy"
+        finally:
+            db.close()
+        
+        return {
+            "status": "healthy" if db_status == "healthy" else "degraded",
+            "database": db_status,
+            "timestamp": time.time(),
+            "environment": settings.ENVIRONMENT,
+            "version": settings.APP_VERSION
+        }
     except Exception as e:
-        print(f"Database initialization error: {e}")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("Shutting down ISO 22000 FSMS")
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": time.time(),
+                "environment": settings.ENVIRONMENT
+            }
+        )
 
 if __name__ == "__main__":
     import uvicorn

@@ -53,9 +53,9 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check if docker is installed (for local testing)
-    if ! command_exists docker; then
-        print_warning "Docker is not installed. Local testing will be skipped."
+    # Check if Python is installed
+    if ! command_exists python3; then
+        print_warning "Python 3 is not installed. Local testing will be skipped."
     fi
     
     print_success "Prerequisites check completed"
@@ -82,60 +82,81 @@ check_config() {
         exit 1
     fi
     
-    if [ ! -f "backend/Dockerfile" ]; then
-        print_error "backend/Dockerfile not found. Please create it first."
+    if [ ! -f "backend/requirements.txt" ]; then
+        print_error "backend/requirements.txt not found. Please create it first."
         exit 1
     fi
     
-    if [ ! -f "frontend/Dockerfile" ]; then
-        print_error "frontend/Dockerfile not found. Please create it first."
+    if [ ! -f "frontend/package.json" ]; then
+        print_error "frontend/package.json not found. Please create it first."
         exit 1
     fi
     
     print_success "Configuration files check completed"
 }
 
-# Function to test locally with Docker Compose
+# Function to test locally
 test_locally() {
-    if ! command_exists docker; then
-        print_warning "Skipping local test (Docker not available)"
+    if ! command_exists python3; then
+        print_warning "Skipping local test (Python 3 not available)"
         return
     fi
     
-    print_status "Testing locally with Docker Compose..."
+    print_status "Testing locally..."
     
-    if [ -f "docker-compose.yml" ]; then
-        print_status "Building and starting services..."
-        docker-compose up --build -d
-        
-        print_status "Waiting for services to be ready..."
-        sleep 30
-        
-        # Test backend health
-        if curl -f http://localhost:8000/health >/dev/null 2>&1; then
-            print_success "Backend health check passed"
-        else
-            print_error "Backend health check failed"
-            docker-compose logs backend
-            exit 1
-        fi
-        
-        # Test frontend
-        if curl -f http://localhost:8080 >/dev/null 2>&1; then
-            print_success "Frontend health check passed"
-        else
-            print_error "Frontend health check failed"
-            docker-compose logs frontend
-            exit 1
-        fi
-        
-        print_status "Stopping local services..."
-        docker-compose down
-        
-        print_success "Local testing completed"
-    else
-        print_warning "docker-compose.yml not found, skipping local test"
+    # Check if backend can start
+    print_status "Testing backend setup..."
+    cd backend
+    
+    # Check if virtual environment exists, create if not
+    if [ ! -d "venv" ]; then
+        print_status "Creating virtual environment..."
+        python3 -m venv venv
     fi
+    
+    # Activate virtual environment
+    source venv/bin/activate
+    
+    # Install dependencies
+    print_status "Installing backend dependencies..."
+    pip install -r requirements.txt
+    
+    # Test if backend can start (just check imports)
+    print_status "Testing backend imports..."
+    if python -c "from app.main import app; print('Backend imports successful')" 2>/dev/null; then
+        print_success "Backend setup test passed"
+    else
+        print_error "Backend setup test failed"
+        exit 1
+    fi
+    
+    # Deactivate virtual environment
+    deactivate
+    
+    # Go back to root directory
+    cd ..
+    
+    # Check if frontend can build
+    print_status "Testing frontend setup..."
+    cd frontend
+    
+    # Install dependencies
+    print_status "Installing frontend dependencies..."
+    npm install
+    
+    # Test if frontend can build
+    print_status "Testing frontend build..."
+    if npm run build >/dev/null 2>&1; then
+        print_success "Frontend build test passed"
+    else
+        print_error "Frontend build test failed"
+        exit 1
+    fi
+    
+    # Go back to root directory
+    cd ..
+    
+    print_success "Local testing completed"
 }
 
 # Function to deploy to DigitalOcean
@@ -298,10 +319,10 @@ show_help() {
     echo "  --non-interactive   Run in non-interactive mode (for CI/CD)"
     echo ""
     echo "This script will:"
-    echo "  1. Check prerequisites (doctl, git, docker)"
+    echo "  1. Check prerequisites (doctl, git, python3)"
     echo "  2. Authenticate with DigitalOcean"
     echo "  3. Check configuration files"
-    echo "  4. Optionally test locally with Docker Compose"
+    echo "  4. Optionally test locally"
     echo "  5. Deploy to DigitalOcean App Platform"
     echo "  6. Run database migrations"
     echo "  7. Perform health checks"

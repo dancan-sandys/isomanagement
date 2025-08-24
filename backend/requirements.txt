@@ -29,10 +29,10 @@ fastapi-mail==1.4.1
 # Date and time handling
 python-dateutil==2.8.2
 
-# Excel and PDF generation
+# Excel and PDF generation (pandas removed to avoid compilation issues on Digital Ocean)
 openpyxl==3.1.2
 reportlab==4.0.7
-pandas==2.1.4
+# pandas==2.0.3  # Commented out - causing compilation failures on Digital Ocean
 
 # QR code generation
 qrcode[pil]==7.4.2

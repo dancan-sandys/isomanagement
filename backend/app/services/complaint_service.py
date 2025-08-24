@@ -7,6 +7,8 @@ from app.models.complaint import Complaint, ComplaintStatus, ComplaintCommunicat
 from app.models.nonconformance import NonConformance, NonConformanceSource
 from app.models.traceability import Batch
 from app.schemas.complaint import ComplaintCreate, ComplaintUpdate, CommunicationCreate, InvestigationCreate, InvestigationUpdate
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 
 class ComplaintService:
@@ -147,5 +149,106 @@ class ComplaintService:
 
     def get_investigation(self, complaint_id: int) -> Optional[ComplaintInvestigation]:
         return self.db.query(ComplaintInvestigation).filter(ComplaintInvestigation.complaint_id == complaint_id).first()
+    
+    def create_complaint_resolution_action(self, complaint_id: int, created_by: int) -> Complaint:
+        """Create action log entry for complaint resolution"""
+        complaint = self.db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        if not complaint:
+            raise ValueError("Complaint not found")
+        
+        # Skip if already linked to action log
+        if complaint.action_log_id:
+            return complaint
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Map complaint severity to action priority
+        priority_mapping = {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "critical": "critical"
+        }
+        
+        # Map complaint status to action status
+        status_mapping = {
+            "open": "pending",
+            "under_investigation": "in_progress",
+            "resolved": "completed",
+            "closed": "completed"
+        }
+        
+        mapped_priority = priority_mapping.get(complaint.severity.lower(), "medium")
+        mapped_status = status_mapping.get(str(complaint.status).lower(), "pending")
+        
+        action_log_data = {
+            "title": f"Complaint Resolution: {complaint.complaint_number}",
+            "description": f"Resolve customer complaint: {complaint.description[:100]}..." if len(complaint.description) > 100 else complaint.description,
+            "action_source": ActionSource.COMPLAINT.value,
+            "source_id": complaint.id,
+            "priority": mapped_priority,
+            "status": mapped_status,
+            "assigned_to": None,  # Can be assigned later
+            "assigned_by": created_by,
+            "due_date": None,  # Can be set based on complaint severity/SLA
+            "estimated_hours": None,
+            "notes": f"Customer complaint resolution - Classification: {complaint.classification}",
+            "tags": {
+                "complaint_number": complaint.complaint_number,
+                "customer_name": complaint.customer_name,
+                "classification": str(complaint.classification),
+                "severity": complaint.severity
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the complaint
+        complaint.action_log_id = action_log.id
+        
+        self.db.commit()
+        self.db.refresh(complaint)
+        return complaint
+    
+    def update_complaint_resolution(self, complaint_id: int, update_data: Dict[str, Any]) -> Complaint:
+        """Update complaint and sync with action log"""
+        complaint = self.db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        if not complaint:
+            raise ValueError("Complaint not found")
+        
+        # Update the complaint
+        for field, value in update_data.items():
+            if hasattr(complaint, field):
+                setattr(complaint, field, value)
+        
+        # Sync changes to actions log if linked
+        if complaint.action_log_id:
+            actions_log_service = ActionsLogService(self.db)
+            
+            # Map complaint status to action status
+            status_mapping = {
+                "open": "pending",
+                "under_investigation": "in_progress",
+                "resolved": "completed",
+                "closed": "completed"
+            }
+            
+            sync_data = {}
+            if 'resolution_description' in update_data:
+                sync_data['description'] = update_data['resolution_description']
+            if 'status' in update_data:
+                sync_data['status'] = status_mapping.get(
+                    str(update_data['status']).lower(), "pending"
+                )
+                if str(update_data['status']).lower() in ['resolved', 'closed']:
+                    sync_data['progress_percent'] = 100.0
+            
+            if sync_data:
+                actions_log_service.update_action(complaint.action_log_id, sync_data)
+        
+        self.db.commit()
+        self.db.refresh(complaint)
+        return complaint
 
 
