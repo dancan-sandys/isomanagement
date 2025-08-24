@@ -25,7 +25,16 @@ import {
   Fab,
   Tabs,
   Tab,
-  Rating
+  Rating,
+  Divider,
+  Avatar,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  ListItemSecondaryAction,
+  LinearProgress,
+  Badge
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,7 +48,15 @@ import {
   StarBorder as StarBorderIcon,
   Email as EmailIcon,
   Error as ErrorIcon,
-  KeyboardArrowUp as PriorityHighIcon
+  KeyboardArrowUp as PriorityHighIcon,
+  Phone as PhoneIcon,
+  LocationOn as LocationIcon,
+  Language as WebsiteIcon,
+  Assignment as AssignmentIcon,
+  Schedule as ScheduleIcon,
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 
 interface InterestedParty {
@@ -122,6 +139,9 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailViewOpen, setDetailViewOpen] = useState(false);
+  const [selectedParty, setSelectedParty] = useState<InterestedParty | null>(null);
+  const [partyActions, setPartyActions] = useState<PartyAction[]>([]);
   const [editingParty, setEditingParty] = useState<InterestedParty | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({
@@ -141,6 +161,60 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
   useEffect(() => {
     loadParties();
   }, []);
+
+  // Mock actions data - this would come from API based on party_id
+  const mockActions: PartyAction[] = [
+    {
+      id: 1,
+      party_id: 1,
+      title: 'Implement Customer Feedback System',
+      description: 'Set up automated feedback collection from ABC Supermarket Chain to improve product quality',
+      status: 'in_progress',
+      priority: 'high',
+      due_date: '2025-09-15',
+      created_at: '2025-08-01'
+    },
+    {
+      id: 2,
+      party_id: 1,
+      title: 'Quality Audit Preparation',
+      description: 'Prepare documentation for quarterly quality audit requested by ABC Supermarket',
+      status: 'completed',
+      priority: 'medium',
+      completed_date: '2025-08-10',
+      created_at: '2025-07-20'
+    },
+    {
+      id: 3,
+      party_id: 2,
+      title: 'KEBS Compliance Update',
+      description: 'Update food safety protocols to meet new KEBS regulations',
+      status: 'open',
+      priority: 'critical',
+      due_date: '2025-08-30',
+      created_at: '2025-08-15'
+    },
+    {
+      id: 4,
+      party_id: 2,
+      title: 'Training Program Implementation',
+      description: 'Implement mandatory training program as per KEBS requirements',
+      status: 'in_progress',
+      priority: 'high',
+      due_date: '2025-09-30',
+      created_at: '2025-08-05'
+    },
+    {
+      id: 5,
+      party_id: 3,
+      title: 'Supplier Quality Assessment',
+      description: 'Conduct quality assessment of raw milk supplies from Dairy Farmers Co-operative',
+      status: 'completed',
+      priority: 'medium',
+      completed_date: '2025-08-12',
+      created_at: '2025-07-25'
+    }
+  ];
 
   const loadParties = async () => {
     try {
@@ -286,6 +360,44 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
+  };
+
+  const handleViewPartyDetails = (party: InterestedParty) => {
+    setSelectedParty(party);
+    // Filter actions for this party
+    const actionsForParty = mockActions.filter(action => action.party_id === party.id);
+    setPartyActions(actionsForParty);
+    setDetailViewOpen(true);
+  };
+
+  const getActionStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'success';
+      case 'in_progress':
+        return 'primary';
+      case 'open':
+        return 'warning';
+      case 'cancelled':
+        return 'error';
+      default:
+        return 'default';
+    }
+  };
+
+  const getActionPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'critical':
+        return 'error';
+      case 'high':
+        return 'warning';
+      case 'medium':
+        return 'info';
+      case 'low':
+        return 'success';
+      default:
+        return 'default';
+    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -465,20 +577,6 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                       </Box>
                     </Box>
 
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Chip
-                        label={`${party.expectations_count} expectations`}
-                        size="small"
-                        variant="outlined"
-                      />
-                      <Chip
-                        label={`${party.completed_actions_count}/${party.actions_count} actions`}
-                        size="small"
-                        variant="outlined"
-                        color={party.completed_actions_count === party.actions_count ? 'success' : 'warning'}
-                      />
-                    </Box>
-
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Box>
                         <IconButton
@@ -488,7 +586,11 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                         >
                           <EditIcon />
                         </IconButton>
-                        <IconButton size="small" color="info">
+                        <IconButton 
+                          size="small" 
+                          color="info"
+                          onClick={() => handleViewPartyDetails(party)}
+                        >
                           <VisibilityIcon />
                         </IconButton>
                         <IconButton size="small" color="secondary">
@@ -538,7 +640,11 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                         >
                           <EditIcon />
                         </IconButton>
-                        <IconButton size="small" color="info">
+                        <IconButton 
+                          size="small" 
+                          color="info"
+                          onClick={() => handleViewPartyDetails(party)}
+                        >
                           <VisibilityIcon />
                         </IconButton>
                       </Box>
@@ -586,7 +692,11 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                         >
                           <EditIcon />
                         </IconButton>
-                        <IconButton size="small" color="info">
+                        <IconButton 
+                          size="small" 
+                          color="info"
+                          onClick={() => handleViewPartyDetails(party)}
+                        >
                           <VisibilityIcon />
                         </IconButton>
                       </Box>
@@ -634,14 +744,18 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                         >
                           <EditIcon />
                         </IconButton>
-                        <IconButton size="small" color="info">
+                        <IconButton 
+                          size="small" 
+                          color="info"
+                          onClick={() => handleViewPartyDetails(party)}
+                        >
                           <VisibilityIcon />
                         </IconButton>
                       </Box>
                       <Chip
-                        label={`${party.completed_actions_count}/${party.actions_count} actions`}
+                        label={formatCategory(party.category)}
+                        color={getCategoryColor(party.category) as any}
                         size="small"
-                        color={party.completed_actions_count === party.actions_count ? 'success' : 'warning'}
                       />
                     </Box>
                   </CardContent>
@@ -696,6 +810,13 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                           color="primary"
                         >
                           <EditIcon />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          color="info"
+                          onClick={() => handleViewPartyDetails(party)}
+                        >
+                          <VisibilityIcon />
                         </IconButton>
                         <IconButton size="small" color="error">
                           <PriorityHighIcon />
@@ -851,6 +972,316 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleSaveParty}>
             {editingParty ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Detailed View Dialog */}
+      <Dialog 
+        open={detailViewOpen} 
+        onClose={() => setDetailViewOpen(false)} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: { minHeight: '70vh' }
+        }}
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box display="flex" alignItems="center">
+              {selectedParty && getCategoryIcon(selectedParty.category)}
+              <Typography variant="h5" sx={{ ml: 1 }}>
+                {selectedParty?.name}
+              </Typography>
+            </Box>
+            <IconButton onClick={() => setDetailViewOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedParty && (
+            <Grid container spacing={3}>
+              {/* Basic Information Card */}
+              <Grid item xs={12} md={6}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Basic Information
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+                    
+                    <Box display="flex" alignItems="center" mb={2}>
+                      <Chip
+                        label={formatCategory(selectedParty.category)}
+                        color={getCategoryColor(selectedParty.category) as any}
+                        icon={getCategoryIcon(selectedParty.category)}
+                        sx={{ mr: 2 }}
+                      />
+                      <Chip
+                        label={selectedParty.is_active ? 'Active' : 'Inactive'}
+                        color={selectedParty.is_active ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </Box>
+
+                    {selectedParty.description && (
+                      <Box mb={2}>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Description
+                        </Typography>
+                        <Typography variant="body1">
+                          {selectedParty.description}
+                        </Typography>
+                      </Box>
+                    )}
+
+                    <Box display="flex" alignItems="center" mb={2}>
+                      <Box display="flex" alignItems="center" mr={3}>
+                        <Typography variant="body2" color="text.secondary" mr={1}>
+                          Importance:
+                        </Typography>
+                        <Rating
+                          value={selectedParty.importance_level}
+                          readOnly
+                          size="small"
+                          icon={<StarIcon color="error" />}
+                          emptyIcon={<StarBorderIcon />}
+                        />
+                      </Box>
+                      <Box display="flex" alignItems="center">
+                        <Typography variant="body2" color="text.secondary" mr={1}>
+                          Satisfaction:
+                        </Typography>
+                        <Rating
+                          value={selectedParty.satisfaction_level || 0}
+                          readOnly
+                          size="small"
+                          icon={<StarIcon color="success" />}
+                          emptyIcon={<StarBorderIcon />}
+                        />
+                      </Box>
+                    </Box>
+
+                    {selectedParty.last_assessment_date && (
+                      <Box mb={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Last Assessment: {new Date(selectedParty.last_assessment_date).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    )}
+
+                    {selectedParty.next_assessment_date && (
+                      <Box mb={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Next Assessment: {new Date(selectedParty.next_assessment_date).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Contact Information Card */}
+              <Grid item xs={12} md={6}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Contact Information
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+
+                    {selectedParty.contact_person && (
+                      <Box display="flex" alignItems="center" mb={2}>
+                        <PersonIcon color="action" sx={{ mr: 2 }} />
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Contact Person
+                          </Typography>
+                          <Typography variant="body1">
+                            {selectedParty.contact_person}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+
+                    {selectedParty.email && (
+                      <Box display="flex" alignItems="center" mb={2}>
+                        <EmailIcon color="action" sx={{ mr: 2 }} />
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Email
+                          </Typography>
+                          <Typography variant="body1">
+                            {selectedParty.email}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+
+                    {selectedParty.phone && (
+                      <Box display="flex" alignItems="center" mb={2}>
+                        <PhoneIcon color="action" sx={{ mr: 2 }} />
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Phone
+                          </Typography>
+                          <Typography variant="body1">
+                            {selectedParty.phone}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+
+                    {selectedParty.address && (
+                      <Box display="flex" alignItems="center" mb={2}>
+                        <LocationIcon color="action" sx={{ mr: 2 }} />
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Address
+                          </Typography>
+                          <Typography variant="body1">
+                            {selectedParty.address}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+
+                    {selectedParty.website && (
+                      <Box display="flex" alignItems="center" mb={2}>
+                        <WebsiteIcon color="action" sx={{ mr: 2 }} />
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Website
+                          </Typography>
+                          <Typography variant="body1">
+                            {selectedParty.website}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Related Actions Card */}
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography variant="h6">
+                        Related Actions ({partyActions.length})
+                      </Typography>
+                      <Badge badgeContent={partyActions.filter(a => a.status !== 'completed').length} color="primary">
+                        <AssignmentIcon />
+                      </Badge>
+                    </Box>
+                    <Divider sx={{ mb: 2 }} />
+
+                    {partyActions.length === 0 ? (
+                      <Box textAlign="center" py={4}>
+                        <AssignmentIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary" gutterBottom>
+                          No Actions Found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          There are no actions currently linked to this interested party.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <List>
+                        {partyActions.map((action, index) => (
+                          <Box key={action.id}>
+                            <ListItem>
+                              <ListItemIcon>
+                                {action.status === 'completed' ? (
+                                  <CheckCircleIcon color="success" />
+                                ) : action.status === 'in_progress' ? (
+                                  <AssignmentIcon color="primary" />
+                                ) : action.priority === 'critical' ? (
+                                  <WarningIcon color="error" />
+                                ) : (
+                                  <AssignmentIcon color="action" />
+                                )}
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={
+                                  <Box display="flex" alignItems="center" gap={1}>
+                                    <Typography variant="subtitle1">
+                                      {action.title}
+                                    </Typography>
+                                    <Chip
+                                      label={action.status.replace(/_/g, ' ')}
+                                      color={getActionStatusColor(action.status) as any}
+                                      size="small"
+                                    />
+                                    <Chip
+                                      label={action.priority}
+                                      color={getActionPriorityColor(action.priority) as any}
+                                      size="small"
+                                      variant="outlined"
+                                    />
+                                  </Box>
+                                }
+                                secondary={
+                                  <Box>
+                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                      {action.description}
+                                    </Typography>
+                                    <Box display="flex" alignItems="center" gap={2}>
+                                      {action.due_date && (
+                                        <Box display="flex" alignItems="center">
+                                          <ScheduleIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                                          <Typography variant="caption">
+                                            Due: {new Date(action.due_date).toLocaleDateString()}
+                                          </Typography>
+                                        </Box>
+                                      )}
+                                      {action.completed_date && (
+                                        <Box display="flex" alignItems="center">
+                                          <CheckCircleIcon sx={{ fontSize: 16, mr: 0.5 }} color="success" />
+                                          <Typography variant="caption">
+                                            Completed: {new Date(action.completed_date).toLocaleDateString()}
+                                          </Typography>
+                                        </Box>
+                                      )}
+                                      <Typography variant="caption" color="text.secondary">
+                                        Created: {new Date(action.created_at).toLocaleDateString()}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                }
+                              />
+                              <ListItemSecondaryAction>
+                                <IconButton size="small" color="primary">
+                                  <VisibilityIcon />
+                                </IconButton>
+                              </ListItemSecondaryAction>
+                            </ListItem>
+                            {index < partyActions.length - 1 && <Divider />}
+                          </Box>
+                        ))}
+                      </List>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailViewOpen(false)} variant="outlined">
+            Close
+          </Button>
+          <Button 
+            onClick={() => {
+              setDetailViewOpen(false);
+              handleEditParty(selectedParty!);
+            }}
+            variant="contained"
+            startIcon={<EditIcon />}
+          >
+            Edit Party
           </Button>
         </DialogActions>
       </Dialog>
