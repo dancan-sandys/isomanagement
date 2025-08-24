@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     ALLOWED_ORIGINS: List[str] = ["*"]
-    ALLOWED_CREDENTIALS: bool = False
+    ALLOWED_CREDENTIALS: bool = True
     
     # File Storage Configuration (AWS S3)
     AWS_ACCESS_KEY_ID: Optional[str] = None
