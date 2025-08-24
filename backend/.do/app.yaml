@@ -5,18 +5,18 @@ services:
   - name: backend
     source_dir: /
     github:
-      repo: dancan-sandys/isomanagement/backend
+      repo: dancan-sandys/isomanagement
       branch: master
-    build_command: pip install -r requirements-production.txt
-    run_command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4
+    build_command: pip install -r requirements.txt
+    run_command: chmod +x start.sh && ./start.sh
     environment_slug: python
     instance_count: 1
     instance_size_slug: basic-xxs
     health_check:
       http_path: /health
-      initial_delay_seconds: 30
-      period_seconds: 10
-      timeout_seconds: 5
+      initial_delay_seconds: 60
+      period_seconds: 30
+      timeout_seconds: 10
       failure_threshold: 3
       success_threshold: 1
     envs:
@@ -43,7 +43,7 @@ services:
       - key: ENVIRONMENT
         value: "production"
       - key: ALLOWED_ORIGINS
-        value: '["https://iso22000-fsms-frontend.ondigitalocean.app","*"]'
+        value: '["*"]'
       - key: ALLOWED_CREDENTIALS
         value: "True"
       - key: MAX_FILE_SIZE
@@ -51,18 +51,15 @@ services:
       - key: ALLOWED_FILE_TYPES
         value: "pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,gif"
       - key: ENABLE_EMAIL_NOTIFICATIONS
-        value: "True"
+        value: "False"
       - key: SMTP_HOST
-        value: ${SMTP_HOST}
-        type: SECRET
+        value: smtp.gmail.com
       - key: SMTP_PORT
         value: "587"
       - key: SMTP_USER
-        value: ${isocreatesoftwares@gmail.com}
-        type: SECRET
+        value: isocreatesoftwares@gmail.com
       - key: SMTP_PASSWORD
-        value: ${olmq engf ouun ionj}
-        type: SECRET
+        value: olmq engf ouun ionj
       - key: SMTP_TLS
         value: "True"
       - key: LOG_LEVEL
@@ -70,23 +67,11 @@ services:
       - key: LOG_FORMAT
         value: "json"
       - key: BACKUP_ENABLED
-        value: "True"
+        value: "False"
       - key: BACKUP_RETENTION_DAYS
         value: "30"
       - key: RATE_LIMIT_PER_MINUTE
         value: "100"
-      - key: AWS_ACCESS_KEY_ID
-        value: ${SPACES_ACCESS_KEY}
-        type: SECRET
-      - key: AWS_SECRET_ACCESS_KEY
-        value: ${SPACES_SECRET_KEY}
-        type: SECRET
-      - key: AWS_BUCKET_NAME
-        value: ${SPACES_BUCKET_NAME}
-      - key: AWS_REGION
-        value: ${SPACES_REGION}
-      - key: AWS_ENDPOINT_URL
-        value: ${SPACES_ENDPOINT_URL}
 
 databases:
   # PostgreSQL Database
@@ -101,26 +86,5 @@ databases:
 # Environment Variables (global)
 envs:
   - key: SECRET_KEY
-    value: your-super-secret-key-change-this-in-production
+    value: your-super-secret-key-change-this-in-production-123456789
     type: SECRET
-  - key: SMTP_HOST
-    value: smtp.gmail.com
-    type: SECRET
-  - key: SMTP_USER
-    value: your-email@gmail.com
-    type: SECRET
-  - key: SMTP_PASSWORD
-    value: your-app-password
-    type: SECRET
-  - key: SPACES_ACCESS_KEY
-    value: your-spaces-access-key
-    type: SECRET
-  - key: SPACES_SECRET_KEY
-    value: your-spaces-secret-key
-    type: SECRET
-  - key: SPACES_BUCKET_NAME
-    value: iso22000-fsms-files
-  - key: SPACES_REGION
-    value: nyc3
-  - key: SPACES_ENDPOINT_URL
-    value: https://nyc3.digitaloceanspaces.com
