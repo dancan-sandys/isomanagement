@@ -431,7 +431,14 @@ const SWOTPESTELAnalysis: React.FC<SWOTPESTELAnalysisProps> = ({ onRefresh }) =>
         if (editingItem) {
           const updatedItems = swotItems.map(item =>
             item.id === editingItem.id
-              ? { ...item, ...itemFormData }
+              ? {
+                  ...item,
+                  category: itemFormData.category as 'strengths' | 'weaknesses' | 'opportunities' | 'threats',
+                  description: itemFormData.description,
+                  impact_level: itemFormData.impact_level as 'high' | 'medium' | 'low',
+                  priority: itemFormData.priority as 'high' | 'medium' | 'low',
+                  notes: itemFormData.notes
+                }
               : item
           );
           setSwotItems(updatedItems);
@@ -452,7 +459,14 @@ const SWOTPESTELAnalysis: React.FC<SWOTPESTELAnalysisProps> = ({ onRefresh }) =>
         if (editingItem) {
           const updatedItems = pestelItems.map(item =>
             item.id === editingItem.id
-              ? { ...item, ...itemFormData }
+              ? {
+                  ...item,
+                  category: itemFormData.category as 'political' | 'economic' | 'social' | 'technological' | 'environmental' | 'legal',
+                  description: itemFormData.description,
+                  impact_level: itemFormData.impact_level as 'high' | 'medium' | 'low',
+                  priority: itemFormData.priority as 'high' | 'medium' | 'low',
+                  notes: itemFormData.notes
+                }
               : item
           );
           setPestelItems(updatedItems);

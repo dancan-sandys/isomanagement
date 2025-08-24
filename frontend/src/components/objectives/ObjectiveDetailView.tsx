@@ -35,7 +35,7 @@ import {
   TrendingFlat as TrendingFlatIcon,
   Assessment as AssessmentIcon,
   Timeline as TimelineIcon,
-  Target as TargetIcon,
+  Flag as TargetIcon,
   ShowChart as ShowChartIcon
 } from '@mui/icons-material';
 import objectivesAPI from '../../services/objectivesAPI';
@@ -78,7 +78,13 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
       setError(null);
       
       const response = await objectivesAPI.getEnhancedObjective(objectiveId);
-      setDetail(response);
+      setDetail(response || {
+        objective: {},
+        targets: [],
+        progress: [],
+        trend_analysis: null,
+        child_objectives: []
+      });
     } catch (e) {
       setError('Failed to load objective details');
       console.error('Error loading objective detail:', e);
@@ -154,33 +160,33 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={8}>
                     <Typography variant="h6" gutterBottom>
-                      {detail.objective.title}
+                      {detail.objective?.title || 'Untitled Objective'}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      {detail.objective.description}
+                      {detail.objective?.description || 'No description available'}
                     </Typography>
                     
                     <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
                       <Chip 
-                        label={detail.objective.objective_type} 
+                        label={detail.objective?.objective_type || 'N/A'} 
                         color="primary" 
                         size="small" 
                       />
                       <Chip 
-                        label={detail.objective.hierarchy_level} 
+                        label={detail.objective?.hierarchy_level || 'N/A'} 
                         variant="outlined" 
                         size="small" 
                       />
                       <Chip 
-                        label={detail.objective.status} 
-                        color={getStatusColor(detail.objective.status) as any}
+                        label={detail.objective?.status || 'N/A'} 
+                        color={getStatusColor(detail.objective?.status || '') as 'success' | 'warning' | 'error' | 'default'}
                         size="small" 
                       />
-                      {detail.objective.performance_color && (
+                      {detail.objective?.performance_color && (
                         <Chip 
                           label={detail.objective.performance_color} 
-                          color={detail.objective.performance_color === 'green' ? 'success' : 
-                                 detail.objective.performance_color === 'yellow' ? 'warning' : 'error'}
+                          color={(detail.objective.performance_color === 'green' ? 'success' : 
+                                 detail.objective.performance_color === 'yellow' ? 'warning' : 'error') as 'success' | 'warning' | 'error'}
                           size="small" 
                         />
                       )}
@@ -192,21 +198,21 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                       Objective Code
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                      {detail.objective.objective_code}
+                      {detail.objective?.objective_code || 'N/A'}
                     </Typography>
                     
                     <Typography variant="subtitle2" gutterBottom>
                       Measurement Unit
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                      {detail.objective.measurement_unit || 'N/A'}
+                      {detail.objective?.measurement_unit || 'N/A'}
                     </Typography>
                     
                     <Typography variant="subtitle2" gutterBottom>
                       Frequency
                     </Typography>
                     <Typography variant="body1">
-                      {detail.objective.frequency || 'N/A'}
+                      {detail.objective?.frequency || 'N/A'}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -235,14 +241,14 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                             Targets Summary
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {detail.targets.length} target(s) defined
+                            {detail.targets?.length || 0} target(s) defined
                           </Typography>
-                          {detail.targets.length > 0 && (
+                          {detail.targets && detail.targets.length > 0 && (
                             <Box sx={{ mt: 2 }}>
                               {detail.targets.slice(0, 3).map((target, index) => (
                                 <Box key={index} sx={{ mb: 1 }}>
                                   <Typography variant="body2">
-                                    Target: {target.target_value} {detail.objective.measurement_unit}
+                                    Target: {target.target_value} {detail.objective?.measurement_unit || ''}
                                   </Typography>
                                   <Typography variant="caption" color="text.secondary">
                                     {formatDate(target.period_start)} - {formatDate(target.period_end)}
@@ -263,14 +269,14 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                             Progress Summary
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {detail.progress.length} progress entry(ies)
+                            {detail.progress?.length || 0} progress entry(ies)
                           </Typography>
-                          {detail.progress.length > 0 && (
+                          {detail.progress && detail.progress.length > 0 && (
                             <Box sx={{ mt: 2 }}>
                               {detail.progress.slice(0, 3).map((prog, index) => (
                                 <Box key={index} sx={{ mb: 1 }}>
                                   <Typography variant="body2">
-                                    {prog.actual_value} {detail.objective.measurement_unit}
+                                    {prog.actual_value} {detail.objective?.measurement_unit || ''}
                                   </Typography>
                                   <Typography variant="caption" color="text.secondary">
                                     {formatDate(prog.period_start)} - {formatDate(prog.period_end)}
@@ -322,7 +328,7 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
               {/* Targets Tab */}
               {activeTab === 1 && (
                 <Box p={3}>
-                  {detail.targets.length > 0 ? (
+                  {detail.targets && detail.targets.length > 0 ? (
                     <TableContainer component={Paper}>
                       <Table>
                         <TableHead>
@@ -372,7 +378,7 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
               {/* Progress Tab */}
               {activeTab === 2 && (
                 <Box p={3}>
-                  {detail.progress.length > 0 ? (
+                  {detail.progress && detail.progress.length > 0 ? (
                     <TableContainer component={Paper}>
                       <Table>
                         <TableHead>
@@ -400,7 +406,7 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                               <TableCell>
                                 <Chip 
                                   label={prog.status || 'N/A'} 
-                                  color={getStatusColor(prog.status || '') as any}
+                                  color={getStatusColor(prog.status || '') as 'success' | 'warning' | 'error' | 'default'}
                                   size="small"
                                 />
                               </TableCell>
@@ -505,7 +511,7 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                                 <Chip 
                                   label={child.status} 
                                   size="small" 
-                                  color={getStatusColor(child.status) as any}
+                                  color={getStatusColor(child.status) as 'success' | 'warning' | 'error' | 'default'}
                                 />
                               </Stack>
                             </CardContent>

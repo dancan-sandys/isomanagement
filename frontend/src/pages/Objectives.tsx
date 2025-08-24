@@ -49,6 +49,7 @@ import {
 import objectivesAPI from '../services/objectivesAPI';
 import { ObjectiveCreatePayload, ObjectiveUpdatePayload, ObjectiveTargetPayload, ObjectiveProgressPayload } from '../services/objectivesAPI';
 import ObjectiveDetailView from '../components/objectives/ObjectiveDetailView';
+import ObjectivesDashboard from '../components/objectives/ObjectivesDashboard';
 
 interface Objective {
   id: number;
@@ -63,6 +64,7 @@ interface Objective {
   status: string;
   created_at: string;
   updated_at?: string;
+  created_by?: number;
 }
 
 interface ObjectiveTarget {
@@ -108,7 +110,7 @@ interface DashboardKPI {
 
 const StatusChip: React.FC<{ status?: string }> = ({ status }) => {
   const color = status === 'on_track' ? 'success' : status === 'at_risk' ? 'warning' : status === 'off_track' ? 'error' : 'default';
-  return <Chip label={status || 'unknown'} color={color as any} size="small" />;
+  return <Chip label={status || 'unknown'} color={color as 'success' | 'warning' | 'error' | 'default'} size="small" />;
 };
 
 const ObjectivesPage: React.FC = () => {
@@ -118,6 +120,7 @@ const ObjectivesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [dashboardKPIs, setDashboardKPIs] = useState<DashboardKPI | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Modal states
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -171,7 +174,7 @@ const ObjectivesPage: React.FC = () => {
       
       // Load basic objectives
       const basicResponse = await objectivesAPI.listObjectives();
-      setObjectives(basicResponse || []);
+      setObjectives(Array.isArray(basicResponse) ? basicResponse : []);
       
       // Load enhanced objectives
       const enhancedResponse = await objectivesAPI.listEnhancedObjectives();
@@ -187,6 +190,11 @@ const ObjectivesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+    loadData();
   };
 
   const handleCreateObjective = async () => {
@@ -205,7 +213,7 @@ const ObjectivesPage: React.FC = () => {
         review_frequency: 'quarterly',
         created_by: 2
       });
-      loadData();
+      handleRefresh();
     } catch (e) {
       setError('Failed to create objective. Please try again.');
       console.error('Error creating objective:', e);
@@ -228,7 +236,7 @@ const ObjectivesPage: React.FC = () => {
         is_lower_better: false,
         created_by: 2
       });
-      loadData();
+      handleRefresh();
     } catch (e) {
       setError('Failed to create target. Please try again.');
       console.error('Error creating target:', e);
@@ -250,7 +258,7 @@ const ObjectivesPage: React.FC = () => {
         evidence: '',
         created_by: 2
       });
-      loadData();
+      handleRefresh();
     } catch (e) {
       setError('Failed to create progress. Please try again.');
       console.error('Error creating progress:', e);
@@ -294,7 +302,7 @@ const ObjectivesPage: React.FC = () => {
         <Typography variant="h5">Food Safety Objectives Management</Typography>
         <Box display="flex" gap={1}>
           <Tooltip title="Refresh Data">
-            <IconButton onClick={loadData} color="primary">
+            <IconButton onClick={handleRefresh} color="primary">
               <RefreshIcon />
             </IconButton>
           </Tooltip>
@@ -469,7 +477,7 @@ const ObjectivesPage: React.FC = () => {
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Typography variant="body2">Type:</Typography>
                         <Chip 
-                          label={objective.objective_type} 
+                          label={objective.objective_type || 'N/A'} 
                           size="small" 
                           color={objective.objective_type === 'corporate' ? 'primary' : 'secondary'}
                         />
@@ -478,7 +486,7 @@ const ObjectivesPage: React.FC = () => {
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Typography variant="body2">Level:</Typography>
                         <Chip 
-                          label={objective.hierarchy_level} 
+                          label={objective.hierarchy_level || 'N/A'} 
                           size="small" 
                           variant="outlined"
                         />
@@ -529,38 +537,7 @@ const ObjectivesPage: React.FC = () => {
         {/* Dashboard Tab */}
         {activeTab === 2 && (
           <Box p={3}>
-            <Typography variant="h6" gutterBottom>
-              Performance Overview
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Recent Activity
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {dashboardKPIs?.recent_progress_entries || 0} progress entries in the last 30 days
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Overall Performance
-                    </Typography>
-                    <Typography variant="h4" color="primary">
-                      {dashboardKPIs?.on_track_percentage || 0}%
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Objectives on track
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
+            <ObjectivesDashboard refreshTrigger={refreshTrigger} />
           </Box>
         )}
       </Paper>
@@ -681,7 +658,7 @@ const ObjectivesPage: React.FC = () => {
                 label="Target Value"
                 type="number"
                 value={targetFormData.target_value}
-                onChange={(e) => setTargetFormData(prev => ({ ...prev, target_value: parseFloat(e.target.value) }))}
+                onChange={(e) => setTargetFormData(prev => ({ ...prev, target_value: parseFloat(e.target.value) || 0 }))}
                 required
               />
             </Grid>
@@ -691,7 +668,7 @@ const ObjectivesPage: React.FC = () => {
                 label="Weight"
                 type="number"
                 value={targetFormData.weight}
-                onChange={(e) => setTargetFormData(prev => ({ ...prev, weight: parseFloat(e.target.value) }))}
+                onChange={(e) => setTargetFormData(prev => ({ ...prev, weight: parseFloat(e.target.value) || 1.0 }))}
               />
             </Grid>
           </Grid>
@@ -737,7 +714,7 @@ const ObjectivesPage: React.FC = () => {
                 label="Actual Value"
                 type="number"
                 value={progressFormData.actual_value}
-                onChange={(e) => setProgressFormData(prev => ({ ...prev, actual_value: parseFloat(e.target.value) }))}
+                onChange={(e) => setProgressFormData(prev => ({ ...prev, actual_value: parseFloat(e.target.value) || 0 }))}
                 required
               />
             </Grid>
