@@ -844,15 +844,13 @@ const PRP: React.FC = () => {
               <TableCell>Scheduled</TableCell>
               <TableCell>Due Date</TableCell>
               <TableCell>Assigned To</TableCell>
-              <TableCell>Progress</TableCell>
-              <TableCell>Compliance</TableCell>
               <TableCell align="center">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredChecklists.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                   <Typography variant="body1" color="text.secondary">
                     No checklists found
                   </Typography>
@@ -908,23 +906,6 @@ const PRP: React.FC = () => {
                             : 'Unassigned'}
                       </Typography>
                     </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Typography variant="body2">
-                        {checklist.passed_items}/{checklist.total_items}
-                      </Typography>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={(checklist.passed_items / checklist.total_items) * 100}
-                        sx={{ width: 60 }}
-                      />
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">
-                      {checklist.compliance_percentage}%
-                    </Typography>
                   </TableCell>
                   <TableCell align="center">
                     <Box display="flex" gap={1}>

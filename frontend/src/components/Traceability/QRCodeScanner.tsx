@@ -15,14 +15,17 @@ import {
   Grid,
   Chip,
   useMediaQuery,
-  useTheme
+  useTheme,
+  TextField
 } from '@mui/material';
 import {
   QrCode as QrCodeIcon,
   CameraAlt as CameraIcon,
   Close as CloseIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Stop as StopIcon
 } from '@mui/icons-material';
+import { Html5QrcodeScanner, Html5QrcodeScannerConfig, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
 
 interface QRCodeScannerProps {
@@ -43,6 +46,9 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
   const [currentBatch, setCurrentBatch] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState('');
+  const [scannerInstance, setScannerInstance] = useState<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<HTMLDivElement>(null);
 
   const handleManualSearch = async (code: string) => {
     try {
@@ -63,6 +69,63 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
       setLoading(false);
     }
   };
+
+  const handleScanSuccess = (decodedText: string) => {
+    setError(null);
+    handleManualSearch(decodedText);
+    stopScanning();
+  };
+
+  const handleScanError = (errorMessage: string) => {
+    // Don't show scan errors as they happen frequently during scanning
+    console.log('Scan error:', errorMessage);
+  };
+
+  const startScanning = () => {
+    if (!scannerRef.current || scannerInstance) return;
+
+    const config: Html5QrcodeScannerConfig = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      supportedScanTypes: [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39],
+      showTorchButtonIfSupported: true,
+      showZoomSliderIfSupported: true,
+    };
+
+    const scanner = new Html5QrcodeScanner(
+      "qr-reader",
+      config,
+      false
+    );
+
+    scanner.render(handleScanSuccess, handleScanError);
+    setScannerInstance(scanner);
+    setScanning(true);
+    setError(null);
+  };
+
+  const stopScanning = () => {
+    if (scannerInstance) {
+      scannerInstance.clear().catch(console.error);
+      setScannerInstance(null);
+    }
+    setScanning(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (scannerInstance) {
+        scannerInstance.clear().catch(console.error);
+      }
+    };
+  }, [scannerInstance]);
+
+  useEffect(() => {
+    if (!open && scanning) {
+      stopScanning();
+    }
+  }, [open, scanning]);
 
   return (
     <Dialog
@@ -106,32 +169,75 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
                   </Box>
                 )}
 
+                <Box sx={{ mb: 2 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Button
+                        variant={scanning ? "outlined" : "contained"}
+                        fullWidth
+                        startIcon={scanning ? <StopIcon /> : <CameraIcon />}
+                        onClick={scanning ? stopScanning : startScanning}
+                        disabled={loading}
+                      >
+                        {scanning ? 'Stop Scanner' : 'Start Camera Scanner'}
+                      </Button>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Manual Code Entry"
+                        variant="outlined"
+                        value={manualCode}
+                        onChange={(e) => setManualCode(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && manualCode.trim()) {
+                            handleManualSearch(manualCode.trim());
+                          }
+                        }}
+                        InputProps={{
+                          endAdornment: (
+                            <IconButton
+                              onClick={() => manualCode.trim() && handleManualSearch(manualCode.trim())}
+                              disabled={!manualCode.trim() || loading}
+                            >
+                              <SearchIcon />
+                            </IconButton>
+                          )
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+
                 <Box
+                  id="qr-reader"
+                  ref={scannerRef}
                   sx={{
                     width: '100%',
-                    height: 300,
+                    minHeight: scanning ? 300 : 200,
                     border: '2px dashed',
-                    borderColor: 'divider',
+                    borderColor: scanning ? 'primary.main' : 'divider',
                     borderRadius: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: 'grey.50'
+                    display: scanning ? 'block' : 'flex',
+                    alignItems: scanning ? 'stretch' : 'center',
+                    justifyContent: scanning ? 'stretch' : 'center',
+                    backgroundColor: scanning ? 'transparent' : 'grey.50',
+                    '& > div': {
+                      border: 'none !important'
+                    }
                   }}
                 >
-                  <Box textAlign="center">
-                    <QrCodeIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
-                    <Typography variant="body2" color="text.secondary" mb={2}>
-                      Camera scanner will be implemented here
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      startIcon={<SearchIcon />}
-                      onClick={() => handleManualSearch('BATCH001')}
-                    >
-                      Test Search
-                    </Button>
-                  </Box>
+                  {!scanning && (
+                    <Box textAlign="center">
+                      <QrCodeIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
+                      <Typography variant="body2" color="text.secondary" mb={2}>
+                        Click "Start Camera Scanner" to scan QR codes and barcodes
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Supports QR codes, Code 128, and Code 39 barcodes
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               </CardContent>
             </Card>

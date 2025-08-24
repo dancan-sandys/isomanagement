@@ -9,6 +9,8 @@ import uuid
 import qrcode
 from io import BytesIO
 import base64
+import barcode
+from barcode.writer import ImageWriter
 
 from app.models.traceability import (
     Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport,
@@ -54,7 +56,7 @@ class TraceabilityService:
             "unit": batch_data.unit
         }
         
-        barcode = self._generate_enhanced_barcode(barcode_data)
+        barcode_string, barcode_image_path = self._generate_enhanced_barcode(barcode_data)
         qr_code_path = self._generate_qr_code(barcode_data, batch_number)
         
         batch = Batch(
@@ -72,7 +74,7 @@ class TraceabilityService:
             coa_number=batch_data.coa_number,
             storage_location=batch_data.storage_location,
             storage_conditions=batch_data.storage_conditions,
-            barcode=barcode,
+            barcode=barcode_string,
             qr_code_path=qr_code_path,
             created_by=created_by
         )
@@ -83,11 +85,26 @@ class TraceabilityService:
         
         return batch
     
-    def _generate_enhanced_barcode(self, barcode_data: Dict[str, Any]) -> str:
-        """Generate enhanced barcode with batch information"""
-        # Create a structured barcode with batch information
-        barcode_string = f"BC-{barcode_data['batch_number']}-{barcode_data['batch_type'][:3].upper()}-{barcode_data['quantity']}{barcode_data['unit'][:2]}"
-        return barcode_string
+    def _generate_enhanced_barcode(self, barcode_data: Dict[str, Any]) -> Tuple[str, str]:
+        """Generate enhanced barcode with batch information and return both string and image path"""
+        try:
+            # Create a structured barcode with batch information
+            barcode_string = f"BC-{barcode_data['batch_number']}-{barcode_data['batch_type'][:3].upper()}-{barcode_data['quantity']}{barcode_data['unit'][:2]}"
+            
+            # Generate barcode image
+            code128 = barcode.get('code128', barcode_string, writer=ImageWriter())
+            
+            # Save to file
+            filename = f"barcode_{barcode_data['batch_number']}.png"
+            file_path = os.path.join(self.upload_dir, filename)
+            code128.save(file_path.replace('.png', ''))  # python-barcode adds .png automatically
+            
+            return barcode_string, file_path
+        except Exception as e:
+            logger.error(f"Failed to generate barcode image: {str(e)}")
+            # Fallback to string only
+            barcode_string = f"BC-{barcode_data['batch_number']}-{barcode_data['batch_type'][:3].upper()}-{barcode_data['quantity']}{barcode_data['unit'][:2]}"
+            return barcode_string, None
     
     def _generate_qr_code(self, qr_data: Dict[str, Any], batch_number: str) -> str:
         """Generate QR code for batch"""
@@ -116,10 +133,24 @@ class TraceabilityService:
         if not batch:
             raise ValueError("Batch not found")
         
+        # Generate barcode image if not exists
+        barcode_image_path = None
+        if batch.barcode:
+            try:
+                # Generate barcode image
+                code128 = barcode.get('code128', batch.barcode, writer=ImageWriter())
+                filename = f"barcode_{batch.batch_number}.png"
+                file_path = os.path.join(self.upload_dir, filename)
+                code128.save(file_path.replace('.png', ''))  # python-barcode adds .png automatically
+                barcode_image_path = file_path
+            except Exception as e:
+                logger.error(f"Failed to generate barcode image: {str(e)}")
+        
         # Generate print-ready barcode data
         print_data = {
             "batch_number": batch.batch_number,
             "barcode": batch.barcode,
+            "barcode_image": barcode_image_path,
             "product_name": batch.product_name,
             "batch_type": batch.batch_type.value,
             "production_date": batch.production_date.strftime("%Y-%m-%d"),
