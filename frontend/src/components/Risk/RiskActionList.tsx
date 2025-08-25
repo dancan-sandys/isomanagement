@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Button, Card, CardContent, Chip, Grid, IconButton, Stack, TextField, Typography } from '@mui/material';
 import { CheckCircle, Delete, Save } from '@mui/icons-material';
 import riskAPI from '../../services/riskAPI';
+import actionsLogAPI from '../../services/actionsLogAPI';
 
 interface Props {
   itemId: number;
@@ -12,25 +13,48 @@ const RiskActionList: React.FC<Props> = ({ itemId }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const load = async () => {
-    const resp = await riskAPI.listActions(itemId);
-    setActions(resp.data || resp);
+    // Prefer pulling from central actions log filtered by risk_id
+    try {
+      const list = await actionsLogAPI.getActions({ risk_id: itemId });
+      // Map minimal fields expected by this UI
+      const mapped = list.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        completed: a.status === 'completed',
+        due_date: a.due_date,
+      }));
+      setActions(mapped);
+    } catch (e) {
+      const resp = await riskAPI.listActions(itemId);
+      setActions(resp.data || resp);
+    }
   };
   useEffect(() => { load(); }, [itemId]);
 
   const add = async () => {
     if (!title) return;
-    await riskAPI.addAction(itemId, { title, description: description || undefined });
+    // Create directly in the central actions log, with risk_id linkage
+    await actionsLogAPI.createAction({
+      title,
+      description: description || '',
+      action_source: 'risk_assessment' as any,
+      source_id: itemId,
+      risk_id: itemId,
+      priority: 'medium' as any,
+      assigned_by: 1,
+    } as any);
     setTitle(''); setDescription('');
     await load();
   };
 
   const complete = async (id: number) => {
-    await riskAPI.completeAction(id);
+    await actionsLogAPI.updateAction(id, { status: 'completed' as any, progress_percent: 100 });
     await load();
   };
 
   const remove = async (id: number) => {
-    await riskAPI.deleteAction(id);
+    await actionsLogAPI.deleteAction(id);
     await load();
   };
 

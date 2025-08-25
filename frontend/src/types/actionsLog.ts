@@ -34,6 +34,7 @@ export interface ActionLogBase {
   description: string;
   action_source: ActionSource;
   source_id?: number;
+  risk_id?: number;
   priority: ActionPriority;
   assigned_to?: number;
   department_id?: number;
@@ -105,6 +106,7 @@ export interface ActionLogFilters {
   source?: ActionSource;
   assigned_to?: number;
   department_id?: number;
+  risk_id?: number;
   page?: number;
   size?: number;
   limit?: number;

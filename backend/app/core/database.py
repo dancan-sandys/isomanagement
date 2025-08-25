@@ -55,6 +55,11 @@ def init_db():
                     conn.execute("ALTER TABLE supplier_evaluations ADD COLUMN hygiene_comments TEXT")
                 # Ensure non_conformance tables exist (if metadata create_all missed due to import order)
                 tables = {row[1] for row in conn.execute("PRAGMA table_list").fetchall()} if hasattr(conn, 'exec_driver_sql') else set()
+                # Ensure risk_id exists on action_logs for risk linkage
+                res2 = conn.execute("PRAGMA table_info('action_logs')").fetchall()
+                existing_cols_al = {row[1] for row in res2}
+                if 'risk_id' not in existing_cols_al:
+                    conn.execute("ALTER TABLE action_logs ADD COLUMN risk_id INTEGER")
                 conn.commit()
     except Exception:
         # Never break app startup for best-effort dev migrations

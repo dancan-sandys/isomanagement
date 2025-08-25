@@ -38,6 +38,7 @@ def list_actions(
     source: Optional[ActionSource] = Query(None),
     assigned_to: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
+    risk_id: Optional[int] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
@@ -50,6 +51,7 @@ def list_actions(
         source=source,
         assigned_to=assigned_to,
         department_id=department_id,
+        risk_id=risk_id,
         limit=limit,
         offset=offset
     )
@@ -74,6 +76,16 @@ def update_action(action_id: int, payload: ActionLogUpdate, db: Session = Depend
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
     return action
+
+
+@router.delete("/actions/{action_id}")
+def delete_action(action_id: int, db: Session = Depends(get_db)):
+    """Delete an action log entry"""
+    service = ActionsLogService(db)
+    ok = service.delete_action(action_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Action not found")
+    return {"success": True}
 
 
 @router.get("/analytics", response_model=ActionsAnalytics)

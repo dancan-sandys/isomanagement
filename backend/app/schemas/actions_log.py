@@ -47,6 +47,7 @@ class ActionLogBase(BaseModel):
     description: str = Field(..., min_length=1)
     action_source: ActionSource
     source_id: Optional[int] = None
+    risk_id: Optional[int] = None
     priority: ActionPriority = ActionPriority.MEDIUM
     assigned_to: Optional[int] = None
     department_id: Optional[int] = None
@@ -73,6 +74,7 @@ class ActionLogUpdate(BaseModel):
     actual_hours: Optional[float] = Field(None, ge=0)
     tags: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+    risk_id: Optional[int] = None
 
 
 class ActionLogResponse(ActionLogBase):

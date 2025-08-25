@@ -26,6 +26,7 @@ def create_actions_log_tables():
                 description TEXT NOT NULL,
                 action_source VARCHAR(50) NOT NULL,
                 source_id INTEGER,
+                risk_id INTEGER,
                 status VARCHAR(20) DEFAULT 'pending',
                 priority VARCHAR(20) DEFAULT 'medium',
                 assigned_to INTEGER,
@@ -238,6 +239,7 @@ def create_actions_log_tables():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_status ON action_logs(status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_priority ON action_logs(priority)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_source ON action_logs(action_source)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_risk_id ON action_logs(risk_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_assigned_to ON action_logs(assigned_to)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_department_id ON action_logs(department_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_action_logs_created_at ON action_logs(created_at)')
