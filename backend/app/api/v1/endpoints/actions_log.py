@@ -14,7 +14,7 @@ from app.services.actions_log_service import ActionsLogService
 from app.schemas.actions_log import (
     ActionLogCreate, ActionLogUpdate, ActionLogResponse,
     ActionsAnalytics, ActionStatus, ActionPriority, ActionSource,
-    InterestedPartyResponse
+    InterestedPartyResponse, InterestedPartyCreate, InterestedPartyUpdate
 )
 
 router = APIRouter()
@@ -183,11 +183,32 @@ def list_interested_parties(db: Session = Depends(get_db)):
     return service.list_interested_parties()
 
 
+@router.post("/interested-parties", response_model=InterestedPartyResponse)
+def create_interested_party(payload: InterestedPartyCreate, db: Session = Depends(get_db)):
+    """Create a new interested party"""
+    service = ActionsLogService(db)
+    try:
+        party = service.create_interested_party(payload.model_dump())
+        return party
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/interested-parties/{party_id}", response_model=InterestedPartyResponse)
 def get_interested_party(party_id: int, db: Session = Depends(get_db)):
     """Get interested party by ID"""
     service = ActionsLogService(db)
     party = service.get_interested_party(party_id)
+    if not party:
+        raise HTTPException(status_code=404, detail="Interested party not found")
+    return party
+
+
+@router.put("/interested-parties/{party_id}", response_model=InterestedPartyResponse)
+def update_interested_party(party_id: int, payload: InterestedPartyUpdate, db: Session = Depends(get_db)):
+    """Update an existing interested party"""
+    service = ActionsLogService(db)
+    party = service.update_interested_party(party_id, payload.model_dump(exclude_unset=True))
     if not party:
         raise HTTPException(status_code=404, detail="Interested party not found")
     return party
