@@ -150,13 +150,12 @@ const PRPProgramDetail: React.FC = () => {
                         <TableCell>Status</TableCell>
                         <TableCell>Scheduled</TableCell>
                         <TableCell>Due</TableCell>
-                        <TableCell>Compliance</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {checklists.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} align="center">No checklists</TableCell>
+                          <TableCell colSpan={4} align="center">No checklists</TableCell>
                         </TableRow>
                       ) : (
                         checklists.map((c) => (
@@ -170,7 +169,6 @@ const PRPProgramDetail: React.FC = () => {
                             </TableCell>
                             <TableCell>{new Date(c.scheduled_date).toLocaleDateString()}</TableCell>
                             <TableCell>{new Date(c.due_date).toLocaleDateString()}</TableCell>
-                            <TableCell>{Number(c.compliance_percentage || 0).toFixed(0)}%</TableCell>
                           </TableRow>
                         ))
                       )}
