@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -228,9 +228,9 @@ async def health_check():
             }
         )
 
-# Catch-all endpoint for debugging
-@app.get("/{path:path}")
-async def catch_all(path: str):
+# Catch-all endpoint for debugging (DISABLED)
+# @app.get("/{path:path}")
+# async def catch_all(path: str):
     """Catch-all endpoint for debugging routing issues"""
     return {
         "message": f"Path '{path}' not found",

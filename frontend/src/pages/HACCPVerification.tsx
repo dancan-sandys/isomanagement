@@ -289,7 +289,7 @@ const HACCPVerification: React.FC = () => {
       };
 
       // Submit verification record
-      await haccpAPI.createVerificationRecord(selectedTask.ccpId, payload);
+      await haccpAPI.createVerificationLog(selectedTask.ccpId, payload);
 
       // Update task status
       setVerificationTasks(prev => 

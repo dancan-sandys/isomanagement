@@ -25,7 +25,7 @@ import {
   Search as SearchIcon,
   Stop as StopIcon
 } from '@mui/icons-material';
-import { Html5QrcodeScanner, Html5QrcodeScannerConfig, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
 
 interface QRCodeScannerProps {

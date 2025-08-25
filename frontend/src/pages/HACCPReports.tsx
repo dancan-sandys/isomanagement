@@ -28,7 +28,7 @@ import {
   TextField,
   Tabs,
   Tab,
-  DatePicker,
+  
   Checkbox,
   FormControlLabel,
   FormGroup,
@@ -457,7 +457,6 @@ const HACCPReports: React.FC = () => {
         subtitle="Generate comprehensive reports and analytics for HACCP system"
         showAdd={true}
         onAdd={() => setReportDialogOpen(true)}
-        addButtonText="Generate Report"
       />
 
       {/* Summary Cards */}
@@ -851,7 +850,7 @@ const HACCPReports: React.FC = () => {
                   label="From Date"
                   value={reportForm.dateFrom}
                   onChange={(date) => setReportForm(prev => ({ ...prev, dateFrom: date || new Date() }))}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  
                 />
               </Grid>
 
@@ -860,7 +859,7 @@ const HACCPReports: React.FC = () => {
                   label="To Date"
                   value={reportForm.dateTo}
                   onChange={(date) => setReportForm(prev => ({ ...prev, dateTo: date || new Date() }))}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  
                 />
               </Grid>
 
@@ -941,7 +940,7 @@ const HACCPReports: React.FC = () => {
 
       {/* HACCP Plan Report Dialog */}
       <HACCPPlanReport
-        open={planReportDialogOpen}
+        isOpen={planReportDialogOpen}
         onClose={() => setPlanReportDialogOpen(false)}
       />
 
