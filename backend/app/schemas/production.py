@@ -561,3 +561,362 @@ class ControlChartData(BaseModel):
     class Config:
         from_attributes = True
 
+
+# FSM (Finite State Machine) Schemas for ISO 22000:2018 Compliance
+
+class ProcessStageCreate(BaseModel):
+    """Schema for creating a new process stage"""
+    stage_name: str = Field(..., max_length=100, description="Name of the process stage")
+    stage_description: Optional[str] = Field(None, description="Detailed description of the stage")
+    sequence_order: int = Field(..., ge=1, description="Order of this stage in the process")
+    
+    # ISO 22000 Critical Control Point information
+    is_critical_control_point: bool = Field(False, description="Whether this stage is a CCP")
+    is_operational_prp: bool = Field(False, description="Whether this stage is an OPRP")
+    
+    # Stage timing
+    planned_start_time: Optional[datetime] = Field(None, description="Planned start time for the stage")
+    planned_end_time: Optional[datetime] = Field(None, description="Planned end time for the stage")
+    duration_minutes: Optional[int] = Field(None, ge=0, description="Expected duration in minutes")
+    
+    # Stage configuration
+    completion_criteria: Optional[Dict[str, Any]] = Field(None, description="Criteria for stage completion")
+    auto_advance: bool = Field(False, description="Auto-advance when criteria met")
+    requires_approval: bool = Field(False, description="Requires supervisor approval")
+    
+    # Personnel assignment
+    assigned_operator_id: Optional[int] = Field(None, description="ID of assigned operator")
+    
+    # Documentation
+    stage_notes: Optional[str] = Field(None, description="Additional notes for the stage")
+
+
+class ProcessStageUpdate(BaseModel):
+    """Schema for updating a process stage"""
+    stage_name: Optional[str] = Field(None, max_length=100)
+    stage_description: Optional[str] = None
+    
+    # Timing updates
+    actual_start_time: Optional[datetime] = None
+    actual_end_time: Optional[datetime] = None
+    
+    # Personnel updates
+    assigned_operator_id: Optional[int] = None
+    completed_by_id: Optional[int] = None
+    approved_by_id: Optional[int] = None
+    
+    # Documentation updates
+    stage_notes: Optional[str] = None
+    deviations_recorded: Optional[str] = None
+    corrective_actions: Optional[str] = None
+
+
+class ProcessStageResponse(BaseModel):
+    """Schema for process stage responses"""
+    id: int
+    process_id: int
+    stage_name: str
+    stage_description: Optional[str]
+    sequence_order: int
+    status: str  # StageStatus enum value
+    
+    # ISO 22000 information
+    is_critical_control_point: bool
+    is_operational_prp: bool
+    
+    # Timing information
+    planned_start_time: Optional[datetime]
+    actual_start_time: Optional[datetime]
+    planned_end_time: Optional[datetime]
+    actual_end_time: Optional[datetime]
+    duration_minutes: Optional[int]
+    
+    # Configuration
+    completion_criteria: Optional[Dict[str, Any]]
+    auto_advance: bool
+    requires_approval: bool
+    
+    # Personnel
+    assigned_operator_id: Optional[int]
+    completed_by_id: Optional[int]
+    approved_by_id: Optional[int]
+    
+    # Documentation
+    stage_notes: Optional[str]
+    deviations_recorded: Optional[str]
+    corrective_actions: Optional[str]
+    
+    # Timestamps
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class StageMonitoringRequirementCreate(BaseModel):
+    """Schema for creating monitoring requirements for a stage"""
+    requirement_name: str = Field(..., max_length=100, description="Name of the monitoring requirement")
+    requirement_type: Literal[
+        "temperature", "time", "ph", "pressure", "visual_inspection", 
+        "weight", "moisture", "documentation", "checklist", "ccp_monitoring"
+    ] = Field(..., description="Type of monitoring requirement")
+    description: Optional[str] = Field(None, description="Detailed description")
+    
+    # ISO 22000 Classification
+    is_critical_limit: bool = Field(False, description="Critical limit for CCP")
+    is_operational_limit: bool = Field(False, description="Operational limit for OPRP")
+    
+    # Monitoring parameters
+    target_value: Optional[float] = Field(None, description="Target value for the parameter")
+    tolerance_min: Optional[float] = Field(None, description="Minimum acceptable value")
+    tolerance_max: Optional[float] = Field(None, description="Maximum acceptable value")
+    unit_of_measure: Optional[str] = Field(None, max_length=20, description="Unit of measurement")
+    
+    # Frequency and timing
+    monitoring_frequency: Optional[str] = Field(None, max_length=50, description="Monitoring frequency")
+    is_mandatory: bool = Field(True, description="Whether this monitoring is mandatory")
+    
+    # Equipment and method
+    equipment_required: Optional[str] = Field(None, max_length=100, description="Equipment required")
+    measurement_method: Optional[str] = Field(None, max_length=100, description="Measurement method")
+    calibration_required: bool = Field(False, description="Whether calibration is required")
+    
+    # Documentation
+    record_keeping_required: bool = Field(True, description="Whether record keeping is required")
+    verification_required: bool = Field(False, description="Whether verification is required")
+    
+    # Compliance
+    regulatory_reference: Optional[str] = Field(None, max_length=100, description="ISO clause reference")
+
+
+class StageMonitoringRequirementResponse(BaseModel):
+    """Schema for monitoring requirement responses"""
+    id: int
+    stage_id: int
+    requirement_name: str
+    requirement_type: str
+    description: Optional[str]
+    
+    # ISO 22000 Classification
+    is_critical_limit: bool
+    is_operational_limit: bool
+    
+    # Parameters
+    target_value: Optional[float]
+    tolerance_min: Optional[float]
+    tolerance_max: Optional[float]
+    unit_of_measure: Optional[str]
+    
+    # Configuration
+    monitoring_frequency: Optional[str]
+    is_mandatory: bool
+    equipment_required: Optional[str]
+    measurement_method: Optional[str]
+    calibration_required: bool
+    record_keeping_required: bool
+    verification_required: bool
+    
+    # Compliance
+    regulatory_reference: Optional[str]
+    created_at: datetime
+    created_by: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
+class StageMonitoringLogCreate(BaseModel):
+    """Schema for creating monitoring log entries"""
+    requirement_id: Optional[int] = Field(None, description="ID of the monitoring requirement")
+    
+    # Monitoring data
+    monitoring_timestamp: Optional[datetime] = Field(None, description="When the monitoring was performed")
+    measured_value: Optional[float] = Field(None, description="Measured numerical value")
+    measured_text: Optional[str] = Field(None, description="Text-based observations")
+    
+    # Assessment
+    pass_fail_status: Optional[Literal["pass", "fail", "warning", "na"]] = Field(None, description="Pass/fail status")
+    deviation_severity: Optional[Literal["minor", "major", "critical"]] = Field(None, description="Deviation severity")
+    
+    # Equipment and method
+    equipment_used: Optional[str] = Field(None, max_length=100, description="Equipment used for measurement")
+    measurement_method: Optional[str] = Field(None, max_length=100, description="Method used")
+    equipment_calibration_date: Optional[datetime] = Field(None, description="Last calibration date")
+    
+    # Documentation
+    notes: Optional[str] = Field(None, description="Additional notes")
+    corrective_action_taken: Optional[str] = Field(None, description="Corrective actions taken")
+    follow_up_required: bool = Field(False, description="Whether follow-up is required")
+    
+    # Compliance
+    regulatory_requirement_met: bool = Field(True, description="Whether regulatory requirements were met")
+    iso_clause_reference: Optional[str] = Field(None, max_length=50, description="ISO clause reference")
+
+
+class StageMonitoringLogResponse(BaseModel):
+    """Schema for monitoring log responses"""
+    id: int
+    stage_id: int
+    requirement_id: Optional[int]
+    
+    # Monitoring data
+    monitoring_timestamp: datetime
+    measured_value: Optional[float]
+    measured_text: Optional[str]
+    is_within_limits: Optional[bool]
+    
+    # Assessment
+    pass_fail_status: Optional[str]
+    deviation_severity: Optional[str]
+    
+    # Personnel
+    recorded_by: int
+    verified_by: Optional[int]
+    verification_timestamp: Optional[datetime]
+    
+    # Equipment and method
+    equipment_used: Optional[str]
+    measurement_method: Optional[str]
+    equipment_calibration_date: Optional[datetime]
+    
+    # Documentation
+    notes: Optional[str]
+    corrective_action_taken: Optional[str]
+    follow_up_required: bool
+    
+    # Compliance
+    regulatory_requirement_met: bool
+    iso_clause_reference: Optional[str]
+    
+    # Timestamps
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class StageTransitionRequest(BaseModel):
+    """Schema for requesting a stage transition"""
+    to_stage_id: int = Field(..., description="ID of the target stage")
+    transition_type: Literal["normal", "skip", "rollback", "emergency"] = Field("normal", description="Type of transition")
+    transition_reason: Optional[str] = Field(None, description="Reason for the transition")
+    
+    # Prerequisites validation
+    prerequisites_met: bool = Field(True, description="Whether prerequisites are met")
+    prerequisite_validation: Optional[Dict[str, Any]] = Field(None, description="Validation results")
+    
+    # Documentation
+    transition_notes: Optional[str] = Field(None, description="Additional notes for the transition")
+
+
+class StageTransitionResponse(BaseModel):
+    """Schema for stage transition responses"""
+    id: int
+    process_id: int
+    from_stage_id: Optional[int]
+    to_stage_id: int
+    
+    # Transition metadata
+    transition_type: str
+    transition_reason: Optional[str]
+    auto_transition: bool
+    
+    # Personnel and timing
+    initiated_by: int
+    transition_timestamp: datetime
+    
+    # Approval workflow
+    requires_approval: bool
+    approved_by: Optional[int]
+    approval_timestamp: Optional[datetime]
+    approval_notes: Optional[str]
+    
+    # Validation
+    prerequisites_met: bool
+    prerequisite_validation: Optional[Dict[str, Any]]
+    
+    # Documentation
+    transition_notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ProcessCreateWithStages(BaseModel):
+    """Enhanced schema for creating a process with stages"""
+    batch_id: int = Field(..., description="ID of the batch being processed")
+    process_type: Literal["fresh_milk", "yoghurt", "mala", "cheese", "pasteurized_milk", "fermented_products"]
+    operator_id: Optional[int] = Field(None, description="ID of the operator")
+    
+    # Process configuration
+    spec: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Process specifications")
+    notes: Optional[str] = Field(None, description="Process notes")
+    
+    # Stages definition
+    stages: List[ProcessStageCreate] = Field(..., min_items=1, description="List of process stages")
+
+
+class ProcessResponse(BaseModel):
+    """Enhanced response schema with stages"""
+    id: int
+    batch_id: int
+    process_type: str
+    operator_id: Optional[int]
+    status: str  # ProcessStatus enum value
+    start_time: datetime
+    end_time: Optional[datetime]
+    spec: Optional[Dict[str, Any]]
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    
+    # Stages information
+    stages: List[ProcessStageResponse] = Field(default_factory=list, description="Process stages")
+    current_stage_id: Optional[int] = Field(None, description="ID of the current active stage")
+
+    class Config:
+        from_attributes = True
+
+
+class ProcessStartRequest(BaseModel):
+    """Schema for starting a process"""
+    operator_id: Optional[int] = Field(None, description="ID of the operator starting the process")
+    start_notes: Optional[str] = Field(None, description="Notes for process start")
+
+
+class ProcessStageCompletionRequest(BaseModel):
+    """Schema for completing a stage"""
+    completion_notes: Optional[str] = Field(None, description="Notes for stage completion")
+    deviations_recorded: Optional[str] = Field(None, description="Any deviations recorded")
+    corrective_actions: Optional[str] = Field(None, description="Corrective actions taken")
+    requires_approval: bool = Field(False, description="Whether approval is required")
+
+
+class ProcessSummaryResponse(BaseModel):
+    """Summary response for process overview"""
+    id: int
+    batch_id: int
+    process_type: str
+    status: str
+    start_time: datetime
+    end_time: Optional[datetime]
+    
+    # Stage summary
+    total_stages: int
+    completed_stages: int
+    current_stage_name: Optional[str]
+    current_stage_status: Optional[str]
+    
+    # Progress percentage
+    progress_percentage: float
+    
+    # Quality metrics
+    deviations_count: int
+    critical_alerts_count: int
+    
+    class Config:
+        from_attributes = True
+
