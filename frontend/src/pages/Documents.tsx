@@ -65,7 +65,7 @@ import {
   Clear,
   Compare,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
 import {
   fetchDocuments,
@@ -144,6 +144,7 @@ const Documents: React.FC = () => {
   const [distributionUsers, setDistributionUsers] = useState<any[]>([]);
   const [selectedDistributionUserIds, setSelectedDistributionUserIds] = useState<number[]>([]);
   const [searchText, setSearchText] = useState<string>(filters?.search || '');
+  const location = useLocation();
 
   // Role-based permissions
   const canCreateDocuments = hasRole(currentUser, 'QA Manager') || 
@@ -167,6 +168,30 @@ const Documents: React.FC = () => {
     loadStats();
     dispatch(fetchPendingApprovals());
   }, [pagination.page, filters]);
+
+  // Initialize filters from query params once
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const category = params.get('category');
+    const status = params.get('status');
+    const document_type = params.get('type') || params.get('document_type');
+    const department = params.get('department');
+    const search = params.get('search');
+
+    const nextFilters: any = {};
+    if (category) nextFilters.category = category;
+    if (status) nextFilters.status = status;
+    if (document_type) nextFilters.document_type = document_type;
+    if (department) nextFilters.department = department;
+    if (search) nextFilters.search = search;
+
+    if (Object.keys(nextFilters).length > 0) {
+      dispatch(setFilters(nextFilters));
+      if (search) setSearchText(search);
+      dispatch(setPagination({ page: 1 }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounce search to reduce churn and make UX fluid
   useEffect(() => {
