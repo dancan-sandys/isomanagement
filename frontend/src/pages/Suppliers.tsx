@@ -34,6 +34,7 @@ import SupplierDashboard from '../components/Suppliers/SupplierDashboard';
 import SupplierList from '../components/Suppliers/SupplierList';
 import MaterialList from '../components/Materials/MaterialList';
 import SupplierForm from '../components/Suppliers/SupplierForm';
+import SupplierDocuments from '../components/Suppliers/SupplierDocuments';
 import MaterialForm from '../components/Materials/MaterialForm';
 import { Supplier, Material } from '../types/supplier';
 import { useLocation } from 'react-router-dom';
@@ -194,12 +195,7 @@ const Suppliers: React.FC = () => {
       case 5:
         return (
           <Box p={3}>
-            <Typography variant="h6" gutterBottom>
-              Documents
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Document management component will be implemented here.
-            </Typography>
+            <SupplierDocuments />
           </Box>
         );
       default:
