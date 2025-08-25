@@ -163,6 +163,23 @@ def create_database_tables():
                 print(f"  - {table}")
         except Exception as e:
             print(f"⚠️  Could not list tables: {e}")
+        
+        # Ensure complaints table has all required columns
+        try:
+            from fix_complaints_schema import ensure_complaints_table_columns
+            import sqlite3
+            
+            # Connect to the database and ensure complaints table columns
+            db_path = "iso22000_fsms.db"
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                ensure_complaints_table_columns(cursor)
+                conn.commit()
+                conn.close()
+                print("✓ Complaints table schema verified")
+        except Exception as e:
+            print(f"⚠️  Could not verify complaints table schema: {e}")
             
     except Exception as e:
         print(f"Error creating database tables: {e}")

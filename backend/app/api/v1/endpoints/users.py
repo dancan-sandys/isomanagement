@@ -39,16 +39,25 @@ async def get_users_dashboard(
 
         # Users by department
         users_by_department = {}
-        departments = db.query(User.department).distinct().filter(User.department.isnot(None)).all()
-        for dept in departments:
-            if dept[0]:
-                count = db.query(User).filter(User.department == dept[0]).count()
-                users_by_department[dept[0]] = count
+        try:
+            # Use department_name field instead of department relationship
+            departments = db.query(User.department_name).distinct().filter(User.department_name != None).all()
+            for dept in departments:
+                if dept[0]:
+                    count = db.query(User).filter(User.department_name == dept[0]).count()
+                    users_by_department[dept[0]] = count
+        except Exception as dept_error:
+            print(f"Error getting users by department: {dept_error}")
+            users_by_department = {}
 
         # Recent logins (today)
-        from datetime import datetime
-        today = datetime.now().date()
-        recent_logins = db.query(User).filter(User.last_login >= today).count()
+        recent_logins = 0
+        try:
+            from datetime import datetime
+            today = datetime.now().date()
+            recent_logins = db.query(User).filter(User.last_login >= today).count()
+        except Exception as login_error:
+            print(f"Error getting recent logins: {login_error}")
 
         # Placeholder training metrics
         training_overdue = 3
@@ -68,6 +77,9 @@ async def get_users_dashboard(
 
         return ResponseModel(success=True, message="Dashboard data retrieved successfully", data=dashboard_data)
     except Exception as e:
+        print(f"Dashboard error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve dashboard data: {str(e)}")
 
 
@@ -422,89 +434,4 @@ async def admin_reset_password(
 
     return ResponseModel(success=True, message="Password reset successfully")
 
-@router.get("/dashboard", response_model=ResponseModel)
-async def get_users_dashboard(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get user management dashboard data
-    """
-    try:
-        # Get total users count
-        total_users = db.query(User).count()
-        
-        # Get active users count
-        active_users = db.query(User).filter(User.is_active == True).count()
-        
-        # Get inactive users count
-        inactive_users = db.query(User).filter(User.is_active == False).count()
-        
-        # Get pending approval count
-        pending_approval = db.query(User).filter(User.status == UserStatus.PENDING_APPROVAL).count()
-        
-        # Get users by role
-        users_by_role = {}
-        try:
-            roles = db.query(Role).all()
-            for role in roles:
-                count = db.query(User).filter(User.role_id == role.id).count()
-                if count > 0:
-                    users_by_role[role.name] = count
-        except Exception as role_error:
-            print(f"Error getting users by role: {role_error}")
-            users_by_role = {}
-        
-        # Get users by department
-        users_by_department = {}
-        try:
-            departments = db.query(User.department).distinct().filter(User.department.isnot(None)).all()
-            for dept in departments:
-                if dept[0]:
-                    count = db.query(User).filter(User.department == dept[0]).count()
-                    users_by_department[dept[0]] = count
-        except Exception as dept_error:
-            print(f"Error getting users by department: {dept_error}")
-            users_by_department = {}
-        
-        # Get recent logins (users who logged in today)
-        recent_logins = 0
-        try:
-            from datetime import datetime, timedelta
-            today = datetime.now().date()
-            recent_logins = db.query(User).filter(
-                User.last_login >= today
-            ).count()
-        except Exception as login_error:
-            print(f"Error getting recent logins: {login_error}")
-        
-        # Mock data for training and competency (these would come from separate tables)
-        training_overdue = 3  # Mock value
-        competencies_expiring = 5  # Mock value
-        
-        dashboard_data = {
-            "total_users": total_users,
-            "active_users": active_users,
-            "inactive_users": inactive_users,
-            "pending_approval": pending_approval,
-            "users_by_role": users_by_role,
-            "users_by_department": users_by_department,
-            "recent_logins": recent_logins,
-            "training_overdue": training_overdue,
-            "competencies_expiring": competencies_expiring
-        }
-        
-        return ResponseModel(
-            success=True,
-            message="Dashboard data retrieved successfully",
-            data=dashboard_data
-        )
-        
-    except Exception as e:
-        print(f"Dashboard error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve dashboard data: {str(e)}"
-        ) 
+ 

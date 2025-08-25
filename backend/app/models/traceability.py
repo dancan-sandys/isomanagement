@@ -42,8 +42,8 @@ class Batch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     batch_number = Column(String(50), unique=True, index=True, nullable=False)
-    batch_type = Column(Enum(BatchType), nullable=False)
-    status = Column(Enum(BatchStatus), nullable=False, default=BatchStatus.IN_PRODUCTION)
+    batch_type = Column(Enum(BatchType, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    status = Column(Enum(BatchStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=BatchStatus.IN_PRODUCTION)
     
     # Product information
     product_id = Column(Integer, ForeignKey("products.id"))

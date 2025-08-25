@@ -169,7 +169,7 @@ class Hazard(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     process_step_id = Column(Integer, ForeignKey("process_flows.id"), nullable=False)
-    hazard_type = Column(Enum(HazardType), nullable=False)
+    hazard_type = Column(Enum(HazardType, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
     hazard_name = Column(String(200), nullable=False)
     description = Column(Text)
     
@@ -182,7 +182,7 @@ class Hazard(Base):
     likelihood = Column(Integer)  # 1-5 scale
     severity = Column(Integer)  # 1-5 scale
     risk_score = Column(Integer)  # likelihood * severity
-    risk_level = Column(Enum(RiskLevel))
+    risk_level = Column(Enum(RiskLevel, values_callable=lambda obj: [e.value for e in obj]))
     
     # Control measures
     control_measures = Column(Text)
@@ -269,7 +269,7 @@ class CCP(Base):
     ccp_number = Column(String(20), nullable=False)
     ccp_name = Column(String(200), nullable=False)
     description = Column(Text)
-    status = Column(Enum(CCPStatus), nullable=False, default=CCPStatus.ACTIVE)
+    status = Column(Enum(CCPStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=CCPStatus.ACTIVE)
     
     # Enhanced Critical Limits - Multi-parameter support
     critical_limits = Column(JSON)  # JSON array of limit objects with parameters, values, units, and conditions
@@ -539,7 +539,7 @@ class HACCPPlan(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text)
-    status = Column(Enum(HACCPPlanStatus), nullable=False, default=HACCPPlanStatus.DRAFT)
+    status = Column(Enum(HACCPPlanStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=HACCPPlanStatus.DRAFT)
     version = Column(String(20), nullable=False, default="1.0")
     # Current content pointer is stored in latest version; duplicate here for convenience
     current_content = Column(Text)

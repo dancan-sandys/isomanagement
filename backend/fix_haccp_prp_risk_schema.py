@@ -57,6 +57,7 @@ def ensure_ccp_monitoring_logs(cur: sqlite3.Cursor) -> None:
         "ccp_monitoring_logs",
         {
             "log_metadata": "TEXT",
+            "action_log_id": "INTEGER",
         },
     )
 

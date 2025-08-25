@@ -28,6 +28,16 @@ import {
 import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { traceabilityAPI } from '../../services/traceabilityAPI';
 
+// Define the config type inline since it's not exported from the library
+interface ScannerConfig {
+  fps: number;
+  qrbox: { width: number; height: number };
+  aspectRatio: number;
+  supportedScanTypes: any[];
+  showTorchButtonIfSupported: boolean;
+  showZoomSliderIfSupported: boolean;
+}
+
 interface QRCodeScannerProps {
   onBatchFound?: (batch: any) => void;
   onClose?: () => void;
@@ -84,7 +94,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
   const startScanning = () => {
     if (!scannerRef.current || scannerInstance) return;
 
-    const config: Html5QrcodeScannerConfig = {
+    const config: ScannerConfig = {
       fps: 10,
       qrbox: { width: 250, height: 250 },
       aspectRatio: 1.0,
