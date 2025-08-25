@@ -863,3 +863,39 @@
    - Gather user feedback
    - Plan continuous improvements
    - Prepare for ISO 22000 audit
+
+## 🔧 Current Issues and Fixes
+
+### **Database Schema and Enum Validation (Latest)**
+- [x] **Verified Enum Consistency**
+  - [x] All enum values are correctly set to lowercase
+  - [x] UserStatus, NonConformanceStatus, NonConformanceSource, RiskLevel, HazardType, CCPStatus, DocumentStatus, ComplaintStatus, SupplierStatus, AuditStatus, BatchStatus all validated
+  - [x] No enum inconsistencies found in backend models
+
+- [x] **Database Initialization Verification**
+  - [x] Fixed database schema mismatch (added department_id column to users table)
+  - [x] Database initialization script works correctly
+  - [x] All 199 tables created successfully
+  - [x] Admin user created with correct status ('active' lowercase)
+  - [x] Permissions and roles created correctly
+  - [x] Database integrity verified
+
+- [x] **Ready for New Database Setup**
+  - [x] `init_database_improved.py` works correctly
+  - [x] `setup_new_database.py` ready for use
+  - [x] All enum values are lowercase from the start
+  - [x] No migration scripts needed for new databases
+
+### **Login Endpoint Issues (Latest)**
+- [x] **Identified Frontend Login 404 Error**
+  - [x] Created debug scripts to test login endpoint
+  - [x] Fixed frontend API configuration with debug logging
+  - [x] Simplified proxy configuration in setupProxy.js
+  - [x] Added comprehensive error logging for development
+
+- [x] **Test Login Endpoint Fix**
+  - [x] Run `python debug_login_issue.py` to diagnose the issue
+  - [x] Test backend login endpoint directly
+  - [x] Test frontend proxy configuration
+  - [x] Verify login works from frontend
+  - [x] Check browser console for any remaining errors
