@@ -742,14 +742,10 @@ export const haccpAPI = {
     return response.data;
   },
 
-  // Utility to fetch most recent NC for a CCP and batch (placeholder)
+  // Utility to fetch most recent NC for a CCP and batch
   getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
-    try {
-      const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/nonconformance/recent`, { params: { batch_number: batchNumber } });
-      return response.data ? { data: response.data } : { data: { found: false } };
-    } catch (err) {
-      return { data: { found: false } } as any;
-    }
+    const response: AxiosResponse = await api.get(`/nonconformance/recent`, { params: { ccp_id: ccpId, batch_number: batchNumber } });
+    return response.data;
   },
 
   getFlowchartData: async (productId: number) => {
@@ -785,11 +781,7 @@ export const haccpAPI = {
     return response.data;
   },
 
-  // Convenience: fetch most recent NC for a CCP and batch
-  getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
-    const response: AxiosResponse = await api.get(`/nonconformance/recent`, { params: { ccp_id: ccpId, batch_number: batchNumber } });
-    return response.data;
-  },
+  // duplicate removed above
 };
 
 // PRP API

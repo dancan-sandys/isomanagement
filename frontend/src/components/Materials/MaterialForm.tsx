@@ -1005,14 +1005,14 @@ const MaterialForm: React.FC<MaterialFormProps> = ({
   const canProceedToNext = () => {
     switch (activeStep) {
       case 0:
-        return formik.values.material_code && 
-               formik.values.name && 
-               formik.values.category && 
-               formik.values.supplier_id &&
-               formik.values.storage_conditions;
+        return formik.values.material_code &&
+               formik.values.name &&
+               formik.values.category &&
+               formik.values.supplier_id;
       case 1:
-      case 2:
         return true;
+      case 2:
+        return !!formik.values.storage_conditions;
       default:
         return false;
     }
