@@ -742,15 +742,7 @@ export const haccpAPI = {
     return response.data;
   },
 
-  // Utility to fetch most recent NC for a CCP and batch (placeholder)
-  getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
-    try {
-      const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/nonconformance/recent`, { params: { batch_number: batchNumber } });
-      return response.data ? { data: response.data } : { data: { found: false } };
-    } catch (err) {
-      return { data: { found: false } } as any;
-    }
-  },
+  // Utility retained below as a consolidated method
 
   getFlowchartData: async (productId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/products/${productId}/flowchart`);
@@ -785,10 +777,10 @@ export const haccpAPI = {
     return response.data;
   },
 
-  // Convenience: fetch most recent NC for a CCP and batch
+  // Convenience alias retained for compatibility; delegate to HACCP endpoint
   getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
-    const response: AxiosResponse = await api.get(`/nonconformance/recent`, { params: { ccp_id: ccpId, batch_number: batchNumber } });
-    return response.data;
+    const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/nonconformance/recent`, { params: { batch_number: batchNumber } });
+    return response.data ? { data: response.data } : { data: { found: false } } as any;
   },
 };
 
