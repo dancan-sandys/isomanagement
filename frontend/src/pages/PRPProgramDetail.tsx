@@ -18,8 +18,15 @@ import {
   Paper,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Stack,
 } from '@mui/material';
-import { prpAPI } from '../services/api';
+import Autocomplete from '@mui/material/Autocomplete';
+import { prpAPI, usersAPI } from '../services/api';
 
 const PRPProgramDetail: React.FC = () => {
   const { id } = useParams();
@@ -29,6 +36,22 @@ const PRPProgramDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [program, setProgram] = useState<any>(null);
   const [checklists, setChecklists] = useState<any[]>([]);
+
+  // Add Checklist dialog state
+  const [openChecklistDialog, setOpenChecklistDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [checklistForm, setChecklistForm] = useState({
+    checklist_code: '',
+    name: '',
+    description: '',
+    scheduled_date: '',
+    due_date: '',
+    assigned_to: 0,
+  });
+  const [userSearch, setUserSearch] = useState('');
+  type UserOption = { id: number; username: string; full_name?: string };
+  const [userOptions, setUserOptions] = useState<Array<UserOption>>([]);
+  const [selectedAssignee, setSelectedAssignee] = useState<UserOption | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -49,6 +72,56 @@ const PRPProgramDetail: React.FC = () => {
     };
     if (!Number.isNaN(programId)) load();
   }, [programId]);
+
+  // Fetch users for assignee Autocomplete
+  useEffect(() => {
+    let active = true;
+    const t = setTimeout(async () => {
+      try {
+        const resp: any = await usersAPI.getUsers({ page: 1, size: 10, search: userSearch });
+        const items = (resp?.data?.items || resp?.items || []) as Array<any>;
+        if (active) setUserOptions(items.map((u: any) => ({ id: u.id, username: u.username, full_name: u.full_name })));
+      } catch {
+        if (active) setUserOptions([]);
+      }
+    }, 300);
+    return () => { active = false; clearTimeout(t); };
+  }, [userSearch]);
+
+  const reloadChecklists = async () => {
+    try {
+      const resp = await prpAPI.getChecklists(programId, { page: 1, size: 50 });
+      setChecklists(resp?.data?.items || []);
+    } catch {}
+  };
+
+  const handleCreateChecklist = async () => {
+    if (!selectedAssignee?.id) {
+      setError('Please select an assignee');
+      return;
+    }
+    if (!checklistForm.checklist_code || !checklistForm.name || !checklistForm.scheduled_date || !checklistForm.due_date) {
+      setError('Please fill in required fields');
+      return;
+    }
+    try {
+      setCreating(true);
+      const payload = { ...checklistForm, assigned_to: selectedAssignee.id };
+      const resp = await prpAPI.createChecklist(programId, payload);
+      if (resp?.success) {
+        setOpenChecklistDialog(false);
+        setChecklistForm({ checklist_code: '', name: '', description: '', scheduled_date: '', due_date: '', assigned_to: 0 });
+        setSelectedAssignee(null);
+        await reloadChecklists();
+      } else {
+        setError(resp?.message || 'Failed to create checklist');
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to create checklist');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const getStatusColor = (status?: string) => {
     switch (String(status || '').toLowerCase()) {
@@ -72,6 +145,10 @@ const PRPProgramDetail: React.FC = () => {
   }
 
   if (!program) return null;
+
+  const safeDate = (d?: string) => {
+    try { return d ? new Date(d).toLocaleDateString() : '—'; } catch { return '—'; }
+  };
 
   return (
     <Box p={3}>
@@ -141,7 +218,10 @@ const PRPProgramDetail: React.FC = () => {
           <Box mt={3}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Program Checklists</Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Typography variant="h6">Program Checklists</Typography>
+                  <Button variant="contained" onClick={() => setOpenChecklistDialog(true)}>Add Checklist</Button>
+                </Box>
                 <TableContainer component={Paper}>
                   <Table>
                     <TableHead>
@@ -167,8 +247,8 @@ const PRPProgramDetail: React.FC = () => {
                             <TableCell>
                               <Chip label={String(c.status || '').toUpperCase()} size="small" />
                             </TableCell>
-                            <TableCell>{new Date(c.scheduled_date).toLocaleDateString()}</TableCell>
-                            <TableCell>{new Date(c.due_date).toLocaleDateString()}</TableCell>
+                            <TableCell>{safeDate(c.scheduled_date)}</TableCell>
+                            <TableCell>{safeDate(c.due_date)}</TableCell>
                           </TableRow>
                         ))
                       )}
@@ -204,9 +284,33 @@ const PRPProgramDetail: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      <Dialog open={openChecklistDialog} onClose={() => setOpenChecklistDialog(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Add Checklist</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <TextField label="Checklist Code" fullWidth value={checklistForm.checklist_code} onChange={(e) => setChecklistForm({ ...checklistForm, checklist_code: e.target.value })} />
+            <TextField label="Name" fullWidth value={checklistForm.name} onChange={(e) => setChecklistForm({ ...checklistForm, name: e.target.value })} />
+            <TextField label="Description" fullWidth multiline minRows={3} value={checklistForm.description} onChange={(e) => setChecklistForm({ ...checklistForm, description: e.target.value })} />
+            <TextField label="Scheduled Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={checklistForm.scheduled_date} onChange={(e) => setChecklistForm({ ...checklistForm, scheduled_date: e.target.value })} />
+            <TextField label="Due Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={checklistForm.due_date} onChange={(e) => setChecklistForm({ ...checklistForm, due_date: e.target.value })} />
+            <Autocomplete
+              options={userOptions}
+              getOptionLabel={(o) => o.full_name || o.username || ''}
+              value={selectedAssignee}
+              onChange={(_, v) => setSelectedAssignee(v)}
+              onInputChange={(_, v) => setUserSearch(v)}
+              renderInput={(params) => <TextField {...params} label="Assign To" />}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenChecklistDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreateChecklist} disabled={creating}>Create</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
 export default PRPProgramDetail;
-
