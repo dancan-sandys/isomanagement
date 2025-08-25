@@ -1,0 +1,5 @@
+warning: in the working copy of 'PROJECT_CHECKLIST.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/AuditSchedule.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/services/api.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/setupProxy.js', LF will be replaced by CRLF the next time Git touches it
+frontend/src/setupProxy.js

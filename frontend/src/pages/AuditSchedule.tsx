@@ -10,6 +10,7 @@ const AuditSchedule: React.FC = () => {
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
   const [conflicts, setConflicts] = useState<{ total_conflicts: number; conflicts: any[] } | null>(null);
   const [view, setView] = useState<'table'|'gantt'>('gantt');
+  const [editDates, setEditDates] = useState<{ [key: number]: { start: string; end: string } }>({});
 
   const load = async () => {
     setLoading(true);
@@ -22,7 +23,7 @@ const AuditSchedule: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const checkConflicts = async () => {
     try {
       const res = await auditsAPI.detectScheduleConflicts({ department: filters.department || undefined, auditor_id: filters.auditor_id });
@@ -121,9 +122,10 @@ const AuditSchedule: React.FC = () => {
             <TableBody>
               {audits.map((a: any) => {
                 const overdue = a.status !== 'completed' && a.end_date && new Date(a.end_date) < new Date();
-                const [start, end] = [String(a.start_date || '').slice(0,10), String(a.end_date || '').slice(0,10)];
-                const [newStart, setNewStart] = useState<string>(start);
-                const [newEnd, setNewEnd] = useState<string>(end);
+                const start = String(a.start_date || '').slice(0,10);
+                const end = String(a.end_date || '').slice(0,10);
+                const currentEditDates = editDates[a.id] || { start, end };
+                
                 return (
                   <TableRow key={a.id}>
                     <TableCell>{a.title}</TableCell>
@@ -135,11 +137,32 @@ const AuditSchedule: React.FC = () => {
                     <TableCell>{overdue ? <Chip color="error" label="Overdue" size="small" /> : '-'}</TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1}>
-                        <TextField size="small" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
-                        <TextField size="small" type="date" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
+                        <TextField 
+                          size="small" 
+                          type="date" 
+                          value={currentEditDates.start} 
+                          onChange={(e) => setEditDates({
+                            ...editDates,
+                            [a.id]: { ...currentEditDates, start: e.target.value }
+                          })} 
+                        />
+                        <TextField 
+                          size="small" 
+                          type="date" 
+                          value={currentEditDates.end} 
+                          onChange={(e) => setEditDates({
+                            ...editDates,
+                            [a.id]: { ...currentEditDates, end: e.target.value }
+                          })} 
+                        />
                         <Button size="small" variant="outlined" onClick={async () => {
-                          await auditsAPI.bulkUpdateSchedule([{ id: a.id, start_date: newStart || undefined, end_date: newEnd || undefined }]);
-                          load(); checkConflicts();
+                          await auditsAPI.bulkUpdateSchedule([{ 
+                            id: a.id, 
+                            start_date: currentEditDates.start || undefined, 
+                            end_date: currentEditDates.end || undefined 
+                          }]);
+                          load(); 
+                          checkConflicts();
                         }}>Save</Button>
                       </Stack>
                     </TableCell>
