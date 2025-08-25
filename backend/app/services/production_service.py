@@ -1562,3 +1562,488 @@ class ProductionService:
             }
         }
 
+    # =================== FSM (Finite State Machine) Methods ===================
+
+    def create_process_with_stages(self, batch_id: int, process_type: ProductProcessType, 
+                                   operator_id: Optional[int], spec: Dict[str, Any],
+                                   stages_data: List[Dict[str, Any]], notes: Optional[str] = None) -> ProductionProcess:
+        """Create a new production process with stages for FSM management"""
+        from app.models.production import ProcessStage, StageStatus
+        
+        # Validate batch exists
+        batch = self.db.query(Batch).filter(Batch.id == batch_id).first()
+        if not batch:
+            raise ValueError("Batch not found")
+        
+        # Create the process in DRAFT status
+        process = ProductionProcess(
+            batch_id=batch_id,
+            process_type=process_type,
+            operator_id=operator_id,
+            spec=spec,
+            status=ProcessStatus.DRAFT,
+            notes=notes
+        )
+        self.db.add(process)
+        self.db.flush()  # Get the process ID
+        
+        # Create stages
+        for stage_data in stages_data:
+            stage = ProcessStage(
+                process_id=process.id,
+                stage_name=stage_data['stage_name'],
+                stage_description=stage_data.get('stage_description'),
+                sequence_order=stage_data['sequence_order'],
+                status=StageStatus.PENDING,
+                is_critical_control_point=stage_data.get('is_critical_control_point', False),
+                is_operational_prp=stage_data.get('is_operational_prp', False),
+                planned_start_time=stage_data.get('planned_start_time'),
+                planned_end_time=stage_data.get('planned_end_time'),
+                duration_minutes=stage_data.get('duration_minutes'),
+                completion_criteria=stage_data.get('completion_criteria'),
+                auto_advance=stage_data.get('auto_advance', False),
+                requires_approval=stage_data.get('requires_approval', False),
+                assigned_operator_id=stage_data.get('assigned_operator_id'),
+                stage_notes=stage_data.get('stage_notes')
+            )
+            self.db.add(stage)
+        
+        self.db.commit()
+        self.db.refresh(process)
+        
+        # Log audit event
+        try:
+            log_audit_event(
+                self.db,
+                user_id=operator_id,
+                action="process.created_with_stages",
+                resource_type="production_process",
+                resource_id=str(process.id),
+                details={
+                    "batch_id": batch_id,
+                    "type": process_type.value,
+                    "stages_count": len(stages_data)
+                }
+            )
+        except Exception:
+            pass
+        
+        return process
+
+    def start_process(self, process_id: int, operator_id: Optional[int] = None, 
+                     start_notes: Optional[str] = None) -> ProductionProcess:
+        """Start a process and activate the first stage"""
+        from app.models.production import ProcessStage, StageStatus, StageTransition
+        
+        process = self.db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
+        if not process:
+            raise ValueError("Process not found")
+        
+        if process.status != ProcessStatus.DRAFT:
+            raise ValueError(f"Process cannot be started. Current status: {process.status}")
+        
+        # Get the first stage
+        first_stage = self.db.query(ProcessStage).filter(
+            ProcessStage.process_id == process_id,
+            ProcessStage.sequence_order == 1
+        ).first()
+        
+        if not first_stage:
+            raise ValueError("No stages defined for this process")
+        
+        # Update process status and start time
+        process.status = ProcessStatus.IN_PROGRESS
+        process.start_time = datetime.utcnow()
+        if operator_id:
+            process.operator_id = operator_id
+        if start_notes:
+            process.notes = (process.notes or "") + f"\nStart notes: {start_notes}"
+        
+        # Activate first stage
+        first_stage.status = StageStatus.IN_PROGRESS
+        first_stage.actual_start_time = datetime.utcnow()
+        if operator_id:
+            first_stage.assigned_operator_id = operator_id
+        
+        # Create transition record
+        transition = StageTransition(
+            process_id=process_id,
+            from_stage_id=None,  # Initial transition
+            to_stage_id=first_stage.id,
+            transition_type="normal",
+            transition_reason="Process started",
+            initiated_by=operator_id or process.operator_id,
+            transition_timestamp=datetime.utcnow(),
+            prerequisites_met=True,
+            transition_notes=start_notes
+        )
+        self.db.add(transition)
+        
+        self.db.commit()
+        self.db.refresh(process)
+        
+        # Log audit event
+        try:
+            log_audit_event(
+                self.db,
+                user_id=operator_id or process.operator_id,
+                action="process.started",
+                resource_type="production_process",
+                resource_id=str(process_id),
+                details={"first_stage_id": first_stage.id}
+            )
+        except Exception:
+            pass
+        
+        return process
+
+    def transition_to_next_stage(self, process_id: int, current_stage_id: int, 
+                                user_id: int, transition_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Transition from current stage to the next stage"""
+        from app.models.production import ProcessStage, StageStatus, StageTransition
+        
+        process = self.db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
+        if not process:
+            raise ValueError("Process not found")
+        
+        if process.status != ProcessStatus.IN_PROGRESS:
+            raise ValueError(f"Process is not in progress. Current status: {process.status}")
+        
+        current_stage = self.db.query(ProcessStage).filter(
+            ProcessStage.id == current_stage_id,
+            ProcessStage.process_id == process_id
+        ).first()
+        
+        if not current_stage:
+            raise ValueError("Current stage not found")
+        
+        if current_stage.status != StageStatus.IN_PROGRESS:
+            raise ValueError(f"Current stage is not in progress. Current status: {current_stage.status}")
+        
+        # Validate stage completion requirements
+        if not self._validate_stage_completion(current_stage):
+            raise ValueError("Stage completion requirements not met")
+        
+        # Complete current stage
+        current_stage.status = StageStatus.COMPLETED
+        current_stage.actual_end_time = datetime.utcnow()
+        current_stage.completed_by_id = user_id
+        current_stage.deviations_recorded = transition_data.get('deviations_recorded')
+        current_stage.corrective_actions = transition_data.get('corrective_actions')
+        
+        # Find next stage
+        next_stage = self.db.query(ProcessStage).filter(
+            ProcessStage.process_id == process_id,
+            ProcessStage.sequence_order == current_stage.sequence_order + 1
+        ).first()
+        
+        if next_stage:
+            # Start next stage
+            next_stage.status = StageStatus.IN_PROGRESS
+            next_stage.actual_start_time = datetime.utcnow()
+            if transition_data.get('assign_operator_to_next'):
+                next_stage.assigned_operator_id = user_id
+            
+            # Create transition record
+            transition = StageTransition(
+                process_id=process_id,
+                from_stage_id=current_stage.id,
+                to_stage_id=next_stage.id,
+                transition_type=transition_data.get('transition_type', 'normal'),
+                transition_reason=transition_data.get('transition_reason'),
+                initiated_by=user_id,
+                transition_timestamp=datetime.utcnow(),
+                prerequisites_met=transition_data.get('prerequisites_met', True),
+                prerequisite_validation=transition_data.get('prerequisite_validation'),
+                transition_notes=transition_data.get('transition_notes')
+            )
+            self.db.add(transition)
+            
+            result = {
+                "completed_stage": current_stage,
+                "next_stage": next_stage,
+                "transition": transition,
+                "process_completed": False
+            }
+        else:
+            # No more stages - complete the process
+            process.status = ProcessStatus.COMPLETED
+            process.end_time = datetime.utcnow()
+            
+            result = {
+                "completed_stage": current_stage,
+                "next_stage": None,
+                "transition": None,
+                "process_completed": True
+            }
+        
+        self.db.commit()
+        
+        # Log audit event
+        try:
+            log_audit_event(
+                self.db,
+                user_id=user_id,
+                action="stage.transitioned",
+                resource_type="process_stage",
+                resource_id=str(current_stage.id),
+                details={
+                    "process_id": process_id,
+                    "next_stage_id": next_stage.id if next_stage else None,
+                    "process_completed": result["process_completed"]
+                }
+            )
+        except Exception:
+            pass
+        
+        return result
+
+    def _validate_stage_completion(self, stage) -> bool:
+        """Validate that a stage meets all completion requirements"""
+        from app.models.production import StageMonitoringRequirement, StageMonitoringLog
+        
+        # Check if all mandatory monitoring requirements are fulfilled
+        if stage.completion_criteria:
+            criteria = stage.completion_criteria
+            
+            # Check monitoring requirements
+            if criteria.get('mandatory_monitoring_required', True):
+                mandatory_requirements = self.db.query(
+                    StageMonitoringRequirement
+                ).filter(
+                    StageMonitoringRequirement.stage_id == stage.id,
+                    StageMonitoringRequirement.is_mandatory == True
+                ).all()
+                
+                for requirement in mandatory_requirements:
+                    # Check if there are monitoring logs for this requirement
+                    log_count = self.db.query(StageMonitoringLog).filter(
+                        StageMonitoringLog.stage_id == stage.id,
+                        StageMonitoringLog.requirement_id == requirement.id
+                    ).count()
+                    
+                    if log_count == 0:
+                        return False
+            
+            # Check minimum duration
+            if criteria.get('minimum_duration_minutes'):
+                min_duration = criteria['minimum_duration_minutes']
+                if stage.actual_start_time and stage.actual_end_time:
+                    duration = (stage.actual_end_time - stage.actual_start_time).total_seconds() / 60
+                    if duration < min_duration:
+                        return False
+            
+        return True
+
+    def add_stage_monitoring_requirement(self, stage_id: int, requirement_data: Dict[str, Any], 
+                                       created_by: int) -> 'StageMonitoringRequirement':
+        """Add a monitoring requirement to a stage"""
+        from app.models.production import StageMonitoringRequirement, MonitoringRequirementType, ProcessStage
+        
+        # Validate stage exists
+        stage = self.db.query(ProcessStage).filter(ProcessStage.id == stage_id).first()
+        if not stage:
+            raise ValueError("Stage not found")
+        
+        requirement = StageMonitoringRequirement(
+            stage_id=stage_id,
+            requirement_name=requirement_data['requirement_name'],
+            requirement_type=MonitoringRequirementType(requirement_data['requirement_type']),
+            description=requirement_data.get('description'),
+            is_critical_limit=requirement_data.get('is_critical_limit', False),
+            is_operational_limit=requirement_data.get('is_operational_limit', False),
+            target_value=requirement_data.get('target_value'),
+            tolerance_min=requirement_data.get('tolerance_min'),
+            tolerance_max=requirement_data.get('tolerance_max'),
+            unit_of_measure=requirement_data.get('unit_of_measure'),
+            monitoring_frequency=requirement_data.get('monitoring_frequency'),
+            is_mandatory=requirement_data.get('is_mandatory', True),
+            equipment_required=requirement_data.get('equipment_required'),
+            measurement_method=requirement_data.get('measurement_method'),
+            calibration_required=requirement_data.get('calibration_required', False),
+            record_keeping_required=requirement_data.get('record_keeping_required', True),
+            verification_required=requirement_data.get('verification_required', False),
+            regulatory_reference=requirement_data.get('regulatory_reference'),
+            created_by=created_by
+        )
+        
+        self.db.add(requirement)
+        self.db.commit()
+        self.db.refresh(requirement)
+        
+        return requirement
+
+    def log_stage_monitoring(self, stage_id: int, monitoring_data: Dict[str, Any], 
+                           recorded_by: int) -> 'StageMonitoringLog':
+        """Log monitoring data for a stage"""
+        from app.models.production import StageMonitoringLog, StageMonitoringRequirement, ProcessStage, StageStatus
+        
+        # Validate stage exists and is in progress
+        stage = self.db.query(ProcessStage).filter(ProcessStage.id == stage_id).first()
+        if not stage:
+            raise ValueError("Stage not found")
+        
+        if stage.status != StageStatus.IN_PROGRESS:
+            raise ValueError(f"Cannot log monitoring for stage not in progress. Current status: {stage.status}")
+        
+        # Validate requirement if provided
+        requirement_id = monitoring_data.get('requirement_id')
+        requirement = None
+        if requirement_id:
+            requirement = self.db.query(StageMonitoringRequirement).filter(
+                StageMonitoringRequirement.id == requirement_id,
+                StageMonitoringRequirement.stage_id == stage_id
+            ).first()
+            if not requirement:
+                raise ValueError("Monitoring requirement not found for this stage")
+        
+        # Create monitoring log
+        log = StageMonitoringLog(
+            stage_id=stage_id,
+            requirement_id=requirement_id,
+            monitoring_timestamp=monitoring_data.get('monitoring_timestamp', datetime.utcnow()),
+            measured_value=monitoring_data.get('measured_value'),
+            measured_text=monitoring_data.get('measured_text'),
+            recorded_by=recorded_by,
+            equipment_used=monitoring_data.get('equipment_used'),
+            measurement_method=monitoring_data.get('measurement_method'),
+            equipment_calibration_date=monitoring_data.get('equipment_calibration_date'),
+            notes=monitoring_data.get('notes'),
+            corrective_action_taken=monitoring_data.get('corrective_action_taken'),
+            follow_up_required=monitoring_data.get('follow_up_required', False),
+            regulatory_requirement_met=monitoring_data.get('regulatory_requirement_met', True),
+            iso_clause_reference=monitoring_data.get('iso_clause_reference'),
+            pass_fail_status=monitoring_data.get('pass_fail_status'),
+            deviation_severity=monitoring_data.get('deviation_severity')
+        )
+        
+        # Calculate if within limits if we have a requirement with limits
+        if requirement and log.measured_value is not None:
+            is_within_limits = True
+            if requirement.tolerance_min is not None and log.measured_value < requirement.tolerance_min:
+                is_within_limits = False
+            if requirement.tolerance_max is not None and log.measured_value > requirement.tolerance_max:
+                is_within_limits = False
+            log.is_within_limits = is_within_limits
+            
+            # Set pass/fail status if not explicitly provided
+            if not log.pass_fail_status:
+                log.pass_fail_status = "pass" if is_within_limits else "fail"
+        
+        self.db.add(log)
+        self.db.commit()
+        self.db.refresh(log)
+        
+        # Create alerts for critical deviations
+        if log.pass_fail_status == "fail" and requirement and requirement.is_critical_limit:
+            self._create_critical_monitoring_alert(log, requirement)
+        
+        # Log audit event
+        try:
+            log_audit_event(
+                self.db,
+                user_id=recorded_by,
+                action="stage.monitoring.logged",
+                resource_type="stage_monitoring_log",
+                resource_id=str(log.id),
+                details={
+                    "stage_id": stage_id,
+                    "requirement_id": requirement_id,
+                    "within_limits": log.is_within_limits,
+                    "pass_fail": log.pass_fail_status
+                }
+            )
+        except Exception:
+            pass
+        
+        return log
+
+    def _create_critical_monitoring_alert(self, log: 'StageMonitoringLog', 
+                                        requirement: 'StageMonitoringRequirement'):
+        """Create an alert for critical monitoring deviations"""
+        from app.models.production import ProcessMonitoringAlert
+        
+        alert = ProcessMonitoringAlert(
+            process_id=log.stage.process_id,
+            alert_type="critical_limit_exceeded",
+            severity_level="critical",
+            alert_title=f"Critical Limit Exceeded: {requirement.requirement_name}",
+            alert_message=f"Stage '{log.stage.stage_name}' monitoring requirement '{requirement.requirement_name}' "
+                         f"exceeded critical limits. Measured: {log.measured_value} {requirement.unit_of_measure or ''}",
+            parameter_name=requirement.requirement_name,
+            current_value=log.measured_value,
+            threshold_value=requirement.tolerance_max or requirement.tolerance_min,
+            auto_generated=True,
+            requires_immediate_action=True,
+            food_safety_impact=requirement.is_critical_limit,
+            ccp_affected=requirement.is_critical_limit,
+            corrective_action_required=True,
+            verification_required=True
+        )
+        
+        self.db.add(alert)
+
+    def get_process_with_stages(self, process_id: int) -> Optional[ProductionProcess]:
+        """Get a process with all its stages and monitoring data"""
+        from sqlalchemy.orm import selectinload
+        from app.models.production import ProcessStage
+        
+        process = self.db.query(ProductionProcess).options(
+            selectinload(ProductionProcess.stages).selectinload(ProcessStage.monitoring_requirements),
+            selectinload(ProductionProcess.stages).selectinload(ProcessStage.monitoring_logs),
+            selectinload(ProductionProcess.stages).selectinload(ProcessStage.stage_transitions)
+        ).filter(ProductionProcess.id == process_id).first()
+        
+        return process
+
+    def get_stage_monitoring_logs(self, stage_id: int) -> List['StageMonitoringLog']:
+        """Get all monitoring logs for a stage"""
+        from app.models.production import StageMonitoringLog
+        
+        return self.db.query(StageMonitoringLog).filter(
+            StageMonitoringLog.stage_id == stage_id
+        ).order_by(StageMonitoringLog.monitoring_timestamp.desc()).all()
+
+    def get_process_summary(self, process_id: int) -> Dict[str, Any]:
+        """Get a summary of the process including progress and quality metrics"""
+        from app.models.production import StageStatus, ProcessMonitoringAlert
+        
+        process = self.get_process_with_stages(process_id)
+        if not process:
+            raise ValueError("Process not found")
+        
+        total_stages = len(process.stages)
+        completed_stages = len([s for s in process.stages if s.status == StageStatus.COMPLETED])
+        
+        current_stage = next((s for s in process.stages if s.status == StageStatus.IN_PROGRESS), None)
+        
+        # Calculate progress percentage
+        progress = (completed_stages / total_stages * 100) if total_stages > 0 else 0
+        
+        # Count deviations and alerts
+        deviations_count = sum(len([log for log in stage.monitoring_logs if log.pass_fail_status == "fail"]) 
+                             for stage in process.stages)
+        
+        # Count critical alerts
+        critical_alerts_count = self.db.query(ProcessMonitoringAlert).filter(
+            ProcessMonitoringAlert.process_id == process_id,
+            ProcessMonitoringAlert.severity_level == "critical",
+            ProcessMonitoringAlert.resolved == False
+        ).count()
+        
+        return {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value,
+            "status": process.status.value,
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "total_stages": total_stages,
+            "completed_stages": completed_stages,
+            "current_stage_name": current_stage.stage_name if current_stage else None,
+            "current_stage_status": current_stage.status.value if current_stage else None,
+            "progress_percentage": round(progress, 2),
+            "deviations_count": deviations_count,
+            "critical_alerts_count": critical_alerts_count
+        }
+
