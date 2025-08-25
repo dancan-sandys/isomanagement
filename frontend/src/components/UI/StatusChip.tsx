@@ -34,7 +34,8 @@ const StatusChip: React.FC<StatusChipProps> = ({
   size = 'small',
   ...props 
 }) => {
-  const statusProps = getStatusChipProps(status);
+  const safeStatus = (status === 'unknown' ? 'info' : status) as any;
+  const statusProps = getStatusChipProps(safeStatus);
 
   return (
     <Chip

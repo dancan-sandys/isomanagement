@@ -84,7 +84,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
   const startScanning = () => {
     if (!scannerRef.current || scannerInstance) return;
 
-    const config: Html5QrcodeScannerConfig = {
+    const config: any = {
       fps: 10,
       qrbox: { width: 250, height: 250 },
       aspectRatio: 1.0,
