@@ -15,6 +15,7 @@ import {
 
 import ActionsLogManagement from '../components/ActionsLog/ActionsLogManagement';
 import InterestedPartiesManagement from '../components/ActionsLog/InterestedPartiesManagement';
+import SWOTPESTELAnalysis from '../components/ActionsLog/SWOTPESTELAnalysis';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -85,14 +86,7 @@ const ActionsLog: React.FC = () => {
           </TabPanel>
 
           <TabPanel value={activeTab} index={2}>
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography variant="h6" color="text.secondary">
-                SWOT/PESTEL Analysis Component
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                This component will be implemented in the next iteration.
-              </Typography>
-            </Box>
+            <SWOTPESTELAnalysis />
           </TabPanel>
         </Paper>
       </Box>

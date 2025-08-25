@@ -171,165 +171,34 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
       setLoading(true);
       setError(null);
       const apiParties = await interestedPartiesAPI.getInterestedParties();
-      
-      // Transform API response to match our interface (for now, fallback to mock data if empty)
-      if (apiParties.length === 0) {
-        // Use mock data as fallback
-        const mockParties: InterestedParty[] = [
-          {
-            id: 1,
-            name: 'ABC Supermarket Chain',
-            category: 'customer',
-            contact_person: 'John Smith',
-            email: 'john.smith@abcsupermarket.com',
-            phone: '+254-700-123-456',
-            address: 'Nairobi, Kenya',
-            website: 'www.abcsupermarket.com',
-            description: 'Major retail chain with 50+ stores across Kenya',
-            importance_level: 5,
-            satisfaction_level: 4,
-            last_assessment_date: '2025-07-15',
-            next_assessment_date: '2025-10-15',
-            is_active: true,
-            created_at: '2025-01-15',
-            expectations_count: 8,
-            actions_count: 12,
-            completed_actions_count: 9
-          },
-          {
-            id: 2,
-            name: 'Kenya Bureau of Standards (KEBS)',
-            category: 'regulator',
-            contact_person: 'Dr. Mary Wanjiku',
-            email: 'mwanjiku@kebs.org',
-            phone: '+254-20-694-8000',
-            address: 'Nairobi, Kenya',
-            website: 'www.kebs.org',
-            description: 'National standards body responsible for food safety regulations',
-            importance_level: 5,
-            satisfaction_level: 3,
-            last_assessment_date: '2025-06-20',
-            next_assessment_date: '2025-09-20',
-            is_active: true,
-            created_at: '2025-01-10',
-            expectations_count: 15,
-            actions_count: 20,
-            completed_actions_count: 18
-          },
-          {
-            id: 3,
-            name: 'Dairy Farmers Co-operative',
-            category: 'supplier',
-            contact_person: 'Peter Kamau',
-            email: 'peter.kamau@dairyfarmers.co.ke',
-            phone: '+254-733-456-789',
-            address: 'Nakuru, Kenya',
-            website: 'www.dairyfarmers.co.ke',
-            description: 'Co-operative of 500+ dairy farmers supplying raw milk',
-            importance_level: 4,
-            satisfaction_level: 4,
-            last_assessment_date: '2025-07-01',
-            next_assessment_date: '2025-10-01',
-            is_active: true,
-            created_at: '2025-01-05',
-            expectations_count: 6,
-            actions_count: 8,
-            completed_actions_count: 7
-          }
-        ];
-        setParties(mockParties);
-      } else {
-        // Transform API parties to match our interface
-        const transformedParties: InterestedParty[] = apiParties.map(party => ({
-          id: party.id,
-          name: party.name,
-          category: party.category,
-          contact_person: party.contact_person,
-          email: party.contact_email,
-          phone: party.contact_phone,
-          address: party.address,
-          website: party.website,
-          description: party.description,
-          importance_level: party.satisfaction_level || 3, // Use satisfaction as importance for now
-          satisfaction_level: party.satisfaction_level,
-          last_assessment_date: party.last_assessment_date,
-          next_assessment_date: party.next_assessment_date,
-          is_active: party.is_active,
-          created_at: party.created_at,
-          updated_at: party.updated_at,
-          expectations_count: party.expectations_count || 0,
-          actions_count: party.actions_count || 0,
-          completed_actions_count: party.completed_actions_count || 0
-        }));
-        setParties(transformedParties);
-      }
+
+      // Transform API response to match our interface
+      const transformedParties: InterestedParty[] = (apiParties || []).map(party => ({
+        id: party.id,
+        name: party.name,
+        category: party.category,
+        contact_person: party.contact_person,
+        email: party.contact_email,
+        phone: party.contact_phone,
+        address: party.address,
+        website: party.website,
+        description: party.description,
+        importance_level: party.satisfaction_level || 3, // Use satisfaction as importance for now
+        satisfaction_level: party.satisfaction_level,
+        last_assessment_date: party.last_assessment_date,
+        next_assessment_date: party.next_assessment_date,
+        is_active: party.is_active,
+        created_at: party.created_at,
+        updated_at: party.updated_at,
+        expectations_count: party.expectations_count || 0,
+        actions_count: party.actions_count || 0,
+        completed_actions_count: party.completed_actions_count || 0
+      }));
+      setParties(transformedParties);
     } catch (err: any) {
       console.error('Error loading interested parties:', err);
       setError('Failed to load interested parties. Please try again.');
-      // Fallback to mock data on error
-      const mockParties: InterestedParty[] = [
-        {
-          id: 1,
-          name: 'ABC Supermarket Chain',
-          category: 'customer',
-          contact_person: 'John Smith',
-          email: 'john.smith@abcsupermarket.com',
-          phone: '+254-700-123-456',
-          address: 'Nairobi, Kenya',
-          website: 'www.abcsupermarket.com',
-          description: 'Major retail chain with 50+ stores across Kenya',
-          importance_level: 5,
-          satisfaction_level: 4,
-          last_assessment_date: '2025-07-15',
-          next_assessment_date: '2025-10-15',
-          is_active: true,
-          created_at: '2025-01-15',
-          expectations_count: 8,
-          actions_count: 12,
-          completed_actions_count: 9
-        },
-        {
-          id: 2,
-          name: 'Kenya Bureau of Standards (KEBS)',
-          category: 'regulator',
-          contact_person: 'Dr. Mary Wanjiku',
-          email: 'mwanjiku@kebs.org',
-          phone: '+254-20-694-8000',
-          address: 'Nairobi, Kenya',
-          website: 'www.kebs.org',
-          description: 'National standards body responsible for food safety regulations',
-          importance_level: 5,
-          satisfaction_level: 3,
-          last_assessment_date: '2025-06-20',
-          next_assessment_date: '2025-09-20',
-          is_active: true,
-          created_at: '2025-01-10',
-          expectations_count: 15,
-          actions_count: 20,
-          completed_actions_count: 18
-        },
-        {
-          id: 3,
-          name: 'Dairy Farmers Co-operative',
-          category: 'supplier',
-          contact_person: 'Peter Kamau',
-          email: 'peter.kamau@dairyfarmers.co.ke',
-          phone: '+254-733-456-789',
-          address: 'Nakuru, Kenya',
-          website: 'www.dairyfarmers.co.ke',
-          description: 'Co-operative of 500+ dairy farmers supplying raw milk',
-          importance_level: 4,
-          satisfaction_level: 4,
-          last_assessment_date: '2025-07-01',
-          next_assessment_date: '2025-10-01',
-          is_active: true,
-          created_at: '2025-01-05',
-          expectations_count: 6,
-          actions_count: 8,
-          completed_actions_count: 7
-        }
-      ];
-      setParties(mockParties);
+      setParties([]);
     } finally {
       setLoading(false);
     }
@@ -373,31 +242,58 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
 
   const handleSaveParty = async () => {
     try {
-      // Mock save - replace with actual API call
+      setLoading(true);
+      setError(null);
+
+      const payload: APIInterestedParty = {
+        id: editingParty?.id || 0,
+        name: formData.name,
+        category: formData.category as any,
+        contact_person: formData.contact_person || undefined,
+        contact_email: formData.email || undefined,
+        contact_phone: formData.phone || undefined,
+        address: formData.address || undefined,
+        description: formData.description || undefined,
+        satisfaction_level: formData.satisfaction_level || undefined,
+        is_active: formData.is_active,
+        created_at: editingParty?.created_at || new Date().toISOString()
+      } as any;
+
       if (editingParty) {
-        const updatedParties = parties.map(party =>
-          party.id === editingParty.id
-            ? { ...party, ...formData }
-            : party
-        );
-        setParties(updatedParties);
+        await interestedPartiesAPI.updateInterestedParty(editingParty.id, {
+          name: payload.name,
+          category: payload.category as any,
+          contact_person: payload.contact_person,
+          contact_email: payload.contact_email,
+          contact_phone: payload.contact_phone,
+          address: payload.address,
+          description: payload.description,
+          satisfaction_level: payload.satisfaction_level,
+          is_active: payload.is_active
+        });
       } else {
-        const newParty: InterestedParty = {
-          id: Math.max(...parties.map(p => p.id)) + 1,
-          ...formData,
-          created_at: new Date().toISOString(),
-          expectations_count: 0,
-          actions_count: 0,
-          completed_actions_count: 0
-        };
-        setParties([...parties, newParty]);
+        await interestedPartiesAPI.createInterestedParty({
+          name: payload.name,
+          category: payload.category as any,
+          contact_person: payload.contact_person,
+          contact_email: payload.contact_email,
+          contact_phone: payload.contact_phone,
+          address: payload.address,
+          description: payload.description,
+          satisfaction_level: payload.satisfaction_level,
+          is_active: payload.is_active
+        });
       }
 
+      // Reload from backend to ensure state reflects server
+      await loadParties();
       setDialogOpen(false);
       if (onRefresh) onRefresh();
     } catch (err) {
       setError('Failed to save interested party. Please try again.');
       console.error('Error saving interested party:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
