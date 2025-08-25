@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Grid, TextField, Select, MenuItem, Stack } from '@mui/material';
 import riskAPI from '../../services/riskAPI';
+import actionsLogAPI from '../../services/actionsLogAPI';
+import { ActionPriority, ActionSource } from '../../types/actionsLog';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  // Optional created callback can receive the created risk item
+  onCreated?: (risk?: any) => void;
+  // Optional context for associating with other modules
+  context?: {
+    // If provided, also create an action in Actions Log linked to this interested party
+    interestedPartyId?: number;
+    createActionOnCreate?: boolean;
+  };
 }
 
-const RiskCreateDialog: React.FC<Props> = ({ open, onClose, onCreated }) => {
+const RiskCreateDialog: React.FC<Props> = ({ open, onClose, onCreated, context }) => {
   const [itemType, setItemType] = useState<'risk'|'opportunity'>('risk');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -19,7 +28,7 @@ const RiskCreateDialog: React.FC<Props> = ({ open, onClose, onCreated }) => {
   const [detectability, setDetectability] = useState('easily_detectable');
 
   const onSubmit = async () => {
-    await riskAPI.create({
+    const created = await riskAPI.create({
       item_type: itemType,
       title,
       description: description || undefined,
@@ -29,7 +38,32 @@ const RiskCreateDialog: React.FC<Props> = ({ open, onClose, onCreated }) => {
       likelihood,
       detectability,
     });
-    onCreated();
+    // If context indicates association with an interested party, create an action log entry
+    if (context?.interestedPartyId && context?.createActionOnCreate) {
+      try {
+        const priorityMap: Record<string, ActionPriority> = {
+          low: ActionPriority.LOW,
+          medium: ActionPriority.MEDIUM,
+          high: ActionPriority.HIGH,
+          critical: ActionPriority.CRITICAL
+        };
+        const mappedPriority = priorityMap[severity] || ActionPriority.MEDIUM;
+        await actionsLogAPI.createAction({
+          title: `Risk: ${title}`,
+          description: description || 'Risk associated from Interested Party',
+          action_source: ActionSource.INTERESTED_PARTY,
+          source_id: context.interestedPartyId,
+          risk_id: created?.id,
+          priority: mappedPriority,
+          assigned_by: 1,
+          tags: { interested_party_id: context.interestedPartyId }
+        } as any);
+      } catch (e) {
+        // Non-blocking: proceed even if action creation fails
+        console.error('Failed to create associated action for interested party', e);
+      }
+    }
+    onCreated?.(created);
     onClose();
   };
 

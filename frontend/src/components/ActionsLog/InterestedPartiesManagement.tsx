@@ -61,6 +61,8 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 
+import RiskCreateDialog from '../Risk/RiskCreateDialog';
+
 interface InterestedParty {
   id: number;
   name: string;
@@ -146,6 +148,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
   const [partyActions, setPartyActions] = useState<PartyAction[]>([]);
   const [editingParty, setEditingParty] = useState<InterestedParty | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [riskDialogOpen, setRiskDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     category: 'customer' as 'customer' | 'supplier' | 'regulator' | 'employee' | 'community' | 'investor' | 'competitor',
@@ -1242,6 +1245,16 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
           </Button>
           <Button 
             onClick={() => {
+              setRiskDialogOpen(true);
+            }}
+            variant="outlined"
+            color="secondary"
+            startIcon={<WarningIcon />}
+          >
+            Associate Risk
+          </Button>
+          <Button 
+            onClick={() => {
               setDetailViewOpen(false);
               handleEditParty(selectedParty!);
             }}
@@ -1252,6 +1265,34 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Associate Risk Dialog */}
+      <RiskCreateDialog 
+        open={riskDialogOpen} 
+        onClose={() => setRiskDialogOpen(false)} 
+        onCreated={async () => {
+          setRiskDialogOpen(false);
+          if (selectedParty) {
+            try {
+              const actionsData = await actionsLogAPI.getPartyActions(selectedParty.id);
+              setPartyActions(actionsData.map(action => ({
+                id: action.id,
+                party_id: selectedParty.id,
+                title: action.title,
+                description: action.description,
+                status: action.status as any,
+                priority: action.priority,
+                due_date: action.due_date,
+                completed_date: action.completed_at,
+                created_at: action.created_at
+              })));
+            } catch (e) {
+              console.error('Failed to refresh party actions after risk creation', e);
+            }
+          }
+        }}
+        context={{ interestedPartyId: selectedParty?.id, createActionOnCreate: true }}
+      />
 
       {/* Floating Action Button */}
       <Fab
