@@ -34,6 +34,7 @@ import SupplierDashboard from '../components/Suppliers/SupplierDashboard';
 import SupplierList from '../components/Suppliers/SupplierList';
 import MaterialList from '../components/Materials/MaterialList';
 import SupplierForm from '../components/Suppliers/SupplierForm';
+import MaterialForm from '../components/Materials/MaterialForm';
 import { Supplier, Material } from '../types/supplier';
 import { useLocation } from 'react-router-dom';
 
@@ -48,6 +49,9 @@ const Suppliers: React.FC = () => {
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [showMaterialForm, setShowMaterialForm] = useState(false);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [materialFormMode, setMaterialFormMode] = useState<'create' | 'edit' | 'view'>('create');
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -117,15 +121,32 @@ const Suppliers: React.FC = () => {
   };
 
   const handleViewMaterial = (material: Material) => {
-    console.log('View material:', material);
+    setMaterialFormMode('view');
+    setSelectedMaterial(material);
+    setShowMaterialForm(true);
   };
 
   const handleEditMaterial = (material: Material) => {
-    console.log('Edit material:', material);
+    setMaterialFormMode('edit');
+    setSelectedMaterial(material);
+    setShowMaterialForm(true);
   };
 
   const handleCreateMaterial = () => {
-    console.log('Create material');
+    setMaterialFormMode('create');
+    setSelectedMaterial(null);
+    setShowMaterialForm(true);
+  };
+
+  const handleSaveMaterial = (material: Material) => {
+    setShowMaterialForm(false);
+    setSelectedMaterial(null);
+    loadInitialData();
+  };
+
+  const handleCancelMaterial = () => {
+    setShowMaterialForm(false);
+    setSelectedMaterial(null);
   };
 
   const renderTabContent = () => {
@@ -261,6 +282,27 @@ const Suppliers: React.FC = () => {
             mode={formMode}
             onSave={handleSaveSupplier}
             onCancel={handleCancelSupplier}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Material Form Dialog */}
+      <Dialog 
+        open={showMaterialForm} 
+        onClose={handleCancelMaterial}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          {materialFormMode === 'create' ? 'Create New Material' : 
+           materialFormMode === 'edit' ? 'Edit Material' : 'View Material'}
+        </DialogTitle>
+        <DialogContent>
+          <MaterialForm
+            materialId={selectedMaterial?.id}
+            mode={materialFormMode}
+            onSave={handleSaveMaterial}
+            onCancel={handleCancelMaterial}
           />
         </DialogContent>
       </Dialog>
