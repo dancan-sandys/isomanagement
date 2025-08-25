@@ -19,8 +19,9 @@ import { login, clearError } from '../store/slices/authSlice';
 const Login: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { isLoading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { isLoading, error, errorInfo, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [errorHint, setErrorHint] = useState<string | null>(null);
+  const [ariaLiveMessage, setAriaLiveMessage] = useState<string>('');
 
   // Debug logging
   console.log('Login component - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
@@ -120,21 +121,23 @@ const Login: React.FC = () => {
         });
         // Navigation will be handled by useEffect when isAuthenticated changes
       } else if (login.rejected.match(result)) {
-        console.log('Login rejected:', result.error);
-        // Ensure error is a string
-        const errorMessage = typeof result.error === 'string' ? result.error : 'Login failed';
-        console.log('Error message:', errorMessage);
-        // Map backend messages for password policy/lockout/expiry hints
-        const normalized = (errorMessage || '').toLowerCase();
-        if (normalized.includes('locked') || normalized.includes('lockout')) {
-          setErrorHint('Account locked due to multiple failed attempts. Please try again later or contact an administrator.');
+        console.log('Login rejected payload:', (result as any).payload);
+        const payload = (result as any).payload as { message?: string; status?: number; details?: any } | undefined;
+        const message = payload?.message || 'Login failed';
+        const status = payload?.status;
+        const normalized = message.toLowerCase();
+        if (status === 423 || normalized.includes('locked')) {
+          setErrorHint('Account locked due to multiple failed attempts. Try again later or contact an administrator.');
         } else if (normalized.includes('expired')) {
           setErrorHint('Your password has expired. Please reset your password or contact support.');
-        } else if (normalized.includes('invalid credentials')) {
+        } else if (status === 401 || normalized.includes('incorrect username or password') || normalized.includes('invalid credentials')) {
           setErrorHint('Invalid username or password. Passwords are case sensitive and must meet the security policy.');
+        } else if (status === 400 && normalized.includes('inactive user')) {
+          setErrorHint('Your account is inactive. Please contact your administrator to re-enable access.');
         } else {
           setErrorHint(null);
         }
+        setAriaLiveMessage(message);
       }
     } catch (error) {
       // Error is handled by the Redux slice
@@ -171,8 +174,8 @@ const Login: React.FC = () => {
           </Typography>
 
           {(error || errorHint) && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {typeof error === 'string' ? error : 'An error occurred during login'}
+            <Alert severity="error" sx={{ width: '100%', mb: 2 }} role="alert" aria-live="assertive">
+              {typeof error === 'string' ? error : (errorInfo?.message || 'An error occurred during login')}
               {errorHint ? (
                 <>
                   <br />
@@ -181,6 +184,11 @@ const Login: React.FC = () => {
               ) : null}
             </Alert>
           )}
+
+          {/* ARIA live region for screen readers per ISO 9241-110 usability guidance */}
+          <div aria-live="polite" style={{ position: 'absolute', left: -10000 }}>
+            {ariaLiveMessage}
+          </div>
 
           {showSuccess && (
             <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
