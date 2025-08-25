@@ -43,7 +43,7 @@ import {
   Link as LinkIcon,
   Assignment as AssignmentIcon,
   TrendingUp as TrendingUpIcon
-} from '@mui/material-icons';
+} from '@mui/icons-material';
 
 import {
   SWOTAnalysisResponse,

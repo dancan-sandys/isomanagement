@@ -101,8 +101,8 @@ interface PartyAction {
   expectation_id?: number;
   title: string;
   description?: string;
-  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  priority: string;
   due_date?: string;
   completed_date?: string;
   assigned_to?: number;
@@ -418,7 +418,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
         party_id: party.id,
         title: action.title,
         description: action.description,
-        status: action.status,
+        status: action.status === 'pending' ? 'open' : action.status as 'open' | 'in_progress' | 'completed' | 'cancelled',
         priority: action.priority,
         due_date: action.due_date,
         completed_date: action.completed_at,
@@ -1269,7 +1269,7 @@ const InterestedPartiesManagement: React.FC<InterestedPartiesManagementProps> = 
                                   <AssignmentIcon color="primary" />
                                 ) : action.status === 'overdue' ? (
                                   <ErrorIcon color="error" />
-                                ) : action.priority === 'critical' || action.priority === 'urgent' ? (
+                                ) : action.priority === 'critical' || action.priority === 'urgent' || action.priority === 'high' ? (
                                   <WarningIcon color="error" />
                                 ) : (
                                   <AssignmentIcon color="action" />

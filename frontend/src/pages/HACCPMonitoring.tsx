@@ -270,7 +270,7 @@ const HACCPMonitoring: React.FC = () => {
       if (isOutOfSpec && monitoringForm.batchNumber) {
         // Try to open NC if one was created
         try {
-          const ncResponse = await haccpAPI.getRecentNC(selectedTask.ccpId, monitoringForm.batchNumber);
+          const ncResponse = await haccpAPI.getRecentNonConformance(selectedTask.ccpId, monitoringForm.batchNumber);
           if (ncResponse.data?.found) {
             window.open(`/nonconformance/${ncResponse.data.id}`, '_blank');
           }

@@ -52,7 +52,7 @@ const apiClient = axios.create({
 // Add auth interceptor
 apiClient.interceptors.request.use((config) => {
   const authHeaders = getAuthHeaders();
-  config.headers = { ...config.headers, ...authHeaders };
+  Object.assign(config.headers, authHeaders);
   return config;
 });
 

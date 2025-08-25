@@ -298,7 +298,7 @@ const DecisionTreeDialog: React.FC<DecisionTreeDialogProps> = ({
     setLoading(true);
     try {
       // Save decision to backend
-      await haccpAPI.updateHazardCCPStatus(hazardId, {
+      await haccpAPI.updateHazard(hazardId, {
         is_ccp: finalDecision.isCCP,
         ccp_justification: finalDecision.justification,
         decision_tree_confidence: finalDecision.confidence,

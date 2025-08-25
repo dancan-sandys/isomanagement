@@ -29,7 +29,7 @@ import {
   TextField,
   Tabs,
   Tab,
-  Calendar,
+  
   Badge,
   Tooltip,
   Switch,
@@ -495,7 +495,6 @@ const HACCPSchedules: React.FC = () => {
         subtitle="Automated scheduling and tracking of HACCP activities"
         showAdd={true}
         onAdd={handleCreateSchedule}
-        addButtonText="Create Schedule"
       />
 
       {/* Summary Cards */}

@@ -717,14 +717,11 @@ export const haccpAPI = {
 
   // Verification Logs
   createVerificationLog: async (ccpId: number, logData: any) => {
-    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/verification-logs`, logData);
-    return response.data;
-  },
-
   getVerificationLogs: async (ccpId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/verification-logs`);
     return response.data;
   },
+
 
   // Dashboard and Reports
   getDashboard: async () => {

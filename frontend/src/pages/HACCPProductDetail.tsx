@@ -6,6 +6,7 @@ import { Add, Edit, Delete, Help, Add as AddIcon, Remove as RemoveIcon } from '@
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, decisionTreeAPI } from '../services/api';
 import DecisionTreeDialog from '../components/DecisionTreeDialog';
+import HACCPBreadcrumbs from '../components/UI/HACCPBreadcrumbs';
 import { AppDispatch, RootState } from '../store';
 import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, deleteCCP, updateProduct } from '../store/slices/haccpSlice';
 
