@@ -24,6 +24,9 @@ import TrainingMatrix from './pages/TrainingMatrix';
 import TrainingPolicies from './pages/TrainingPolicies';
 import RiskThresholds from './pages/RiskThresholds';
 import Audits from './pages/Audits';
+import AuditSchedule from './pages/AuditSchedule';
+import AuditFindings from './pages/AuditFindings';
+import AuditReports from './pages/AuditReports';
 import AuditDetail from './pages/AuditDetail';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
@@ -35,6 +38,7 @@ import ComplaintDetail from './pages/ComplaintDetail';
 import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import DashboardAnalytics from './pages/DashboardAnalytics';
+import ObjectivesPage from './pages/Objectives';
 import DashboardReports from './pages/DashboardReports';
 import RiskRegister from './pages/RiskRegister';
 import OpportunitiesRegister from './pages/OpportunitiesRegister';
@@ -50,6 +54,9 @@ import AllergenLabel from './pages/AllergenLabel';
 import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
 import HiddenDemoTools from './pages/HiddenDemoTools';
+import ProductionPage from './pages/Production';
+import Analytics from './pages/Analytics';
+import ActionsLog from "./pages/ActionsLog";
 
 function App() {
   return (
@@ -83,6 +90,12 @@ function App() {
                       <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/dashboard/analytics" element={<DashboardAnalytics />} />
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
+                      <Route path="/objectives" element={<ObjectivesPage />} />
+                      <Route path="/objectives/dashboard" element={<ObjectivesPage />} />
+                      <Route path="/objectives/progress" element={<ObjectivesPage />} />
+                      <Route path="/production" element={<ProductionPage />} />
+                      <Route path="/production/monitoring" element={<ProductionPage />} />
+                      <Route path="/production/yield" element={<ProductionPage />} />
                       
                       {/* Document Control - All authenticated users */}
                       <Route path="/documents" element={<Documents />} />
@@ -136,9 +149,9 @@ function App() {
                       <Route path="/audits/internal" element={<Navigate to="/audits" replace />} />
                       <Route path="/audits/external" element={<Navigate to="/audits" replace />} />
                       <Route path="/audits/:id" element={<AuditDetail />} />
-                      <Route path="/audits/schedule" element={<Navigate to="/audits?tab=schedule" replace />} />
-                      <Route path="/audits/findings" element={<Navigate to="/audits?tab=findings" replace />} />
-                      <Route path="/audits/reports" element={<Navigate to="/audits?tab=reports" replace />} />
+                      <Route path="/audits/schedule" element={<AuditSchedule />} />
+                      <Route path="/audits/findings" element={<AuditFindings />} />
+                      <Route path="/audits/reports" element={<AuditReports />} />
                       
                       {/* Training & Competence - QA and HR roles */}
                       <Route path="/training/programs" element={<Navigate to="/training" replace />} />
@@ -183,6 +196,16 @@ function App() {
                       <Route path="/compliance/reports" element={<Navigate to="/dashboard/reports" replace />} />
                       <Route path="/compliance/updates" element={<Navigate to="/documents?category=regulatory" replace />} />
                       
+                      {/* Analytics & Reporting - QA and Production roles */}
+                      <Route path="/analytics" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Production Manager", "System Administrator"]} component={Analytics} />} />
+                      <Route path="/analytics/kpis" element={<Navigate to="/analytics?tab=1" replace />} />
+                      <Route path="/analytics/dashboards" element={<Navigate to="/analytics?tab=2" replace />} />
+                      <Route path="/analytics/reports" element={<Navigate to="/analytics?tab=3" replace />} />
+                      <Route path="/analytics/trends" element={<Navigate to="/analytics?tab=4" replace />} />
+                      <Route path="/actions-log" element={<RoleBasedRoute allowedRoles={["QA Manager", "QA Specialist", "Production Manager", "System Administrator"]} component={ActionsLog} />} />
+                      <Route path="/actions-log/parties" element={<Navigate to="/actions-log?tab=1" replace />} />
+                      <Route path="/actions-log/analysis" element={<Navigate to="/actions-log?tab=2" replace />} />
+                      
                       {/* User Management - System Administrators and QA Managers only */}
                       <Route path="/users" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager"]} component={Users} />} />
                       <Route path="/rbac" element={<RoleBasedRoute allowedRoles={["System Administrator", "QA Manager"]} component={RBAC} />} />
@@ -212,4 +235,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

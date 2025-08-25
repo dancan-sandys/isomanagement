@@ -253,7 +253,7 @@ class HazardReview(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    hazard = relationship("Hazard", back_populates="reviews")
+    hazard = relationship("Hazard", overlaps="risk_assessments", back_populates="reviews")
     reviewer = relationship("User")
     
     def __repr__(self):
@@ -368,7 +368,7 @@ class CCP(Base):
     
     # Relationships
     product = relationship("Product", back_populates="ccps")
-    hazard = relationship("Hazard", back_populates="ccp")
+    hazard = relationship("Hazard", overlaps="risk_assessments", back_populates="ccp")
     monitoring_logs = relationship("CCPMonitoringLog", back_populates="ccp")
     verification_logs = relationship("CCPVerificationLog", back_populates="ccp")
     monitoring_schedule = relationship("CCPMonitoringSchedule", back_populates="ccp", uselist=False, cascade="all, delete-orphan")
@@ -467,6 +467,10 @@ class CCPMonitoringLog(Base):
     corrective_action_description = Column(Text)
     corrective_action_by = Column(Integer, ForeignKey("users.id"))
     equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=True)  # Equipment used for monitoring
+    
+    # Action log integration for HACCP corrective actions
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
+    
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     log_metadata = Column(JSON)  # Additional metadata like device calibration status, etc.
@@ -477,6 +481,7 @@ class CCPMonitoringLog(Base):
     creator = relationship("User", foreign_keys=[created_by])
     corrective_action_user = relationship("User", foreign_keys=[corrective_action_by])
     equipment = relationship("Equipment")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
 
     def __repr__(self):
         return f"<CCPMonitoringLog(id={self.id}, ccp_id={self.ccp_id}, batch='{self.batch_number}')>"
@@ -693,7 +698,7 @@ class DecisionTree(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    hazard = relationship("Hazard", back_populates="decision_tree")
+    hazard = relationship("Hazard", overlaps="risk_assessments", back_populates="decision_tree")
     q1_user = relationship("User", foreign_keys=[q1_answered_by])
     q2_user = relationship("User", foreign_keys=[q2_answered_by])
     q3_user = relationship("User", foreign_keys=[q3_answered_by])

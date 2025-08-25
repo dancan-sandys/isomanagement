@@ -9,6 +9,7 @@ from app.models.user import User, UserStatus
 from app.models.rbac import Role
 from app.schemas.auth import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.schemas.common import ResponseModel, PaginationParams, PaginatedResponse
+from app.services.notification_service import NotificationService
 
 router = APIRouter()
 
@@ -233,6 +234,20 @@ async def create_user(
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Send welcome email notification
+    try:
+        notification_service = NotificationService(db)
+        notification_service.send_welcome_notification(
+            user_id=db_user.id,
+            username=db_user.username,
+            role_name=role.name,
+            department=db_user.department or "Not specified",
+            login_url="/login"
+        )
+    except Exception as e:
+        # Log error but don't fail the user creation
+        print(f"Failed to send welcome email: {str(e)}")
     
     # Get role name for response
     user_response = UserResponse(

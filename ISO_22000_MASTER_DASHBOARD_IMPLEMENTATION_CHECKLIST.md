@@ -1271,8 +1271,7 @@ const PreAuditChecklist = ({ auditDate, department }) => {
 - [ ] **Build Tool**: Vite or Create React App
 
 ### DevOps & Monitoring
-- [ ] **Containerization**: Docker
-- [ ] **Orchestration**: Docker Compose or Kubernetes
+- [ ] **Deployment**: DigitalOcean App Platform or similar
 - [ ] **Monitoring**: Prometheus + Grafana
 - [ ] **Logging**: ELK Stack (Elasticsearch, Logstash, Kibana)
 - [ ] **CI/CD**: GitHub Actions or GitLab CI

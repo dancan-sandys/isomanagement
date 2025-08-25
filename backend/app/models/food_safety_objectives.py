@@ -1,8 +1,44 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, Float, Index, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+import enum
 
 from app.core.database import Base
+
+
+class ObjectiveType(str, enum.Enum):
+    """Types of objectives"""
+    CORPORATE = "corporate"
+    DEPARTMENTAL = "departmental"
+    OPERATIONAL = "operational"
+
+
+class HierarchyLevel(str, enum.Enum):
+    """Hierarchy levels for objectives"""
+    STRATEGIC = "strategic"
+    TACTICAL = "tactical"
+    OPERATIONAL = "operational"
+
+
+class TrendDirection(str, enum.Enum):
+    """Trend direction for objectives"""
+    IMPROVING = "improving"
+    DECLINING = "declining"
+    STABLE = "stable"
+
+
+class PerformanceColor(str, enum.Enum):
+    """Performance color indicators"""
+    GREEN = "green"
+    YELLOW = "yellow"
+    RED = "red"
+
+
+class DataSource(str, enum.Enum):
+    """Data sources for objective tracking"""
+    MANUAL = "manual"
+    SYSTEM = "system"
+    INTEGRATION = "integration"
 
 
 class FoodSafetyObjective(Base):
@@ -13,8 +49,46 @@ class FoodSafetyObjective(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text)
     category = Column(String(100))
-    target_value = Column(String(100))
+    
+    # Enhanced objective type and hierarchy
+    objective_type = Column(
+        Enum(ObjectiveType, values_callable=lambda enum_cls: [member.value for member in enum_cls]),
+        nullable=False,
+        default=ObjectiveType.OPERATIONAL
+    )
+    hierarchy_level = Column(
+        Enum(HierarchyLevel, values_callable=lambda enum_cls: [member.value for member in enum_cls]),
+        nullable=False,
+        default=HierarchyLevel.OPERATIONAL
+    )
+    parent_objective_id = Column(Integer, ForeignKey("food_safety_objectives.id"), nullable=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
+    
+    # Enhanced measurement and tracking
+    baseline_value = Column(Float, nullable=True)
+    target_value = Column(Float, nullable=True)  # Changed from String to Float
     measurement_unit = Column(String(50))
+    weight = Column(Float, default=1.0)  # Weight for KPI calculations
+    measurement_frequency = Column(String(100))  # daily, weekly, monthly, quarterly, annually
+    start_date = Column(DateTime(timezone=True), nullable=True)
+    target_date = Column(DateTime(timezone=True), nullable=True)
+    
+    # Enhanced progress tracking
+    trend_direction = Column(
+        Enum(TrendDirection, values_callable=lambda enum_cls: [member.value for member in enum_cls]),
+        nullable=True
+    )
+    performance_color = Column(
+        Enum(PerformanceColor, values_callable=lambda enum_cls: [member.value for member in enum_cls]),
+        nullable=True
+    )
+    automated_calculation = Column(Boolean, default=False)
+    data_source = Column(
+        Enum(DataSource, values_callable=lambda enum_cls: [member.value for member in enum_cls]),
+        default=DataSource.MANUAL
+    )
+    
+    # Existing fields
     frequency = Column(String(100))
     responsible_person_id = Column(Integer, ForeignKey("users.id"))
     review_frequency = Column(String(100))
@@ -24,12 +98,160 @@ class FoodSafetyObjective(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Enhanced tracking fields
+    last_updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    last_updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    # ISO 6.2 planning and evaluation fields
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sponsor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    method_of_evaluation = Column(String(100), nullable=True)
+    acceptance_criteria = Column(Text, nullable=True)  # JSON/text
+    resource_plan = Column(Text, nullable=True)
+    budget_estimate = Column(Float, nullable=True)
+    budget_currency = Column(String(10), nullable=True)
+    communication_plan = Column(Text, nullable=True)
+    linked_risk_ids = Column(Text, nullable=True)       # JSON array string
+    linked_control_ids = Column(Text, nullable=True)    # JSON array string
+    linked_document_ids = Column(Text, nullable=True)   # JSON array string
+    management_review_refs = Column(Text, nullable=True)  # JSON array string
+    version = Column(Integer, default=1)
+    superseded_by_id = Column(Integer, ForeignKey("food_safety_objectives.id"), nullable=True)
+    change_reason = Column(Text, nullable=True)
 
     # Relationships
+    parent_objective = relationship(
+        "FoodSafetyObjective",
+        remote_side=[id],
+        back_populates="child_objectives",
+        foreign_keys=[parent_objective_id]
+    )
+    child_objectives = relationship(
+        "FoodSafetyObjective",
+        back_populates="parent_objective",
+        foreign_keys=[parent_objective_id]
+    )
+    department = relationship("Department", back_populates="objectives")
     responsible_person = relationship("User", foreign_keys=[responsible_person_id])
     created_by_user = relationship("User", foreign_keys=[created_by])
+    last_updated_by_user = relationship("User", foreign_keys=[last_updated_by])
     fsms_integrations = relationship("FSMSRiskIntegration", back_populates="food_safety_objective")
+    targets = relationship("ObjectiveTarget", back_populates="objective", cascade="all, delete-orphan")
+    progress_entries = relationship("ObjectiveProgress", back_populates="objective", cascade="all, delete-orphan")
+    owner_user = relationship("User", foreign_keys=[owner_user_id])
+    sponsor_user = relationship("User", foreign_keys=[sponsor_user_id])
+    superseded_by = relationship(
+        "FoodSafetyObjective",
+        remote_side=[id],
+        foreign_keys=[superseded_by_id]
+    )
+
+    # Workflow / approvals
+    approval_status = Column(String(20), default="draft")  # draft, pending, approved, rejected, closed
+    submitted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    closure_reason = Column(Text, nullable=True)
+
+    submitted_by = relationship("User", foreign_keys=[submitted_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
+    closed_by = relationship("User", foreign_keys=[closed_by_id])
+
+    __table_args__ = (
+        Index("ix_objectives_hierarchy", "parent_objective_id", "objective_type"),
+        Index("ix_objectives_department", "department_id", "objective_type"),
+        Index("ix_objectives_type_level", "objective_type", "hierarchy_level"),
+    )
 
     def __repr__(self):
-        return f"<FoodSafetyObjective(id={self.id}, code='{self.objective_code}', title='{self.title}')>"
+        return f"<FoodSafetyObjective(id={self.id}, code='{self.objective_code}', title='{self.title}', type='{self.objective_type}')>"
 
+
+class ObjectiveEvidence(Base):
+    __tablename__ = "objective_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    objective_id = Column(Integer, ForeignKey("food_safety_objectives.id", ondelete="CASCADE"), index=True, nullable=False)
+    progress_id = Column(Integer, ForeignKey("objective_progress.id", ondelete="SET NULL"), index=True, nullable=True)
+    file_path = Column(Text, nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    checksum = Column(String(128), nullable=True)
+    notes = Column(Text, nullable=True)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_verified = Column(Boolean, default=False)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    objective = relationship("FoodSafetyObjective", backref="evidence")
+    progress = relationship("ObjectiveProgress")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+    __table_args__ = (
+        Index("ix_objective_evidence_obj", "objective_id", "uploaded_at"),
+    )
+
+
+class ObjectiveTarget(Base):
+    __tablename__ = "objective_targets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    objective_id = Column(Integer, ForeignKey("food_safety_objectives.id"), nullable=False, index=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, index=True)
+    period_start = Column(DateTime(timezone=True), nullable=False, index=True)
+    period_end = Column(DateTime(timezone=True), nullable=False, index=True)
+    target_value = Column(Float, nullable=False)
+    lower_threshold = Column(Float, nullable=True)  # for ranges or lower-is-better
+    upper_threshold = Column(Float, nullable=True)
+    weight = Column(Float, nullable=True, default=1.0)
+    is_lower_better = Column(Boolean, default=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    objective = relationship("FoodSafetyObjective", back_populates="targets")
+    department = relationship("Department", back_populates="objective_targets")
+    created_by_user = relationship("User", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_objective_target_period", "objective_id", "department_id", "period_start"),
+        Index("ix_objective_target_department", "department_id", "period_start"),
+    )
+
+
+class ObjectiveProgress(Base):
+    __tablename__ = "objective_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    objective_id = Column(Integer, ForeignKey("food_safety_objectives.id"), nullable=False, index=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, index=True)
+    period_start = Column(DateTime(timezone=True), nullable=False, index=True)
+    period_end = Column(DateTime(timezone=True), nullable=False, index=True)
+    actual_value = Column(Float, nullable=False)
+    attainment_percent = Column(Float, nullable=True)
+    status = Column(String(20), nullable=True)  # on_track, at_risk, off_track
+    evidence = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    objective = relationship("FoodSafetyObjective", back_populates="progress_entries")
+    department = relationship("Department", back_populates="objective_progress")
+    created_by_user = relationship("User", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_objective_progress_period", "objective_id", "department_id", "period_start"),
+        Index("ix_objective_progress_department", "department_id", "period_start"),
+        Index("ix_objective_progress_status", "status", "period_start"),
+    )

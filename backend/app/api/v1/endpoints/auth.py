@@ -15,6 +15,7 @@ from app.models.rbac import Role
 from app.schemas.auth import Token, TokenData, UserLogin, UserCreate, UserResponse, UserSignup
 from app.schemas.common import ResponseModel
 from app.services import log_audit_event
+from app.services.notification_service import NotificationService
 from app.core.config import settings
 from datetime import timedelta as _timedelta
 
@@ -191,6 +192,20 @@ async def signup(
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Send welcome email notification
+    try:
+        notification_service = NotificationService(db)
+        notification_service.send_welcome_notification(
+            user_id=db_user.id,
+            username=db_user.username,
+            role_name=admin_role.name,
+            department=db_user.department or "Not specified",
+            login_url="/login"
+        )
+    except Exception as e:
+        # Log error but don't fail the registration
+        print(f"Failed to send welcome email: {str(e)}")
     
     # Create user response with role name
     user_response = UserResponse(
@@ -397,6 +412,20 @@ async def register(
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Send welcome email notification
+    try:
+        notification_service = NotificationService(db)
+        notification_service.send_welcome_notification(
+            user_id=db_user.id,
+            username=db_user.username,
+            role_name=role.name,
+            department=db_user.department or "Not specified",
+            login_url="/login"
+        )
+    except Exception as e:
+        # Log error but don't fail the registration
+        print(f"Failed to send welcome email: {str(e)}")
     
     # Create user response with role name
     user_response = UserResponse(

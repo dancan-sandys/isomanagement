@@ -21,6 +21,8 @@ from app.schemas.prp import (
     ReminderCreate, ScheduleCreate, ResponseType, RiskMatrixCreate,
     RiskAssessmentCreate, RiskControlCreate, CorrectiveActionCreate, PreventiveActionCreate
 )
+from app.services.actions_log_service import ActionsLogService
+from app.models.actions_log import ActionSource
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +361,57 @@ class PRPService:
         )
         
         self.db.add(action)
+        self.db.flush()  # Get the ID without committing
+        
+        # Create corresponding entry in actions log
+        actions_log_service = ActionsLogService(self.db)
+        
+        # Map PRP severity to action priority
+        priority_mapping = {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "critical": "critical"
+        }
+        
+        # Map PRP status to action status
+        status_mapping = {
+            "open": "pending",
+            "in_progress": "in_progress",
+            "completed": "completed",
+            "verified": "completed",
+            "closed": "completed"
+        }
+        
+        mapped_priority = priority_mapping.get(action_data.severity.lower(), "medium")
+        mapped_status = status_mapping.get(str(action.status).lower(), "pending")
+        
+        action_log_data = {
+            "title": f"PRP Corrective Action: {action_code}",
+            "description": action_data.action_description or action_data.non_conformance_description,
+            "action_source": ActionSource.CONTINUOUS_IMPROVEMENT.value,
+            "source_id": action.id,
+            "priority": mapped_priority,
+            "status": mapped_status,
+            "assigned_to": action_data.assigned_to,
+            "assigned_by": created_by,
+            "due_date": action_data.target_completion_date,
+            "estimated_hours": None,
+            "notes": f"PRP {action_data.action_type} action - Source: {action_data.source_type}",
+            "tags": {
+                "action_code": action_code,
+                "program_id": action_data.program_id,
+                "severity": action_data.severity,
+                "action_type": action_data.action_type,
+                "source_type": action_data.source_type
+            }
+        }
+        
+        action_log = actions_log_service.create_action(action_log_data)
+        
+        # Link the action log back to the PRP action
+        action.action_log_id = action_log.id
+        
         self.db.commit()
         self.db.refresh(action)
         
@@ -1065,11 +1118,21 @@ class PRPService:
         if existing_action:
             raise ValueError(f"Preventive action code '{action_data.action_code}' already exists")
         
+        # Get default program if none provided
+        program_id = action_data.program_id
+        if not program_id:
+            # Get the first available program as default
+            default_program = self.db.query(PRPProgram).first()
+            if default_program:
+                program_id = default_program.id
+            else:
+                raise ValueError("No PRP program available. Please create a program first.")
+        
         action = PRPPreventiveAction(
             action_code=action_data.action_code,
             trigger_type=action_data.trigger_type,
             trigger_description=action_data.trigger_description,
-            program_id=action_data.program_id,
+            program_id=program_id,
             action_description=action_data.action_description,
             objective=action_data.objective,
             responsible_person=action_data.responsible_person,

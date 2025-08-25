@@ -332,7 +332,12 @@ class AuditResponse(AuditBase):
   created_by: int
   created_at: datetime
   updated_at: datetime
+  actual_start_at: datetime | None = None
   actual_end_at: datetime | None = None
+  schedule_lock: bool | None = None
+  lock_reason: str | None = None
+  reschedule_count: int | None = None
+  last_rescheduled_at: datetime | None = None
 
   class Config:
     from_attributes = True
@@ -464,6 +469,34 @@ class AuditListResponse(BaseModel):
   pages: int
 
 
+# Cross-audit findings aggregation
+class FindingListResponse(BaseModel):
+  items: List[FindingResponse]
+  total: int
+  page: int
+  size: int
+  pages: int
+
+
+class FindingsAnalyticsResponse(BaseModel):
+  by_severity: Dict[str, int]
+  by_status: Dict[str, int]
+  open_findings: int
+  overdue_findings: int
+  critical_findings: int
+  average_closure_days: Optional[float] = None
+
+
+class BulkFindingsStatusUpdateRequest(BaseModel):
+  finding_ids: List[int]
+  status: str = Field(pattern="^(open|in_progress|verified|closed)$")
+
+
+class BulkFindingsAssignRequest(BaseModel):
+  finding_ids: List[int]
+  responsible_person_id: int
+
+
 class AuditStatsResponse(BaseModel):
   total: int
   by_status: Dict[str, int]
@@ -519,5 +552,28 @@ class AuditeeResponse(BaseModel):
 
   class Config:
     from_attributes = True
+
+
+# Report approval/history
+class AuditReportApproveRequest(BaseModel):
+  notes: Optional[str] = None
+  file_path: Optional[str] = None
+
+
+class AuditReportHistoryRecord(BaseModel):
+  id: int
+  audit_id: int
+  version: int
+  approved_by: int
+  approved_at: datetime
+  notes: Optional[str] = None
+  file_path: Optional[str] = None
+
+  class Config:
+    from_attributes = True
+
+
+class AuditReportHistoryResponse(BaseModel):
+  items: List[AuditReportHistoryRecord]
 
 

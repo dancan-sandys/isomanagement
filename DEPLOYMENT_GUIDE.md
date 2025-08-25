@@ -20,7 +20,6 @@ This guide will walk you through deploying your ISO 22000 Food Safety Management
 ### Required Tools
 - [DigitalOcean CLI (doctl)](https://docs.digitalocean.com/reference/doctl/how-to/install/)
 - [Git](https://git-scm.com/)
-- [Docker](https://www.docker.com/) (for local testing)
 
 ### Required Services
 - DigitalOcean Spaces (for file storage)
@@ -39,11 +38,8 @@ This guide will walk you through deploying your ISO 22000 Food Safety Management
    ```
 
 2. **Verify all deployment files are present**:
-   - `backend/Dockerfile`
-   - `frontend/Dockerfile`
    - `frontend/nginx.conf`
    - `.do/app.yaml`
-   - `docker-compose.yml`
 
 ### Step 2: Set Up DigitalOcean Spaces
 
@@ -81,36 +77,52 @@ This guide will walk you through deploying your ISO 22000 Food Safety Management
    - Verify your domain
    - Generate an API key
 
-## 🐳 Phase 2: Local Testing
+## 🧪 Phase 2: Local Testing
 
-### Step 1: Test with Docker Compose
+### Step 1: Test Locally
 
-1. **Build and run locally**:
+1. **Set up local environment**:
    ```bash
-   docker-compose up --build
+   # Backend setup
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   
+   # Frontend setup
+   cd ../frontend
+   npm install
    ```
 
-2. **Verify services are running**:
-   - Backend: http://localhost:8000/health
-   - Frontend: http://localhost:8080
-   - Database: Connect to localhost:5432
+2. **Run services locally**:
+   ```bash
+   # Backend (in backend directory)
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   
+   # Frontend (in frontend directory)
+   npm start
+   ```
 
-3. **Test the application**:
+3. **Verify services are running**:
+   - Backend: http://localhost:8000/health
+   - Frontend: http://localhost:3000
+   - Database: Connect to your local PostgreSQL instance
+
+4. **Test the application**:
    - Create a test user
    - Upload a test document
    - Verify all modules work correctly
 
 ### Step 2: Fix Any Issues
 
-1. **Check logs**:
-   ```bash
-   docker-compose logs backend
-   docker-compose logs frontend
-   ```
+1. **Check backend logs**:
+   - Monitor the uvicorn console output
+   - Check for any import or configuration errors
 
 2. **Test database migrations**:
    ```bash
-   docker-compose exec backend alembic upgrade head
+   cd backend
+   alembic upgrade head
    ```
 
 ## ☁️ Phase 3: DigitalOcean Deployment
@@ -282,10 +294,18 @@ This guide will walk you through deploying your ISO 22000 Food Safety Management
        runs-on: ubuntu-latest
        steps:
          - uses: actions/checkout@v2
+         - name: Set up Python
+           uses: actions/setup-python@v2
+           with:
+             python-version: '3.11'
+         - name: Install dependencies
+           run: |
+             cd backend
+             pip install -r requirements.txt
          - name: Run tests
            run: |
-             docker-compose up -d
-             docker-compose exec backend pytest
+             cd backend
+             pytest
    ```
 
 ## 🚨 Troubleshooting
@@ -293,9 +313,9 @@ This guide will walk you through deploying your ISO 22000 Food Safety Management
 ### Common Issues
 
 1. **Build failures**:
-   - Check Dockerfile syntax
-   - Verify all dependencies are in requirements.txt
-   - Check for missing files in .dockerignore
+   - Check Python dependencies in requirements.txt
+   - Verify all imports are available
+   - Check for missing environment variables
 
 2. **Database connection issues**:
    - Verify DATABASE_URL is correct
@@ -409,7 +429,7 @@ doctl apps run <app-id> --command "python -c \"from app.core.database import Ses
 ## ✅ Deployment Checklist
 
 - [ ] Repository pushed to GitHub
-- [ ] Docker images build successfully
+- [ ] Local environment setup completed
 - [ ] Local testing completed
 - [ ] DigitalOcean Spaces configured
 - [ ] Email service configured

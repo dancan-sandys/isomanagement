@@ -275,31 +275,5 @@ class DashboardAuditLog(Base):
     # Relationships
     user = relationship("User")
 
-# Department model (if not exists)
-class Department(Base):
-    """Departments for filtering dashboard data"""
-    __tablename__ = "departments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, unique=True, index=True)
-    code = Column(String(50), nullable=True, unique=True)
-    description = Column(Text, nullable=True)
-    
-    # Hierarchy
-    parent_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    level = Column(Integer, default=0)
-    
-    # Contact information
-    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    location = Column(String(255), nullable=True)
-    
-    # Status
-    is_active = Column(Boolean, default=True)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    parent = relationship("Department", remote_side=[id])
-    children = relationship("Department")
-    manager = relationship("User")
+# Department model is defined in app.models.departments; import it here to avoid duplicate table definitions
+from app.models.departments import Department

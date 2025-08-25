@@ -17,7 +17,7 @@ from app.models.audit_mgmt import (
     AuditAttachment, AuditItemAttachment, AuditFindingAttachment, AuditAuditee,
 	AuditPlan, AuditProgram, ProgramStatus, RiskMethod, AuditRisk, RiskLevel,
     AuditTeamMember, TeamMemberRole, CompetenceStatus,
-    AuditEvidence, AuditActivityLog,
+    AuditEvidence, AuditActivityLog, AuditReportHistory,
 )
 from app.schemas.audit import (
     AuditCreate, AuditUpdate, AuditResponse, AuditListResponse,
@@ -34,6 +34,8 @@ from app.schemas.audit import (
     AuditActivityLogCreate, AuditActivityLogUpdate, AuditActivityLogResponse, AuditActivityLogListResponse,
     CompetenceAssessmentRequest, CompetenceAssessmentResponse,
     ImpartialityCheckRequest, ImpartialityCheckResponse,
+    FindingListResponse, FindingsAnalyticsResponse, BulkFindingsStatusUpdateRequest, BulkFindingsAssignRequest,
+    AuditReportApproveRequest, AuditReportHistoryResponse,
 )
 from app.utils.audit import audit_event
 from app.schemas.nonconformance import NonConformanceCreate, NonConformanceResponse
@@ -47,6 +49,90 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Schedule conflict detection
+@router.get("/schedule/conflicts", dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def detect_schedule_conflicts(
+    start: Optional[datetime] = Query(None),
+    end: Optional[datetime] = Query(None),
+    auditor_id: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Detect schedule conflicts based on overlapping audit date ranges for a given auditor or department.
+    """
+    q = db.query(AuditModel)
+    if auditor_id:
+        q = q.filter((AuditModel.auditor_id == auditor_id) | (AuditModel.lead_auditor_id == auditor_id))
+    if department:
+        q = q.filter(AuditModel.auditee_department == department)
+    audits = q.all()
+    conflicts = []
+    # Simple O(n^2) overlap detection for current scale
+    for i in range(len(audits)):
+        a = audits[i]
+        for j in range(i + 1, len(audits)):
+            b = audits[j]
+            a_start, a_end = getattr(a, 'start_date', None), getattr(a, 'end_date', None)
+            b_start, b_end = getattr(b, 'start_date', None), getattr(b, 'end_date', None)
+            if not a_start or not a_end or not b_start or not b_end:
+                continue
+            # Optional global window restriction
+            if start and a_end < start and b_end < start:
+                continue
+            if end and a_start > end and b_start > end:
+                continue
+            # Overlap if ranges intersect
+            if a_start <= b_end and b_start <= a_end:
+                conflicts.append({
+                    "audit_a": {"id": a.id, "title": a.title, "start": a_start, "end": a_end, "auditor_id": a.auditor_id, "lead_auditor_id": a.lead_auditor_id, "department": a.auditee_department},
+                    "audit_b": {"id": b.id, "title": b.title, "start": b_start, "end": b_end, "auditor_id": b.auditor_id, "lead_auditor_id": b.lead_auditor_id, "department": b.auditee_department},
+                    "reason": "overlap"
+                })
+    return {"total_conflicts": len(conflicts), "conflicts": conflicts}
+
+
+@router.post("/schedule/bulk-update", dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def bulk_update_schedule(
+    updates: List[dict],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Bulk update audit start/end dates. Each item: {id, start_date, end_date} (ISO strings).
+    Enforces ownership: lead auditor or program manager.
+    """
+    updated = 0
+    for u in updates:
+        try:
+            audit_id = int(u.get('id'))
+        except Exception:
+            continue
+        audit = db.query(AuditModel).get(audit_id)
+        if not audit:
+            continue
+        # Enforce stronger role for cross-team updates (MANAGE_PROGRAM)
+        if not check_permission(current_user.id, Module.AUDITS, PermissionType.MANAGE_PROGRAM, db):
+            # Allow lead auditor to move only their own audits
+            if audit.lead_auditor_id != current_user.id:
+                continue
+        start_s = u.get('start_date')
+        end_s = u.get('end_date')
+        try:
+            if start_s:
+                audit.start_date = datetime.fromisoformat(start_s)
+            if end_s:
+                audit.end_date = datetime.fromisoformat(end_s)
+            # Update governance fields
+            audit.reschedule_count = (getattr(audit, 'reschedule_count', 0) or 0) + 1
+            audit.last_rescheduled_at = datetime.utcnow()
+            updated += 1
+        except Exception:
+            continue
+    db.commit()
+    return {"updated": updated}
 
 
 def can_perform_destructive_action(audit: AuditModel, current_user: User, db: Session) -> bool:
@@ -595,15 +681,196 @@ async def update_finding(finding_id: int, payload: FindingUpdate, db: Session = 
     # Check ownership for finding update
     check_finding_ownership(finding, current_user, db, "update")
     
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updated_fields = payload.model_dump(exclude_unset=True)
+    for field, value in updated_fields.items():
         if field == "severity" and value is not None:
             value = FindingSeverity(value)
         if field == "status" and value is not None:
             value = FindingStatus(value)
         setattr(finding, field, value)
+    # Handle closed_at stamping
+    try:
+        if 'status' in updated_fields:
+            if finding.status in [FindingStatus.VERIFIED, FindingStatus.CLOSED] and not finding.closed_at:
+                finding.closed_at = datetime.utcnow()
+            if finding.status in [FindingStatus.OPEN, FindingStatus.IN_PROGRESS]:
+                finding.closed_at = None
+    except Exception:
+        pass
     db.commit()
     db.refresh(finding)
     return finding
+
+
+# Cross-audit findings aggregation
+@router.get("/findings", response_model=FindingListResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def list_all_findings(
+    audit_id: Optional[int] = Query(None),
+    program_id: Optional[int] = Query(None),
+    severity: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    responsible_person_id: Optional[int] = Query(None),
+    has_nc: Optional[bool] = Query(None),
+    overdue: Optional[bool] = Query(None),
+    created_from: Optional[datetime] = Query(None),
+    created_to: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditFinding)
+    if audit_id:
+        q = q.filter(AuditFinding.audit_id == audit_id)
+    if program_id:
+        # join via AuditModel
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id)
+        q = q.filter(AuditModel.program_id == program_id)
+    if severity:
+        try:
+            q = q.filter(AuditFinding.severity == FindingSeverity(severity))
+        except Exception:
+            pass
+    if status:
+        try:
+            q = q.filter(AuditFinding.status == FindingStatus(status))
+        except Exception:
+            pass
+    if department:
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id) if 'AuditModel' not in str(q) else q
+        q = q.filter(AuditModel.auditee_department == department)
+    if responsible_person_id:
+        q = q.filter(AuditFinding.responsible_person_id == responsible_person_id)
+    if has_nc is not None:
+        if has_nc:
+            q = q.filter(AuditFinding.related_nc_id.isnot(None))
+        else:
+            q = q.filter(AuditFinding.related_nc_id.is_(None))
+    if created_from:
+        q = q.filter(AuditFinding.created_at >= created_from)
+    if created_to:
+        q = q.filter(AuditFinding.created_at <= created_to)
+    if overdue is not None:
+        now = datetime.utcnow()
+        if overdue:
+            q = q.filter(
+                (AuditFinding.status.notin_([FindingStatus.VERIFIED, FindingStatus.CLOSED])) &
+                (AuditFinding.target_completion_date.isnot(None)) &
+                (AuditFinding.target_completion_date < now)
+            )
+        else:
+            q = q.filter(
+                (AuditFinding.status.in_([FindingStatus.VERIFIED, FindingStatus.CLOSED])) |
+                (AuditFinding.target_completion_date.is_(None)) |
+                (AuditFinding.target_completion_date >= now)
+            )
+
+    total = q.count()
+    items = (
+        q.order_by(AuditFinding.created_at.desc())
+         .offset((page - 1) * size)
+         .limit(size)
+         .all()
+    )
+    return FindingListResponse(items=items, total=total, page=page, size=size, pages=(total + size - 1) // size)
+
+
+@router.post("/findings/bulk-update-status", dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def bulk_update_findings_status(
+    payload: BulkFindingsStatusUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Update with ownership check per finding's audit
+    updated = 0
+    for fid in payload.finding_ids:
+        finding = db.query(AuditFinding).get(fid)
+        if not finding:
+            continue
+        audit = db.query(AuditModel).get(finding.audit_id)
+        if not audit:
+            continue
+        try:
+            check_finding_ownership(finding, current_user, db, "update")
+        except HTTPException:
+            continue
+        finding.status = FindingStatus(payload.status)
+        if finding.status in [FindingStatus.VERIFIED, FindingStatus.CLOSED] and not finding.closed_at:
+            finding.closed_at = datetime.utcnow()
+        updated += 1
+    db.commit()
+    return {"updated": updated}
+
+
+@router.post("/findings/bulk-assign", dependencies=[Depends(require_permission_dependency("audits:update"))])
+async def bulk_assign_findings(
+    payload: BulkFindingsAssignRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    assigned = 0
+    for fid in payload.finding_ids:
+        finding = db.query(AuditFinding).get(fid)
+        if not finding:
+            continue
+        audit = db.query(AuditModel).get(finding.audit_id)
+        if not audit:
+            continue
+        try:
+            check_finding_ownership(finding, current_user, db, "update")
+        except HTTPException:
+            continue
+        finding.responsible_person_id = payload.responsible_person_id
+        assigned += 1
+    db.commit()
+    return {"assigned": assigned}
+
+
+@router.get("/findings/analytics", response_model=FindingsAnalyticsResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def findings_analytics(
+    program_id: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditFinding)
+    if program_id:
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id).filter(AuditModel.program_id == program_id)
+    if department:
+        q = q.join(AuditModel, AuditModel.id == AuditFinding.audit_id).filter(AuditModel.auditee_department == department)
+    findings = q.all()
+    by_severity = {s.value: 0 for s in FindingSeverity}
+    by_status = {s.value: 0 for s in FindingStatus}
+    for f in findings:
+        try:
+            by_severity[f.severity.value if hasattr(f.severity, 'value') else str(f.severity)] += 1
+        except Exception:
+            pass
+        try:
+            by_status[f.status.value if hasattr(f.status, 'value') else str(f.status)] += 1
+        except Exception:
+            pass
+    now = datetime.utcnow()
+    open_findings = len([f for f in findings if f.status in [FindingStatus.OPEN, FindingStatus.IN_PROGRESS]])
+    overdue_findings = len([f for f in findings if f.status not in [FindingStatus.VERIFIED, FindingStatus.CLOSED] and f.target_completion_date and f.target_completion_date < now])
+    critical_findings = len([f for f in findings if f.severity == FindingSeverity.CRITICAL])
+    durations = []
+    for f in findings:
+        if f.closed_at and f.created_at:
+            try:
+                durations.append((f.closed_at - f.created_at).days)
+            except Exception:
+                pass
+    average_closure_days = (sum(durations) / len(durations)) if durations else None
+    return FindingsAnalyticsResponse(
+        by_severity=by_severity,
+        by_status=by_status,
+        open_findings=open_findings,
+        overdue_findings=overdue_findings,
+        critical_findings=critical_findings,
+        average_closure_days=average_closure_days,
+    )
 
 
 # Attachments
@@ -1090,6 +1357,55 @@ async def export_audits(
         return StreamingResponse(buf, media_type="application/pdf", headers=headers)
 
 
+@router.post("/reports/consolidated", dependencies=[Depends(require_permission_dependency("audits:export"))])
+async def export_consolidated_reports(
+    format: str = Query("pdf", pattern="^(pdf|xlsx)$"),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    program_id: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    auditor_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = db.query(AuditModel)
+    if date_from:
+        q = q.filter(AuditModel.created_at >= date_from)
+    if date_to:
+        q = q.filter(AuditModel.created_at <= date_to)
+    if program_id:
+        q = q.filter(AuditModel.program_id == program_id)
+    if department:
+        q = q.filter(AuditModel.auditee_department == department)
+    if auditor_id:
+        q = q.filter((AuditModel.auditor_id == auditor_id) | (AuditModel.lead_auditor_id == auditor_id))
+    if status:
+        q = q.filter(AuditModel.status == AuditStatus(status))
+    items = q.order_by(AuditModel.created_at.desc()).all()
+
+    if format == "xlsx":
+        wb = Workbook(); ws = wb.active; ws.title = "Consolidated Reports"
+        ws.append(["ID", "Title", "Type", "Status", "Start", "End", "Department", "Lead Auditor", "Auditor"]) 
+        for a in items:
+            ws.append([a.id, a.title, a.audit_type.value, a.status.value, str(a.start_date or ''), str(a.end_date or ''), a.auditee_department or '', a.lead_auditor_id or '', a.auditor_id or ''])
+        buf = BytesIO(); wb.save(buf); buf.seek(0)
+        headers = {"Content-Disposition": "attachment; filename=audits_consolidated.xlsx"}
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
+    else:
+        buf = BytesIO(); c = canvas.Canvas(buf, pagesize=A4)
+        x, y = 40, 800
+        c.setFont("Helvetica-Bold", 14); c.drawString(x, y, "Consolidated Audit Reports"); y -= 20; c.setFont("Helvetica", 10)
+        for a in items:
+            line = f"#{a.id} {a.title} | {a.audit_type.value} | {a.status.value} | Dept={a.auditee_department or ''}"
+            c.drawString(x, y, line)
+            y -= 14
+            if y < 60: c.showPage(); y = 800
+        c.showPage(); c.save(); buf.seek(0)
+        headers = {"Content-Disposition": "attachment; filename=audits_consolidated.pdf"}
+        return StreamingResponse(buf, media_type="application/pdf", headers=headers)
+
+
 # Single audit report export
 @router.get("/{audit_id:int}/report", dependencies=[Depends(require_permission_dependency("audits:export"))])
 async def export_audit_report(
@@ -1141,6 +1457,81 @@ async def export_audit_report(
         return StreamingResponse(buf, media_type="application/pdf", headers=headers)
 
 
+# Report approval and history
+@router.post("/{audit_id:int}/report/approve", dependencies=[Depends(require_permission_dependency("audits:approve"))])
+async def approve_audit_report(
+    audit_id: int,
+    payload: AuditReportApproveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    audit = db.query(AuditModel).get(audit_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Ownership check for approval
+    check_audit_ownership(audit, current_user, db, "update")
+
+    # Approval gating rules: all findings must be verified or closed
+    open_count = (
+        db.query(AuditFinding)
+        .filter(AuditFinding.audit_id == audit_id)
+        .filter(AuditFinding.status.notin_([FindingStatus.VERIFIED, FindingStatus.CLOSED]))
+        .count()
+    )
+    if open_count > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+            "error": "approval_blocked",
+            "message": f"Cannot approve report: {open_count} finding(s) are not closed or verified",
+            "open_findings": open_count
+        })
+
+    # Determine next version
+    last = (
+        db.query(AuditReportHistory)
+        .filter(AuditReportHistory.audit_id == audit_id)
+        .order_by(AuditReportHistory.version.desc())
+        .first()
+    )
+    next_version = 1 if not last else last.version + 1
+
+    rec = AuditReportHistory(
+        audit_id=audit_id,
+        version=next_version,
+        approved_by=current_user.id,
+        approved_at=datetime.utcnow(),
+        notes=payload.notes,
+        file_path=payload.file_path,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    try:
+        audit_event(db, current_user.id, "audit_report_approved", "audits", str(audit_id), {"version": next_version})
+    except Exception:
+        pass
+    return {"audit_id": audit_id, "version": next_version, "approved_by": current_user.id, "approved_at": rec.approved_at}
+
+
+@router.get("/{audit_id:int}/report/history", response_model=AuditReportHistoryResponse, dependencies=[Depends(require_permission_dependency("audits:view"))])
+async def get_audit_report_history(
+    audit_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    audit = db.query(AuditModel).get(audit_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Basic view access
+    check_audit_ownership(audit, current_user, db, "view")
+    items = (
+        db.query(AuditReportHistory)
+        .filter(AuditReportHistory.audit_id == audit_id)
+        .order_by(AuditReportHistory.version.desc())
+        .all()
+    )
+    return {"items": items}
 # Auditees
 @router.get("/{audit_id:int}/auditees", response_model=List[AuditeeResponse], dependencies=[Depends(require_permission_dependency("audits:view"))])
 async def list_auditees(audit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

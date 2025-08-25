@@ -200,10 +200,14 @@ class RiskAction(Base):
     due_date = Column(DateTime(timezone=True), nullable=True)
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Action log integration
+    action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     item = relationship("RiskRegisterItem", back_populates="actions")
+    action_log = relationship("ActionLog", foreign_keys=[action_log_id])
 
     def __repr__(self):
         return f"<RiskAction(id={self.id}, item_id={self.item_id}, title='{self.title}')>"
@@ -270,7 +274,7 @@ class FSMSRiskIntegration(Base):
     integrated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_item = relationship("RiskRegisterItem", overlaps="fsms_integrations,resource_allocations,communications", foreign_keys=[risk_register_item_id])
     food_safety_objective = relationship("FoodSafetyObjective", foreign_keys=[food_safety_objective_id])
     integrated_by_user = relationship("User", foreign_keys=[integrated_by])
 
@@ -314,7 +318,7 @@ class RiskResourceAllocation(Base):
     allocation_period = Column(String(100), nullable=True)
 
     # Relationships
-    risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_item = relationship("RiskRegisterItem", overlaps="fsms_integrations,resource_allocations,communications", foreign_keys=[risk_register_item_id])
     approver = relationship("User", foreign_keys=[allocation_approver_id])
 
     def __repr__(self):
@@ -337,7 +341,7 @@ class RiskCommunication(Base):
     delivery_confirmation = Column(Boolean, default=False)
 
     # Relationships
-    risk_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
+    risk_item = relationship("RiskRegisterItem", overlaps="fsms_integrations,resource_allocations,communications", foreign_keys=[risk_register_item_id])
     sent_by_user = relationship("User", foreign_keys=[sent_by])
 
     def __repr__(self):

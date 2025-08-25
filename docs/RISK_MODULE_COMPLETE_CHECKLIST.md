@@ -563,7 +563,8 @@ Transform the current basic risk register into a comprehensive, ISO 31000:2018 &
 - [ ] **Application Deployment**
   ```bash
   # Deploy backend and frontend
-  docker-compose -f docker-compose.prod.yml up -d
+  # Use your preferred deployment method
+  # (e.g., DigitalOcean App Platform, Heroku, etc.)
   ```
 
 - [ ] **Configuration Setup**
