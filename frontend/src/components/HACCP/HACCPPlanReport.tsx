@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import {
   Box,
   Card,
@@ -27,7 +31,12 @@ import {
   CheckCircle,
 } from '@mui/icons-material';
 
-const HACCPPlanReport: React.FC = () => {
+interface HACCPPlanReportProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const HACCPPlanReport: React.FC<HACCPPlanReportProps> = ({ isOpen, onClose }) => {
   const [reportData] = useState({
     product: {
       name: 'Chicken Breast Fillets',
@@ -119,7 +128,7 @@ const HACCPPlanReport: React.FC = () => {
     }
   };
 
-  return (
+  const content = (
     <Box sx={{ p: 3 }}>
       <Card>
         <CardHeader
@@ -286,6 +295,20 @@ const HACCPPlanReport: React.FC = () => {
       </Card>
     </Box>
   );
+  if (typeof isOpen === 'boolean') {
+    return (
+      <Dialog open={isOpen} onClose={onClose} maxWidth="lg" fullWidth>
+        <DialogTitle>HACCP Plan Report</DialogTitle>
+        <DialogContent dividers>
+          {content}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+  return content;
 };
 
 export default HACCPPlanReport;

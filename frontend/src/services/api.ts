@@ -775,6 +775,12 @@ export const haccpAPI = {
     const response: AxiosResponse = await api.post(`/haccp/plans/${planId}/approvals/${approvalId}/reject`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
     return response.data;
   },
+
+  // Convenience: fetch most recent NC for a CCP and batch
+  getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
+    const response: AxiosResponse = await api.get(`/nonconformance/recent`, { params: { ccp_id: ccpId, batch_number: batchNumber } });
+    return response.data;
+  },
 };
 
 // PRP API
