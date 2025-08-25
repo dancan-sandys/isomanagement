@@ -28,9 +28,15 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Tooltip,
+  IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
-import { Warning, Error, Info, ArrowBack } from '@mui/icons-material';
-import productionAPI, { suppliersAPI } from '../services/productionAPI';
+import { Warning, Error, Info, ArrowBack, Science, Edit } from '@mui/icons-material';
+import productionAPI, { suppliersAPI, ProcessParameterPayload } from '../services/productionAPI';
 import Autocomplete from '@mui/material/Autocomplete';
 
 const ProductionProcessDetail: React.FC = () => {
@@ -50,29 +56,89 @@ const ProductionProcessDetail: React.FC = () => {
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
 
-  useEffect(() => {
-    const load = async () => {
-      if (!id) return;
+  // Record Parameter state
+  const [parameterDialogOpen, setParameterDialogOpen] = useState(false);
+  const [newParameter, setNewParameter] = useState<ProcessParameterPayload>({
+    parameter_name: '',
+    parameter_value: 0,
+    unit: '°C',
+    target_value: undefined,
+    tolerance_min: undefined,
+    tolerance_max: undefined,
+    notes: '',
+  });
+
+  // Edit Process state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<{ operator_id?: number; status?: string; notes?: string }>({});
+
+  const loadDetails = async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const processId = parseInt(id, 10);
+      const res = await (await fetch(`/api/v1/production/processes/${processId}/details`)).json();
+      setProcessDetails(res);
       try {
-        setLoading(true);
-        setError(null);
-        const processId = parseInt(id, 10);
-        const res = await (await fetch(`/api/v1/production/processes/${processId}/details`)).json();
-        setProcessDetails(res);
-        try {
-          const audit = await productionAPI.getProcessAudit(processId, { limit: 100, offset: 0 });
-          setProcessAudit(audit);
-        } catch (e) {
-          setProcessAudit([]);
-        }
+        const audit = await productionAPI.getProcessAudit(processId, { limit: 100, offset: 0 });
+        setProcessAudit(audit);
       } catch (e) {
-        setError('Failed to load process details');
-      } finally {
-        setLoading(false);
+        setProcessAudit([]);
       }
-    };
-    load();
+    } catch (e) {
+      setError('Failed to load process details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDetails();
   }, [id]);
+
+  const handleRecordParameter = async () => {
+    try {
+      if (!processDetails?.id) return;
+      await productionAPI.recordParameter(processDetails.id, newParameter);
+      setParameterDialogOpen(false);
+      setNewParameter({
+        parameter_name: '',
+        parameter_value: 0,
+        unit: '°C',
+        target_value: undefined,
+        tolerance_min: undefined,
+        tolerance_max: undefined,
+        notes: '',
+      });
+      await loadDetails();
+    } catch (e) {
+      setError('Failed to record parameter');
+      console.error('Error recording parameter:', e);
+    }
+  };
+
+  const handleOpenEdit = () => {
+    if (!processDetails) return;
+    setEditForm({
+      operator_id: processDetails.operator_id,
+      status: processDetails.status,
+      notes: processDetails.notes || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      if (!processDetails?.id) return;
+      await productionAPI.updateProcess(processDetails.id, editForm);
+      setEditOpen(false);
+      await loadDetails();
+    } catch (e) {
+      setError('Failed to update process');
+      console.error('Error updating process:', e);
+    }
+  };
 
   const getAlertIcon = (level: string) => {
     switch (level) {
@@ -99,12 +165,24 @@ const ProductionProcessDetail: React.FC = () => {
           <Button startIcon={<ArrowBack />} onClick={() => navigate('/production')}>Back</Button>
           <Typography variant="h5">Process Details</Typography>
         </Stack>
-        {error && (
-          <Alert severity="error" onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Tooltip title="Record Parameter">
+            <IconButton size="small" onClick={() => setParameterDialogOpen(true)}>
+              <Science />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Edit">
+            <IconButton size="small" onClick={handleOpenEdit}>
+              <Edit />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Stack>
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Paper sx={{ width: '100%', mb: 2 }}>
         <Tabs value={detailsTab} onChange={(_, v) => setDetailsTab(v)} sx={{ px: 2 }}>
@@ -302,6 +380,107 @@ const ProductionProcessDetail: React.FC = () => {
           )}
         </Box>
       </Paper>
+
+      {/* Record Parameter Dialog */}
+      <Dialog open={parameterDialogOpen} onClose={() => setParameterDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Record Process Parameter</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Parameter Name"
+              value={newParameter.parameter_name}
+              onChange={(e) => setNewParameter({ ...newParameter, parameter_name: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Parameter Value"
+              type="number"
+              value={newParameter.parameter_value}
+              onChange={(e) => setNewParameter({ ...newParameter, parameter_value: parseFloat(e.target.value) })}
+              fullWidth
+            />
+            <TextField
+              label="Unit"
+              value={newParameter.unit}
+              onChange={(e) => setNewParameter({ ...newParameter, unit: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Target Value"
+              type="number"
+              value={newParameter.target_value || ''}
+              onChange={(e) => setNewParameter({ ...newParameter, target_value: e.target.value ? parseFloat(e.target.value) : undefined })}
+              fullWidth
+            />
+            <TextField
+              label="Tolerance Min"
+              type="number"
+              value={newParameter.tolerance_min || ''}
+              onChange={(e) => setNewParameter({ ...newParameter, tolerance_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+              fullWidth
+            />
+            <TextField
+              label="Tolerance Max"
+              type="number"
+              value={newParameter.tolerance_max || ''}
+              onChange={(e) => setNewParameter({ ...newParameter, tolerance_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+              fullWidth
+            />
+            <TextField
+              label="Notes"
+              multiline
+              rows={3}
+              value={newParameter.notes}
+              onChange={(e) => setNewParameter({ ...newParameter, notes: e.target.value })}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setParameterDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleRecordParameter} variant="contained">Record Parameter</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Process Dialog */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Process</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Operator ID"
+              type="number"
+              value={editForm.operator_id ?? ''}
+              onChange={(e) => setEditForm({ ...editForm, operator_id: e.target.value ? parseInt(e.target.value) : undefined })}
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                label="Status"
+                value={editForm.status || ''}
+                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as string })}
+              >
+                <MenuItem value="in_progress">In Progress</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+                <MenuItem value="diverted">Diverted</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Notes"
+              multiline
+              rows={3}
+              value={editForm.notes || ''}
+              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveEdit}>Save</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={mocOpen} onClose={() => setMocOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Request Change (MOC)</DialogTitle>

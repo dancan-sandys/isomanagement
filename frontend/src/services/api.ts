@@ -781,7 +781,11 @@ export const haccpAPI = {
     return response.data;
   },
 
-  // duplicate removed above
+  // Convenience alias retained for compatibility; delegate to HACCP endpoint
+  getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
+    const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/nonconformance/recent`, { params: { batch_number: batchNumber } });
+    return response.data ? { data: response.data } : { data: { found: false } } as any;
+  },
 };
 
 // PRP API
