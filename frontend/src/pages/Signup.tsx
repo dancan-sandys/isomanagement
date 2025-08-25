@@ -37,6 +37,7 @@ const Signup: React.FC = () => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ariaLiveMessage, setAriaLiveMessage] = useState<string>('');
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -119,19 +120,40 @@ const Signup: React.FC = () => {
         employee_id: formData.employeeId || undefined,
       };
 
-      // Unwrap to throw on rejected
+      // Unwrap to throw on rejected with structured payload
       await dispatch(signup(signupData)).unwrap();
       navigate('/login');
     } catch (err: any) {
-      const msg: string = typeof err === 'string' ? err : (err?.response?.data?.detail || 'Signup failed');
+      const payload = err as { message?: string; status?: number; errors?: Array<any>; details?: any };
+      const msg: string = payload?.message || 'Signup failed';
       setError(msg);
-      // Map common backend errors to field-level messages
+      setAriaLiveMessage(msg);
+      // Map common backend errors to field-level messages, including FastAPI validation errors
       const fieldErrors: { [key: string]: string } = {};
+      // Specific uniqueness and policy messages
       if (/Username already registered/i.test(msg)) fieldErrors.username = 'Username already registered';
       if (/Email already registered/i.test(msg)) fieldErrors.email = 'Email already registered';
       if (/Employee ID already registered/i.test(msg)) fieldErrors.employeeId = 'Employee ID already registered';
       if (/Password does not meet security requirements/i.test(msg)) {
         fieldErrors.password = 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character';
+      }
+      // FastAPI 422 validation errors payload
+      if (Array.isArray(payload?.errors)) {
+        payload.errors.forEach((e: any) => {
+          const loc = Array.isArray(e?.field) ? e.field : e?.field || e?.loc;
+          const message = e?.message || e?.msg || 'Invalid value';
+          const fieldName = Array.isArray(loc) ? (loc[loc.length - 1] as string) : (typeof loc === 'string' ? loc : '');
+          if (fieldName) {
+            fieldErrors[fieldName] = message;
+          }
+        });
+      }
+      // Some backends return details.detail as string
+      const detailMsg = payload?.details?.detail;
+      if (typeof detailMsg === 'string') {
+        if (/Username already registered/i.test(detailMsg)) fieldErrors.username = 'Username already registered';
+        if (/Email already registered/i.test(detailMsg)) fieldErrors.email = 'Email already registered';
+        if (/Employee ID already registered/i.test(detailMsg)) fieldErrors.employeeId = 'Employee ID already registered';
       }
       if (Object.keys(fieldErrors).length > 0) setErrors(prev => ({ ...prev, ...fieldErrors }));
     } finally {
@@ -183,10 +205,15 @@ const Signup: React.FC = () => {
           </Card>
 
           {error && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
+            <Alert severity="error" sx={{ width: '100%', mb: 2 }} role="alert" aria-live="assertive">
               {error}
             </Alert>
           )}
+
+          {/* ARIA live region for screen readers */}
+          <div aria-live="polite" style={{ position: 'absolute', left: -10000 }}>
+            {ariaLiveMessage}
+          </div>
 
           <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
             <Grid container spacing={2}>

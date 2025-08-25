@@ -45,6 +45,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  errorInfo?: { message: string; status?: number; code?: string; details?: any } | null;
 }
 
 const initialState: AuthState = {
@@ -54,6 +55,7 @@ const initialState: AuthState = {
   isAuthenticated: !!localStorage.getItem('access_token') && isTokenValid(localStorage.getItem('access_token') || ''),
   isLoading: false,
   error: null,
+  errorInfo: null,
 };
 
 // Helper function to check if user has specific role
@@ -81,7 +83,15 @@ export const login = createAsyncThunk(
       const response = await authAPI.login({ username, password });
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Login failed');
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      const payload = {
+        message: (typeof detail === 'string' && detail) || 'Login failed',
+        status,
+        code: error?.code,
+        details: error?.response?.data,
+      };
+      return rejectWithValue(payload);
     }
   }
 );
@@ -102,7 +112,16 @@ export const signup = createAsyncThunk(
       const response = await authAPI.signup(signupData);
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Signup failed');
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      const payload = {
+        message: (data?.detail as string) || 'Signup failed',
+        status,
+        code: error?.code,
+        details: data,
+        errors: data?.errors, // FastAPI validation errors
+      };
+      return rejectWithValue(payload);
     }
   }
 );
@@ -140,6 +159,7 @@ const authSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+      state.errorInfo = null;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
@@ -151,6 +171,7 @@ const authSlice = createSlice({
       .addCase(login.pending, (state) => {
         state.isLoading = true;
         state.error = null;
+        state.errorInfo = null;
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
@@ -159,6 +180,7 @@ const authSlice = createSlice({
         state.token = action.payload.data.access_token;
         state.refreshToken = action.payload.data.refresh_token;
         state.error = null;
+        state.errorInfo = null;
         
         // Store tokens in localStorage
         localStorage.setItem('access_token', action.payload.data.access_token);
@@ -166,24 +188,30 @@ const authSlice = createSlice({
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = typeof action.payload === 'string' ? action.payload : 'Login failed';
+        const payload: any = action.payload;
+        state.error = (payload && payload.message) || (typeof action.payload === 'string' ? (action.payload as string) : 'Login failed');
+        state.errorInfo = payload || { message: state.error };
       })
       
       // Signup
       .addCase(signup.pending, (state) => {
         state.isLoading = true;
         state.error = null;
+        state.errorInfo = null;
       })
       .addCase(signup.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isAuthenticated = false; // Signup doesn't automatically log in
         state.user = action.payload.data;
         state.error = null;
+        state.errorInfo = null;
         // Don't set tokens - user needs to login after signup
       })
       .addCase(signup.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = typeof action.payload === 'string' ? action.payload : 'Signup failed';
+        const payload: any = action.payload;
+        state.error = (payload && payload.message) || (typeof action.payload === 'string' ? (action.payload as string) : 'Signup failed');
+        state.errorInfo = payload || { message: state.error };
       })
       
       // Logout
