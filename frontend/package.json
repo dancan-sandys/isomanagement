@@ -15,10 +15,6 @@
     "@testing-library/jest-dom": "^6.7.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/jest": "^27.5.2",
-    "@types/node": "^16.18.68",
-    "@types/react": "^18.2.42",
-    "@types/react-dom": "^18.2.17",
     "@zxing/library": "^0.21.3",
     "axios": "^1.6.2",
     "chart.js": "^4.5.0",
@@ -33,6 +29,10 @@
     "react-intersection-observer": "^9.16.0",
     "react-redux": "^8.1.3",
     "react-router-dom": "^6.20.1",
+<<<<<<< HEAD
+=======
+    "react-scripts": "^5.0.1",
+>>>>>>> 3f2f4252020ea77a04ba76ac11fde2df918e2b4e
     "reactflow": "^11.11.4",
     "recharts": "^2.15.4",
     "web-vitals": "^2.1.4",
@@ -76,6 +76,10 @@
     ]
   },
   "devDependencies": {
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.68",
+    "@types/react": "^18.2.42",
+    "@types/react-dom": "^18.2.17",
     "axios-mock-adapter": "^2.1.0",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^9.1.0",
