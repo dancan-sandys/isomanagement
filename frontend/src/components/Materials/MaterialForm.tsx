@@ -190,7 +190,7 @@ const MaterialForm: React.FC<MaterialFormProps> = ({
         if (mode === 'create') {
           result = await dispatch(createMaterial(materialData)).unwrap();
         } else if (mode === 'edit' && materialId) {
-          result = await dispatch(updateMaterial({ id: materialId, data: materialData as MaterialUpdate })).unwrap();
+          result = await dispatch(updateMaterial({ materialId, materialData: materialData as MaterialUpdate })).unwrap();
         }
 
         setNotification({
@@ -1003,6 +1003,10 @@ const MaterialForm: React.FC<MaterialFormProps> = ({
   };
 
   const canProceedToNext = () => {
+    // Ensure Next button is always active during material creation flow
+    if (mode === 'create') {
+      return true;
+    }
     switch (activeStep) {
       case 0:
         return formik.values.material_code && 

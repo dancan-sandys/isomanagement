@@ -938,11 +938,10 @@ const HACCPReports: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* HACCP Plan Report Dialog */}
-      <HACCPPlanReport
-        isOpen={planReportDialogOpen}
-        onClose={() => setPlanReportDialogOpen(false)}
-      />
+      {/* HACCP Plan Report */}
+      {planReportDialogOpen && (
+        <HACCPPlanReport />
+      )}
 
       {/* Quick Actions */}
       <Box sx={{ position: 'fixed', bottom: 16, right: 16 }}>

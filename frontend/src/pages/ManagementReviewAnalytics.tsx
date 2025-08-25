@@ -385,9 +385,9 @@ const ManagementReviewAnalytics: React.FC = () => {
                       </Stack>
                       <LinearProgress 
                         variant="determinate" 
-                        value={rate as number} 
+                        value={(rate as number)} 
                         sx={{ mt: 0.5 }}
-                        color={rate >= 90 ? 'success' : rate >= 75 ? 'warning' : 'error'}
+                        color={(Number(rate) >= 90 ? 'success' : Number(rate) >= 75 ? 'warning' : 'error') as any}
                       />
                     </Box>
                   ))}
@@ -409,9 +409,9 @@ const ManagementReviewAnalytics: React.FC = () => {
                       </Stack>
                       <LinearProgress 
                         variant="determinate" 
-                        value={rate as number} 
+                        value={(rate as number)} 
                         sx={{ mt: 0.5 }}
-                        color={rate >= 90 ? 'success' : rate >= 75 ? 'warning' : 'error'}
+                        color={(Number(rate) >= 90 ? 'success' : Number(rate) >= 75 ? 'warning' : 'error') as any}
                       />
                     </Box>
                   ))}
