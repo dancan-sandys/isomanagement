@@ -67,6 +67,15 @@ class ActionsLogService:
         self.db.commit()
         self.db.refresh(action)
         return action
+
+    def delete_action(self, action_id: int) -> bool:
+        """Delete an action log entry"""
+        action = self.get_action(action_id)
+        if not action:
+            return False
+        self.db.delete(action)
+        self.db.commit()
+        return True
     
     def list_actions(
         self,
@@ -75,6 +84,7 @@ class ActionsLogService:
         source: Optional[ActionSource] = None,
         assigned_to: Optional[int] = None,
         department_id: Optional[int] = None,
+        risk_id: Optional[int] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[ActionLog]:
@@ -91,6 +101,15 @@ class ActionsLogService:
             query = query.filter(ActionLog.assigned_to == assigned_to)
         if department_id:
             query = query.filter(ActionLog.department_id == department_id)
+        if risk_id:
+            # Direct linkage via risk_id or tagged via tags.risk_item_id
+            query = query.filter(
+                or_(
+                    ActionLog.risk_id == risk_id,
+                    # For SQLite/JSON, a simple LIKE fallback if JSON querying is unavailable
+                    ActionLog.tags.like(f'%"risk_item_id": {risk_id}%')
+                )
+            )
         
         return query.order_by(desc(ActionLog.created_at)).offset(offset).limit(limit).all()
     

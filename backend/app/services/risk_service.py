@@ -159,17 +159,7 @@ class RiskService:
         item = self.db.query(RiskRegisterItem).filter(RiskRegisterItem.id == item_id).first()
         if not item:
             raise ValueError("Risk item not found")
-        action = RiskAction(
-            item_id=item_id,
-            title=title,
-            description=description,
-            assigned_to=assigned_to,
-            due_date=due_date,
-        )
-        self.db.add(action)
-        self.db.flush()  # Get the ID without committing
-        
-        # Create corresponding entry in actions log
+        # Create corresponding entry in actions log (single source of truth)
         actions_log_service = ActionsLogService(self.db)
         
         # Determine priority based on risk severity
@@ -187,7 +177,8 @@ class RiskService:
             "title": title,
             "description": description or "",
             "action_source": ActionSource.RISK_ASSESSMENT.value,
-            "source_id": action.id,
+            "source_id": item_id,
+            "risk_id": item_id,
             "priority": mapped_priority,
             "status": "pending",
             "assigned_to": assigned_to,
@@ -201,12 +192,18 @@ class RiskService:
                 "risk_severity": str(getattr(item, 'severity', ''))
             }
         }
-        
         action_log = actions_log_service.create_action(action_log_data)
-        
-        # Link the action log back to the risk action
-        action.action_log_id = action_log.id
-        
+
+        # Maintain minimal RiskAction record for backward compatibility and UI expectations
+        action = RiskAction(
+            item_id=item_id,
+            title=title,
+            description=description,
+            assigned_to=assigned_to,
+            due_date=due_date,
+            action_log_id=action_log.id,
+        )
+        self.db.add(action)
         self.db.commit()
         self.db.refresh(action)
         return action
@@ -234,6 +231,7 @@ class RiskService:
         item = self.db.query(RiskRegisterItem).filter(RiskRegisterItem.id == item_id).first()
         if not item:
             raise ValueError("Risk item not found")
+        # Prefer showing from RiskAction for now (linked to ActionLog). In future, could fetch directly from ActionLog by risk_id.
         return self.db.query(RiskAction).filter(RiskAction.item_id == item_id).order_by(desc(RiskAction.created_at)).all()
 
     def update_action(self, action_id: int, data: Dict[str, Any]) -> RiskAction:

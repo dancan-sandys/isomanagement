@@ -86,6 +86,8 @@ class ActionLog(Base):
     description = Column(Text, nullable=False)
     action_source = Column(String(50), nullable=False, index=True)
     source_id = Column(Integer, nullable=True, index=True)  # ID of the source record
+    # Direct linkage to a Risk item so risk module can natively use actions log
+    risk_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True, index=True)
     status = Column(String(20), default=ActionStatus.PENDING, index=True)
     priority = Column(String(20), default=ActionPriority.MEDIUM, index=True)
     
