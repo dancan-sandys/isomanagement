@@ -489,6 +489,8 @@ export const getStatusChipProps = (
     | 'failed'
     | 'pending_approval'
     | 'blacklisted'
+    | 'in_spec'
+    | 'out_of_spec'
 ) => {
   const statusConfig = {
     compliant: {
@@ -590,6 +592,20 @@ export const getStatusChipProps = (
       iconColor: '#059669',
     },
     failed: {
+      color: 'error' as const,
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
+      textColor: '#991B1B',
+      iconColor: '#DC2626',
+    },
+    in_spec: {
+      color: 'success' as const,
+      backgroundColor: '#F0FDF4',
+      borderColor: '#BBF7D0',
+      textColor: '#166534',
+      iconColor: '#059669',
+    },
+    out_of_spec: {
       color: 'error' as const,
       backgroundColor: '#FEF2F2',
       borderColor: '#FECACA',

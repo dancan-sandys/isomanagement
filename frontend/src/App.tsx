@@ -62,6 +62,7 @@ import AdvancedReporting from './pages/AdvancedReporting';
 import AdvancedSecurity from './pages/AdvancedSecurity';
 import HiddenDemoTools from './pages/HiddenDemoTools';
 import ProductionPage from './pages/Production';
+import ProductionProcessDetail from './pages/ProductionProcessDetail';
 import Analytics from './pages/Analytics';
 import ActionsLog from "./pages/ActionsLog";
 
@@ -101,6 +102,7 @@ function App() {
                       <Route path="/objectives/dashboard" element={<ObjectivesPage />} />
                       <Route path="/objectives/progress" element={<ObjectivesPage />} />
                       <Route path="/production" element={<ProductionPage />} />
+                      <Route path="/production/processes/:id" element={<ProductionProcessDetail />} />
                       <Route path="/production/monitoring" element={<ProductionPage />} />
                       <Route path="/production/yield" element={<ProductionPage />} />
                       

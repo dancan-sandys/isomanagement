@@ -717,6 +717,10 @@ export const haccpAPI = {
 
   // Verification Logs
   createVerificationLog: async (ccpId: number, logData: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/verification-logs`, logData);
+    return response.data;
+  },
+
   getVerificationLogs: async (ccpId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/verification-logs`);
     return response.data;
@@ -769,6 +773,12 @@ export const haccpAPI = {
   rejectPlanStep: async (planId: number, approvalId: number, comments?: string) => {
     const form = new FormData(); if (comments) form.append('comments', comments);
     const response: AxiosResponse = await api.post(`/haccp/plans/${planId}/approvals/${approvalId}/reject`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return response.data;
+  },
+
+  // Convenience: fetch most recent NC for a CCP and batch
+  getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
+    const response: AxiosResponse = await api.get(`/nonconformance/recent`, { params: { ccp_id: ccpId, batch_number: batchNumber } });
     return response.data;
   },
 };
