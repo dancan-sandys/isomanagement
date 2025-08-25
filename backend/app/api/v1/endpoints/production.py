@@ -21,7 +21,11 @@ from app.schemas.production import (
     YieldAnalysisReportCreate, YieldAnalysisReportResponse, YieldDefectCategoryResponse,
     ProcessMonitoringAlertResponse, ProcessMonitoringAlertUpdate,
     ProcessMonitoringDashboardCreate, ProcessMonitoringDashboardResponse,
-    ProcessMonitoringAnalytics, ControlChartData
+    ProcessMonitoringAnalytics, ControlChartData,
+    # FSM Schemas
+    ProcessCreateWithStages, ProcessStartRequest, ProcessStageCompletionRequest,
+    ProcessSummaryResponse, StageMonitoringRequirementCreate, StageMonitoringRequirementResponse,
+    StageMonitoringLogCreate, StageMonitoringLogResponse
 )
 from app.schemas.production import ProcessSpecBindRequest, ReleaseCheckResponse, ReleaseRequest, ReleaseResponse
 from app.schemas.production import MaterialConsumptionCreate
@@ -1291,4 +1295,572 @@ def get_real_time_monitoring_data(
             "control_charts_out_of_control": sum(1 for cs in chart_status if cs["is_out_of_control"])
         }
     }
+
+
+# =================== FSM (Finite State Machine) Endpoints ===================
+
+@router.post("/processes/fsm", response_model=ProcessResponse)
+def create_process_with_stages(
+    payload: ProcessCreateWithStages, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Create a new production process with stages for FSM management"""
+    service = ProductionService(db)
+    try:
+        from app.models.production import ProductProcessType
+        
+        # Convert stages data
+        stages_data = [stage.model_dump() for stage in payload.stages]
+        
+        # Create process with stages
+        process = service.create_process_with_stages(
+            batch_id=payload.batch_id,
+            process_type=ProductProcessType(payload.process_type),
+            operator_id=payload.operator_id,
+            spec=payload.spec,
+            stages_data=stages_data,
+            notes=payload.notes
+        )
+        
+        # Return process with stages
+        process_dict = {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value,
+            "operator_id": process.operator_id,
+            "status": process.status.value,
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "spec": process.spec,
+            "notes": process.notes,
+            "created_at": process.created_at,
+            "updated_at": process.updated_at,
+            "stages": [
+                {
+                    "id": stage.id,
+                    "process_id": stage.process_id,
+                    "stage_name": stage.stage_name,
+                    "stage_description": stage.stage_description,
+                    "sequence_order": stage.sequence_order,
+                    "status": stage.status.value,
+                    "is_critical_control_point": stage.is_critical_control_point,
+                    "is_operational_prp": stage.is_operational_prp,
+                    "planned_start_time": stage.planned_start_time,
+                    "actual_start_time": stage.actual_start_time,
+                    "planned_end_time": stage.planned_end_time,
+                    "actual_end_time": stage.actual_end_time,
+                    "duration_minutes": stage.duration_minutes,
+                    "completion_criteria": stage.completion_criteria,
+                    "auto_advance": stage.auto_advance,
+                    "requires_approval": stage.requires_approval,
+                    "assigned_operator_id": stage.assigned_operator_id,
+                    "completed_by_id": stage.completed_by_id,
+                    "approved_by_id": stage.approved_by_id,
+                    "stage_notes": stage.stage_notes,
+                    "deviations_recorded": stage.deviations_recorded,
+                    "corrective_actions": stage.corrective_actions,
+                    "created_at": stage.created_at,
+                    "updated_at": stage.updated_at
+                } for stage in process.stages
+            ],
+            "current_stage_id": next((s.id for s in process.stages if s.status.value == "in_progress"), None)
+        }
+        
+        return ProcessResponse(**process_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/start", response_model=ProcessResponse)
+def start_process(
+    process_id: int, 
+    payload: ProcessStartRequest,
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:update"))
+):
+    """Start a process and activate the first stage"""
+    service = ProductionService(db)
+    try:
+        process = service.start_process(
+            process_id=process_id,
+            operator_id=payload.operator_id,
+            start_notes=payload.start_notes
+        )
+        
+        # Convert to response format
+        process_dict = {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value,
+            "operator_id": process.operator_id,
+            "status": process.status.value,
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "spec": process.spec,
+            "notes": process.notes,
+            "created_at": process.created_at,
+            "updated_at": process.updated_at,
+            "stages": [
+                {
+                    "id": stage.id,
+                    "process_id": stage.process_id,
+                    "stage_name": stage.stage_name,
+                    "stage_description": stage.stage_description,
+                    "sequence_order": stage.sequence_order,
+                    "status": stage.status.value,
+                    "is_critical_control_point": stage.is_critical_control_point,
+                    "is_operational_prp": stage.is_operational_prp,
+                    "planned_start_time": stage.planned_start_time,
+                    "actual_start_time": stage.actual_start_time,
+                    "planned_end_time": stage.planned_end_time,
+                    "actual_end_time": stage.actual_end_time,
+                    "duration_minutes": stage.duration_minutes,
+                    "completion_criteria": stage.completion_criteria,
+                    "auto_advance": stage.auto_advance,
+                    "requires_approval": stage.requires_approval,
+                    "assigned_operator_id": stage.assigned_operator_id,
+                    "completed_by_id": stage.completed_by_id,
+                    "approved_by_id": stage.approved_by_id,
+                    "stage_notes": stage.stage_notes,
+                    "deviations_recorded": stage.deviations_recorded,
+                    "corrective_actions": stage.corrective_actions,
+                    "created_at": stage.created_at,
+                    "updated_at": stage.updated_at
+                } for stage in process.stages
+            ],
+            "current_stage_id": next((s.id for s in process.stages if s.status.value == "in_progress"), None)
+        }
+        
+        return ProcessResponse(**process_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/stages/{stage_id}/complete")
+def complete_stage_and_transition(
+    process_id: int, 
+    stage_id: int,
+    payload: ProcessStageCompletionRequest,
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:update"))
+):
+    """Complete current stage and transition to next stage"""
+    service = ProductionService(db)
+    try:
+        # Prepare transition data
+        transition_data = {
+            "deviations_recorded": payload.deviations_recorded,
+            "corrective_actions": payload.corrective_actions,
+            "transition_notes": payload.completion_notes,
+            "assign_operator_to_next": True,
+            "transition_type": "normal",
+            "prerequisites_met": True
+        }
+        
+        # Get current user ID (assuming it's available from the dependency)
+        user_id = getattr(current_user, 'id', 1)  # Fallback to 1 if not available
+        
+        result = service.transition_to_next_stage(
+            process_id=process_id,
+            current_stage_id=stage_id,
+            user_id=user_id,
+            transition_data=transition_data
+        )
+        
+        return {
+            "success": True,
+            "message": "Stage completed successfully" if not result["process_completed"] else "Process completed successfully",
+            "completed_stage_id": result["completed_stage"].id,
+            "next_stage_id": result["next_stage"].id if result["next_stage"] else None,
+            "process_completed": result["process_completed"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/fsm", response_model=ProcessResponse)
+def get_process_with_stages(
+    process_id: int, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:read"))
+):
+    """Get a process with all its stages and monitoring data"""
+    service = ProductionService(db)
+    try:
+        process = service.get_process_with_stages(process_id)
+        if not process:
+            raise HTTPException(status_code=404, detail="Process not found")
+        
+        # Convert to response format
+        process_dict = {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value,
+            "operator_id": process.operator_id,
+            "status": process.status.value,
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "spec": process.spec,
+            "notes": process.notes,
+            "created_at": process.created_at,
+            "updated_at": process.updated_at,
+            "stages": [
+                {
+                    "id": stage.id,
+                    "process_id": stage.process_id,
+                    "stage_name": stage.stage_name,
+                    "stage_description": stage.stage_description,
+                    "sequence_order": stage.sequence_order,
+                    "status": stage.status.value,
+                    "is_critical_control_point": stage.is_critical_control_point,
+                    "is_operational_prp": stage.is_operational_prp,
+                    "planned_start_time": stage.planned_start_time,
+                    "actual_start_time": stage.actual_start_time,
+                    "planned_end_time": stage.planned_end_time,
+                    "actual_end_time": stage.actual_end_time,
+                    "duration_minutes": stage.duration_minutes,
+                    "completion_criteria": stage.completion_criteria,
+                    "auto_advance": stage.auto_advance,
+                    "requires_approval": stage.requires_approval,
+                    "assigned_operator_id": stage.assigned_operator_id,
+                    "completed_by_id": stage.completed_by_id,
+                    "approved_by_id": stage.approved_by_id,
+                    "stage_notes": stage.stage_notes,
+                    "deviations_recorded": stage.deviations_recorded,
+                    "corrective_actions": stage.corrective_actions,
+                    "created_at": stage.created_at,
+                    "updated_at": stage.updated_at
+                } for stage in process.stages
+            ],
+            "current_stage_id": next((s.id for s in process.stages if s.status.value == "in_progress"), None)
+        }
+        
+        return ProcessResponse(**process_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/summary", response_model=ProcessSummaryResponse)
+def get_process_summary(
+    process_id: int, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:read"))
+):
+    """Get a summary of the process including progress and quality metrics"""
+    service = ProductionService(db)
+    try:
+        summary = service.get_process_summary(process_id)
+        return ProcessSummaryResponse(**summary)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stages/{stage_id}/monitoring-requirements", response_model=StageMonitoringRequirementResponse)
+def add_stage_monitoring_requirement(
+    stage_id: int, 
+    payload: StageMonitoringRequirementCreate,
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Add a monitoring requirement to a stage"""
+    service = ProductionService(db)
+    try:
+        # Get current user ID
+        user_id = getattr(current_user, 'id', 1)
+        
+        requirement = service.add_stage_monitoring_requirement(
+            stage_id=stage_id,
+            requirement_data=payload.model_dump(),
+            created_by=user_id
+        )
+        
+        # Convert to response format
+        requirement_dict = {
+            "id": requirement.id,
+            "stage_id": requirement.stage_id,
+            "requirement_name": requirement.requirement_name,
+            "requirement_type": requirement.requirement_type.value,
+            "description": requirement.description,
+            "is_critical_limit": requirement.is_critical_limit,
+            "is_operational_limit": requirement.is_operational_limit,
+            "target_value": requirement.target_value,
+            "tolerance_min": requirement.tolerance_min,
+            "tolerance_max": requirement.tolerance_max,
+            "unit_of_measure": requirement.unit_of_measure,
+            "monitoring_frequency": requirement.monitoring_frequency,
+            "is_mandatory": requirement.is_mandatory,
+            "equipment_required": requirement.equipment_required,
+            "measurement_method": requirement.measurement_method,
+            "calibration_required": requirement.calibration_required,
+            "record_keeping_required": requirement.record_keeping_required,
+            "verification_required": requirement.verification_required,
+            "regulatory_reference": requirement.regulatory_reference,
+            "created_at": requirement.created_at,
+            "created_by": requirement.created_by
+        }
+        
+        return StageMonitoringRequirementResponse(**requirement_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stages/{stage_id}/monitoring-logs", response_model=StageMonitoringLogResponse)
+def log_stage_monitoring(
+    stage_id: int, 
+    payload: StageMonitoringLogCreate,
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:update"))
+):
+    """Log monitoring data for a stage"""
+    service = ProductionService(db)
+    try:
+        # Get current user ID
+        user_id = getattr(current_user, 'id', 1)
+        
+        log = service.log_stage_monitoring(
+            stage_id=stage_id,
+            monitoring_data=payload.model_dump(),
+            recorded_by=user_id
+        )
+        
+        # Convert to response format
+        log_dict = {
+            "id": log.id,
+            "stage_id": log.stage_id,
+            "requirement_id": log.requirement_id,
+            "monitoring_timestamp": log.monitoring_timestamp,
+            "measured_value": log.measured_value,
+            "measured_text": log.measured_text,
+            "is_within_limits": log.is_within_limits,
+            "pass_fail_status": log.pass_fail_status,
+            "deviation_severity": log.deviation_severity,
+            "recorded_by": log.recorded_by,
+            "verified_by": log.verified_by,
+            "verification_timestamp": log.verification_timestamp,
+            "equipment_used": log.equipment_used,
+            "measurement_method": log.measurement_method,
+            "equipment_calibration_date": log.equipment_calibration_date,
+            "notes": log.notes,
+            "corrective_action_taken": log.corrective_action_taken,
+            "follow_up_required": log.follow_up_required,
+            "regulatory_requirement_met": log.regulatory_requirement_met,
+            "iso_clause_reference": log.iso_clause_reference,
+            "created_at": log.created_at,
+            "updated_at": log.updated_at
+        }
+        
+        return StageMonitoringLogResponse(**log_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/stages/{stage_id}/monitoring-logs", response_model=List[StageMonitoringLogResponse])
+def get_stage_monitoring_logs(
+    stage_id: int, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:read"))
+):
+    """Get all monitoring logs for a stage"""
+    service = ProductionService(db)
+    try:
+        logs = service.get_stage_monitoring_logs(stage_id)
+        
+        # Convert to response format
+        logs_dict = []
+        for log in logs:
+            log_dict = {
+                "id": log.id,
+                "stage_id": log.stage_id,
+                "requirement_id": log.requirement_id,
+                "monitoring_timestamp": log.monitoring_timestamp,
+                "measured_value": log.measured_value,
+                "measured_text": log.measured_text,
+                "is_within_limits": log.is_within_limits,
+                "pass_fail_status": log.pass_fail_status,
+                "deviation_severity": log.deviation_severity,
+                "recorded_by": log.recorded_by,
+                "verified_by": log.verified_by,
+                "verification_timestamp": log.verification_timestamp,
+                "equipment_used": log.equipment_used,
+                "measurement_method": log.measurement_method,
+                "equipment_calibration_date": log.equipment_calibration_date,
+                "notes": log.notes,
+                "corrective_action_taken": log.corrective_action_taken,
+                "follow_up_required": log.follow_up_required,
+                "regulatory_requirement_met": log.regulatory_requirement_met,
+                "iso_clause_reference": log.iso_clause_reference,
+                "created_at": log.created_at,
+                "updated_at": log.updated_at
+            }
+            logs_dict.append(log_dict)
+        
+        return [StageMonitoringLogResponse(**log_dict) for log_dict in logs_dict]
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/templates/stages/{product_type}")
+def get_iso_stage_template(
+    product_type: str,
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:read"))
+):
+    """Get ISO 22000:2018 compliant stage template for a product type"""
+    try:
+        from app.utils.iso_stage_templates import ISO22000StageTemplates
+        
+        # Validate product type
+        valid_types = ["fresh_milk", "pasteurized_milk", "yoghurt", "cheese", "mala", "fermented_products"]
+        if product_type not in valid_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid product type. Valid types: {', '.join(valid_types)}"
+            )
+        
+        # Get stage template
+        stages = ISO22000StageTemplates.get_template_by_product_type(product_type)
+        
+        # Add monitoring requirements for each stage
+        for stage in stages:
+            stage["monitoring_requirements"] = ISO22000StageTemplates.get_monitoring_requirements_for_stage(
+                stage["stage_name"], 
+                stage.get("is_critical_control_point", False)
+            )
+        
+        # Validate ISO compliance
+        validation = ISO22000StageTemplates.validate_iso_compliance(stages)
+        
+        return {
+            "product_type": product_type,
+            "stages": stages,
+            "iso_compliance": validation,
+            "total_stages": len(stages),
+            "ccps_count": sum(1 for s in stages if s.get("is_critical_control_point", False)),
+            "oprps_count": sum(1 for s in stages if s.get("is_operational_prp", False)),
+            "estimated_total_duration_hours": round(sum(s.get("duration_minutes", 0) for s in stages) / 60, 2)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/fsm/from-template")
+def create_process_from_iso_template(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db), 
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Create a new process using an ISO 22000:2018 compliant template"""
+    try:
+        from app.utils.iso_stage_templates import ISO22000StageTemplates
+        from app.models.production import ProductProcessType
+        
+        batch_id = payload.get("batch_id")
+        product_type = payload.get("process_type")
+        operator_id = payload.get("operator_id")
+        
+        if not batch_id or not product_type:
+            raise HTTPException(status_code=400, detail="batch_id and process_type are required")
+        
+        # Get template stages
+        template_stages = ISO22000StageTemplates.get_template_by_product_type(product_type)
+        if not template_stages:
+            raise HTTPException(status_code=400, detail=f"No template available for product type: {product_type}")
+        
+        # Validate ISO compliance
+        validation = ISO22000StageTemplates.validate_iso_compliance(template_stages)
+        if not validation["is_compliant"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Template validation failed: {'; '.join(validation['errors'])}"
+            )
+        
+        # Create process with template stages
+        service = ProductionService(db)
+        process = service.create_process_with_stages(
+            batch_id=batch_id,
+            process_type=ProductProcessType(product_type),
+            operator_id=operator_id,
+            spec=payload.get("spec", {}),
+            stages_data=template_stages,
+            notes=f"Created from ISO 22000:2018 template for {product_type}. Template validation: {validation['is_compliant']}"
+        )
+        
+        # Add monitoring requirements for each stage
+        for stage in process.stages:
+            stage_name = stage.stage_name
+            is_ccp = stage.is_critical_control_point
+            
+            monitoring_requirements = ISO22000StageTemplates.get_monitoring_requirements_for_stage(stage_name, is_ccp)
+            
+            for req_data in monitoring_requirements:
+                service.add_stage_monitoring_requirement(
+                    stage_id=stage.id,
+                    requirement_data=req_data,
+                    created_by=getattr(current_user, 'id', 1)
+                )
+        
+        # Convert to response format
+        process_dict = {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value,
+            "operator_id": process.operator_id,
+            "status": process.status.value,
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "spec": process.spec,
+            "notes": process.notes,
+            "created_at": process.created_at,
+            "updated_at": process.updated_at,
+            "stages": [
+                {
+                    "id": stage.id,
+                    "process_id": stage.process_id,
+                    "stage_name": stage.stage_name,
+                    "stage_description": stage.stage_description,
+                    "sequence_order": stage.sequence_order,
+                    "status": stage.status.value,
+                    "is_critical_control_point": stage.is_critical_control_point,
+                    "is_operational_prp": stage.is_operational_prp,
+                    "planned_start_time": stage.planned_start_time,
+                    "actual_start_time": stage.actual_start_time,
+                    "planned_end_time": stage.planned_end_time,
+                    "actual_end_time": stage.actual_end_time,
+                    "duration_minutes": stage.duration_minutes,
+                    "completion_criteria": stage.completion_criteria,
+                    "auto_advance": stage.auto_advance,
+                    "requires_approval": stage.requires_approval,
+                    "assigned_operator_id": stage.assigned_operator_id,
+                    "completed_by_id": stage.completed_by_id,
+                    "approved_by_id": stage.approved_by_id,
+                    "stage_notes": stage.stage_notes,
+                    "deviations_recorded": stage.deviations_recorded,
+                    "corrective_actions": stage.corrective_actions,
+                    "created_at": stage.created_at,
+                    "updated_at": stage.updated_at
+                } for stage in process.stages
+            ],
+            "current_stage_id": None,  # Process is in DRAFT status
+            "template_info": {
+                "template_used": product_type,
+                "iso_compliant": validation["is_compliant"],
+                "ccps_count": sum(1 for s in process.stages if s.is_critical_control_point),
+                "oprps_count": sum(1 for s in process.stages if s.is_operational_prp)
+            }
+        }
+        
+        return ProcessResponse(**process_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 

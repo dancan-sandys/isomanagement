@@ -15,9 +15,32 @@ class ProductProcessType(str, enum.Enum):
 
 
 class ProcessStatus(str, enum.Enum):
-    IN_PROGRESS = "in_progress"
+    DRAFT = "draft"  # Process created but not started
+    IN_PROGRESS = "in_progress"  # Process is running through stages
     DIVERTED = "diverted"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"  # Process cancelled before completion
+
+
+class StageStatus(str, enum.Enum):
+    PENDING = "pending"  # Stage not yet started
+    IN_PROGRESS = "in_progress"  # Stage currently active
+    COMPLETED = "completed"  # Stage finished successfully
+    SKIPPED = "skipped"  # Stage skipped (non-critical)
+    FAILED = "failed"  # Stage failed with issues
+
+
+class MonitoringRequirementType(str, enum.Enum):
+    TEMPERATURE = "temperature"
+    TIME = "time"
+    PH = "ph"
+    PRESSURE = "pressure"
+    VISUAL_INSPECTION = "visual_inspection"
+    WEIGHT = "weight"
+    MOISTURE = "moisture"
+    DOCUMENTATION = "documentation"
+    CHECKLIST = "checklist"
+    CCP_MONITORING = "ccp_monitoring"  # Critical Control Point monitoring
 
 
 class StepType(str, enum.Enum):
@@ -56,7 +79,7 @@ class ProductionProcess(Base):
     batch_id = Column(Integer, ForeignKey("batches.id"), nullable=False, index=True)
     process_type = Column(SAEnum(ProductProcessType), nullable=False)
     operator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    status = Column(SAEnum(ProcessStatus), nullable=False, default=ProcessStatus.IN_PROGRESS)
+    status = Column(SAEnum(ProcessStatus), nullable=False, default=ProcessStatus.DRAFT)
     start_time = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     end_time = Column(DateTime(timezone=True), nullable=True)
     spec = Column(JSON, nullable=True)  # Holds temperature/time targets per step
@@ -69,6 +92,7 @@ class ProductionProcess(Base):
     yields = relationship("YieldRecord", back_populates="process", cascade="all, delete-orphan")
     transfers = relationship("ColdRoomTransfer", back_populates="process", cascade="all, delete-orphan")
     aging_records = relationship("AgingRecord", back_populates="process", cascade="all, delete-orphan")
+    stages = relationship("ProcessStage", back_populates="process", cascade="all, delete-orphan", order_by="ProcessStage.sequence_order")
 
 
 class ProcessStep(Base):
@@ -543,4 +567,205 @@ class ProcessMonitoringAlert(Base):
     __table_args__ = (
         Index("ix_monitoring_alerts_process_severity", "process_id", "severity_level"),
         Index("ix_monitoring_alerts_unresolved", "resolved", "created_at"),
+    )
+
+
+class ProcessStage(Base):
+    """ISO 22000:2018 compliant process stages for finite state machine management"""
+    __tablename__ = "process_stages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    stage_name = Column(String(100), nullable=False)
+    stage_description = Column(Text, nullable=True)
+    sequence_order = Column(Integer, nullable=False)
+    status = Column(SAEnum(StageStatus), nullable=False, default=StageStatus.PENDING)
+    
+    # ISO 22000 Critical Control Point information
+    is_critical_control_point = Column(Boolean, default=False)
+    is_operational_prp = Column(Boolean, default=False)  # Operational Prerequisite Program
+    
+    # Stage timing
+    planned_start_time = Column(DateTime(timezone=True), nullable=True)
+    actual_start_time = Column(DateTime(timezone=True), nullable=True)
+    planned_end_time = Column(DateTime(timezone=True), nullable=True)
+    actual_end_time = Column(DateTime(timezone=True), nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    
+    # Stage completion criteria
+    completion_criteria = Column(JSON, nullable=True)  # JSON object with completion requirements
+    auto_advance = Column(Boolean, default=False)  # Auto-advance to next stage when criteria met
+    requires_approval = Column(Boolean, default=False)  # Requires supervisor approval to advance
+    
+    # Personnel and responsibility
+    assigned_operator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    completed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # Documentation and notes
+    stage_notes = Column(Text, nullable=True)
+    deviations_recorded = Column(Text, nullable=True)
+    corrective_actions = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    process = relationship("ProductionProcess", back_populates="stages")
+    assigned_operator = relationship("User", foreign_keys=[assigned_operator_id])
+    completed_by = relationship("User", foreign_keys=[completed_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
+    monitoring_requirements = relationship("StageMonitoringRequirement", back_populates="stage", cascade="all, delete-orphan")
+    monitoring_logs = relationship("StageMonitoringLog", back_populates="stage", cascade="all, delete-orphan")
+    stage_transitions = relationship("StageTransition", foreign_keys="StageTransition.from_stage_id", back_populates="from_stage")
+
+    __table_args__ = (
+        Index("ix_process_stages_process_seq", "process_id", "sequence_order"),
+        Index("ix_process_stages_status", "status"),
+    )
+
+
+class StageMonitoringRequirement(Base):
+    """ISO 22000:2018 compliant monitoring requirements for each process stage"""
+    __tablename__ = "stage_monitoring_requirements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stage_id = Column(Integer, ForeignKey("process_stages.id"), nullable=False, index=True)
+    requirement_name = Column(String(100), nullable=False)
+    requirement_type = Column(SAEnum(MonitoringRequirementType), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # ISO 22000 Classification
+    is_critical_limit = Column(Boolean, default=False)  # Critical limit for CCP
+    is_operational_limit = Column(Boolean, default=False)  # Operational limit for OPRP
+    
+    # Monitoring parameters
+    target_value = Column(Float, nullable=True)
+    tolerance_min = Column(Float, nullable=True)
+    tolerance_max = Column(Float, nullable=True)
+    unit_of_measure = Column(String(20), nullable=True)
+    
+    # Monitoring frequency and timing
+    monitoring_frequency = Column(String(50), nullable=True)  # continuous, hourly, per_batch, etc.
+    is_mandatory = Column(Boolean, default=True)
+    
+    # Equipment and method requirements
+    equipment_required = Column(String(100), nullable=True)
+    measurement_method = Column(String(100), nullable=True)
+    calibration_required = Column(Boolean, default=False)
+    
+    # Documentation requirements
+    record_keeping_required = Column(Boolean, default=True)
+    verification_required = Column(Boolean, default=False)
+    
+    # Compliance metadata
+    regulatory_reference = Column(String(100), nullable=True)  # ISO clause reference
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Relationships
+    stage = relationship("ProcessStage", back_populates="monitoring_requirements")
+    creator = relationship("User")
+    monitoring_logs = relationship("StageMonitoringLog", back_populates="requirement", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_monitoring_requirements_stage_type", "stage_id", "requirement_type"),
+    )
+
+
+class StageMonitoringLog(Base):
+    """ISO 22000:2018 compliant monitoring log entries for process stages"""
+    __tablename__ = "stage_monitoring_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stage_id = Column(Integer, ForeignKey("process_stages.id"), nullable=False, index=True)
+    requirement_id = Column(Integer, ForeignKey("stage_monitoring_requirements.id"), nullable=True, index=True)
+    
+    # Monitoring data
+    monitoring_timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    measured_value = Column(Float, nullable=True)
+    measured_text = Column(Text, nullable=True)  # For text-based observations
+    is_within_limits = Column(Boolean, nullable=True)
+    
+    # Quality assessment
+    pass_fail_status = Column(String(20), nullable=True)  # pass, fail, warning, N/A
+    deviation_severity = Column(String(20), nullable=True)  # minor, major, critical
+    
+    # Personnel and verification
+    recorded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verification_timestamp = Column(DateTime(timezone=True), nullable=True)
+    
+    # Equipment and method
+    equipment_used = Column(String(100), nullable=True)
+    measurement_method = Column(String(100), nullable=True)
+    equipment_calibration_date = Column(DateTime(timezone=True), nullable=True)
+    
+    # Documentation and notes
+    notes = Column(Text, nullable=True)
+    corrective_action_taken = Column(Text, nullable=True)
+    follow_up_required = Column(Boolean, default=False)
+    
+    # Compliance tracking
+    regulatory_requirement_met = Column(Boolean, default=True)
+    iso_clause_reference = Column(String(50), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    stage = relationship("ProcessStage", back_populates="monitoring_logs")
+    requirement = relationship("StageMonitoringRequirement", back_populates="monitoring_logs")
+    recorder = relationship("User", foreign_keys=[recorded_by])
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+    __table_args__ = (
+        Index("ix_monitoring_logs_stage_time", "stage_id", "monitoring_timestamp"),
+        Index("ix_monitoring_logs_requirement_time", "requirement_id", "monitoring_timestamp"),
+    )
+
+
+class StageTransition(Base):
+    """Process stage transitions for finite state machine management"""
+    __tablename__ = "stage_transitions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    from_stage_id = Column(Integer, ForeignKey("process_stages.id"), nullable=True)  # NULL for initial transition
+    to_stage_id = Column(Integer, ForeignKey("process_stages.id"), nullable=False)
+    
+    # Transition metadata
+    transition_type = Column(String(50), nullable=False, default="normal")  # normal, skip, rollback, emergency
+    transition_reason = Column(Text, nullable=True)
+    auto_transition = Column(Boolean, default=False)
+    
+    # Personnel and timing
+    initiated_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    transition_timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    # Approval workflow
+    requires_approval = Column(Boolean, default=False)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approval_timestamp = Column(DateTime(timezone=True), nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    
+    # Validation and verification
+    prerequisites_met = Column(Boolean, default=True)
+    prerequisite_validation = Column(JSON, nullable=True)  # JSON object with validation results
+    
+    # Documentation
+    transition_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    process = relationship("ProductionProcess")
+    from_stage = relationship("ProcessStage", foreign_keys=[from_stage_id])
+    to_stage = relationship("ProcessStage", foreign_keys=[to_stage_id])
+    initiator = relationship("User", foreign_keys=[initiated_by])
+    approver = relationship("User", foreign_keys=[approved_by])
+
+    __table_args__ = (
+        Index("ix_stage_transitions_process_time", "process_id", "transition_timestamp"),
     )

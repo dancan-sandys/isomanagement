@@ -17,7 +17,8 @@ from .food_safety_objectives import FoodSafetyObjective, ObjectiveTarget, Object
 from .production import (
     ProductionProcess, ProcessStep, ProcessLog, YieldRecord, ColdRoomTransfer, AgingRecord,
     ProcessParameter, ProcessDeviation, ProcessAlert, ProductSpecification, ProcessTemplate,
-    ProductProcessType, ProcessStatus, StepType, LogEvent
+    ProductProcessType, ProcessStatus, StepType, LogEvent, StageStatus, MonitoringRequirementType,
+    ProcessStage, StageMonitoringRequirement, StageMonitoringLog, StageTransition
 )
 from .risk import (
     RiskRegisterItem, RiskAction, RiskManagementFramework, RiskContext,
