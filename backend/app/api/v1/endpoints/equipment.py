@@ -352,7 +352,7 @@ async def list_all_maintenance_plans(
             ))
     return all_plans
 
-@router.get("/work-orders", response_model=list[MaintenanceWorkOrderResponse])
+@router.get("/all/work-orders", response_model=list[MaintenanceWorkOrderResponse])
 async def list_all_work_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -385,7 +385,7 @@ async def list_all_work_orders(
             ))
     return all_work_orders
 
-@router.get("/calibration-plans", response_model=list[CalibrationPlanResponse])
+@router.get("/all/calibration-plans", response_model=list[CalibrationPlanResponse])
 async def list_all_calibration_plans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

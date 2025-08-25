@@ -103,6 +103,22 @@ export const actionsLogAPI = {
   getManagementReviewActions: async (reviewId: number) => {
     const response: AxiosResponse = await api.get(`/actions-log/management-review/${reviewId}`);
     return response.data as ActionLog[];
+  },
+
+  // Interested Parties Integration
+  getInterestedParties: async () => {
+    const response: AxiosResponse = await api.get('/actions-log/interested-parties');
+    return response.data;
+  },
+
+  getInterestedParty: async (partyId: number) => {
+    const response: AxiosResponse = await api.get(`/actions-log/interested-parties/${partyId}`);
+    return response.data;
+  },
+
+  getPartyActions: async (partyId: number) => {
+    const response: AxiosResponse = await api.get(`/actions-log/interested-parties/${partyId}/actions`);
+    return response.data as ActionLog[];
   }
 };
 

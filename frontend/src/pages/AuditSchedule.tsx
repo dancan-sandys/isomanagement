@@ -125,7 +125,6 @@ const AuditSchedule: React.FC = () => {
                 const start = String(a.start_date || '').slice(0,10);
                 const end = String(a.end_date || '').slice(0,10);
                 const currentEditDates = editDates[a.id] || { start, end };
-                
                 return (
                   <TableRow key={a.id}>
                     <TableCell>{a.title}</TableCell>

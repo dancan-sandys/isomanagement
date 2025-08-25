@@ -1085,7 +1085,7 @@ const PRPCAPA: React.FC<{ programId?: number }> = ({ programId }) => {
                 <TextField
                   {...params}
                   label="Assigned To"
-                  required
+                required
                   placeholder="Search for a user..."
                 />
               )}

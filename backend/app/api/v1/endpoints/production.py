@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import Optional, List
 from datetime import datetime
 from fastapi.responses import StreamingResponse
@@ -14,7 +15,13 @@ from app.schemas.production import (
     ProcessParameterCreate, ProcessDeviationCreate, ProcessAlertCreate,
     ProcessTemplateCreate, ProcessTemplateUpdate, ProcessCreateEnhanced,
     ProcessUpdate, ProcessResponse, ProcessParameterResponse, ProcessDeviationResponse,
-    ProcessAlertResponse, ProcessTemplateResponse, ProductionAnalytics
+    ProcessAlertResponse, ProcessTemplateResponse, ProductionAnalytics,
+    ProcessControlChartCreate, ProcessControlChartResponse, ProcessControlPointResponse,
+    ProcessCapabilityStudyCreate, ProcessCapabilityStudyResponse,
+    YieldAnalysisReportCreate, YieldAnalysisReportResponse, YieldDefectCategoryResponse,
+    ProcessMonitoringAlertResponse, ProcessMonitoringAlertUpdate,
+    ProcessMonitoringDashboardCreate, ProcessMonitoringDashboardResponse,
+    ProcessMonitoringAnalytics, ControlChartData
 )
 from app.schemas.production import ProcessSpecBindRequest, ReleaseCheckResponse, ReleaseRequest, ReleaseResponse
 from app.schemas.production import MaterialConsumptionCreate
@@ -86,14 +93,6 @@ def record_aging(process_id: int, payload: AgingCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{process_id}")
-def get_process(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
-    service = ProductionService(db)
-    proc = service.get_process(process_id)
-    if not proc:
-        raise HTTPException(status_code=404, detail="Process not found")
-    return proc
-
 # Enhanced Production Endpoints
 @router.post("/processes", response_model=ProcessResponse)
 def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:create"))):
@@ -128,9 +127,48 @@ def list_processes(
 ):
     """List production processes with filtering"""
     service = ProductionService(db)
-    pt = ProductProcessType(process_type) if process_type else None
-    st = ProcessStatus(status) if status else None
-    return service.list_processes(pt, st, limit, offset)
+    
+    # Safe enum conversion with error handling
+    pt = None
+    if process_type:
+        try:
+            pt = ProductProcessType(process_type)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid process_type: {process_type}")
+    
+    st = None
+    if status:
+        try:
+            st = ProcessStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
+    
+    processes = service.list_processes(pt, st, limit, offset)
+    
+    # Convert to response format with empty related data
+    result = []
+    for process in processes:
+        process_dict = {
+            "id": process.id,
+            "batch_id": process.batch_id,
+            "process_type": process.process_type.value if hasattr(process.process_type, 'value') else str(process.process_type),
+            "operator_id": process.operator_id,
+            "status": process.status.value if hasattr(process.status, 'value') else str(process.status),
+            "start_time": process.start_time,
+            "end_time": process.end_time,
+            "spec": process.spec,
+            "notes": process.notes,
+            "created_at": process.created_at,
+            "updated_at": process.updated_at,
+            "steps": [],
+            "logs": [],
+            "parameters": [],
+            "deviations": [],
+            "alerts": []
+        }
+        result.append(process_dict)
+    
+    return result
 
 
 @router.get("/templates", response_model=List[ProcessTemplateResponse])
@@ -140,9 +178,26 @@ def get_templates(
 ):
     """Get process templates"""
     service = ProductionService(db)
-    pt = ProductProcessType(product_type) if product_type else None
+    
+    # Safe enum conversion with error handling
+    pt = None
+    if product_type:
+        try:
+            pt = ProductProcessType(product_type)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid product_type: {product_type}")
+    
     templates = service.get_process_templates(pt)
     return templates
+
+
+@router.get("/{process_id}")
+def get_process(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return proc
 
 
 @router.put("/processes/{process_id}", response_model=ProcessResponse)
@@ -160,7 +215,27 @@ def update_process(
     
     try:
         updated = service.update_process(process_id, payload.model_dump(exclude_unset=True))
-        return updated
+        
+        # Convert to response format
+        process_dict = {
+            "id": updated.id,
+            "batch_id": updated.batch_id,
+            "process_type": updated.process_type.value if hasattr(updated.process_type, 'value') else str(updated.process_type),
+            "operator_id": updated.operator_id,
+            "status": updated.status.value if hasattr(updated.status, 'value') else str(updated.status),
+            "start_time": updated.start_time,
+            "end_time": updated.end_time,
+            "spec": updated.spec,
+            "notes": updated.notes,
+            "created_at": updated.created_at,
+            "updated_at": updated.updated_at,
+            "steps": [],
+            "logs": [],
+            "parameters": [],
+            "deviations": [],
+            "alerts": []
+        }
+        return process_dict
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -674,4 +749,546 @@ def export_production_sheet_pdf(
         pass
     c.showPage(); c.save(); buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=production_sheet_{process_id}.pdf"})
+
+
+# ===== ENHANCED PROCESS MONITORING AND SPC ENDPOINTS =====
+
+@router.post("/processes/{process_id}/control-charts", response_model=ProcessControlChartResponse)
+def create_control_chart(
+    process_id: int,
+    payload: ProcessControlChartCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Create a new control chart for SPC monitoring - ISO 22000:2018 Clause 8.5"""
+    service = ProductionService(db)
+    try:
+        data = payload.model_dump()
+        data["created_by"] = getattr(current_user, "id", None)
+        control_chart = service.create_control_chart(process_id, payload.parameter_name, data)
+        return control_chart
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/control-charts", response_model=List[ProcessControlChartResponse])
+def get_process_control_charts(
+    process_id: int,
+    parameter_name: Optional[str] = Query(None),
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get control charts for a process"""
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    from app.models.production import ProcessControlChart
+    query = db.query(ProcessControlChart).filter(ProcessControlChart.process_id == process_id)
+    
+    if parameter_name:
+        query = query.filter(ProcessControlChart.parameter_name == parameter_name)
+    if active_only:
+        query = query.filter(ProcessControlChart.is_active == True)
+    
+    charts = query.order_by(ProcessControlChart.created_at.desc()).all()
+    return charts
+
+
+@router.get("/control-charts/{chart_id}/data", response_model=ControlChartData)
+def get_control_chart_data(
+    chart_id: int,
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get control chart data with visualization information"""
+    from app.models.production import ProcessControlChart, ProcessControlPoint
+    
+    chart = db.query(ProcessControlChart).filter(ProcessControlChart.id == chart_id).first()
+    if not chart:
+        raise HTTPException(status_code=404, detail="Control chart not found")
+    
+    # Get recent data points
+    data_points = (
+        db.query(ProcessControlPoint)
+        .filter(ProcessControlPoint.control_chart_id == chart_id)
+        .order_by(ProcessControlPoint.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    
+    # Calculate statistics
+    values = [p.measured_value for p in data_points]
+    statistics_data = {
+        "count": len(values),
+        "mean": sum(values) / len(values) if values else 0,
+        "min": min(values) if values else 0,
+        "max": max(values) if values else 0,
+        "out_of_control_count": sum(1 for p in data_points if p.is_out_of_control),
+        "last_violation": max((p.timestamp for p in data_points if p.is_out_of_control), default=None)
+    }
+    
+    # Get violations
+    violations = [
+        {
+            "timestamp": p.timestamp,
+            "value": p.measured_value,
+            "rule": p.control_rule_violated,
+            "notes": p.notes
+        }
+        for p in data_points if p.is_out_of_control
+    ]
+    
+    return ControlChartData(
+        chart_info=chart,
+        data_points=list(reversed(data_points)),  # Chronological order
+        statistics=statistics_data,
+        violations=violations
+    )
+
+
+@router.post("/processes/{process_id}/capability-studies", response_model=ProcessCapabilityStudyResponse)
+def create_capability_study(
+    process_id: int,
+    payload: ProcessCapabilityStudyCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Calculate process capability indices (Cp, Cpk) - ISO 22000:2018 requirements"""
+    service = ProductionService(db)
+    try:
+        data = payload.model_dump()
+        data["conducted_by"] = getattr(current_user, "id", None)
+        capability_study = service.calculate_process_capability(process_id, payload.parameter_name, data)
+        return capability_study
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/capability-studies", response_model=List[ProcessCapabilityStudyResponse])
+def get_capability_studies(
+    process_id: int,
+    parameter_name: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get process capability studies"""
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    from app.models.production import ProcessCapabilityStudy
+    query = db.query(ProcessCapabilityStudy).filter(ProcessCapabilityStudy.process_id == process_id)
+    
+    if parameter_name:
+        query = query.filter(ProcessCapabilityStudy.parameter_name == parameter_name)
+    
+    studies = query.order_by(ProcessCapabilityStudy.created_at.desc()).all()
+    return studies
+
+
+@router.post("/processes/{process_id}/yield-reports", response_model=YieldAnalysisReportResponse)
+def create_yield_analysis_report(
+    process_id: int,
+    payload: YieldAnalysisReportCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Create comprehensive yield analysis report - ISO 22000:2018 monitoring"""
+    service = ProductionService(db)
+    try:
+        data = payload.model_dump()
+        data["analyzed_by"] = getattr(current_user, "id", None)
+        yield_report = service.create_yield_analysis_report(process_id, data)
+        
+        # Include defect categories in response
+        from app.models.production import YieldDefectCategory
+        defect_categories = (
+            db.query(YieldDefectCategory)
+            .filter(YieldDefectCategory.yield_report_id == yield_report.id)
+            .order_by(YieldDefectCategory.cumulative_percentage.asc())
+            .all()
+        )
+        
+        # Convert to response format
+        report_dict = {
+            **yield_report.__dict__,
+            "defect_categories": [
+                {
+                    "id": dc.id,
+                    "defect_type": dc.defect_type,
+                    "defect_description": dc.defect_description,
+                    "defect_count": dc.defect_count,
+                    "defect_quantity": dc.defect_quantity,
+                    "percentage_of_total": dc.percentage_of_total,
+                    "cumulative_percentage": dc.cumulative_percentage,
+                    "is_critical_to_quality": dc.is_critical_to_quality,
+                    "root_cause_category": dc.root_cause_category,
+                    "corrective_action_required": dc.corrective_action_required
+                }
+                for dc in defect_categories
+            ]
+        }
+        
+        return report_dict
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/yield-reports", response_model=List[YieldAnalysisReportResponse])
+def get_yield_reports(
+    process_id: int,
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get yield analysis reports for a process"""
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    from app.models.production import YieldAnalysisReport
+    reports = (
+        db.query(YieldAnalysisReport)
+        .filter(YieldAnalysisReport.process_id == process_id)
+        .order_by(YieldAnalysisReport.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    
+    # Convert to response format with defect categories
+    result = []
+    for report in reports:
+        from app.models.production import YieldDefectCategory
+        defect_categories = (
+            db.query(YieldDefectCategory)
+            .filter(YieldDefectCategory.yield_report_id == report.id)
+            .order_by(YieldDefectCategory.cumulative_percentage.asc())
+            .all()
+        )
+        
+        report_dict = {
+            **report.__dict__,
+            "defect_categories": [
+                {
+                    "id": dc.id,
+                    "defect_type": dc.defect_type,
+                    "defect_description": dc.defect_description,
+                    "defect_count": dc.defect_count,
+                    "percentage_of_total": dc.percentage_of_total,
+                    "is_critical_to_quality": dc.is_critical_to_quality,
+                    "root_cause_category": dc.root_cause_category
+                }
+                for dc in defect_categories
+            ]
+        }
+        result.append(report_dict)
+    
+    return result
+
+
+@router.get("/monitoring/alerts", response_model=List[ProcessMonitoringAlertResponse])
+def get_monitoring_alerts(
+    process_id: Optional[int] = Query(None),
+    severity_level: Optional[str] = Query(None),
+    resolved: Optional[bool] = Query(None),
+    food_safety_only: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get process monitoring alerts with filtering"""
+    from app.models.production import ProcessMonitoringAlert
+    
+    query = db.query(ProcessMonitoringAlert)
+    
+    if process_id:
+        query = query.filter(ProcessMonitoringAlert.process_id == process_id)
+    if severity_level:
+        query = query.filter(ProcessMonitoringAlert.severity_level == severity_level)
+    if resolved is not None:
+        query = query.filter(ProcessMonitoringAlert.resolved == resolved)
+    if food_safety_only:
+        query = query.filter(ProcessMonitoringAlert.food_safety_impact == True)
+    
+    alerts = (
+        query.order_by(ProcessMonitoringAlert.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    
+    return alerts
+
+
+@router.put("/monitoring/alerts/{alert_id}", response_model=ProcessMonitoringAlertResponse)
+def update_monitoring_alert(
+    alert_id: int,
+    payload: ProcessMonitoringAlertUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:update"))
+):
+    """Update monitoring alert (acknowledge, resolve, assign)"""
+    from app.models.production import ProcessMonitoringAlert
+    from datetime import datetime
+    
+    alert = db.query(ProcessMonitoringAlert).filter(ProcessMonitoringAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    user_id = getattr(current_user, "id", None)
+    
+    # Update fields
+    if payload.assigned_to is not None:
+        alert.assigned_to = payload.assigned_to
+    
+    if payload.acknowledged is not None and payload.acknowledged and not alert.acknowledged:
+        alert.acknowledged = True
+        alert.acknowledged_at = datetime.utcnow()
+        alert.acknowledged_by = user_id
+    
+    if payload.resolved is not None and payload.resolved and not alert.resolved:
+        alert.resolved = True
+        alert.resolved_at = datetime.utcnow()
+        alert.resolved_by = user_id
+        alert.resolution_notes = payload.resolution_notes
+    
+    if payload.escalation_level is not None:
+        alert.escalation_level = payload.escalation_level
+    
+    alert.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(alert)
+    
+    try:
+        from app.services import log_audit_event
+        log_audit_event(
+            db,
+            user_id=user_id,
+            action="monitoring_alert.updated",
+            resource_type="production_process",
+            resource_id=str(alert.process_id),
+            details={"alert_id": alert_id, "updates": payload.model_dump(exclude_unset=True)}
+        )
+    except Exception:
+        pass
+    
+    return alert
+
+
+@router.get("/monitoring/analytics", response_model=ProcessMonitoringAnalytics)
+def get_monitoring_analytics(
+    process_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get comprehensive process monitoring analytics dashboard"""
+    service = ProductionService(db)
+    
+    pt = None
+    if process_type:
+        try:
+            pt = ProductProcessType(process_type)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid process_type: {process_type}")
+    
+    analytics = service.get_process_monitoring_analytics(pt)
+    return analytics
+
+
+@router.post("/monitoring/dashboards", response_model=ProcessMonitoringDashboardResponse)
+def create_monitoring_dashboard(
+    payload: ProcessMonitoringDashboardCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Create a custom monitoring dashboard configuration"""
+    from app.models.production import ProcessMonitoringDashboard
+    
+    user_id = getattr(current_user, "id", None)
+    
+    dashboard = ProcessMonitoringDashboard(
+        dashboard_name=payload.dashboard_name,
+        process_type=ProductProcessType(payload.process_type) if payload.process_type else None,
+        user_id=user_id,
+        is_public=payload.is_public,
+        dashboard_config=payload.dashboard_config,
+        refresh_interval_seconds=payload.refresh_interval_seconds,
+        alert_thresholds=payload.alert_thresholds,
+    )
+    
+    db.add(dashboard)
+    db.commit()
+    db.refresh(dashboard)
+    
+    try:
+        from app.services import log_audit_event
+        log_audit_event(
+            db,
+            user_id=user_id,
+            action="monitoring_dashboard.created",
+            resource_type="monitoring_dashboard",
+            resource_id=str(dashboard.id),
+            details={"dashboard_name": dashboard.dashboard_name}
+        )
+    except Exception:
+        pass
+    
+    return dashboard
+
+
+@router.get("/monitoring/dashboards", response_model=List[ProcessMonitoringDashboardResponse])
+def get_monitoring_dashboards(
+    process_type: Optional[str] = Query(None),
+    public_only: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get monitoring dashboard configurations"""
+    from app.models.production import ProcessMonitoringDashboard
+    
+    user_id = getattr(current_user, "id", None)
+    
+    query = db.query(ProcessMonitoringDashboard).filter(ProcessMonitoringDashboard.is_active == True)
+    
+    if process_type:
+        try:
+            pt = ProductProcessType(process_type)
+            query = query.filter(ProcessMonitoringDashboard.process_type == pt)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid process_type: {process_type}")
+    
+    if public_only:
+        query = query.filter(ProcessMonitoringDashboard.is_public == True)
+    else:
+        # Show public dashboards + user's own dashboards
+        query = query.filter(
+            or_(
+                ProcessMonitoringDashboard.is_public == True,
+                ProcessMonitoringDashboard.user_id == user_id
+            )
+        )
+    
+    dashboards = query.order_by(ProcessMonitoringDashboard.created_at.desc()).all()
+    return dashboards
+
+
+@router.get("/monitoring/real-time/{process_id}")
+def get_real_time_monitoring_data(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get real-time monitoring data for a process - WebSocket alternative"""
+    service = ProductionService(db)
+    proc = service.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    
+    from datetime import datetime, timedelta
+    from app.models.production import (
+        ProcessParameter, ProcessControlPoint, ProcessMonitoringAlert,
+        ProcessControlChart
+    )
+    
+    # Get recent parameters (last hour)
+    recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+    
+    recent_parameters = (
+        db.query(ProcessParameter)
+        .filter(
+            ProcessParameter.process_id == process_id,
+            ProcessParameter.recorded_at >= recent_cutoff
+        )
+        .order_by(ProcessParameter.recorded_at.desc())
+        .limit(100)
+        .all()
+    )
+    
+    # Get active alerts
+    active_alerts = (
+        db.query(ProcessMonitoringAlert)
+        .filter(
+            ProcessMonitoringAlert.process_id == process_id,
+            ProcessMonitoringAlert.resolved == False
+        )
+        .order_by(ProcessMonitoringAlert.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    
+    # Get control chart status
+    control_charts = (
+        db.query(ProcessControlChart)
+        .filter(
+            ProcessControlChart.process_id == process_id,
+            ProcessControlChart.is_active == True
+        )
+        .all()
+    )
+    
+    chart_status = []
+    for chart in control_charts:
+        latest_point = (
+            db.query(ProcessControlPoint)
+            .filter(ProcessControlPoint.control_chart_id == chart.id)
+            .order_by(ProcessControlPoint.timestamp.desc())
+            .first()
+        )
+        
+        chart_status.append({
+            "chart_id": chart.id,
+            "parameter_name": chart.parameter_name,
+            "chart_type": chart.chart_type,
+            "latest_value": latest_point.measured_value if latest_point else None,
+            "latest_timestamp": latest_point.timestamp if latest_point else None,
+            "is_out_of_control": latest_point.is_out_of_control if latest_point else False,
+            "target_value": chart.target_value,
+            "upper_control_limit": chart.upper_control_limit,
+            "lower_control_limit": chart.lower_control_limit
+        })
+    
+    return {
+        "process_id": process_id,
+        "process_status": proc.status.value if hasattr(proc.status, 'value') else str(proc.status),
+        "timestamp": datetime.utcnow(),
+        "recent_parameters": [
+            {
+                "id": p.id,
+                "parameter_name": p.parameter_name,
+                "parameter_value": p.parameter_value,
+                "unit": p.unit,
+                "recorded_at": p.recorded_at,
+                "is_within_tolerance": p.is_within_tolerance
+            }
+            for p in recent_parameters
+        ],
+        "active_alerts": [
+            {
+                "id": a.id,
+                "alert_type": a.alert_type,
+                "severity_level": a.severity_level,
+                "alert_title": a.alert_title,
+                "created_at": a.created_at,
+                "food_safety_impact": a.food_safety_impact,
+                "requires_immediate_action": a.requires_immediate_action
+            }
+            for a in active_alerts
+        ],
+        "control_chart_status": chart_status,
+        "summary": {
+            "total_parameters_last_hour": len(recent_parameters),
+            "out_of_tolerance_count": sum(1 for p in recent_parameters if p.is_within_tolerance is False),
+            "active_alert_count": len(active_alerts),
+            "critical_alert_count": sum(1 for a in active_alerts if a.severity_level == "critical"),
+            "control_charts_out_of_control": sum(1 for cs in chart_status if cs["is_out_of_control"])
+        }
+    }
 

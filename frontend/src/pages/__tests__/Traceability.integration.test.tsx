@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../utils/test-utils';
+import { renderWithProviders } from '../../__tests__/utils/test-utils';
 import Traceability from '../Traceability';
-import { mockTraceabilityAPI, mockUsersAPI } from '../../utils/test-utils';
+import { mockTraceabilityAPI, mockUsersAPI } from '../../__tests__/utils/test-utils';
 
 // Mock the APIs
 jest.mock('../../services/traceabilityAPI', () => ({

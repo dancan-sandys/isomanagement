@@ -7,12 +7,18 @@ services:
     github:
       repo: your-username/iso22000-fsms
       branch: main
+    build_command: pip install -r requirements-production.txt
     run_command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4
     environment_slug: python
     instance_count: 2
     instance_size_slug: basic-xxs
     health_check:
       http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      failure_threshold: 3
+      success_threshold: 1
     envs:
       - key: DATABASE_URL
         value: ${db.DATABASE_URL}
@@ -88,12 +94,11 @@ services:
     github:
       repo: your-username/iso22000-fsms
       branch: main
-    run_command: nginx -g 'daemon off;'
-    environment_slug: nginx
+    dockerfile_path: Dockerfile.digitalocean
     instance_count: 2
     instance_size_slug: basic-xxs
     health_check:
-      http_path: /health
+      http_path: /
     envs:
       - key: REACT_APP_API_URL
         value: https://iso22000-fsms-backend.ondigitalocean.app/api/v1
@@ -101,6 +106,8 @@ services:
         value: production
       - key: REACT_APP_DEBUG
         value: "false"
+      - key: BACKEND_URL
+        value: https://iso22000-fsms-backend.ondigitalocean.app
 
 databases:
   # PostgreSQL Database

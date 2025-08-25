@@ -4,7 +4,8 @@ export interface ProcessCreatePayload {
   batch_id: number;
   process_type: 'fresh_milk' | 'yoghurt' | 'mala' | 'cheese' | 'pasteurized_milk' | 'fermented_products';
   operator_id?: number;
-  spec: any;
+  spec?: any;
+  notes?: string;
 }
 
 export interface ProcessParameterPayload {
@@ -55,24 +56,69 @@ export interface ProcessStepSpec {
   step_metadata?: any;
 }
 
+export interface ProcessLogPayload {
+  step_id?: number;
+  timestamp?: string;
+  event: 'start' | 'reading' | 'complete' | 'divert';
+  measured_temp_c?: number;
+  note?: string;
+  auto_flag?: boolean;
+  source?: string;
+}
+
+export interface YieldPayload {
+  output_qty: number;
+  expected_qty?: number;
+  unit: string;
+}
+
+export interface TransferPayload {
+  quantity: number;
+  unit: string;
+  location?: string;
+  lot_number?: string;
+  verified_by?: number;
+}
+
+export interface AgingPayload {
+  start_time?: string;
+  end_time?: string;
+  room_temperature_c?: number;
+  target_temp_min_c?: number;
+  target_temp_max_c?: number;
+  target_days?: number;
+  room_location?: string;
+  notes?: string;
+}
+
+export interface MaterialConsumptionPayload {
+  material_id: number;
+  quantity: number;
+  unit: string;
+  supplier_id?: number;
+  delivery_id?: number;
+  lot_number?: string;
+  notes?: string;
+}
+
 const productionAPI = {
   createProcess: async (payload: ProcessCreatePayload) => {
     const res = await api.post('/production/process', payload);
     return res.data;
   },
-  addLog: async (processId: number, payload: any) => {
+  addLog: async (processId: number, payload: ProcessLogPayload) => {
     const res = await api.post(`/production/${processId}/log`, payload);
     return res.data;
   },
-  recordYield: async (processId: number, payload: { output_qty: number; expected_qty?: number; unit: string }) => {
+  recordYield: async (processId: number, payload: YieldPayload) => {
     const res = await api.post(`/production/${processId}/yield`, payload);
     return res.data;
   },
-  transfer: async (processId: number, payload: { quantity: number; unit: string; location?: string; lot_number?: string; verified_by?: number }) => {
+  transfer: async (processId: number, payload: TransferPayload) => {
     const res = await api.post(`/production/${processId}/transfer`, payload);
     return res.data;
   },
-  aging: async (processId: number, payload: any) => {
+  aging: async (processId: number, payload: AgingPayload) => {
     const res = await api.post(`/production/${processId}/aging`, payload);
     return res.data;
   },
@@ -178,6 +224,11 @@ const productionAPI = {
   exportProductionSheetPDF: async (processId: number) => {
     const res = await api.get(`/production/processes/${processId}/export/pdf`, { responseType: 'blob' });
     return res.data as Blob;
+  },
+
+  recordMaterialConsumption: async (processId: number, payload: MaterialConsumptionPayload) => {
+    const res = await api.post(`/production/processes/${processId}/materials`, payload);
+    return res.data;
   },
 
   // MOC helpers (via change-requests endpoints)

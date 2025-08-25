@@ -2,7 +2,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import time
+import logging
 
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
@@ -11,16 +13,43 @@ from app.core.exceptions import setup_exception_handlers
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import user, document, haccp, prp, supplier, traceability, notification, rbac, settings as settings_model, audit, nonconformance, training, equipment as equipment_model
+from app.models.production import ProductProcessType, ProcessStatus
 from app.core.security import verify_token
 from app.services import log_audit_event
 
-# Create FastAPI app
+# Configure logging
+logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()))
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Database: {settings.DATABASE_TYPE}")
+    
+    # Initialize database (only in development/testing)
+    if settings.ENVIRONMENT in ["development", "testing"]:
+        try:
+            init_db()
+            logger.info("Database initialized successfully (models metadata created)")
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
+            # Don't crash the app in production - let it continue
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down ISO 22000 FSMS")
+
+# Create FastAPI app with lifespan
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="ISO 22000 Food Safety Management System for Dairy Processing",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # Setup custom exception handlers
@@ -38,7 +67,7 @@ app.add_middleware(
 # Add Trusted Host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"]
+    allowed_hosts=["*"] if settings.DEBUG else ["*"]
 )
 
 # Request timing middleware (client-disconnect safe)
@@ -148,36 +177,67 @@ async def root():
     return {
         "message": "ISO 22000 FSMS API",
         "version": settings.APP_VERSION,
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
+        "status": "running",
+        "timestamp": time.time()
+    }
+
+# Debug endpoint
+@app.get("/debug")
+async def debug():
+    return {
+        "message": "Debug endpoint working",
+        "app_name": settings.APP_NAME,
+        "environment": settings.ENVIRONMENT,
+        "debug": settings.DEBUG,
+        "timestamp": time.time()
+    }
+
+# Test production endpoints
+@app.get("/test-production")
+async def test_production():
+    """Test endpoint to check production API access"""
+    return {
+        "message": "Production test endpoint",
+        "available_process_types": [pt.value for pt in ProductProcessType],
+        "available_statuses": [st.value for st in ProcessStatus],
+        "timestamp": time.time()
     }
 
 # Health check endpoint
 @app.get("/health")
 async def health_check():
+    """Health check endpoint for Digital Ocean and monitoring"""
+    try:
+        # Simple health check without database dependency
+        return {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "environment": settings.ENVIRONMENT,
+            "version": settings.APP_VERSION
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": time.time(),
+                "environment": settings.ENVIRONMENT
+            }
+        )
+
+# Catch-all endpoint for debugging
+@app.get("/{path:path}")
+async def catch_all(path: str):
+    """Catch-all endpoint for debugging routing issues"""
     return {
-        "status": "healthy",
+        "message": f"Path '{path}' not found",
+        "available_endpoints": ["/", "/health", "/debug", "/api/v1"],
         "timestamp": time.time(),
         "environment": settings.ENVIRONMENT
     }
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"Environment: {settings.ENVIRONMENT}")
-    print(f"Database: {settings.DATABASE_TYPE}")
-
-    # Initialize database (dev convenience). Ensure models are imported above.
-    try:
-        init_db()
-        print("Database initialized successfully (models metadata created)")
-    except Exception as e:
-        print(f"Database initialization error: {e}")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("Shutting down ISO 22000 FSMS")
 
 if __name__ == "__main__":
     import uvicorn

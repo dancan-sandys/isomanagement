@@ -129,6 +129,86 @@ export const haccpAPI = {
     const response: AxiosResponse = await api.post(`/haccp/products/${productId}/reports`, reportRequest);
     return response.data;
   },
+
+  // Additional API methods for new functionality
+  updateHazardCCPStatus: async (hazardId: number, statusData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/hazards/${hazardId}/ccp-status`, statusData);
+    return response.data;
+  },
+
+  createVerificationRecord: async (ccpId: number, recordData: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/verification-records`, recordData);
+    return response.data;
+  },
+
+  getRecentNC: async (ccpId: number, batchNumber: string) => {
+    const response: AxiosResponse = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(batchNumber)}`);
+    return response.data;
+  },
+
+  // Alerts API
+  getAlerts: async (filters?: any) => {
+    const params = new URLSearchParams(filters);
+    const response: AxiosResponse = await api.get(`/haccp/alerts?${params}`);
+    return response.data;
+  },
+
+  markAlertAsRead: async (alertId: string) => {
+    const response: AxiosResponse = await api.patch(`/haccp/alerts/${alertId}/read`);
+    return response.data;
+  },
+
+  resolveAlert: async (alertId: string, resolution: any) => {
+    const response: AxiosResponse = await api.patch(`/haccp/alerts/${alertId}/resolve`, resolution);
+    return response.data;
+  },
+
+  // Schedules API
+  getSchedules: async () => {
+    const response: AxiosResponse = await api.get('/haccp/schedules');
+    return response.data;
+  },
+
+  createSchedule: async (scheduleData: any) => {
+    const response: AxiosResponse = await api.post('/haccp/schedules', scheduleData);
+    return response.data;
+  },
+
+  updateSchedule: async (scheduleId: string, scheduleData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/schedules/${scheduleId}`, scheduleData);
+    return response.data;
+  },
+
+  deleteSchedule: async (scheduleId: string) => {
+    const response: AxiosResponse = await api.delete(`/haccp/schedules/${scheduleId}`);
+    return response.data;
+  },
+
+  toggleSchedule: async (scheduleId: string, isActive: boolean) => {
+    const response: AxiosResponse = await api.patch(`/haccp/schedules/${scheduleId}/toggle`, { isActive });
+    return response.data;
+  },
+
+  // Reports API
+  getReportTemplates: async () => {
+    const response: AxiosResponse = await api.get('/haccp/reports/templates');
+    return response.data;
+  },
+
+  generateReportFromTemplate: async (templateId: string, parameters: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/reports/templates/${templateId}/generate`, parameters);
+    return response.data;
+  },
+
+  getGeneratedReports: async () => {
+    const response: AxiosResponse = await api.get('/haccp/reports/generated');
+    return response.data;
+  },
+
+  downloadReport: async (reportId: string) => {
+    const response: AxiosResponse = await api.get(`/haccp/reports/${reportId}/download`, { responseType: 'blob' });
+    return response.data;
+  },
 };
 
 export default haccpAPI; 

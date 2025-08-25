@@ -313,3 +313,234 @@ class ProcessTemplate(Base):
 
     creator = relationship("User", foreign_keys=[created_by])
     updater = relationship("User", foreign_keys=[updated_by])
+
+
+# Enhanced Process Monitoring Models for ISO 22000 Compliance
+
+class ProcessControlChart(Base):
+    """Control chart data for Statistical Process Control (SPC) - ISO 22000:2018 Clause 8.5"""
+    __tablename__ = "process_control_charts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    parameter_name = Column(String(100), nullable=False)
+    chart_type = Column(String(20), nullable=False)  # X-bar, R, CUSUM, EWMA
+    sample_size = Column(Integer, nullable=False, default=5)
+    target_value = Column(Float, nullable=False)
+    upper_control_limit = Column(Float, nullable=False)
+    lower_control_limit = Column(Float, nullable=False)
+    upper_warning_limit = Column(Float, nullable=True)
+    lower_warning_limit = Column(Float, nullable=True)
+    specification_upper = Column(Float, nullable=True)
+    specification_lower = Column(Float, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    process = relationship("ProductionProcess")
+    control_points = relationship("ProcessControlPoint", back_populates="control_chart", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_control_charts_process_param", "process_id", "parameter_name"),
+    )
+
+
+class ProcessControlPoint(Base):
+    """Individual control chart data points for trend analysis"""
+    __tablename__ = "process_control_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_chart_id = Column(Integer, ForeignKey("process_control_charts.id"), nullable=False, index=True)
+    parameter_id = Column(Integer, ForeignKey("process_parameters.id"), nullable=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    measured_value = Column(Float, nullable=False)
+    subgroup_range = Column(Float, nullable=True)  # For R-charts
+    cumulative_sum = Column(Float, nullable=True)  # For CUSUM charts
+    moving_average = Column(Float, nullable=True)  # For EWMA charts
+    is_out_of_control = Column(Boolean, default=False)
+    control_rule_violated = Column(String(50), nullable=True)  # Nelson rules
+    notes = Column(Text, nullable=True)
+
+    control_chart = relationship("ProcessControlChart", back_populates="control_points")
+    parameter = relationship("ProcessParameter")
+
+    __table_args__ = (
+        Index("ix_control_points_chart_time", "control_chart_id", "timestamp"),
+    )
+
+
+class ProcessCapabilityStudy(Base):
+    """Process capability analysis data - ISO 22000:2018 requirements"""
+    __tablename__ = "process_capability_studies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    parameter_name = Column(String(100), nullable=False)
+    study_period_start = Column(DateTime(timezone=True), nullable=False)
+    study_period_end = Column(DateTime(timezone=True), nullable=False)
+    sample_size = Column(Integer, nullable=False)
+    mean_value = Column(Float, nullable=False)
+    standard_deviation = Column(Float, nullable=False)
+    specification_upper = Column(Float, nullable=False)
+    specification_lower = Column(Float, nullable=False)
+    cp_index = Column(Float, nullable=True)  # Process capability
+    cpk_index = Column(Float, nullable=True)  # Process capability adjusted for centering
+    pp_index = Column(Float, nullable=True)  # Process performance
+    ppk_index = Column(Float, nullable=True)  # Process performance adjusted for centering
+    process_sigma_level = Column(Float, nullable=True)
+    defect_rate_ppm = Column(Float, nullable=True)  # Parts per million defects
+    is_capable = Column(Boolean, nullable=True)
+    study_notes = Column(Text, nullable=True)
+    conducted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    process = relationship("ProductionProcess")
+    conductor = relationship("User", foreign_keys=[conducted_by])
+    approver = relationship("User", foreign_keys=[approved_by])
+
+
+class YieldAnalysisReport(Base):
+    """Comprehensive yield analysis reports - ISO 22000:2018 monitoring requirements"""
+    __tablename__ = "yield_analysis_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    analysis_period_start = Column(DateTime(timezone=True), nullable=False)
+    analysis_period_end = Column(DateTime(timezone=True), nullable=False)
+    total_input_quantity = Column(Float, nullable=False)
+    total_output_quantity = Column(Float, nullable=False)
+    conforming_output_quantity = Column(Float, nullable=False)
+    non_conforming_quantity = Column(Float, nullable=False)
+    rework_quantity = Column(Float, nullable=False, default=0.0)
+    waste_quantity = Column(Float, nullable=False, default=0.0)
+    unit = Column(String(20), nullable=False)
+    
+    # Key Performance Indicators
+    first_pass_yield = Column(Float, nullable=False)  # % conforming units first time
+    rolled_throughput_yield = Column(Float, nullable=True)  # RTY for multi-step processes
+    overall_yield = Column(Float, nullable=False)  # Total output / Total input
+    quality_rate = Column(Float, nullable=False)  # % conforming units
+    rework_rate = Column(Float, nullable=False)  # % requiring rework
+    waste_rate = Column(Float, nullable=False)  # % waste
+    
+    # Root Cause Analysis References
+    primary_loss_category = Column(String(100), nullable=True)
+    secondary_loss_reasons = Column(JSON, nullable=True)  # Array of loss reasons
+    improvement_opportunities = Column(JSON, nullable=True)  # Array of opportunities
+    corrective_actions_taken = Column(JSON, nullable=True)  # Array of actions
+    
+    # Analysis metadata
+    analysis_method = Column(String(50), default="standard")  # standard, lean, six_sigma
+    baseline_comparison = Column(JSON, nullable=True)  # Previous period comparison
+    trend_analysis = Column(JSON, nullable=True)  # Trend data
+    statistical_significance = Column(Boolean, nullable=True)
+    confidence_level = Column(Float, nullable=True, default=95.0)
+    
+    analyzed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    process = relationship("ProductionProcess")
+    analyzer = relationship("User", foreign_keys=[analyzed_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    approver = relationship("User", foreign_keys=[approved_by])
+    defect_categories = relationship("YieldDefectCategory", back_populates="yield_report", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_yield_reports_process_period", "process_id", "analysis_period_start", "analysis_period_end"),
+    )
+
+
+class YieldDefectCategory(Base):
+    """Defect categorization for yield analysis - Pareto analysis support"""
+    __tablename__ = "yield_defect_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    yield_report_id = Column(Integer, ForeignKey("yield_analysis_reports.id"), nullable=False, index=True)
+    defect_type = Column(String(100), nullable=False)
+    defect_description = Column(Text, nullable=True)
+    defect_count = Column(Integer, nullable=False)
+    defect_quantity = Column(Float, nullable=False)
+    defect_cost = Column(Float, nullable=True)
+    percentage_of_total = Column(Float, nullable=False)
+    cumulative_percentage = Column(Float, nullable=False)
+    is_critical_to_quality = Column(Boolean, default=False)
+    root_cause_category = Column(String(100), nullable=True)  # man, machine, material, method, environment
+    corrective_action_required = Column(Boolean, default=True)
+    prevention_method = Column(Text, nullable=True)
+
+    yield_report = relationship("YieldAnalysisReport", back_populates="defect_categories")
+
+
+class ProcessMonitoringDashboard(Base):
+    """Real-time monitoring dashboard configuration"""
+    __tablename__ = "process_monitoring_dashboards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dashboard_name = Column(String(100), nullable=False)
+    process_type = Column(SAEnum(ProductProcessType), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_public = Column(Boolean, default=False)
+    dashboard_config = Column(JSON, nullable=False)  # Widget configurations
+    refresh_interval_seconds = Column(Integer, default=30)
+    alert_thresholds = Column(JSON, nullable=True)  # Custom alert configurations
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User")
+
+
+class ProcessMonitoringAlert(Base):
+    """Enhanced process monitoring alerts with escalation"""
+    __tablename__ = "process_monitoring_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    process_id = Column(Integer, ForeignKey("production_processes.id"), nullable=False, index=True)
+    control_chart_id = Column(Integer, ForeignKey("process_control_charts.id"), nullable=True)
+    alert_type = Column(String(50), nullable=False)  # control_limit, trend, capability, yield
+    severity_level = Column(String(20), nullable=False)  # info, warning, critical, emergency
+    alert_title = Column(String(200), nullable=False)
+    alert_message = Column(Text, nullable=False)
+    parameter_name = Column(String(100), nullable=True)
+    current_value = Column(Float, nullable=True)
+    threshold_value = Column(Float, nullable=True)
+    trend_direction = Column(String(20), nullable=True)  # increasing, decreasing, stable
+    control_rule = Column(String(100), nullable=True)  # Nelson rules, Western Electric rules
+    
+    # Escalation and Response
+    auto_generated = Column(Boolean, default=True)
+    requires_immediate_action = Column(Boolean, default=False)
+    escalation_level = Column(Integer, default=1)
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    acknowledged = Column(Boolean, default=False)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+    
+    # ISO 22000 Compliance
+    food_safety_impact = Column(Boolean, default=False)
+    ccp_affected = Column(Boolean, default=False)  # Critical Control Point
+    oprp_affected = Column(Boolean, default=False)  # Operational Prerequisite Program
+    corrective_action_required = Column(Boolean, default=False)
+    verification_required = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    process = relationship("ProductionProcess")
+    control_chart = relationship("ProcessControlChart")
+    assignee = relationship("User", foreign_keys=[assigned_to])
+    acknowledger = relationship("User", foreign_keys=[acknowledged_by])
+    resolver = relationship("User", foreign_keys=[resolved_by])
+
+    __table_args__ = (
+        Index("ix_monitoring_alerts_process_severity", "process_id", "severity_level"),
+        Index("ix_monitoring_alerts_unresolved", "resolved", "created_at"),
+    )

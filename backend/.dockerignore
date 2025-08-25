@@ -63,20 +63,21 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Logs
+*.log
+logs/
+
 # Database
 *.db
 *.sqlite
 *.sqlite3
-
-# Logs
-*.log
-logs/
 
 # Environment files
 .env
 .env.local
 .env.development
 .env.test
+.env.production
 
 # Temporary files
 *.tmp
@@ -84,22 +85,10 @@ logs/
 temp/
 tmp/
 
-# Uploads (will be mounted as volume)
-uploads/
-
-# Scripts and utilities
-scripts/
-*.py
-!app/**/*.py
-!alembic/**/*.py
-!alembic.ini
-
-# Test files
-test_*.py
-*_test.py
-tests/
-
 # Backup files
 *_backup_*
 *.backup
+
+# Uploads (if any)
+uploads/
 

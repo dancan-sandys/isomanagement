@@ -105,6 +105,116 @@ def list_objectives_root(
     )
 
 
+# ============================================================================
+# CORPORATE AND DEPARTMENTAL OBJECTIVES ENDPOINTS
+# ============================================================================
+
+@router.get("/corporate", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def get_corporate_objectives(
+    db: Session = Depends(get_db)
+):
+    """Get all corporate objectives"""
+    service = ObjectivesServiceEnhanced(db)
+    return service.get_corporate_objectives()
+
+
+@router.get("/departmental/{department_id}", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def get_departmental_objectives(
+    department_id: int = Path(..., description="Department ID"),
+    db: Session = Depends(get_db)
+):
+    """Get objectives for a specific department"""
+    service = ObjectivesServiceEnhanced(db)
+    return service.get_departmental_objectives(department_id)
+
+
+@router.get("/hierarchy", response_model=ObjectiveHierarchy, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
+def get_hierarchical_objectives(
+    db: Session = Depends(get_db)
+):
+    """Get objectives in hierarchical structure"""
+    service = ObjectivesServiceEnhanced(db)
+    hierarchy = service.get_hierarchical_objectives()
+    return ObjectiveHierarchy(objectives=hierarchy)
+
+
+@router.get("/export", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "EXPORT")))])
+def export_objectives(
+    format: str = Query("json", description="Export format (json, csv, pdf)"),
+    objective_type: Optional[ObjectiveType] = Query(None, description="Filter by objective type"),
+    department_id: Optional[int] = Query(None, description="Filter by department ID"),
+    db: Session = Depends(get_db)
+):
+    """Export objectives data"""
+    service = ObjectivesServiceEnhanced(db)
+    
+    # Get objectives based on filters
+    objectives = service.list_objectives(
+        objective_type=objective_type,
+        department_id=department_id
+    )
+    
+    # Assemble related data
+    all_targets = []
+    all_progress = []
+    for obj in objectives:
+        all_targets.extend(service.get_targets(obj.id))
+        all_progress.extend(service.get_progress(obj.id, limit=100))
+
+    # Convert SQLAlchemy objects to dictionaries
+    objectives_dict = []
+    for obj in objectives:
+        obj_dict = {
+            "id": obj.id,
+            "objective_code": obj.objective_code,
+            "title": obj.title,
+            "description": obj.description,
+            "category": obj.category,
+            "objective_type": obj.objective_type.value if hasattr(obj.objective_type, 'value') else str(obj.objective_type),
+            "hierarchy_level": obj.hierarchy_level.value if hasattr(obj.hierarchy_level, 'value') else str(obj.hierarchy_level),
+            "status": obj.status,
+            "created_at": obj.created_at,
+            "updated_at": obj.updated_at
+        }
+        objectives_dict.append(obj_dict)
+    
+    targets_dict = []
+    for target in all_targets:
+        target_dict = {
+            "id": target.id,
+            "objective_id": target.objective_id,
+            "period_start": target.period_start,
+            "period_end": target.period_end,
+            "target_value": target.target_value,
+            "created_at": target.created_at
+        }
+        targets_dict.append(target_dict)
+    
+    progress_dict = []
+    for prog in all_progress:
+        prog_dict = {
+            "id": prog.id,
+            "objective_id": prog.objective_id,
+            "period_start": prog.period_start,
+            "period_end": prog.period_end,
+            "actual_value": prog.actual_value,
+            "attainment_percent": prog.attainment_percent,
+            "status": prog.status,
+            "created_at": prog.created_at
+        }
+        progress_dict.append(prog_dict)
+
+    export_payload = {
+        "export_date": datetime.utcnow(),
+        "export_format": format,
+        "objectives": objectives_dict,
+        "targets": targets_dict,
+        "progress": progress_dict,
+    }
+
+    return export_payload
+
+
 @router.get("/{objective_id}", response_model=ObjectiveDetailResponse, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
 def get_objective(
     objective_id: int = Path(..., description="Objective ID"),
@@ -124,7 +234,10 @@ def get_objective(
     targets = service.get_targets(objective_id)
     progress = service.get_progress(objective_id)
     trend_analysis = service.get_trend_analysis(objective_id)
-    child_objectives = service.list_objectives(parent_objective_id=objective_id)
+    # Get child objectives by filtering for parent_objective_id
+    child_objectives = service.db.query(FoodSafetyObjective).filter(
+        FoodSafetyObjective.parent_objective_id == objective_id
+    ).all()
     
     return ObjectiveDetailResponse(
         objective=objective,
@@ -171,39 +284,6 @@ def delete_objective(
 
 
 # ============================================================================
-# CORPORATE AND DEPARTMENTAL OBJECTIVES ENDPOINTS
-# ============================================================================
-
-@router.get("/corporate", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
-def get_corporate_objectives(
-    db: Session = Depends(get_db)
-):
-    """Get all corporate objectives"""
-    service = ObjectivesServiceEnhanced(db)
-    return service.get_corporate_objectives()
-
-
-@router.get("/departmental/{department_id}", response_model=List[Objective], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
-def get_departmental_objectives(
-    department_id: int = Path(..., description="Department ID"),
-    db: Session = Depends(get_db)
-):
-    """Get objectives for a specific department"""
-    service = ObjectivesServiceEnhanced(db)
-    return service.get_departmental_objectives(department_id)
-
-
-@router.get("/hierarchy", response_model=ObjectiveHierarchy, dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "VIEW")))])
-def get_hierarchical_objectives(
-    db: Session = Depends(get_db)
-):
-    """Get objectives in hierarchical structure"""
-    service = ObjectivesServiceEnhanced(db)
-    hierarchy = service.get_hierarchical_objectives()
-    return ObjectiveHierarchy(objectives=hierarchy)
-
-
-# ============================================================================
 # PROGRESS TRACKING ENDPOINTS
 # ============================================================================
 
@@ -211,7 +291,8 @@ def get_hierarchical_objectives(
 def create_progress(
     objective_id: int = Path(..., description="Objective ID"),
     progress: ObjectiveProgressCreate = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
 ):
     """Record progress for an objective"""
     service = ObjectivesServiceEnhanced(db)
@@ -224,7 +305,10 @@ def create_progress(
         )
     
     try:
-        result = service.create_progress(progress.model_dump())
+        payload = progress.model_dump()
+        if not payload.get("created_by"):
+            payload["created_by"] = current_user.id
+        result = service.create_progress(payload)
         return result
     except Exception as e:
         raise HTTPException(
@@ -287,7 +371,8 @@ def create_bulk_progress(
 def create_target(
     objective_id: int = Path(..., description="Objective ID"),
     target: ObjectiveTargetCreate = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
 ):
     """Create a target for an objective"""
     service = ObjectivesServiceEnhanced(db)
@@ -299,7 +384,10 @@ def create_target(
         )
     
     try:
-        result = service.create_target(target.model_dump())
+        payload = target.model_dump()
+        if not payload.get("created_by"):
+            payload["created_by"] = current_user.id
+        result = service.create_target(payload)
         return result
     except Exception as e:
         raise HTTPException(
@@ -529,46 +617,7 @@ def get_progress_summary(
     }
 
 
-@router.get("/export", response_model=Dict[str, Any], dependencies=[Depends(require_permission((Module.OBJECTIVES.value, "EXPORT")))])
-def export_objectives(
-    format: str = Query("json", description="Export format (json, csv, excel)"),
-    objective_type: Optional[ObjectiveType] = Query(None, description="Filter by objective type"),
-    department_id: Optional[int] = Query(None, description="Filter by department ID"),
-    db: Session = Depends(get_db)
-):
-    """Export objectives data"""
-    service = ObjectivesServiceEnhanced(db)
-    
-    # Get objectives based on filters
-    objectives = service.list_objectives(
-        objective_type=objective_type,
-        department_id=department_id
-    )
-    
-    # Assemble related data
-    all_targets = []
-    all_progress = []
-    for obj in objectives:
-        all_targets.extend(service.get_targets(obj.id))
-        all_progress.extend(service.get_progress(obj.id, limit=100))
 
-    # Departments
-    depts = service.list_departments()
-
-    export_payload = {
-        "export_date": datetime.utcnow(),
-        "export_format": format,
-        "objectives": objectives,
-        "targets": all_targets,
-        "progress": all_progress,
-        "departments": depts,
-    }
-
-    # For now, return JSON payload; CSV/Excel can be added via a download route
-    if format.lower() == "json":
-        return export_payload
-    else:
-        return export_payload
 
 
 # =========================================================================
