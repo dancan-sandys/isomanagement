@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, dashboard, documents, haccp, prp, notifications, settings, suppliers, traceability, rbac, users, profile, nonconformance, audits, training, risk, equipment, allergen_label, management_review, complaints, search, demo, objectives, production, objectives_enhanced, actions_log, analytics
+from app.api.v1.endpoints import auth, dashboard, documents, haccp, prp, notifications, settings, suppliers, traceability, rbac, users, profile, nonconformance, audits, training, risk, equipment, allergen_label, management_review, complaints, search, demo, objectives, production, objectives_enhanced, actions_log, analytics, swot_pestel
 
 api_router = APIRouter()
 
@@ -31,3 +31,4 @@ api_router.include_router(objectives_enhanced.router, prefix="/objectives-v2", t
 api_router.include_router(production.router, prefix="/production", tags=["production"])
 api_router.include_router(actions_log.router, prefix="/actions-log", tags=["actions-log"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(swot_pestel.router, prefix="/swot-pestel", tags=["swot-pestel"])

@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
-from app.database import get_db
+from app.core.database import get_db
 from app.models.actions_log import SWOTAnalysis, SWOTItem, PESTELAnalysis, PESTELItem, SWOTAction, PESTELAction
 from sqlalchemy import func, and_
-from app.schemas.actions_log import (
+from app.schemas.swot_pestel import (
     SWOTAnalysisCreate, SWOTAnalysisUpdate, SWOTAnalysisResponse,
     SWOTItemCreate, SWOTItemUpdate, SWOTItemResponse,
     PESTELAnalysisCreate, PESTELAnalysisUpdate, PESTELAnalysisResponse,
