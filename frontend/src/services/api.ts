@@ -742,11 +742,7 @@ export const haccpAPI = {
     return response.data;
   },
 
-  // Utility to fetch most recent NC for a CCP and batch
-  getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
-    const response: AxiosResponse = await api.get(`/nonconformance/recent`, { params: { ccp_id: ccpId, batch_number: batchNumber } });
-    return response.data;
-  },
+
 
   getFlowchartData: async (productId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/products/${productId}/flowchart`);
