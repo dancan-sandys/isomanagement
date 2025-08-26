@@ -312,6 +312,26 @@ const HACCPProductDetail: React.FC = () => {
     return () => { active = false; clearTimeout(t); };
   }, [batchOpen, batchSearch]);
 
+  // Fetch existing monitoring logs whenever a CCP is selected
+  useEffect(() => {
+    let active = true;
+    const fetchLogs = async () => {
+      const ccpIdStr = monitoringForm.ccp_id || '';
+      if (!ccpIdStr) { if (active) setMonitoringLogs([]); return; }
+      try {
+        const api = (await import('../services/api')).api;
+        const resp = await api.get(`/haccp/ccps/${Number(ccpIdStr)}/monitoring-logs`);
+        const logsJson = resp.data;
+        const items = logsJson?.data?.items || logsJson?.items || [];
+        if (active) setMonitoringLogs(items);
+      } catch {
+        if (active) setMonitoringLogs([]);
+      }
+    };
+    fetchLogs();
+    return () => { active = false; };
+  }, [monitoringForm.ccp_id]);
+
   const [riskConfigDialogOpen, setRiskConfigDialogOpen] = useState(false);
   const [riskConfigForm, setRiskConfigForm] = useState({
     calculation_method: 'multiplication',
