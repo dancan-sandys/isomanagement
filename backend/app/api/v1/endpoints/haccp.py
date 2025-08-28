@@ -97,6 +97,22 @@ async def get_product(
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
         
+        # Get risk configuration
+        from app.models.haccp import ProductRiskConfig
+        risk_config = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
+        risk_config_data = None
+        if risk_config:
+            risk_config_data = {
+                "calculation_method": risk_config.calculation_method,
+                "likelihood_scale": risk_config.likelihood_scale,
+                "severity_scale": risk_config.severity_scale,
+                "risk_thresholds": {
+                    "low_threshold": risk_config.low_threshold,
+                    "medium_threshold": risk_config.medium_threshold,
+                    "high_threshold": risk_config.high_threshold,
+                }
+            }
+        
         # Get process flows
         process_flows = db.query(ProcessFlow).filter(
             ProcessFlow.product_id == product_id
@@ -215,6 +231,7 @@ async def get_product(
                 "packaging_type": product.packaging_type,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
+                "risk_config": risk_config_data,
                 "created_by": creator_name,
                 "created_at": product.created_at.isoformat() if product.created_at else None,
                 "updated_at": product.updated_at.isoformat() if product.updated_at else None,
@@ -366,41 +383,79 @@ async def update_product(
         
         # Handle optional embedded risk configuration
         if product_data.risk_config is not None:
-            from app.models.haccp import ProductRiskConfig
-            rc = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
-            payload = product_data.risk_config or {}
-            if not rc:
-                rc = ProductRiskConfig(
-                    product_id=product_id,
-                    calculation_method=payload.get("calculation_method", "multiplication"),
-                    likelihood_scale=payload.get("likelihood_scale", 5),
-                    severity_scale=payload.get("severity_scale", 5),
-                    low_threshold=payload.get("risk_thresholds", {}).get("low_threshold", payload.get("low_threshold", 4)),
-                    medium_threshold=payload.get("risk_thresholds", {}).get("medium_threshold", payload.get("medium_threshold", 8)),
-                    high_threshold=payload.get("risk_thresholds", {}).get("high_threshold", payload.get("high_threshold", 15)),
-                    created_by=current_user.id,
-                )
-                db.add(rc)
-            else:
-                if "calculation_method" in payload: rc.calculation_method = payload["calculation_method"]
-                if "likelihood_scale" in payload: rc.likelihood_scale = int(payload["likelihood_scale"])
-                if "severity_scale" in payload: rc.severity_scale = int(payload["severity_scale"])
-                if "risk_thresholds" in payload and isinstance(payload["risk_thresholds"], dict):
-                    rt = payload["risk_thresholds"]
-                    if "low_threshold" in rt: rc.low_threshold = int(rt["low_threshold"])
-                    if "medium_threshold" in rt: rc.medium_threshold = int(rt["medium_threshold"])
-                    if "high_threshold" in rt: rc.high_threshold = int(rt["high_threshold"])
+            try:
+                from app.models.haccp import ProductRiskConfig
+                rc = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
+                payload = product_data.risk_config or {}
+                print(f"DEBUG: Processing risk config payload: {payload}")
+                
+                if not rc:
+                    print(f"DEBUG: Creating new risk config for product {product_id}")
+                    rc = ProductRiskConfig(
+                        product_id=product_id,
+                        calculation_method=payload.get("calculation_method", "multiplication"),
+                        likelihood_scale=payload.get("likelihood_scale", 5),
+                        severity_scale=payload.get("severity_scale", 5),
+                        low_threshold=payload.get("risk_thresholds", {}).get("low_threshold", payload.get("low_threshold", 4)),
+                        medium_threshold=payload.get("risk_thresholds", {}).get("medium_threshold", payload.get("medium_threshold", 8)),
+                        high_threshold=payload.get("risk_thresholds", {}).get("high_threshold", payload.get("high_threshold", 15)),
+                        created_by=current_user.id,
+                    )
+                    db.add(rc)
+                    print(f"DEBUG: Added new risk config: {rc}")
                 else:
-                    if "low_threshold" in payload: rc.low_threshold = int(payload["low_threshold"])
-                    if "medium_threshold" in payload: rc.medium_threshold = int(payload["medium_threshold"])
-                    if "high_threshold" in payload: rc.high_threshold = int(payload["high_threshold"])
+                    print(f"DEBUG: Updating existing risk config: {rc.id}")
+                    if "calculation_method" in payload: rc.calculation_method = payload["calculation_method"]
+                    if "likelihood_scale" in payload: rc.likelihood_scale = int(payload["likelihood_scale"])
+                    if "severity_scale" in payload: rc.severity_scale = int(payload["severity_scale"])
+                    if "risk_thresholds" in payload and isinstance(payload["risk_thresholds"], dict):
+                        rt = payload["risk_thresholds"]
+                        if "low_threshold" in rt: rc.low_threshold = int(rt["low_threshold"])
+                        if "medium_threshold" in rt: rc.medium_threshold = int(rt["medium_threshold"])
+                        if "high_threshold" in rt: rc.high_threshold = int(rt["high_threshold"])
+                    else:
+                        if "low_threshold" in payload: rc.low_threshold = int(payload["low_threshold"])
+                        if "medium_threshold" in payload: rc.medium_threshold = int(payload["medium_threshold"])
+                        if "high_threshold" in payload: rc.high_threshold = int(payload["high_threshold"])
+                    print(f"DEBUG: Updated risk config: {rc}")
+            except Exception as e:
+                print(f"DEBUG: Error processing risk config: {e}")
+                import traceback
+                print(f"DEBUG: Traceback: {traceback.format_exc()}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to process risk configuration: {str(e)}"
+                )
         
-        db.commit()
-        db.refresh(product)
+        try:
+            db.commit()
+            db.refresh(product)
+        except Exception as e:
+            print(f"DEBUG: Database commit error: {e}")
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error: {str(e)}"
+            )
         
         # Get creator name
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
+        
+        # Get updated risk configuration for response
+        risk_config = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
+        risk_config_data = None
+        if risk_config:
+            risk_config_data = {
+                "calculation_method": risk_config.calculation_method,
+                "likelihood_scale": risk_config.likelihood_scale,
+                "severity_scale": risk_config.severity_scale,
+                "risk_thresholds": {
+                    "low_threshold": risk_config.low_threshold,
+                    "medium_threshold": risk_config.medium_threshold,
+                    "high_threshold": risk_config.high_threshold,
+                }
+            }
         
         resp = ResponseModel(
             success=True,
@@ -418,6 +473,7 @@ async def update_product(
                 "packaging_type": product.packaging_type,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
+                "risk_config": risk_config_data,
                 "created_by": creator_name,
                 "created_at": product.created_at.isoformat() if product.created_at else None,
                 "updated_at": product.updated_at.isoformat() if product.updated_at else None,

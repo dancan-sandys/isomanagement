@@ -348,27 +348,60 @@ const HACCPProductDetail: React.FC = () => {
   const [riskConfigDialogOpen, setRiskConfigDialogOpen] = useState(false);
   const [riskConfigForm, setRiskConfigForm] = useState({
     calculation_method: 'multiplication',
-    likelihood_scale: 10,
-    severity_scale: 10,
+    likelihood_scale: 5,
+    severity_scale: 5,
     risk_thresholds: {
-      low_threshold: 10,
-      medium_threshold: 20,
-      high_threshold: 30,
+      low_threshold: 4,
+      medium_threshold: 8,
+      high_threshold: 15,
     },
   });
 
   const handleSaveRiskConfig = async () => {
     try {
-      await dispatch(updateProduct({ productId, productData: { risk_config: riskConfigForm } })).unwrap();
+      // Validate form data
+      if (!riskConfigForm.calculation_method) {
+        alert('Please select a calculation method');
+        return;
+      }
+      
+      if (!riskConfigForm.likelihood_scale || riskConfigForm.likelihood_scale < 1 || riskConfigForm.likelihood_scale > 10) {
+        alert('Please enter a valid likelihood scale (1-10)');
+        return;
+      }
+      
+      if (!riskConfigForm.severity_scale || riskConfigForm.severity_scale < 1 || riskConfigForm.severity_scale > 10) {
+        alert('Please enter a valid severity scale (1-10)');
+        return;
+      }
+      
+      if (!riskConfigForm.risk_thresholds.low_threshold || 
+          !riskConfigForm.risk_thresholds.medium_threshold || 
+          !riskConfigForm.risk_thresholds.high_threshold) {
+        alert('Please enter all risk thresholds');
+        return;
+      }
+      
+      if (riskConfigForm.risk_thresholds.low_threshold >= riskConfigForm.risk_thresholds.medium_threshold ||
+          riskConfigForm.risk_thresholds.medium_threshold >= riskConfigForm.risk_thresholds.high_threshold) {
+        alert('Risk thresholds must be in ascending order: Low < Medium < High');
+        return;
+      }
+      
+      console.log('Saving risk config:', { productId, riskConfigForm });
+      const result = await dispatch(updateProduct({ productId, productData: { risk_config: riskConfigForm } })).unwrap();
+      console.log('Risk config saved successfully:', result);
       setRiskConfigDialogOpen(false);
       dispatch(fetchProduct(productId));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save risk config:', error);
-      alert('Failed to save risk config');
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to save risk config';
+      alert(`Failed to save risk config: ${errorMessage}`);
     }
   };
 
   useEffect(() => {
+    console.log('Selected product risk config:', selectedProduct?.risk_config);
     if (selectedProduct?.risk_config) {
       setRiskConfigForm(selectedProduct.risk_config);
     }

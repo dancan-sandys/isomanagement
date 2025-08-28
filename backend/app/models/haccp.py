@@ -602,7 +602,7 @@ class ProductRiskConfig(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), unique=True, nullable=False)
     
     # Risk calculation method
-    calculation_method = Column(Enum("multiplication", "addition", "matrix", name="risk_calculation_method"), default="multiplication")
+    calculation_method = Column(String(20), default="multiplication")
     
     # Scales for likelihood and severity
     likelihood_scale = Column(Integer, default=5)  # e.g., 1-5 scale
