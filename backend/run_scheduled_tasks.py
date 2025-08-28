@@ -16,6 +16,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.services.scheduled_tasks import run_scheduled_maintenance, run_audit_reminders
+from app.services.scheduled_tasks import ScheduledTasksService
+from app.core.database import get_db
 from app.services.email_service import EmailService
 
 # Configure logging
@@ -30,7 +32,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run scheduled tasks for ISO Management System')
     parser.add_argument(
         '--task',
-        choices=['maintenance', 'audit_reminders', 'all'],
+        choices=['maintenance', 'audit_reminders', 'prp_daily', 'all'],
         default='all',
         help='Which task to run (default: all)'
     )
@@ -56,6 +58,14 @@ def main():
             results = run_audit_reminders()
             logger.info(f"Audit reminders completed: {results}")
             
+        elif args.task == 'prp_daily':
+            db = next(get_db())
+            try:
+                service = ScheduledTasksService(db)
+                results = service.process_prp_daily_rollover()
+                logger.info(f"PRP daily rollover completed: {results}")
+            finally:
+                db.close()
         elif args.task == 'all':
             # Run maintenance tasks
             maintenance_results = run_scheduled_maintenance()
@@ -65,10 +75,20 @@ def main():
             audit_results = run_audit_reminders()
             logger.info(f"Audit reminders completed: {audit_results}")
             
+            # PRP daily rollover
+            db = next(get_db())
+            try:
+                service = ScheduledTasksService(db)
+                prp_results = service.process_prp_daily_rollover()
+                logger.info(f"PRP daily rollover completed: {prp_results}")
+            finally:
+                db.close()
+            
             # Combine results
             results = {
                 "maintenance": maintenance_results,
-                "audit_reminders": audit_results
+                "audit_reminders": audit_results,
+                "prp_daily": prp_results
             }
         
         logger.info("Scheduled tasks completed successfully")
