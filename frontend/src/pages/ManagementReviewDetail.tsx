@@ -14,7 +14,7 @@ import {
   Send as SendIcon, Analytics as AnalyticsIcon, Checklist as ChecklistIcon,
   Schedule as ScheduleIcon, Group as GroupIcon
 } from '@mui/icons-material';
-import managementReviewAPI from '../services/managementReviewAPI';
+import managementReviewAPI, { ReviewParticipant } from '../services/managementReviewAPI';
 
 const ManagementReviewDetail: React.FC = () => {
   const { id } = useParams();
@@ -29,6 +29,8 @@ const ManagementReviewDetail: React.FC = () => {
   const [actions, setActions] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>({});
   const [compliance, setCompliance] = useState<any>({});
+  const [attendance, setAttendance] = useState<ReviewParticipant[]>([]);
+  const [newAttendee, setNewAttendee] = useState<ReviewParticipant>({ name: '', role: '', attendance_status: 'present' });
   const [collectingInputs, setCollectingInputs] = useState(false);
   const [actionForm, setActionForm] = useState({
     title: '',
@@ -53,6 +55,10 @@ const ManagementReviewDetail: React.FC = () => {
       setInputs(inputsResp.data || []);
       setOutputs(outputsResp.data || []);
       setActions(actionsResp.data || []);
+      try {
+        const attResp = await managementReviewAPI.listAttendance(Number(id));
+        setAttendance(attResp.data || []);
+      } catch {}
       
       // Load analytics and compliance if review is completed
       if ((reviewResp.data || reviewResp).status === 'completed') {
@@ -94,6 +100,23 @@ const ManagementReviewDetail: React.FC = () => {
     } finally {
       setCollectingInputs(false);
     }
+  };
+
+  const addAttendee = async () => {
+    if (!newAttendee.name || !newAttendee.role) return;
+    await managementReviewAPI.addAttendee(Number(id), newAttendee);
+    setNewAttendee({ name: '', role: '', attendance_status: 'present' });
+    await load();
+  };
+
+  const updateAttendeeStatus = async (index: number, status: 'present' | 'absent' | 'partial') => {
+    await managementReviewAPI.updateAttendee(Number(id), index, { attendance_status: status });
+    await load();
+  };
+
+  const removeAttendee = async (index: number) => {
+    await managementReviewAPI.deleteAttendee(Number(id), index);
+    await load();
   };
 
   const startReview = async () => {
@@ -253,6 +276,7 @@ const ManagementReviewDetail: React.FC = () => {
           <Tab label="Outputs" />
           <Tab label="Actions" />
           <Tab label="Analytics" />
+          <Tab label="Attendance" />
         </Tabs>
       </Paper>
 
@@ -663,6 +687,72 @@ const ManagementReviewDetail: React.FC = () => {
               </Grid>
             </Grid>
           )}
+        </Box>
+      )}
+
+      {tabValue === 5 && (
+        <Box>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="h6">Attendance Register</Typography>
+          </Stack>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              {(!attendance || attendance.length === 0) ? (
+                <Alert severity="info">No attendees recorded. Add participants below.</Alert>
+              ) : (
+                <Stack spacing={2}>
+                  {attendance.map((a, idx) => (
+                    <Card key={idx}>
+                      <CardContent>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                          <Box>
+                            <Typography variant="subtitle1">{a.name}</Typography>
+                            <Typography variant="body2" color="text.secondary">{a.role}{a.department ? ` • ${a.department}` : ''}</Typography>
+                            {a.email && <Typography variant="body2" color="text.secondary">{a.email}</Typography>}
+                          </Box>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip label={a.attendance_status || 'present'} color={
+                              (a.attendance_status === 'present' ? 'success' : a.attendance_status === 'partial' ? 'warning' : 'default') as any
+                            } />
+                            {review.status !== 'completed' && (
+                              <Stack direction="row" spacing={1}>
+                                <Button size="small" onClick={() => updateAttendeeStatus(idx, 'present')}>Present</Button>
+                                <Button size="small" onClick={() => updateAttendeeStatus(idx, 'partial')}>Partial</Button>
+                                <Button size="small" onClick={() => updateAttendeeStatus(idx, 'absent')}>Absent</Button>
+                                <Button size="small" color="error" onClick={() => removeAttendee(idx)}>Remove</Button>
+                              </Stack>
+                            )}
+                          </Stack>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Add Participant</Typography>
+                  <Stack spacing={2}>
+                    <TextField label="Name" value={newAttendee.name} onChange={(e) => setNewAttendee({ ...newAttendee, name: e.target.value })} fullWidth />
+                    <TextField label="Role" value={newAttendee.role} onChange={(e) => setNewAttendee({ ...newAttendee, role: e.target.value })} fullWidth />
+                    <TextField label="Department" value={newAttendee.department || ''} onChange={(e) => setNewAttendee({ ...newAttendee, department: e.target.value })} fullWidth />
+                    <TextField label="Email" value={newAttendee.email || ''} onChange={(e) => setNewAttendee({ ...newAttendee, email: e.target.value })} fullWidth />
+                    <FormControl fullWidth>
+                      <InputLabel>Attendance Status</InputLabel>
+                      <Select value={newAttendee.attendance_status || 'present'} label="Attendance Status" onChange={(e) => setNewAttendee({ ...newAttendee, attendance_status: e.target.value as any })}>
+                        <MenuItem value="present">Present</MenuItem>
+                        <MenuItem value="partial">Partial</MenuItem>
+                        <MenuItem value="absent">Absent</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button variant="contained" onClick={addAttendee} disabled={!newAttendee.name || !newAttendee.role}>Add Participant</Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
         </Box>
       )}
     </Box>

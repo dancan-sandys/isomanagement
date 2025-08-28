@@ -658,4 +658,50 @@ class ManagementReviewService:
             )
         ).first()
 
+    # ==================== ATTENDANCE MANAGEMENT ====================
+    def list_attendees(self, review_id: int) -> List[Dict[str, Any]]:
+        review = self.get(review_id)
+        if not review:
+            raise ValueError("Management review not found")
+        return list(review.attendees or [])
+
+    def add_attendee(self, review_id: int, attendee: Dict[str, Any]) -> List[Dict[str, Any]]:
+        review = self.get(review_id)
+        if not review:
+            raise ValueError("Management review not found")
+        attendees = review.attendees or []
+        attendees.append(attendee)
+        review.attendees = attendees
+        review.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(review)
+        return attendees
+
+    def update_attendee(self, review_id: int, index: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        review = self.get(review_id)
+        if not review:
+            raise ValueError("Management review not found")
+        attendees = review.attendees or []
+        if index < 0 or index >= len(attendees):
+            raise ValueError("Attendee not found")
+        attendees[index] = {**attendees[index], **{k: v for k, v in updates.items() if v is not None}}
+        review.attendees = attendees
+        review.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(review)
+        return attendees[index]
+
+    def delete_attendee(self, review_id: int, index: int) -> bool:
+        review = self.get(review_id)
+        if not review:
+            raise ValueError("Management review not found")
+        attendees = review.attendees or []
+        if index < 0 or index >= len(attendees):
+            raise ValueError("Attendee not found")
+        attendees.pop(index)
+        review.attendees = attendees
+        review.updated_at = datetime.utcnow()
+        self.db.commit()
+        return True
+
 

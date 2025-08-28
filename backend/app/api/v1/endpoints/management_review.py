@@ -11,7 +11,8 @@ from app.schemas.management_review import (
     ManagementReviewInputCreate, ManagementReviewInputResponse,
     ManagementReviewOutputCreate, ManagementReviewOutputResponse,
     ManagementReviewTemplateCreate, ManagementReviewTemplateResponse,
-    DataCollectionRequest, ComplianceCheckResponse
+    DataCollectionRequest, ComplianceCheckResponse,
+    ReviewParticipant, ReviewParticipantUpdate
 )
 from app.services.management_review_service import ManagementReviewService
 
@@ -339,5 +340,57 @@ async def create_template(payload: ManagementReviewTemplateCreate, db: Session =
         return ResponseModel(success=True, message="Template created", data=ManagementReviewTemplateResponse.model_validate(template))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create template: {str(e)}")
+
+
+# ==================== ATTENDANCE REGISTER ====================
+
+@router.get("/{review_id}/attendance", response_model=ResponseModel)
+async def list_attendance(review_id: int, db: Session = Depends(get_db)):
+    try:
+        service = ManagementReviewService(db)
+        attendees = service.list_attendees(review_id)
+        return ResponseModel(success=True, message="Attendance retrieved", data=attendees)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve attendance: {str(e)}")
+
+
+@router.post("/{review_id}/attendance", response_model=ResponseModel)
+async def add_attendance(review_id: int, attendee: ReviewParticipant, db: Session = Depends(get_db)):
+    try:
+        service = ManagementReviewService(db)
+        attendees = service.add_attendee(review_id, attendee.model_dump())
+        return ResponseModel(success=True, message="Attendee added", data=attendees)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add attendee: {str(e)}")
+
+
+@router.put("/{review_id}/attendance/{index}", response_model=ResponseModel)
+async def update_attendance(review_id: int, index: int, updates: ReviewParticipantUpdate, db: Session = Depends(get_db)):
+    try:
+        service = ManagementReviewService(db)
+        attendee = service.update_attendee(review_id, index, updates.model_dump(exclude_unset=True))
+        return ResponseModel(success=True, message="Attendee updated", data=attendee)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update attendee: {str(e)}")
+
+
+@router.delete("/{review_id}/attendance/{index}", response_model=ResponseModel)
+async def delete_attendance(review_id: int, index: int, db: Session = Depends(get_db)):
+    try:
+        service = ManagementReviewService(db)
+        ok = service.delete_attendee(review_id, index)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Attendee not found")
+        return ResponseModel(success=True, message="Attendee deleted")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete attendee: {str(e)}")
 
 
