@@ -71,6 +71,7 @@ class InvestigationCreate(BaseModel):
 class InvestigationUpdate(BaseModel):
     investigator_id: Optional[int] = None
     root_cause_analysis_id: Optional[int] = None
+    capa_action_id: Optional[int] = None
     summary: Optional[str] = None
     outcome: Optional[str] = None
 
@@ -82,6 +83,7 @@ class InvestigationResponse(BaseModel):
     start_date: datetime
     investigator_id: Optional[int] = None
     root_cause_analysis_id: Optional[int] = None
+    capa_action_id: Optional[int] = None
     summary: Optional[str] = None
     outcome: Optional[str] = None
 

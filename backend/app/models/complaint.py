@@ -99,10 +99,16 @@ class ComplaintInvestigation(Base):
     start_date = Column(DateTime(timezone=True), server_default=func.now())
     investigator_id = Column(Integer, ForeignKey("users.id"))
     root_cause_analysis_id = Column(Integer, ForeignKey("root_cause_analyses.id"))
+    # Link to CAPA action associated with the complaint's NC (if any)
+    capa_action_id = Column(Integer, ForeignKey("capa_actions.id"))
     summary = Column(Text)
     outcome = Column(Text)
 
     complaint = relationship("Complaint", back_populates="investigation")
+    # Optional relationship for convenience; avoids loading unless used
+    # Note: CAPAAction is defined in nonconformance models
+    # Using string-based relationship to avoid circular imports
+    capa_action = relationship("CAPAAction", uselist=False, primaryjoin="foreign(ComplaintInvestigation.capa_action_id)==CAPAAction.id")
 
     def __repr__(self):
         return f"<ComplaintInvestigation(id={self.id}, complaint_id={self.complaint_id})>"

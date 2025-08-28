@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Stack, Typography, Paper, Divider, Chip, TextField, Button, MenuItem, Select, Table, TableHead, TableRow, TableCell, TableBody } from '@mui/material';
-import { complaintsAPI } from '../services/api';
+import { Box, Stack, Typography, Paper, Divider, Chip, TextField, Button, MenuItem, Select, Table, TableHead, TableRow, TableCell, TableBody, Autocomplete } from '@mui/material';
+import { complaintsAPI, ncAPI } from '../services/api';
 import { useParams } from 'react-router-dom';
 
 const ComplaintDetailPage: React.FC = () => {
@@ -11,7 +11,8 @@ const ComplaintDetailPage: React.FC = () => {
   const [investigation, setInvestigation] = useState<any | null>(null);
   const [statusUpdate, setStatusUpdate] = useState<string>('');
   const [newComm, setNewComm] = useState({ channel: 'email', sender: '', recipient: '', message: '' });
-  const [invForm, setInvForm] = useState({ investigator_id: '', summary: '', root_cause_analysis_id: '', outcome: '' });
+  const [invForm, setInvForm] = useState({ investigator_id: '', summary: '', root_cause_analysis_id: '', capa_action_id: '', outcome: '' });
+  const [capaOptions, setCapaOptions] = useState<any[]>([]);
 
   const load = async () => {
     const comp = await complaintsAPI.get(complaintId);
@@ -29,11 +30,26 @@ const ComplaintDetailPage: React.FC = () => {
           investigator_id: investigationData.investigator_id?.toString() || '',
           summary: investigationData.summary || '',
           root_cause_analysis_id: investigationData.root_cause_analysis_id?.toString() || '',
+          capa_action_id: investigationData.capa_action_id?.toString() || '',
           outcome: investigationData.outcome || ''
         });
       }
     } catch (error) {
       console.error('Error loading investigation:', error);
+    }
+
+    // Load CAPAs for linked NC if available
+    try {
+      const ncId = (comp?.data || comp)?.non_conformance_id || comp?.non_conformance_id;
+      if (ncId) {
+        const capasRes = await ncAPI.getCAPAList({ non_conformance_id: Number(ncId), page: 1, size: 50 });
+        const items = capasRes?.data?.items || capasRes?.items || [];
+        setCapaOptions(items);
+      } else {
+        setCapaOptions([]);
+      }
+    } catch (e) {
+      setCapaOptions([]);
     }
   };
 
@@ -174,6 +190,19 @@ const ComplaintDetailPage: React.FC = () => {
               onChange={e => setInvForm({ ...invForm, root_cause_analysis_id: e.target.value })}
               placeholder="Enter root cause analysis ID"
             />
+            {complaint?.non_conformance_id && (
+              <Autocomplete
+                options={capaOptions}
+                getOptionLabel={(o: any) => (o?.capa_number ? `${o.capa_number} — ${o.title}` : String(o))}
+                value={
+                  (capaOptions || []).find((o: any) => String(o.id) === String(invForm.capa_action_id)) || null
+                }
+                onChange={(_, value: any) => setInvForm({ ...invForm, capa_action_id: value?.id ? String(value.id) : '' })}
+                renderInput={(params) => (
+                  <TextField {...params} size="small" label="Link CAPA (optional)" placeholder="Select CAPA to link" />
+                )}
+              />
+            )}
             <TextField 
               size="small" 
               label="Outcome" 
@@ -208,11 +237,12 @@ const ComplaintDetailPage: React.FC = () => {
                     await complaintsAPI.updateInvestigation(complaintId, { 
                       investigator_id: invForm.investigator_id ? Number(invForm.investigator_id) : undefined, 
                       root_cause_analysis_id: invForm.root_cause_analysis_id ? Number(invForm.root_cause_analysis_id) : undefined, 
+                      capa_action_id: invForm.capa_action_id ? Number(invForm.capa_action_id) : undefined,
                       summary: invForm.summary || undefined, 
                       outcome: invForm.outcome || undefined 
                     }); 
                     load(); 
-                    setInvForm({ investigator_id: '', summary: '', root_cause_analysis_id: '', outcome: '' });
+                    setInvForm({ investigator_id: '', summary: '', root_cause_analysis_id: '', capa_action_id: '', outcome: '' });
                   } catch (error) {
                     console.error('Error updating investigation:', error);
                   }

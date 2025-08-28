@@ -1657,7 +1657,7 @@ export const complaintsAPI = {
     const response = await api.post(`/complaints/${id}/investigation`, payload);
     return response.data;
   },
-  updateInvestigation: async (id: number, payload: { investigator_id?: number; root_cause_analysis_id?: number; summary?: string; outcome?: string }) => {
+  updateInvestigation: async (id: number, payload: { investigator_id?: number; root_cause_analysis_id?: number; capa_action_id?: number; summary?: string; outcome?: string }) => {
     const response = await api.put(`/complaints/${id}/investigation`, payload);
     return response.data;
   },

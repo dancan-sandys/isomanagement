@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.models.complaint import Complaint, ComplaintStatus, ComplaintCommunication, ComplaintInvestigation
-from app.models.nonconformance import NonConformance, NonConformanceSource
+from app.models.nonconformance import NonConformance, NonConformanceSource, CAPAAction
 from app.models.traceability import Batch
 from app.schemas.complaint import ComplaintCreate, ComplaintUpdate, CommunicationCreate, InvestigationCreate, InvestigationUpdate
 from app.services.actions_log_service import ActionsLogService
@@ -124,7 +124,21 @@ class ComplaintService:
         inv = self.db.query(ComplaintInvestigation).filter(ComplaintInvestigation.complaint_id == complaint_id).first()
         if not inv:
             return None
-        for field, value in payload.dict(exclude_unset=True).items():
+        update_data = payload.dict(exclude_unset=True)
+
+        # Validate CAPA linkage if provided
+        if 'capa_action_id' in update_data and update_data['capa_action_id'] is not None:
+            complaint = self.get_complaint(complaint_id)
+            if not complaint:
+                return None
+            capa = self.db.query(CAPAAction).filter(CAPAAction.id == update_data['capa_action_id']).first()
+            if not capa:
+                raise ValueError("CAPA action not found")
+            # Ensure CAPA belongs to the complaint's linked NC (ISO 9001/22000 traceability)
+            if complaint.non_conformance_id and capa.non_conformance_id != complaint.non_conformance_id:
+                raise ValueError("CAPA action does not belong to the complaint's linked non-conformance")
+
+        for field, value in update_data.items():
             setattr(inv, field, value)
         self.db.commit()
         self.db.refresh(inv)
