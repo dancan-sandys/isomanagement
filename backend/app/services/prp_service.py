@@ -2090,77 +2090,101 @@ class PRPService:
     def escalate_risk_to_register(self, assessment_id: int, escalated_by: int) -> Dict[str, Any]:
         """Escalate a PRP risk assessment to the main risk register"""
         
-        assessment = self.db.query(RiskAssessment).filter(RiskAssessment.id == assessment_id).first()
-        if not assessment:
-            raise ValueError("Risk assessment not found")
-        
-        if assessment.escalated_to_risk_register:
-            raise ValueError("Risk assessment already escalated to risk register")
-        
-        # Get program details for context
-        program = self.db.query(PRPProgram).filter(PRPProgram.id == assessment.program_id).first()
-        
-        # Create risk register entry
-        from app.models.risk import RiskRegisterItem, RiskAction
-        from app.models.user import User
-        
-        # Determine risk category based on PRP category
-        risk_category = self._map_prp_category_to_risk_category(program.category)
-        
-        # Create risk register entry
-        risk_entry = RiskRegisterItem(
-            risk_code=f"PRP-{assessment.assessment_code}",
-            title=f"PRP Risk: {assessment.hazard_identified}",
-            description=f"PRP Risk Assessment: {assessment.hazard_description}\n"
-                       f"Program: {program.name}\n"
-                       f"Category: {program.category.value}",
-            risk_category=risk_category,
-            risk_type="operational",
-            likelihood=assessment.likelihood_level,
-            severity=assessment.severity_level,
-            risk_level=assessment.risk_level.value if assessment.risk_level else "medium",
-            risk_score=assessment.risk_score,
-            current_controls=assessment.existing_controls,
-            additional_controls_needed=assessment.additional_controls_required,
-            risk_owner=assessment.created_by,
-            risk_owner_department=program.responsible_department,
-            status="active",
-            source="prp_assessment",
-            source_id=assessment.id,
-            created_by=escalated_by
-        )
-        
-        self.db.add(risk_entry)
-        self.db.flush()  # Get the ID
-        
-        # Update assessment with risk register link
-        assessment.risk_register_entry_id = risk_entry.id
-        assessment.escalated_to_risk_register = True
-        assessment.escalation_date = datetime.utcnow()
-        assessment.escalated_by = escalated_by
-        
-        # Create risk action for escalation
-        risk_action = RiskAction(
-            risk_id=risk_entry.id,
-            action_type="escalation",
-            action_description=f"Risk escalated from PRP assessment {assessment.assessment_code}",
-            action_date=datetime.utcnow(),
-            responsible_person=escalated_by,
-            status="completed"
-        )
-        
-        self.db.add(risk_action)
-        self.db.commit()
-        
-        # Create notification
-        self._create_risk_escalation_notification(assessment, risk_entry)
-        
-        return {
-            "assessment_id": assessment.id,
-            "risk_register_id": risk_entry.id,
-            "escalation_date": assessment.escalation_date,
-            "message": f"Risk assessment {assessment.assessment_code} successfully escalated to risk register"
-        }
+        try:
+            assessment = self.db.query(RiskAssessment).filter(RiskAssessment.id == assessment_id).first()
+            if not assessment:
+                raise ValueError("Risk assessment not found")
+            
+            if assessment.escalated_to_risk_register:
+                raise ValueError("Risk assessment already escalated to risk register")
+            
+            # Get program details for context
+            program = self.db.query(PRPProgram).filter(PRPProgram.id == assessment.program_id).first()
+            if not program:
+                raise ValueError("PRP program not found for assessment")
+            
+            # Create risk register entry
+            from app.models.risk import RiskRegisterItem, RiskAction, RiskItemType, RiskCategory, RiskStatus, RiskSeverity, RiskLikelihood
+            from app.models.user import User
+            
+            # Determine risk category based on PRP category
+            risk_category = self._map_prp_category_to_risk_category(program.category)
+            
+            # Map PRP severity/likelihood to risk register enums
+            severity_mapping = {
+                "Very Low": RiskSeverity.LOW,
+                "Low": RiskSeverity.LOW,
+                "Medium": RiskSeverity.MEDIUM,
+                "High": RiskSeverity.HIGH,
+                "Very High": RiskSeverity.CRITICAL
+            }
+            
+            likelihood_mapping = {
+                "Very Low": RiskLikelihood.RARE,
+                "Low": RiskLikelihood.UNLIKELY,
+                "Medium": RiskLikelihood.POSSIBLE,
+                "High": RiskLikelihood.LIKELY,
+                "Very High": RiskLikelihood.ALMOST_CERTAIN
+            }
+            
+            # Create risk register entry
+            risk_entry = RiskRegisterItem(
+                item_type=RiskItemType.RISK,
+                risk_number=f"PRP-{assessment.assessment_code}",
+                title=f"PRP Risk: {assessment.hazard_identified}",
+                description=f"PRP Risk Assessment: {assessment.hazard_description or 'No description'}\n"
+                           f"Program: {program.name}\n"
+                           f"Category: {program.category.value}",
+                category=RiskCategory(risk_category),
+                severity=severity_mapping.get(assessment.severity_level, RiskSeverity.MEDIUM),
+                likelihood=likelihood_mapping.get(assessment.likelihood_level, RiskLikelihood.POSSIBLE),
+                risk_score=assessment.risk_score or 0,
+                status=RiskStatus.OPEN,
+                created_by=escalated_by
+            )
+            
+            self.db.add(risk_entry)
+            self.db.flush()  # Get the ID
+            
+            # Update assessment with risk register link
+            # assessment.risk_register_entry_id = risk_entry.id  # Field is commented out in model
+            assessment.escalated_to_risk_register = True
+            assessment.escalation_date = datetime.utcnow()
+            assessment.escalated_by = escalated_by
+            
+            # Create risk action for escalation
+            risk_action = RiskAction(
+                item_id=risk_entry.id,
+                title="Risk Escalation from PRP Assessment",
+                description=f"Risk escalated from PRP assessment {assessment.assessment_code}",
+                assigned_to=escalated_by,
+                completed=True,
+                completed_at=datetime.utcnow()
+            )
+            
+            self.db.add(risk_action)
+            self.db.commit()
+            
+            # Create notification
+            try:
+                self._create_risk_escalation_notification(assessment, risk_entry)
+            except Exception as e:
+                print(f"DEBUG: Error creating notification: {e}")
+                # Don't fail the escalation if notification fails
+            
+            return {
+                "assessment_id": assessment.id,
+                "risk_register_id": risk_entry.id,
+                "escalation_date": assessment.escalation_date,
+                "message": f"Risk assessment {assessment.assessment_code} successfully escalated to risk register"
+            }
+            
+        except Exception as e:
+            print(f"DEBUG: Error in escalate_risk_to_register: {e}")
+            import traceback
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            self.db.rollback()
+            raise ValueError(f"Failed to escalate risk assessment: {str(e)}")
     
     def _map_prp_category_to_risk_category(self, prp_category: PRPCategory) -> str:
         """Map PRP category to risk register category"""

@@ -231,9 +231,33 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
       return;
     }
     
+    // Filter out fields that are not in the backend schema
+    const { next_review_date, selected_program_id, ...validAssessmentData } = assessmentForm;
+    
+    // Validate required fields
+    if (!validAssessmentData.assessment_code || validAssessmentData.assessment_code.trim() === '') {
+      setError('Please enter an assessment code');
+      return;
+    }
+    
+    if (!validAssessmentData.hazard_identified || validAssessmentData.hazard_identified.trim() === '') {
+      setError('Please enter the hazard identified');
+      return;
+    }
+    
+    if (!validAssessmentData.likelihood_level || validAssessmentData.likelihood_level.trim() === '') {
+      setError('Please select a likelihood level');
+      return;
+    }
+    
+    if (!validAssessmentData.severity_level || validAssessmentData.severity_level.trim() === '') {
+      setError('Please select a severity level');
+      return;
+    }
+    
     try {
-      console.log('Creating risk assessment for program:', targetProgramId, 'with data:', assessmentForm);
-      const response = await prpAPI.createRiskAssessment(Number(targetProgramId), assessmentForm);
+      console.log('Creating risk assessment for program:', targetProgramId, 'with data:', validAssessmentData);
+      const response = await prpAPI.createRiskAssessment(Number(targetProgramId), validAssessmentData);
       console.log('Risk assessment creation response:', response);
       
       if (response.success) {
@@ -265,7 +289,8 @@ const PRPRiskAssessment: React.FC<{ programId?: number }> = ({ programId }) => {
       }
     } catch (err: any) {
       console.error('Error creating risk assessment:', err);
-      setError(err.message || 'Failed to create assessment');
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Failed to create assessment';
+      setError(errorMessage);
     }
   };
 
