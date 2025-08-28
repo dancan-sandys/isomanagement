@@ -196,6 +196,25 @@ class ReviewParticipant(BaseModel):
     attendance_status: str = "present"  # present, absent, partial
 
 
+# Attendance update schema
+class ReviewParticipantUpdate(BaseModel):
+    user_id: Optional[int] = None
+    name: Optional[str] = None
+    role: Optional[str] = None
+    department: Optional[str] = None
+    email: Optional[str] = None
+    attendance_status: Optional[str] = None  # present, absent, partial
+
+    @validator('attendance_status')
+    def validate_attendance_status(cls, v):
+        if v is None:
+            return v
+        allowed = {"present", "absent", "partial"}
+        if v not in allowed:
+            raise ValueError("attendance_status must be one of: present, absent, partial")
+        return v
+
+
 # Enhanced Management Review Schemas
 class ManagementReviewCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)

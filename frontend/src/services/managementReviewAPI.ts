@@ -11,6 +11,15 @@ export interface ReviewParticipant {
   attendance_status?: 'present' | 'absent' | 'partial';
 }
 
+export interface ReviewParticipantUpdate {
+  user_id?: number;
+  name?: string;
+  role?: string;
+  department?: string;
+  email?: string;
+  attendance_status?: 'present' | 'absent' | 'partial';
+}
+
 export interface MRPayload {
   title: string;
   review_date?: string;
@@ -198,6 +207,24 @@ const managementReviewAPI = {
   },
   createTemplate: async (payload: TemplatePayload) => {
     const resp: AxiosResponse = await api.post('/management-reviews/templates', payload);
+    return resp.data;
+  },
+
+  // Attendance register
+  listAttendance: async (id: number) => {
+    const resp: AxiosResponse = await api.get(`/management-reviews/${id}/attendance`);
+    return resp.data;
+  },
+  addAttendee: async (id: number, attendee: ReviewParticipant) => {
+    const resp: AxiosResponse = await api.post(`/management-reviews/${id}/attendance`, attendee);
+    return resp.data;
+  },
+  updateAttendee: async (id: number, index: number, updates: ReviewParticipantUpdate) => {
+    const resp: AxiosResponse = await api.put(`/management-reviews/${id}/attendance/${index}`, updates);
+    return resp.data;
+  },
+  deleteAttendee: async (id: number, index: number) => {
+    const resp: AxiosResponse = await api.delete(`/management-reviews/${id}/attendance/${index}`);
     return resp.data;
   },
 };
