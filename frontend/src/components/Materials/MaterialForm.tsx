@@ -88,6 +88,7 @@ const validationSchema = Yup.object({
   category: Yup.string()
     .required('Category is required'),
   supplier_id: Yup.number()
+    .min(1, 'Supplier is required')
     .required('Supplier is required'),
   storage_conditions: Yup.string()
     .required('Storage conditions are required'),
@@ -228,6 +229,43 @@ const MaterialForm: React.FC<MaterialFormProps> = ({
 
   const handleBack = () => {
     setActiveStep((prevStep) => prevStep - 1);
+  };
+
+  const handleFinalSubmit = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    const errors = await formik.validateForm();
+    if (errors && Object.keys(errors).length > 0) {
+      // Mark all errored fields as touched so helper texts appear
+      const touched: any = {};
+      Object.keys(errors).forEach((key) => {
+        touched[key] = true;
+      });
+      formik.setTouched(touched, true);
+
+      // Determine first step with an error
+      const basicInfoFields = ['material_code', 'name', 'category', 'supplier_id'];
+      const safetyFields = ['storage_conditions', 'temperature_requirements.min_temp', 'temperature_requirements.max_temp', 'handling_instructions', 'transportation_conditions', 'allergens'];
+
+      const errorKeys = Object.keys(errors);
+      if (errorKeys.some((k) => basicInfoFields.includes(k))) {
+        setActiveStep(0);
+      } else if (errorKeys.some((k) => safetyFields.includes(k))) {
+        setActiveStep(2);
+      } else {
+        // Default to review step if unknown
+        setActiveStep(3);
+      }
+
+      setNotification({
+        open: true,
+        message: 'Please complete required fields before submitting.',
+        severity: 'warning',
+      });
+      return;
+    }
+
+    // No validation errors, proceed to submit
+    formik.handleSubmit();
   };
 
   const addSpecification = () => {
@@ -1069,10 +1107,11 @@ const MaterialForm: React.FC<MaterialFormProps> = ({
 
             {activeStep === steps.length - 1 ? (
               <Button
-                type="submit"
+                type="button"
                 variant="contained"
                 startIcon={formik.isSubmitting ? <Schedule /> : <Save />}
                 disabled={formik.isSubmitting || mode === 'view'}
+                onClick={handleFinalSubmit}
               >
                 {formik.isSubmitting 
                   ? 'Saving...' 
