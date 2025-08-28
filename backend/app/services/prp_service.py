@@ -2108,7 +2108,9 @@ class PRPService:
             from app.models.user import User
             
             # Determine risk category based on PRP category
+            print(f"DEBUG: Program category: {program.category}")
             risk_category = self._map_prp_category_to_risk_category(program.category)
+            print(f"DEBUG: Mapped risk category: {risk_category}")
             
             # Map PRP severity/likelihood to risk register enums
             severity_mapping = {
@@ -2128,20 +2130,31 @@ class PRPService:
             }
             
             # Create risk register entry
-            risk_entry = RiskRegisterItem(
-                item_type=RiskItemType.RISK,
-                risk_number=f"PRP-{assessment.assessment_code}",
-                title=f"PRP Risk: {assessment.hazard_identified}",
-                description=f"PRP Risk Assessment: {assessment.hazard_description or 'No description'}\n"
-                           f"Program: {program.name}\n"
-                           f"Category: {program.category.value}",
-                category=RiskCategory(risk_category),
-                severity=severity_mapping.get(assessment.severity_level, RiskSeverity.MEDIUM),
-                likelihood=likelihood_mapping.get(assessment.likelihood_level, RiskLikelihood.POSSIBLE),
-                risk_score=assessment.risk_score or 0,
-                status=RiskStatus.OPEN,
-                created_by=escalated_by
-            )
+            try:
+                mapped_category = RiskCategory(risk_category)
+                mapped_severity = severity_mapping.get(assessment.severity_level, RiskSeverity.MEDIUM)
+                mapped_likelihood = likelihood_mapping.get(assessment.likelihood_level, RiskLikelihood.POSSIBLE)
+                
+                print(f"DEBUG: Creating risk entry with category={mapped_category}, severity={mapped_severity}, likelihood={mapped_likelihood}")
+                
+                risk_entry = RiskRegisterItem(
+                    item_type=RiskItemType.RISK,
+                    risk_number=f"PRP-{assessment.assessment_code}",
+                    title=f"PRP Risk: {assessment.hazard_identified}",
+                    description=f"PRP Risk Assessment: {assessment.hazard_description or 'No description'}\n"
+                               f"Program: {program.name}\n"
+                               f"Category: {program.category.value}",
+                    category=mapped_category,
+                    severity=mapped_severity,
+                    likelihood=mapped_likelihood,
+                    risk_score=assessment.risk_score or 0,
+                    status=RiskStatus.OPEN,
+                    created_by=escalated_by
+                )
+            except ValueError as e:
+                print(f"DEBUG: Error creating RiskRegisterItem: {e}")
+                print(f"DEBUG: risk_category={risk_category}, severity_level={assessment.severity_level}, likelihood_level={assessment.likelihood_level}")
+                raise ValueError(f"Invalid enum values for risk register: {str(e)}")
             
             self.db.add(risk_entry)
             self.db.flush()  # Get the ID
@@ -2189,26 +2202,34 @@ class PRPService:
     def _map_prp_category_to_risk_category(self, prp_category: PRPCategory) -> str:
         """Map PRP category to risk register category"""
         category_mapping = {
-            PRPCategory.FACILITY_EQUIPMENT_DESIGN: "operational",
-            PRPCategory.FACILITY_LAYOUT: "operational",
-            PRPCategory.PRODUCTION_EQUIPMENT: "operational",
-            PRPCategory.CLEANING_SANITATION: "operational",
-            PRPCategory.PEST_CONTROL: "operational",
-            PRPCategory.PERSONNEL_HYGIENE: "operational",
-            PRPCategory.WASTE_MANAGEMENT: "operational",
-            PRPCategory.STORAGE_TRANSPORTATION: "operational",
-            PRPCategory.SUPPLIER_CONTROL: "supplier",
+            PRPCategory.CONSTRUCTION_AND_LAYOUT: "process",
+            PRPCategory.LAYOUT_OF_PREMISES: "process",
+            PRPCategory.SUPPLIES_OF_AIR_WATER_ENERGY: "environment",
+            PRPCategory.SUPPORTING_SERVICES: "process",
+            PRPCategory.SUITABILITY_CLEANING_MAINTENANCE: "process",
+            PRPCategory.MANAGEMENT_OF_PURCHASED_MATERIALS: "supplier",
+            PRPCategory.PREVENTION_OF_CROSS_CONTAMINATION: "process",
+            PRPCategory.CLEANING_AND_SANITIZING: "process",
+            PRPCategory.PEST_CONTROL: "process",
+            PRPCategory.PERSONNEL_HYGIENE_FACILITIES: "staff",
+            PRPCategory.PERSONNEL_HYGIENE_PRACTICES: "staff",
+            PRPCategory.REPROCESSING: "process",
+            PRPCategory.PRODUCT_RECALL_PROCEDURES: "compliance",
+            PRPCategory.WAREHOUSING: "process",
             PRPCategory.PRODUCT_INFORMATION_CONSUMER_AWARENESS: "compliance",
-            PRPCategory.FOOD_DEFENSE_BIOVIGILANCE: "security",
-            PRPCategory.WATER_QUALITY: "operational",
-            PRPCategory.AIR_QUALITY: "operational",
-            PRPCategory.EQUIPMENT_CALIBRATION: "operational",
-            PRPCategory.MAINTENANCE: "operational",
-            PRPCategory.PERSONNEL_TRAINING: "operational",
-            PRPCategory.RECALL_PROCEDURES: "compliance",
-            PRPCategory.TRANSPORTATION: "operational"
+            PRPCategory.FOOD_DEFENSE_BIOVIGILANCE_BIOTERRORISM: "compliance",
+            PRPCategory.CONTROL_OF_NONCONFORMING_PRODUCT: "compliance",
+            PRPCategory.PRODUCT_RELEASE: "compliance",
+            PRPCategory.STAFF_HYGIENE: "staff",
+            PRPCategory.WASTE_MANAGEMENT: "environment",
+            PRPCategory.EQUIPMENT_CALIBRATION: "equipment",
+            PRPCategory.MAINTENANCE: "equipment",
+            PRPCategory.PERSONNEL_TRAINING: "training",
+            PRPCategory.SUPPLIER_CONTROL: "supplier",
+            PRPCategory.WATER_QUALITY: "environment",
+            PRPCategory.AIR_QUALITY: "environment"
         }
-        return category_mapping.get(prp_category, "operational")
+        return category_mapping.get(prp_category, "process")
     
     def _create_risk_escalation_notification(self, assessment: RiskAssessment, risk_entry):
         """Create notification for risk escalation"""

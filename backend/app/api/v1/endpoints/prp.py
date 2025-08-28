@@ -1537,9 +1537,11 @@ async def escalate_risk_assessment(
 ):
     """Escalate a risk assessment to the main risk register"""
     try:
+        print(f"DEBUG: Attempting to escalate risk assessment {assessment_id} by user {current_user.id}")
         prp_service = PRPService(db)
         result = prp_service.escalate_risk_to_register(assessment_id, current_user.id)
         
+        print(f"DEBUG: Escalation successful for assessment {assessment_id}")
         return ResponseModel(
             success=True,
             message="Risk assessment escalated successfully",
@@ -1547,11 +1549,15 @@ async def escalate_risk_assessment(
         )
         
     except ValueError as e:
+        print(f"DEBUG: ValueError during escalation: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        print(f"DEBUG: Unexpected error during escalation: {e}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to escalate risk assessment: {str(e)}"
