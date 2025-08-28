@@ -387,6 +387,8 @@ class ProductUpdate(BaseModel):
     packaging_type: Optional[str] = Field(None, max_length=100)
     haccp_plan_approved: Optional[bool] = None
     haccp_plan_version: Optional[str] = None
+    # Optional embedded risk configuration payload
+    risk_config: Optional[Dict[str, Any]] = None
 
 
 class ProductResponse(BaseModel):

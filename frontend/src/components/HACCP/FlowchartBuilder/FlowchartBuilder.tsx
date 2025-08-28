@@ -233,6 +233,26 @@ const FlowchartBuilderContent: React.FC<FlowchartBuilderProps> = ({
       return;
     }
 
+    // ISO/Codex validation: CCPs must have critical limits, monitoring, corrective actions, verification
+    const validationErrors: string[] = [];
+    nodes.forEach((node) => {
+      const data = node.data as any;
+      const hasCcp = !!(data?.ccp?.number) || (data?.hazards || []).some((h: any) => h.isCCP);
+      if (hasCcp) {
+        const limits = data?.ccp?.criticalLimits || [];
+        if (!limits.length) validationErrors.push(`${node.data.label}: CCP must define at least one critical limit`);
+        if (!data?.ccp?.monitoringFrequency) validationErrors.push(`${node.data.label}: CCP requires monitoring frequency`);
+        if (!data?.ccp?.monitoringMethod) validationErrors.push(`${node.data.label}: CCP requires monitoring method`);
+        if (!data?.ccp?.correctiveActions) validationErrors.push(`${node.data.label}: CCP requires corrective actions`);
+        if (!data?.ccp?.verificationMethod) validationErrors.push(`${node.data.label}: CCP requires verification method`);
+      }
+    });
+    if (validationErrors.length) {
+      showSnackbar(`Fix ${validationErrors.length} validation issue(s) before saving`, 'error');
+      console.error('HACCP Flowchart validation errors:', validationErrors);
+      return;
+    }
+
     // Convert ReactFlow nodes back to HACCPProcessStep
     const haccpNodes: HACCPProcessStep[] = nodes.map((node) => {
       const { onEdit, onDelete, label, nodeType, ...dataWithoutUi } = node.data;
