@@ -443,10 +443,22 @@ const HACCP: React.FC = () => {
 
   const handleSaveHazard = async () => {
     if (!selectedProduct) return;
+    
+    // Validate required fields
+    if (!hazardForm.process_step_id || hazardForm.process_step_id === '') {
+      alert('Please select a process step');
+      return;
+    }
+    
+    if (!hazardForm.hazard_name || hazardForm.hazard_name.trim() === '') {
+      alert('Please enter a hazard name');
+      return;
+    }
+    
     const payload: any = {
-      process_step_id: hazardForm.process_step_id === '' ? null : Number(hazardForm.process_step_id),
+      process_step_id: Number(hazardForm.process_step_id),
       hazard_type: hazardForm.hazard_type,
-      hazard_name: hazardForm.hazard_name,
+      hazard_name: hazardForm.hazard_name.trim(),
       description: hazardForm.description,
       likelihood: Number(hazardForm.likelihood),
       severity: Number(hazardForm.severity),
@@ -1259,7 +1271,20 @@ const HACCP: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
-              <TextField fullWidth type="number" label="Process Step ID" value={hazardForm.process_step_id} onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })} />
+              <FormControl fullWidth>
+                <InputLabel>Process Step</InputLabel>
+                <Select
+                  value={hazardForm.process_step_id}
+                  label="Process Step"
+                  onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })}
+                >
+                  {processFlows.map((flow) => (
+                    <MenuItem key={flow.id} value={flow.id}>
+                      {flow.step_number}. {flow.step_name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
