@@ -512,6 +512,38 @@ const HACCPProductDetail: React.FC = () => {
           />
           <TextField type="number" label="Measured Value" value={monitoringForm.value || ''} onChange={e => setMonitoringForm({ ...monitoringForm, value: e.target.value })} />
           <TextField label="Unit" value={monitoringForm.unit || ''} onChange={e => setMonitoringForm({ ...monitoringForm, unit: e.target.value })} />
+          {/* Evidence upload */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>Attach Evidence (photos, files)</Typography>
+            <input
+              type="file"
+              multiple
+              onChange={async (e) => {
+                const files = e.target.files;
+                if (!files || !monitoringForm.ccp_id) return;
+                const api = (await import('../services/api')).api;
+                const ccpId = Number(monitoringForm.ccp_id);
+                const uploaded: string[] = [];
+                for (const file of Array.from(files)) {
+                  const form = new FormData();
+                  form.append('file', file);
+                  try {
+                    const res = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/upload-evidence`, form, {
+                      headers: { 'Content-Type': 'multipart/form-data' },
+                    });
+                    const data = res?.data?.data || res?.data;
+                    if (data?.file_path) uploaded.push(data.file_path);
+                  } catch (err) {
+                    console.error('Evidence upload failed', err);
+                    alert(`Failed to upload ${file.name}`);
+                  }
+                }
+                if (uploaded.length) {
+                  setMonitoringForm({ ...monitoringForm, evidence_files: JSON.stringify(uploaded) });
+                }
+              }}
+            />
+          </Box>
           <Stack direction="row" spacing={2}>
             <Button variant="contained" disabled={!monitoringForm.ccp_id} onClick={async () => {
               const ccpId = Number(monitoringForm.ccp_id);
@@ -533,6 +565,9 @@ const HACCPProductDetail: React.FC = () => {
                 }
                 if (monitoringForm.unit) {
                   requestBody.unit = monitoringForm.unit;
+                }
+                if (monitoringForm.evidence_files) {
+                  requestBody.evidence_files = monitoringForm.evidence_files;
                 }
                 
                 console.log('Sending monitoring log request:', requestBody);

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_, text
 from datetime import datetime, timedelta
@@ -25,6 +25,7 @@ from app.schemas.haccp import (
     HACCPReportRequest, ValidationEvidence
 )
 from app.services.haccp_service import HACCPService
+from app.services.storage_service import StorageService
 from app.utils.audit import audit_event
 
 router = APIRouter()
@@ -1437,6 +1438,44 @@ async def create_enhanced_monitoring_log(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create monitoring log: {str(e)}"
+        )
+
+
+# Evidence Upload for Monitoring Logs
+@router.post("/ccps/{ccp_id}/monitoring-logs/upload-evidence")
+async def upload_monitoring_evidence(
+    ccp_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Upload evidence file (photo, document, CSV) for HACCP monitoring logs.
+
+    Returns stored file metadata and path for later association to a monitoring log.
+    """
+    try:
+        storage = StorageService(base_upload_dir="uploads/haccp")
+        file_path, file_size, content_type, original_filename, checksum = storage.save_upload(
+            file, subdir=f"ccps/{ccp_id}"
+        )
+
+        return ResponseModel(
+            success=True,
+            message="Evidence uploaded successfully",
+            data={
+                "file_path": file_path,
+                "file_size": file_size,
+                "content_type": content_type,
+                "filename": original_filename,
+                "checksum": checksum,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload evidence: {str(e)}"
         )
 
 
