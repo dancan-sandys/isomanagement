@@ -389,11 +389,11 @@ class NonConformanceService:
             "due_date": capa_action.target_completion_date,
             "estimated_hours": None,  # CAPA doesn't have estimated hours
             "notes": f"CAPA Action: {capa_number} - Type: {capa_action.action_type}",
-            "tags": json.dumps({
+            "tags": {
                 "capa_number": capa_number,
                 "non_conformance_id": capa_action.non_conformance_id,
                 "action_type": capa_action.action_type
-            })
+            }
         }
         
         action_log = actions_log_service.create_action(action_log_data)

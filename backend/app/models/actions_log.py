@@ -108,8 +108,8 @@ class ActionLog(Base):
     actual_hours = Column(Float, nullable=True)
     
     # Additional metadata
-    tags = Column(Text, nullable=True)  # For flexible tagging (stored as JSON string)
-    attachments = Column(Text, nullable=True)  # File attachments (stored as JSON string)
+    tags = Column(JSON, nullable=True)  # For flexible tagging
+    attachments = Column(JSON, nullable=True)  # File attachments
     notes = Column(Text, nullable=True)
     
     # Relationships
