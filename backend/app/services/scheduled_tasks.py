@@ -10,6 +10,9 @@ from app.models.document import Document, DocumentStatus, DocumentChangeLog
 from app.models.settings import ApplicationSetting
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
+from app.models.prp import PRPProgram, PRPChecklist, PRPFrequency, ChecklistStatus
+from app.services.nonconformance_service import NonConformanceService
+from app.schemas.nonconformance import NonConformanceCreate, NonConformanceSource
 from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.models.audit_mgmt import Audit, AuditPlan, AuditFinding, AuditStatus, FindingStatus
 from app.models.haccp import CCPMonitoringSchedule, CCP
@@ -26,6 +29,122 @@ class ScheduledTasksService:
     
     def __init__(self, db: Session):
         self.db = db
+    
+    def process_prp_daily_rollover(self) -> dict:
+        """
+        - For PRP programs with daily frequency:
+          - Flag yesterday's (or earlier) incomplete checklists as non-conformance
+          - Create today's checklist if not present (auto-reset/uncheck)
+        Returns counts for actions taken.
+        """
+        try:
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = today_start + timedelta(days=1) - timedelta(microseconds=1)
+            results = {
+                "programs_processed": 0,
+                "missed_checklists_flagged": 0,
+                "checklists_marked_failed": 0,
+                "today_checklists_created": 0,
+                "notifications_created": 0,
+            }
+
+            # Fetch active daily PRP programs
+            programs = self.db.query(PRPProgram).filter(
+                PRPProgram.frequency == PRPFrequency.DAILY,
+                PRPProgram.status == getattr(PRPProgram.status.property.columns[0].type.enum_class, 'ACTIVE')
+            ).all()
+
+            nc_service = NonConformanceService(self.db)
+
+            for program in programs:
+                results["programs_processed"] += 1
+
+                # 1) Flag missed checklists (scheduled before today, not completed)
+                missed = self.db.query(PRPChecklist).filter(
+                    PRPChecklist.program_id == program.id,
+                    PRPChecklist.scheduled_date < today_start,
+                    PRPChecklist.status.in_([ChecklistStatus.PENDING, ChecklistStatus.IN_PROGRESS])
+                ).all()
+
+                for checklist in missed:
+                    # Mark as failed
+                    checklist.status = ChecklistStatus.FAILED
+                    self.db.add(checklist)
+                    results["checklists_marked_failed"] += 1
+
+                    # Create non-conformance record
+                    nc_payload = NonConformanceCreate(
+                        title=f"Missed PRP Checklist: {checklist.name}",
+                        description=(
+                            f"Checklist '{checklist.name}' scheduled on {checklist.scheduled_date.strftime('%Y-%m-%d')} "
+                            f"was not completed by due date {checklist.due_date.strftime('%Y-%m-%d')}. "
+                            "Auto-flagged as non-conformance by scheduler."
+                        ),
+                        source=NonConformanceSource.PRP,
+                        severity="medium",
+                        impact_area="compliance",
+                        category="missed_checklist",
+                        target_resolution_date=today_start + timedelta(days=7)
+                    )
+                    try:
+                        nc_service.create_non_conformance(nc_payload, reported_by=program.responsible_person or 1)
+                        results["missed_checklists_flagged"] += 1
+                    except Exception as _:
+                        # continue processing other programs even if NC creation fails
+                        logger.exception("Failed creating NC for missed PRP checklist")
+
+                # 2) Create today's checklist if not exists
+                existing_today = self.db.query(PRPChecklist).filter(
+                    PRPChecklist.program_id == program.id,
+                    PRPChecklist.scheduled_date >= today_start,
+                    PRPChecklist.scheduled_date < today_end
+                ).first()
+
+                if not existing_today:
+                    try:
+                        checklist_code = f"PRP-CHK-{today_start.strftime('%Y%m%d')}-{program.id}"
+                        name = f"{program.name} Daily Checklist {today_start.strftime('%Y-%m-%d')}"
+                        new_chk = PRPChecklist(
+                            program_id=program.id,
+                            checklist_code=checklist_code,
+                            name=name,
+                            description=f"Auto-generated daily checklist for {program.name}",
+                            status=ChecklistStatus.PENDING,
+                            scheduled_date=today_start,
+                            due_date=today_end,
+                            assigned_to=program.responsible_person or 1,
+                            created_by=program.created_by or 1
+                        )
+                        self.db.add(new_chk)
+                        results["today_checklists_created"] += 1
+
+                        # Optional: notify assignee
+                        try:
+                            self.db.add(Notification(
+                                user_id=new_chk.assigned_to,
+                                title="New Daily PRP Checklist",
+                                message=f"'{new_chk.name}' is ready for completion today.",
+                                notification_type=NotificationType.INFO,
+                                priority=NotificationPriority.MEDIUM,
+                                category=NotificationCategory.PRP,
+                                notification_data={
+                                    "program_id": program.id,
+                                    "checklist_id": None,
+                                    "scheduled_date": today_start.isoformat(),
+                                }
+                            ))
+                            results["notifications_created"] += 1
+                        except Exception:
+                            logger.debug("Notification creation failed for PRP daily checklist", exc_info=True)
+                    except Exception:
+                        logger.exception("Failed creating today's PRP checklist")
+
+            self.db.commit()
+            return results
+        except Exception as e:
+            logger.error(f"Error in PRP daily rollover: {e}")
+            self.db.rollback()
+            return {"error": str(e)}
     
     def archive_obsolete_documents(self) -> int:
         """
@@ -626,7 +745,8 @@ class ScheduledTasksService:
             "missed_monitoring_alerts": 0,
             "errors": [],
             "objective_review_notifications": 0,
-            "objective_no_progress_alerts": 0
+            "objective_no_progress_alerts": 0,
+            "prp_daily_rollover": {"programs_processed": 0, "missed_checklists_flagged": 0, "checklists_marked_failed": 0, "today_checklists_created": 0, "notifications_created": 0}
         }
         
         try:
@@ -706,6 +826,14 @@ class ScheduledTasksService:
                 results["missed_monitoring_alerts"] = 1  # Count as 1 task executed
             except Exception as e:
                 results["errors"].append(f"missed monitoring check: {e}")
+
+            # PRP daily rollover (generate today's checklists and flag missed)
+            try:
+                prp_results = self.process_prp_daily_rollover()
+                if isinstance(prp_results, dict):
+                    results["prp_daily_rollover"] = prp_results
+            except Exception as e:
+                results["errors"].append(f"prp daily rollover: {e}")
 
         except Exception as e:
             error_msg = f"Error in maintenance tasks: {str(e)}"

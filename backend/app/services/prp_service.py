@@ -1477,6 +1477,34 @@ class PRPService:
         
         self.db.commit()
         
+        # Audit trail entry via Actions Log
+        try:
+            actions_log_service = ActionsLogService(self.db)
+            action_data = {
+                "title": f"PRP Checklist Completed: {checklist.name}",
+                "description": (
+                    f"Checklist '{checklist.name}' was completed with compliance {compliance_percentage:.1f}%. "
+                    f"Passed: {passed_items}, Failed: {failed_items}, Not applicable: {not_applicable_items}."
+                ),
+                "action_source": ActionSource.CONTINUOUS_IMPROVEMENT.value,
+                "source_id": checklist.id,
+                "status": "completed",
+                "priority": "medium",
+                "assigned_to": checklist.assigned_to,
+                "assigned_by": completed_by,
+                "due_date": checklist.due_date,
+                "tags": {
+                    "module": "prp",
+                    "checklist_code": checklist.checklist_code,
+                    "program_id": checklist.program_id,
+                    "event": "checklist_completed"
+                },
+                "notes": completion_data.general_comments or "",
+            }
+            actions_log_service.create_action(action_data)
+        except Exception:
+            logger.debug("Failed to create actions log audit for checklist completion", exc_info=True)
+        
         return checklist, non_conformance_created
     
     def _store_signature(self, checklist_id: int, signature_data: str, signed_by: int) -> bool:
