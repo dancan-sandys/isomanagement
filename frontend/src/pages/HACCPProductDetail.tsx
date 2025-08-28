@@ -5,6 +5,7 @@ import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody
 import { Add, Edit, Delete, Help, Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, decisionTreeAPI } from '../services/api';
+import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
 import DecisionTreeDialog from '../components/DecisionTreeDialog';
 import HACCPBreadcrumbs from '../components/UI/HACCPBreadcrumbs';
 import { AppDispatch, RootState } from '../store';
@@ -31,6 +32,7 @@ const HACCPProductDetail: React.FC = () => {
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [selectedHazardItem, setSelectedHazardItem] = useState<any>(null);
   const [selectedCcpItem, setSelectedCcpItem] = useState<any>(null);
+  const [flowchartDialogOpen, setFlowchartDialogOpen] = useState(false);
 
   const [flowForm, setFlowForm] = useState({ step_number: '', step_name: '', description: '', equipment: '', temperature: '', time_minutes: '', ph: '', aw: '' });
   const [hazardForm, setHazardForm] = useState({ 
@@ -391,7 +393,10 @@ const HACCPProductDetail: React.FC = () => {
       <TabPanel value={selectedTab} index={0}>
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">Process Flow</Typography>
-          <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedFlow(null); setProcessFlowDialogOpen(true); }}>Add Step</Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="outlined" onClick={() => setFlowchartDialogOpen(true)}>Open Flowchart Builder</Button>
+            <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedFlow(null); setProcessFlowDialogOpen(true); }}>Add Step</Button>
+          </Box>
         </Box>
         <TableContainer component={Paper}>
           <Table>
@@ -646,6 +651,14 @@ const HACCPProductDetail: React.FC = () => {
       </TabPanel>
 
       {/* Dialogs */}
+      <HACCPFlowchartBuilder
+        open={flowchartDialogOpen}
+        onClose={() => setFlowchartDialogOpen(false)}
+        productId={String(productId)}
+        productName={selectedProduct?.name || ''}
+        hazards={hazards as any}
+        ccps={ccps as any}
+      />
       <Dialog open={processFlowDialogOpen} onClose={() => { setProcessFlowDialogOpen(false); setSelectedFlow(null); }} maxWidth="md" fullWidth>
         <DialogTitle>{selectedFlow ? 'Edit Process Step' : 'Add Process Step'}</DialogTitle>
         <DialogContent>
