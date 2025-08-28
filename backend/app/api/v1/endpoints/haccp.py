@@ -364,6 +364,37 @@ async def update_product(
         if product_data.haccp_plan_version is not None:
             product.haccp_plan_version = product_data.haccp_plan_version
         
+        # Handle optional embedded risk configuration
+        if product_data.risk_config is not None:
+            from app.models.haccp import ProductRiskConfig
+            rc = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
+            payload = product_data.risk_config or {}
+            if not rc:
+                rc = ProductRiskConfig(
+                    product_id=product_id,
+                    calculation_method=payload.get("calculation_method", "multiplication"),
+                    likelihood_scale=payload.get("likelihood_scale", 5),
+                    severity_scale=payload.get("severity_scale", 5),
+                    low_threshold=payload.get("risk_thresholds", {}).get("low_threshold", payload.get("low_threshold", 4)),
+                    medium_threshold=payload.get("risk_thresholds", {}).get("medium_threshold", payload.get("medium_threshold", 8)),
+                    high_threshold=payload.get("risk_thresholds", {}).get("high_threshold", payload.get("high_threshold", 15)),
+                    created_by=current_user.id,
+                )
+                db.add(rc)
+            else:
+                if "calculation_method" in payload: rc.calculation_method = payload["calculation_method"]
+                if "likelihood_scale" in payload: rc.likelihood_scale = int(payload["likelihood_scale"])
+                if "severity_scale" in payload: rc.severity_scale = int(payload["severity_scale"])
+                if "risk_thresholds" in payload and isinstance(payload["risk_thresholds"], dict):
+                    rt = payload["risk_thresholds"]
+                    if "low_threshold" in rt: rc.low_threshold = int(rt["low_threshold"])
+                    if "medium_threshold" in rt: rc.medium_threshold = int(rt["medium_threshold"])
+                    if "high_threshold" in rt: rc.high_threshold = int(rt["high_threshold"])
+                else:
+                    if "low_threshold" in payload: rc.low_threshold = int(payload["low_threshold"])
+                    if "medium_threshold" in payload: rc.medium_threshold = int(payload["medium_threshold"])
+                    if "high_threshold" in payload: rc.high_threshold = int(payload["high_threshold"])
+        
         db.commit()
         db.refresh(product)
         
