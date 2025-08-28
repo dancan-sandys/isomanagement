@@ -9,8 +9,8 @@ import uuid
 import qrcode
 from io import BytesIO
 import base64
-import barcode
-from barcode.writer import ImageWriter
+# import barcode
+# from barcode.writer import ImageWriter
 
 from app.models.traceability import (
     Batch, TraceabilityLink, Recall, RecallEntry, RecallAction, TraceabilityReport,
@@ -92,12 +92,12 @@ class TraceabilityService:
             barcode_string = f"BC-{barcode_data['batch_number']}-{barcode_data['batch_type'][:3].upper()}-{barcode_data['quantity']}{barcode_data['unit'][:2]}"
             
             # Generate barcode image
-            code128 = barcode.get('code128', barcode_string, writer=ImageWriter())
+            # code128 = barcode.get('code128', barcode_string, writer=ImageWriter())
             
             # Save to file
             filename = f"barcode_{barcode_data['batch_number']}.png"
             file_path = os.path.join(self.upload_dir, filename)
-            code128.save(file_path.replace('.png', ''))  # python-barcode adds .png automatically
+            # code128.save(file_path.replace('.png', ''))  # python-barcode adds .png automatically
             
             return barcode_string, file_path
         except Exception as e:
@@ -138,10 +138,10 @@ class TraceabilityService:
         if batch.barcode:
             try:
                 # Generate barcode image
-                code128 = barcode.get('code128', batch.barcode, writer=ImageWriter())
+                # code128 = barcode.get('code128', batch.barcode, writer=ImageWriter())
                 filename = f"barcode_{batch.batch_number}.png"
                 file_path = os.path.join(self.upload_dir, filename)
-                code128.save(file_path.replace('.png', ''))  # python-barcode adds .png automatically
+                # code128.save(file_path.replace('.png', ''))  # python-barcode adds .png automatically
                 barcode_image_path = file_path
             except Exception as e:
                 logger.error(f"Failed to generate barcode image: {str(e)}")

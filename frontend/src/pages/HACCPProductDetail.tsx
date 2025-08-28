@@ -303,7 +303,7 @@ const HACCPProductDetail: React.FC = () => {
     }));
   };
 
-  const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string }>({});
+  const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string; evidence_files?: string }>({});
   const [monitoringLogs, setMonitoringLogs] = useState<any[]>([]);
   const [batchOptions, setBatchOptions] = useState<any[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
