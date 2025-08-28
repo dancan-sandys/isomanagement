@@ -28,6 +28,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  FormHelperText,
   Alert,
   CircularProgress,
   Tooltip,
@@ -52,6 +53,7 @@ import productionAPI, {
   ProcessParameterPayload,
 } from '../services/productionAPI';
 import { suppliersAPI } from '../services/productionAPI';
+import { traceabilityAPI } from '../services/traceabilityAPI';
 
 const ProductionPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
@@ -67,11 +69,15 @@ const ProductionPage: React.FC = () => {
 
   // Form states
   const [newProcess, setNewProcess] = useState<ProcessCreatePayload>({
-    batch_id: 1,
+    batch_id: 0, // Changed from 1 to 0 to indicate no selection
     process_type: 'fresh_milk',
     operator_id: undefined,
     spec: {},
   });
+
+  // Batch selection state
+  const [availableBatches, setAvailableBatches] = useState<Array<{ id: number; batch_number: string; product_name: string; status?: string; batch_type?: string }>>([]);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   const [newParameter, setNewParameter] = useState<ProcessParameterPayload>({
     parameter_name: '',
@@ -107,14 +113,54 @@ const ProductionPage: React.FC = () => {
     }
   };
 
+  const loadAvailableBatches = async () => {
+    setBatchLoading(true);
+    try {
+      console.log('Loading available batches...');
+      // Load batches from the traceability API
+      const response = await traceabilityAPI.getBatches({ size: 100 });
+      console.log('Batches response:', response);
+      
+      if (response.success || response.items) {
+        const batches = response.data?.items || response.items || [];
+        console.log('Available batches:', batches);
+        setAvailableBatches(batches);
+      } else {
+        console.error('Failed to load batches:', response);
+        setAvailableBatches([]);
+      }
+    } catch (e) {
+      console.error('Error loading batches:', e);
+      setAvailableBatches([]);
+      // Show error message to user
+      setError('Failed to load batches. Please try refreshing.');
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
   const handleCreateProcess = async () => {
+    // Validate batch selection
+    if (!newProcess.batch_id || newProcess.batch_id === 0) {
+      setError('Please select a batch');
+      return;
+    }
+
+    // Validate that the selected batch exists
+    const selectedBatch = availableBatches.find(batch => batch.id === newProcess.batch_id);
+    if (!selectedBatch) {
+      setError('Selected batch not found. Please refresh and try again.');
+      return;
+    }
+
     try {
       await productionAPI.createProcessEnhanced(newProcess);
       setCreateDialogOpen(false);
-      setNewProcess({ batch_id: 1, process_type: 'fresh_milk', operator_id: undefined, spec: {} });
+      setNewProcess({ batch_id: 0, process_type: 'fresh_milk', operator_id: undefined, spec: {} });
       loadData();
-    } catch (e) {
-      setError('Failed to create process');
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to create process';
+      setError(errorMessage);
       console.error('Error creating process:', e);
     }
   };
@@ -426,7 +472,15 @@ const ProductionPage: React.FC = () => {
       </Paper>
 
       {/* Create Process Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={createDialogOpen} 
+        onClose={() => setCreateDialogOpen(false)} 
+        TransitionProps={{
+          onEnter: () => loadAvailableBatches()
+        }}
+        maxWidth="sm" 
+        fullWidth
+      >
         <DialogTitle>Create New Process</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -445,13 +499,55 @@ const ProductionPage: React.FC = () => {
                 <MenuItem value="fermented_products">Fermented Products</MenuItem>
               </Select>
             </FormControl>
-            <TextField
-              label="Batch ID"
-              type="number"
-              value={newProcess.batch_id}
-              onChange={(e) => setNewProcess({ ...newProcess, batch_id: parseInt(e.target.value) })}
-              fullWidth
-            />
+            
+            <FormControl fullWidth>
+              <InputLabel>Select Batch</InputLabel>
+              <Select
+                value={newProcess.batch_id ? String(newProcess.batch_id) : ''}
+                onChange={(e) => setNewProcess({ ...newProcess, batch_id: e.target.value ? parseInt(e.target.value) : 0 })}
+                label="Select Batch"
+                disabled={batchLoading}
+              >
+                <MenuItem value="">
+                  <em>Select a batch...</em>
+                </MenuItem>
+                {availableBatches.map((batch) => (
+                  <MenuItem key={batch.id} value={String(batch.id)}>
+                    {batch.batch_number} - {batch.product_name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {batchLoading && (
+                  <FormHelperText>Loading batches...</FormHelperText>
+                )}
+                <Button 
+                  size="small" 
+                  onClick={loadAvailableBatches}
+                  disabled={batchLoading}
+                  sx={{ ml: 'auto' }}
+                >
+                  Refresh Batches
+                </Button>
+              </Box>
+              {availableBatches.length === 0 && !batchLoading && (
+                <FormHelperText>
+                  No batches available. Please create a batch first in the Traceability module.
+                  <Button 
+                    size="small" 
+                    sx={{ ml: 1 }}
+                    onClick={() => {
+                      setCreateDialogOpen(false);
+                      // Navigate to traceability page
+                      window.location.href = '/traceability';
+                    }}
+                  >
+                    Go to Traceability
+                  </Button>
+                </FormHelperText>
+              )}
+            </FormControl>
+            
             <TextField
               label="Operator ID"
               type="number"
@@ -463,7 +559,11 @@ const ProductionPage: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateProcess} variant="contained">
+          <Button 
+            onClick={handleCreateProcess} 
+            variant="contained"
+            disabled={!newProcess.batch_id || newProcess.batch_id === 0 || availableBatches.length === 0}
+          >
             Create Process
           </Button>
         </DialogActions>

@@ -30,9 +30,18 @@ class ProductionService:
         self.db = db
 
     def create_process(self, batch_id: int, process_type: ProductProcessType, operator_id: Optional[int], spec: Dict[str, Any]) -> ProductionProcess:
+        print(f"DEBUG: Creating process for batch_id: {batch_id}")
         batch = self.db.query(Batch).filter(Batch.id == batch_id).first()
         if not batch:
-            raise ValueError("Batch not found")
+            print(f"DEBUG: Batch with ID {batch_id} not found in database")
+            # Check if any batches exist
+            total_batches = self.db.query(Batch).count()
+            print(f"DEBUG: Total batches in database: {total_batches}")
+            if total_batches > 0:
+                # Get some sample batch IDs for debugging
+                sample_batches = self.db.query(Batch.id, Batch.batch_number).limit(5).all()
+                print(f"DEBUG: Sample batch IDs: {sample_batches}")
+            raise ValueError(f"Batch with ID {batch_id} not found. Please ensure the batch exists before creating a process.")
         process = ProductionProcess(
             batch_id=batch_id,
             process_type=process_type,

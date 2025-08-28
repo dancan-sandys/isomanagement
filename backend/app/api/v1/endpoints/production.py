@@ -103,6 +103,8 @@ def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depend
     """Create a new production process with enhanced features"""
     service = ProductionService(db)
     try:
+        print(f"DEBUG: Received payload: batch_id={payload.batch_id}, process_type={payload.process_type}, operator_id={payload.operator_id}")
+        
         if payload.template_id:
             # Use template if provided
             template = service.get_process_templates()
@@ -116,8 +118,14 @@ def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depend
             payload.spec or {}
         )
         return proc
-    except Exception as e:
+    except ValueError as e:
+        print(f"DEBUG: ValueError in create_process_enhanced: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"DEBUG: Unexpected error in create_process_enhanced: {e}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to create process: {str(e)}")
 
 
 @router.get("/processes", response_model=List[ProcessResponse])
