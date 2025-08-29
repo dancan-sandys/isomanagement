@@ -203,13 +203,7 @@ def get_templates(
     return templates
 
 
-@router.get("/{process_id}")
-def get_process(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
-    service = ProductionService(db)
-    proc = service.get_process(process_id)
-    if not proc:
-        raise HTTPException(status_code=404, detail="Process not found")
-    return proc
+
 
 
 @router.put("/processes/{process_id}", response_model=ProcessResponse)

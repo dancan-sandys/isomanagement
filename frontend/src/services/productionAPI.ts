@@ -200,6 +200,11 @@ const productionAPI = {
     return res.data as Blob;
   },
 
+  getProcessDetails: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/details`);
+    return res.data;
+  },
+
   getProcessAudit: async (processId: number, params?: { limit?: number; offset?: number }) => {
     const res = await api.get(`/production/processes/${processId}/audit`, { params });
     return res.data as Array<{ id: number; user_id?: number; action: string; details?: any; created_at: string; ip_address?: string; user_agent?: string }>;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -35,7 +35,7 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { Warning, Error, Info, ArrowBack, Science, Edit } from '@mui/icons-material';
+import { Warning, Error, Info, ArrowBack, Science, Edit, Refresh } from '@mui/icons-material';
 import productionAPI, { suppliersAPI, ProcessParameterPayload } from '../services/productionAPI';
 import Autocomplete from '@mui/material/Autocomplete';
 
@@ -72,34 +72,63 @@ const ProductionProcessDetail: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<{ operator_id?: number; status?: string; notes?: string }>({});
 
-  const loadDetails = async () => {
+  const loadDetails = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
       setError(null);
       const processId = parseInt(id, 10);
-      const res = await (await fetch(`/api/v1/production/processes/${processId}/details`)).json();
+      
+      // Use the productionAPI service instead of direct fetch
+      const res = await productionAPI.getProcessDetails(processId);
       setProcessDetails(res);
+      
       try {
         const audit = await productionAPI.getProcessAudit(processId, { limit: 100, offset: 0 });
         setProcessAudit(audit);
       } catch (e) {
+        console.warn('Failed to load audit data:', e);
         setProcessAudit([]);
       }
-    } catch (e) {
-      setError('Failed to load process details');
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to load process details';
+      setError(errorMessage);
+      console.error('Error loading process details:', e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadDetails();
-  }, [id]);
+  }, [loadDetails]);
 
   const handleRecordParameter = async () => {
     try {
-      if (!processDetails?.id) return;
+      if (!processDetails?.id) {
+        setError('Process not found');
+        return;
+      }
+
+      // Validate required fields
+      if (!newParameter.parameter_name.trim()) {
+        setError('Parameter name is required');
+        return;
+      }
+
+      if (newParameter.parameter_value === undefined || newParameter.parameter_value === null) {
+        setError('Parameter value is required');
+        return;
+      }
+
+      // Validate tolerance values if provided
+      if (newParameter.tolerance_min !== undefined && newParameter.tolerance_max !== undefined) {
+        if (newParameter.tolerance_min >= newParameter.tolerance_max) {
+          setError('Tolerance min must be less than tolerance max');
+          return;
+        }
+      }
+
       await productionAPI.recordParameter(processDetails.id, newParameter);
       setParameterDialogOpen(false);
       setNewParameter({
@@ -112,8 +141,9 @@ const ProductionProcessDetail: React.FC = () => {
         notes: '',
       });
       await loadDetails();
-    } catch (e) {
-      setError('Failed to record parameter');
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to record parameter';
+      setError(errorMessage);
       console.error('Error recording parameter:', e);
     }
   };
@@ -130,12 +160,23 @@ const ProductionProcessDetail: React.FC = () => {
 
   const handleSaveEdit = async () => {
     try {
-      if (!processDetails?.id) return;
+      if (!processDetails?.id) {
+        setError('Process not found');
+        return;
+      }
+
+      // Validate status if provided
+      if (editForm.status && !['in_progress', 'completed', 'diverted'].includes(editForm.status)) {
+        setError('Invalid status value');
+        return;
+      }
+
       await productionAPI.updateProcess(processDetails.id, editForm);
       setEditOpen(false);
       await loadDetails();
-    } catch (e) {
-      setError('Failed to update process');
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to update process';
+      setError(errorMessage);
       console.error('Error updating process:', e);
     }
   };
@@ -166,12 +207,22 @@ const ProductionProcessDetail: React.FC = () => {
           <Typography variant="h5">Process Details</Typography>
         </Stack>
         <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Refresh />}
+            onClick={loadDetails}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+
           <Tooltip title="Record Parameter">
             <IconButton size="small" onClick={() => setParameterDialogOpen(true)}>
               <Science />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Edit">
+          <Tooltip title="Edit Process">
             <IconButton size="small" onClick={handleOpenEdit}>
               <Edit />
             </IconButton>
@@ -199,9 +250,47 @@ const ProductionProcessDetail: React.FC = () => {
                 Core Info
               </Typography>
               <List>
-                <ListItem><ListItemText primary={`ID: ${processDetails?.id}`} secondary={`Type: ${processDetails?.process_type}`} /></ListItem>
-                <ListItem><ListItemText primary={`Status: ${processDetails?.status}`} secondary={`Batch: ${processDetails?.batch_id}`} /></ListItem>
-                <ListItem><ListItemText primary={`Operator: ${processDetails?.operator_id || '—'}`} secondary={`Start: ${processDetails?.start_time}`} /></ListItem>
+                <ListItem>
+                  <ListItemText 
+                    primary={`ID: ${processDetails?.id}`} 
+                    secondary={`Type: ${processDetails?.process_type}`} 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText 
+                    primary={
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <span>Status:</span>
+                        <Chip 
+                          label={processDetails?.status || 'Unknown'} 
+                          color={
+                            processDetails?.status === 'completed' ? 'success' :
+                            processDetails?.status === 'in_progress' ? 'primary' :
+                            processDetails?.status === 'diverted' ? 'error' : 'default'
+                          }
+                          size="small"
+                        />
+                      </Stack>
+                    } 
+                    secondary={`Batch: ${processDetails?.batch_id}`} 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText 
+                    primary={`Operator: ${processDetails?.operator_id || '—'}`} 
+                    secondary={`Start: ${processDetails?.start_time ? new Date(processDetails.start_time).toLocaleString() : '—'}`} 
+                  />
+                </ListItem>
+                {processDetails?.end_time && (
+                  <ListItem>
+                    <ListItemText 
+                      primary={`End Time: ${new Date(processDetails.end_time).toLocaleString()}`} 
+                      secondary={`Duration: ${processDetails.start_time ? 
+                        Math.round((new Date(processDetails.end_time).getTime() - new Date(processDetails.start_time).getTime()) / (1000 * 60)) + ' minutes' : 
+                        '—'}`} 
+                    />
+                  </ListItem>
+                )}
               </List>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle1" gutterBottom>Materials</Typography>
@@ -235,20 +324,34 @@ const ProductionProcessDetail: React.FC = () => {
                 <TextField label="Lot" size="small" value={matForm.lot_number} onChange={(e) => setMatForm({ ...matForm, lot_number: e.target.value })} />
                 <Button size="small" variant="outlined" onClick={async () => {
                   try {
-                    if (!processDetails?.id || !matForm.material_id) return;
-                    await fetch(`/api/v1/production/processes/${processDetails.id}/materials`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        material_id: parseInt(matForm.material_id, 10),
-                        quantity: parseFloat(matForm.quantity),
-                        unit: matForm.unit,
-                        lot_number: matForm.lot_number,
-                      })
+                    if (!processDetails?.id) {
+                      setError('Process not found');
+                      return;
+                    }
+                    
+                    if (!matForm.material_id) {
+                      setError('Please select a material');
+                      return;
+                    }
+                    
+                    if (!matForm.quantity || parseFloat(matForm.quantity) <= 0) {
+                      setError('Please enter a valid quantity');
+                      return;
+                    }
+
+                    await productionAPI.recordMaterialConsumption(processDetails.id, {
+                      material_id: parseInt(matForm.material_id, 10),
+                      quantity: parseFloat(matForm.quantity),
+                      unit: matForm.unit,
+                      lot_number: matForm.lot_number || undefined,
                     });
+                    
                     setMatForm({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
-                  } catch (e) {
-                    setError('Failed to record material consumption');
+                    await loadDetails(); // Refresh the data
+                  } catch (e: any) {
+                    const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to record material consumption';
+                    setError(errorMessage);
+                    console.error('Error recording material consumption:', e);
                   }
                 }}>Record</Button>
               </Stack>
@@ -283,30 +386,44 @@ const ProductionProcessDetail: React.FC = () => {
           {detailsTab === 1 && (
             <Box>
               <Typography variant="subtitle1" gutterBottom>Parameters</Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Value</TableCell>
-                    <TableCell>Unit</TableCell>
-                    <TableCell>Target</TableCell>
-                    <TableCell>Tolerance</TableCell>
-                    <TableCell>Within</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {processDetails?.parameters?.map((p: any) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.parameter_name}</TableCell>
-                      <TableCell>{p.parameter_value}</TableCell>
-                      <TableCell>{p.unit}</TableCell>
-                      <TableCell>{p.target_value ?? '—'}</TableCell>
-                      <TableCell>{p.tolerance_min ?? '—'} - {p.tolerance_max ?? '—'}</TableCell>
-                      <TableCell>{p.is_within_tolerance === false ? <Chip label="OOT" color="error" size="small"/> : 'OK'}</TableCell>
+              {processDetails?.parameters && processDetails.parameters.length > 0 ? (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Value</TableCell>
+                      <TableCell>Unit</TableCell>
+                      <TableCell>Target</TableCell>
+                      <TableCell>Tolerance</TableCell>
+                      <TableCell>Within</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {processDetails.parameters.map((p: any) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.parameter_name}</TableCell>
+                        <TableCell>{p.parameter_value}</TableCell>
+                        <TableCell>{p.unit}</TableCell>
+                        <TableCell>{p.target_value ?? '—'}</TableCell>
+                        <TableCell>{p.tolerance_min ?? '—'} - {p.tolerance_max ?? '—'}</TableCell>
+                        <TableCell>{p.is_within_tolerance === false ? <Chip label="OOT" color="error" size="small"/> : 'OK'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <Box textAlign="center" py={3}>
+                  <Typography color="text.secondary">No parameters recorded yet</Typography>
+                  <Button 
+                    variant="outlined" 
+                    size="small" 
+                    onClick={() => setParameterDialogOpen(true)}
+                    sx={{ mt: 1 }}
+                  >
+                    Record First Parameter
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
 
@@ -314,25 +431,43 @@ const ProductionProcessDetail: React.FC = () => {
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <Typography variant="subtitle1" gutterBottom>Deviations</Typography>
-                <List>
-                  {processDetails?.deviations?.map((d: any) => (
-                    <ListItem key={d.id}>
-                      <ListItemIcon><Warning color={d.severity === 'critical' ? 'error' : 'warning'} /></ListItemIcon>
-                      <ListItemText primary={`${d.deviation_type}: ${d.actual_value} vs ${d.expected_value}`} secondary={`Severity: ${d.severity} • ${new Date(d.created_at).toLocaleString()}`} />
-                    </ListItem>
-                  ))}
-                </List>
+                {processDetails?.deviations && processDetails.deviations.length > 0 ? (
+                  <List>
+                    {processDetails.deviations.map((d: any) => (
+                      <ListItem key={d.id}>
+                        <ListItemIcon><Warning color={d.severity === 'critical' ? 'error' : 'warning'} /></ListItemIcon>
+                        <ListItemText 
+                          primary={`${d.deviation_type}: ${d.actual_value} vs ${d.expected_value}`} 
+                          secondary={`Severity: ${d.severity} • ${new Date(d.created_at).toLocaleString()}`} 
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Box textAlign="center" py={3}>
+                    <Typography color="text.secondary">No deviations recorded</Typography>
+                  </Box>
+                )}
               </Grid>
               <Grid item xs={12} md={6}>
                 <Typography variant="subtitle1" gutterBottom>Alerts</Typography>
-                <List>
-                  {processDetails?.alerts?.map((a: any) => (
-                    <ListItem key={a.id}>
-                      <ListItemIcon>{getAlertIcon(a.alert_level)}</ListItemIcon>
-                      <ListItemText primary={a.message} secondary={`${a.alert_type} • ${new Date(a.created_at).toLocaleString()}`} />
-                    </ListItem>
-                  ))}
-                </List>
+                {processDetails?.alerts && processDetails.alerts.length > 0 ? (
+                  <List>
+                    {processDetails.alerts.map((a: any) => (
+                      <ListItem key={a.id}>
+                        <ListItemIcon>{getAlertIcon(a.alert_level)}</ListItemIcon>
+                        <ListItemText 
+                          primary={a.message} 
+                          secondary={`${a.alert_type} • ${new Date(a.created_at).toLocaleString()}`} 
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Box textAlign="center" py={3}>
+                    <Typography color="text.secondary">No alerts recorded</Typography>
+                  </Box>
+                )}
               </Grid>
             </Grid>
           )}

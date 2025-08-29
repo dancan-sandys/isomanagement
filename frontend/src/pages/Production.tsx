@@ -102,6 +102,8 @@ const ProductionPage: React.FC = () => {
         productionAPI.listProcesses(),
         productionAPI.getTemplates(),
       ]);
+      console.log('Analytics data received:', analyticsData);
+      console.log('Processes data received:', processesData);
       setAnalytics(analyticsData);
       setProcesses(processesData);
       setTemplates(templatesData);
@@ -236,6 +238,16 @@ const ProductionPage: React.FC = () => {
           >
             Create Process
           </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              console.log('Current analytics state:', analytics);
+              console.log('Current processes state:', processes);
+            }}
+          >
+            Debug Data
+          </Button>
         </Stack>
       </Stack>
 
@@ -251,7 +263,13 @@ const ProductionPage: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary">Total Processes</Typography>
-              <Typography variant="h4">{analytics?.total_processes ?? '—'}</Typography>
+              <Typography variant="h4">
+                {loading ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  analytics?.total_processes ?? processes?.length ?? 0
+                )}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -259,7 +277,13 @@ const ProductionPage: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary">Active Processes</Typography>
-              <Typography variant="h4" color="primary">{analytics?.active_processes ?? '—'}</Typography>
+              <Typography variant="h4" color="primary">
+                {loading ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  analytics?.active_processes ?? processes?.filter(p => p.status === 'in_progress')?.length ?? 0
+                )}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -267,7 +291,13 @@ const ProductionPage: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary">Deviations</Typography>
-              <Typography variant="h4" color="warning.main">{analytics?.total_deviations ?? '—'}</Typography>
+              <Typography variant="h4" color="warning.main">
+                {loading ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  analytics?.total_deviations ?? 0
+                )}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -275,7 +305,13 @@ const ProductionPage: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary">Alerts</Typography>
-              <Typography variant="h4" color="error.main">{analytics?.unacknowledged_alerts ?? '—'}</Typography>
+              <Typography variant="h4" color="error.main">
+                {loading ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  analytics?.unacknowledged_alerts ?? 0
+                )}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>

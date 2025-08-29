@@ -244,16 +244,28 @@ class ProductionService:
         return proc
 
     def get_analytics(self, product_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:
-        query = self.db.query(YieldRecord)
+        # Get process counts
+        process_query = self.db.query(ProductionProcess)
         if product_type:
-            query = query.join(ProductionProcess, ProductionProcess.id == YieldRecord.process_id).filter(ProductionProcess.process_type == product_type)
-        yields = query.all()
-        total = len(yields)
+            process_query = process_query.filter(ProductionProcess.process_type == product_type)
+        
+        total_processes = process_query.count()
+        active_processes = process_query.filter(ProductionProcess.status == ProcessStatus.IN_PROGRESS).count()
+        
+        # Get yield data
+        yield_query = self.db.query(YieldRecord)
+        if product_type:
+            yield_query = yield_query.join(ProductionProcess, ProductionProcess.id == YieldRecord.process_id).filter(ProductionProcess.process_type == product_type)
+        yields = yield_query.all()
+        total_yields = len(yields)
         overruns = [y for y in yields if (y.overrun_percent or 0) > 0]
         underruns = [y for y in yields if (y.overrun_percent or 0) < 0]
-        avg_overrun = sum((y.overrun_percent or 0) for y in yields) / total if total else 0.0
+        avg_overrun = sum((y.overrun_percent or 0) for y in yields) / total_yields if total_yields else 0.0
+        
         return {
-            "total_records": total,
+            "total_processes": total_processes,
+            "active_processes": active_processes,
+            "total_records": total_yields,
             "avg_overrun_percent": round(avg_overrun, 2),
             "overruns": len(overruns),
             "underruns": len(underruns),
