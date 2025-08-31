@@ -1866,3 +1866,76 @@ def create_process_from_iso_template(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.get("/processes/{process_id}/transitions")
+def list_stage_transitions(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """List stage transitions for a production process (for divert/rework verification)."""
+    from app.models.production import StageTransition
+    from app.services.production_service import ProductionService
+    svc = ProductionService(db)
+    proc = svc.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    transitions = (
+        db.query(StageTransition)
+        .filter(StageTransition.process_id == process_id)
+        .order_by(StageTransition.transition_timestamp.asc())
+        .all()
+    )
+    return [
+        {
+            "id": t.id,
+            "from_stage_id": t.from_stage_id,
+            "to_stage_id": t.to_stage_id,
+            "transition_type": t.transition_type,
+            "auto_transition": t.auto_transition,
+            "reason": t.transition_reason,
+            "initiated_by": t.initiated_by,
+            "timestamp": t.transition_timestamp,
+            "requires_approval": t.requires_approval,
+            "approved_by": t.approved_by,
+        }
+        for t in transitions
+    ]
+
+@router.get("/processes/{process_id}/audit-simple")
+def get_process_audit_simple(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Simple audit bundle: stage transitions and divert logs."""
+    from app.models.production import ProcessLog, LogEvent
+    from app.services.production_service import ProductionService
+    svc = ProductionService(db)
+    proc = svc.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    # Transitions
+    transitions = list_stage_transitions(process_id, db, current_user)
+    # Divert logs
+    diverts = (
+        db.query(ProcessLog)
+        .filter(ProcessLog.process_id == process_id, ProcessLog.event == LogEvent.DIVERT)
+        .order_by(ProcessLog.timestamp.asc())
+        .all()
+    )
+    return {
+        "process_id": process_id,
+        "transitions": transitions,
+        "diverts": [
+            {
+                "id": d.id,
+                "timestamp": d.timestamp,
+                "measured_temp_c": d.measured_temp_c,
+                "note": d.note,
+                "auto_flag": d.auto_flag,
+            }
+            for d in diverts
+        ],
+    }
+
