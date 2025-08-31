@@ -72,6 +72,10 @@ const ProductionProcessDetail: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<{ operator_id?: number; status?: string; notes?: string }>({});
 
+  const [operatorPanelOpen, setOperatorPanelOpen] = useState<boolean>(true);
+  const [transitions, setTransitions] = useState<any[]>([]);
+  const [auditSimple, setAuditSimple] = useState<{ diverts: any[] } | null>(null);
+
   const loadDetails = useCallback(async () => {
     if (!id) return;
     try {
@@ -99,9 +103,28 @@ const ProductionProcessDetail: React.FC = () => {
     }
   }, [id]);
 
+  const loadOperatorData = useCallback(async () => {
+    if (!id) return;
+    try {
+      const processId = parseInt(id, 10);
+      const [t, a] = await Promise.all([
+        productionAPI.getTransitions(processId).catch(() => []),
+        productionAPI.getAuditSimple(processId).catch(() => null),
+      ]);
+      setTransitions(t || []);
+      setAuditSimple(a);
+    } catch (e) {
+      // non-blocking
+    }
+  }, [id]);
+
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
+
+  useEffect(() => {
+    loadOperatorData();
+  }, [loadOperatorData]);
 
   const handleRecordParameter = async () => {
     try {
@@ -202,38 +225,59 @@ const ProductionProcessDetail: React.FC = () => {
   return (
     <Box p={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button startIcon={<ArrowBack />} onClick={() => navigate('/production')}>Back</Button>
-          <Typography variant="h5">Process Details</Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Refresh />}
-            onClick={loadDetails}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-
-          <Tooltip title="Record Parameter">
-            <IconButton size="small" onClick={() => setParameterDialogOpen(true)}>
-              <Science />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Edit Process">
-            <IconButton size="small" onClick={handleOpenEdit}>
-              <Edit />
-            </IconButton>
-          </Tooltip>
-        </Stack>
+        <Button startIcon={<ArrowBack />} onClick={() => navigate(-1)}>Back</Button>
+        <Typography variant="h5">Production Process Detail</Typography>
+        <Box />
       </Stack>
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+
+      {/* Operator Console */}
+      <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack spacing={0.5}>
+            <Typography variant="subtitle1">Operator Console</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Process #{processDetails?.id} • Status: {processDetails?.status} • Active Stage: {processDetails?.active_stage?.name || 'N/A'}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <Chip label={`Transitions: ${transitions.length}`} size="small" />
+            <Chip label={`Diverts: ${auditSimple?.diverts?.length || 0}`} color={(auditSimple?.diverts?.length || 0) > 0 ? 'warning' : 'default'} size="small" />
+            <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
+          </Stack>
+        </Stack>
+        <Divider sx={{ my: 1.5 }} />
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={8}>
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" color="success" size="small" onClick={() => navigate(`/api/v1/production/processes/${processDetails?.id}/transitions`)}>
+                View Transitions (API)
+              </Button>
+              <Button variant="outlined" size="small" onClick={() => navigate(`/api/v1/production/processes/${processDetails?.id}/audit-simple`)}>
+                View Audit (API)
+              </Button>
+            </Stack>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
+              <Tooltip title="Mark current stage as Pass (requires criteria met)">
+                <span>
+                  <Button variant="contained" size="small" disabled>Pass</Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Fail current stage and request rework">
+                <span>
+                  <Button variant="outlined" color="warning" size="small" disabled>Rework</Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Divert batch (QA only)">
+                <span>
+                  <Button variant="outlined" color="error" size="small" disabled>Divert</Button>
+                </span>
+              </Tooltip>
+            </Stack>
+          </Grid>
+        </Grid>
+      </Paper>
 
       <Paper sx={{ width: '100%', mb: 2 }}>
         <Tabs value={detailsTab} onChange={(_, v) => setDetailsTab(v)} sx={{ px: 2 }}>

@@ -249,6 +249,16 @@ const productionAPI = {
     const res = await api.post(`/change-requests/${id}/approve`, { decision: payload.decision, comments: payload.comments }, { params: { sequence: payload.sequence } });
     return res.data;
   },
+
+  getTransitions: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/transitions`);
+    return res.data as Array<{ id: number; from_stage_id?: number; to_stage_id?: number; transition_type: string; auto_transition?: boolean; reason?: string; initiated_by: number; timestamp: string; requires_approval?: boolean; approved_by?: number|null }>;
+  },
+
+  getAuditSimple: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/audit-simple`);
+    return res.data as { process_id: number; transitions: any[]; diverts: any[] };
+  },
 };
 
 export const suppliersAPI = {
