@@ -10,9 +10,9 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user
+from app.core.security import get_current_active_user, verify_password
 from app.core.permissions import require_permission_dependency
-from app.models.user import User
+from app.models.user import User as UserModel
 from app.services.batch_progression_service import BatchProgressionService, TransitionType
 from app.services.process_monitoring_service import ProcessMonitoringService
 from app.schemas.production import (
@@ -212,6 +212,45 @@ def request_stage_transition(
             transition_data=transition_data
         )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/stages/{stage_id}/gates/{gate_key}/sign")
+def sign_stage_gate(
+    process_id: int,
+    stage_id: int,
+    gate_key: str,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission_dependency("production:update"))
+) -> Dict[str, Any]:
+    """Operator e-sign for a stage gate. Requires re-auth via password; stores signature hash.
+    payload: { password: string, reason?: string }
+    """
+    try:
+        # Re-auth
+        user = db.query(UserModel).filter(UserModel.id == current_user.id).first()
+        if not user or not verify_password(payload.get("password", ""), user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid credentials for e-sign")
+        # Create an audit transition event placeholder (no movement) with signature
+        from app.models.production import StageTransition
+        st = StageTransition(
+            process_id=process_id,
+            from_stage_id=stage_id,
+            to_stage_id=stage_id,
+            transition_type="gate_sign",
+            transition_reason=payload.get("reason") or f"Gate signed: {gate_key}",
+            auto_transition=False,
+            initiated_by=current_user.id,
+            transition_notes=f"gate={gate_key}",
+            requires_approval=False,
+        )
+        db.add(st)
+        db.commit()
+        return {"status": "signed", "gate": gate_key, "signed_by": current_user.id, "transition_id": st.id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

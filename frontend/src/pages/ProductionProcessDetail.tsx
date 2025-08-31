@@ -78,6 +78,9 @@ const ProductionProcessDetail: React.FC = () => {
 
   const [explicitActiveStage, setExplicitActiveStage] = useState<{ id: number; name: string; sequence: number; status: string } | null>(null);
 
+  const [signOpen, setSignOpen] = useState(false);
+  const [signForm, setSignForm] = useState<{ gateKey: string; password: string; reason?: string }>({ gateKey: '', password: '' });
+
   const loadDetails = useCallback(async () => {
     if (!id) return;
     try {
@@ -280,6 +283,22 @@ const ProductionProcessDetail: React.FC = () => {
     setError('Manual divert not enabled. Use rework or rely on auto-divert.');
   };
 
+  const handleOpenSign = () => {
+    setSignForm({ gateKey: 'operator_gate', password: '' });
+    setSignOpen(true);
+  };
+  const handleSubmitSign = async () => {
+    try {
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      await productionAPI.signGate(processDetails.id, stageId, signForm.gateKey || 'operator_gate', { password: signForm.password, reason: signForm.reason });
+      setSignOpen(false);
+      await loadOperatorData();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to sign gate');
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -338,6 +357,11 @@ const ProductionProcessDetail: React.FC = () => {
               <Tooltip title="Divert batch (QA only)">
                 <span>
                   <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Sign Gate">
+                <span>
+                  <Button variant="outlined" size="small" onClick={handleOpenSign} startIcon={<Edit />}>Sign Gate</Button>
                 </span>
               </Tooltip>
             </Stack>
@@ -758,6 +782,21 @@ const ProductionProcessDetail: React.FC = () => {
               setError('Failed to submit change request');
             }
           }}>Submit</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={signOpen} onClose={() => setSignOpen(false)}>
+        <DialogTitle>Sign Gate</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Gate Key" value={signForm.gateKey} onChange={(e) => setSignForm({ ...signForm, gateKey: e.target.value })} size="small" />
+            <TextField label="Password" type="password" value={signForm.password} onChange={(e) => setSignForm({ ...signForm, password: e.target.value })} size="small" />
+            <TextField label="Reason (optional)" value={signForm.reason || ''} onChange={(e) => setSignForm({ ...signForm, reason: e.target.value })} size="small" />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSignOpen(false)}>Cancel</Button>
+          <Button onClick={handleSubmitSign} variant="contained">Sign</Button>
         </DialogActions>
       </Dialog>
     </Box>

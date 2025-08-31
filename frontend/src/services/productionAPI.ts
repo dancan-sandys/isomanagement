@@ -273,6 +273,10 @@ const productionAPI = {
     const res = await api.get(`/production/processes/${processId}/active-stage`);
     return res.data as { active_stage: { id: number; name: string; sequence: number; status: string } | null };
   },
+  signGate: async (processId: number, stageId: number, gateKey: string, payload: { password: string; reason?: string }) => {
+    const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/gates/${gateKey}/sign`, payload);
+    return res.data as { status: string; gate: string; signed_by: number; transition_id: number };
+  },
 };
 
 export const suppliersAPI = {
