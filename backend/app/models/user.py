@@ -60,15 +60,15 @@ class User(Base):
     
     # Relationships
     role = relationship("Role", back_populates="users")
-    department = relationship("Department", foreign_keys=[department_id])
+    department = relationship("Department", foreign_keys=[department_id], viewonly=True)  # Make viewonly to avoid conflicts
     custom_permissions = relationship("UserPermission", back_populates="user", cascade="all, delete-orphan", foreign_keys="UserPermission.user_id")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     dashboard_configurations = relationship("DashboardConfiguration", back_populates="user")
     
-    # Actions Log relationships
-    assigned_actions = relationship("ActionLog", foreign_keys="ActionLog.assigned_to", back_populates="assigned_user")
-    created_actions = relationship("ActionLog", foreign_keys="ActionLog.assigned_by", back_populates="created_by_user")
-    action_progress_updates = relationship("ActionProgress", foreign_keys="ActionProgress.updated_by", back_populates="user")
+    # Actions Log relationships - Make viewonly to avoid conflicts during user creation
+    assigned_actions = relationship("ActionLog", foreign_keys="ActionLog.assigned_to", back_populates="assigned_user", viewonly=True)
+    created_actions = relationship("ActionLog", foreign_keys="ActionLog.assigned_by", back_populates="created_by_user", viewonly=True)
+    action_progress_updates = relationship("ActionProgress", foreign_keys="ActionProgress.updated_by", back_populates="user", viewonly=True)
     
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role_id={self.role_id})>"

@@ -10,7 +10,7 @@ from app.core.security import (
     create_user_session, invalidate_user_session, get_current_user,
     get_password_hash, verify_token, verify_password, validate_password_policy
 )
-from app.models.user import User, UserSession
+from app.models.user import User, UserSession, UserStatus
 from app.models.rbac import Role
 from app.schemas.auth import Token, TokenData, UserLogin, UserCreate, UserResponse, UserSignup
 from app.schemas.common import ResponseModel
@@ -183,8 +183,8 @@ async def signup(
         full_name=user_data.full_name,
         hashed_password=hashed_password,
         role_id=default_role.id,  # Assign default role
-        status="ACTIVE",
-        department=user_data.department,
+        status=UserStatus.ACTIVE,  # Use enum instead of string
+        department_name=user_data.department,  # Use department_name instead of department
         position=user_data.position,
         phone=user_data.phone,
         employee_id=user_data.employee_id,
@@ -203,7 +203,7 @@ async def signup(
             user_id=db_user.id,
             username=db_user.username,
             role_name=default_role.name,
-            department=db_user.department or "Not specified",
+            department=db_user.department_name or "Not specified",
             login_url="/login"
         )
     except Exception as e:
@@ -219,7 +219,7 @@ async def signup(
         role_id=db_user.role_id,
         role_name=default_role.name,
         status=db_user.status,
-        department=db_user.department,
+        department=db_user.department_name,  # Use department_name instead of department
         position=db_user.position,
         phone=db_user.phone,
         employee_id=db_user.employee_id,
