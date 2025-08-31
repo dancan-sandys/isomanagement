@@ -299,6 +299,8 @@ const ProductionProcessDetail: React.FC = () => {
     }
   };
 
+  const commonGateKeys = ['operator_gate', 'operator_ack', 'intake_ack', 'op_release', 'op_culture_added', 'op_mold_press'];
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -789,7 +791,12 @@ const ProductionProcessDetail: React.FC = () => {
         <DialogTitle>Sign Gate</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Gate Key" value={signForm.gateKey} onChange={(e) => setSignForm({ ...signForm, gateKey: e.target.value })} size="small" />
+            <FormControl size="small">
+              <InputLabel id="gate-key-label">Gate Key</InputLabel>
+              <Select labelId="gate-key-label" label="Gate Key" value={signForm.gateKey} onChange={(e) => setSignForm({ ...signForm, gateKey: String(e.target.value) })}>
+                {commonGateKeys.map(k => <MenuItem key={k} value={k}>{k}</MenuItem>)}
+              </Select>
+            </FormControl>
             <TextField label="Password" type="password" value={signForm.password} onChange={(e) => setSignForm({ ...signForm, password: e.target.value })} size="small" />
             <TextField label="Reason (optional)" value={signForm.reason || ''} onChange={(e) => setSignForm({ ...signForm, reason: e.target.value })} size="small" />
           </Stack>

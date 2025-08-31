@@ -15,6 +15,7 @@ from app.core.permissions import require_permission_dependency
 from app.models.user import User as UserModel
 from app.services.batch_progression_service import BatchProgressionService, TransitionType
 from app.services.process_monitoring_service import ProcessMonitoringService
+from app.services.workflow_engine import WorkflowEngine
 from app.schemas.production import (
     ProcessCreateWithStages, ProcessStartRequest, ProcessSummaryResponse,
     StageMonitoringRequirementCreate, StageMonitoringLogCreate
@@ -204,6 +205,40 @@ def request_stage_transition(
             "prerequisites_met": request.prerequisites_met
         }
         
+        # Enforce e-sign on gates for critical stages before NORMAL pass
+        if transition_type == TransitionType.NORMAL:
+            # Load gates for this stage from workflow definition
+            from app.models.production import ProcessStage, StageTransition as ST, ProductionProcess
+            stage = db.query(ProcessStage).filter(ProcessStage.id == stage_id, ProcessStage.process_id == process_id).first()
+            process = db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
+            if stage and process:
+                try:
+                    engine = WorkflowEngine(db)
+                    wf = engine.load_workflow(getattr(process.process_type, 'value', str(process.process_type)))
+                    idx = max(0, stage.sequence_order - 1)
+                    stage_def = (wf.get('stages') or [])[idx] if idx < len(wf.get('stages') or []) else None
+                    gates = (stage_def.get('gates') if stage_def else []) or []
+                    required_esign = [g for g in gates if g.get('esign')]
+                    if required_esign:
+                        # Count gate_sign transitions for this stage
+                        signed = db.query(ST).filter(ST.process_id == process_id, ST.from_stage_id == stage_id, ST.to_stage_id == stage_id, ST.transition_type == 'gate_sign').all()
+                        signed_keys = set()
+                        for s in signed:
+                            notes = (s.transition_notes or '')
+                            if 'gate=' in notes:
+                                try:
+                                    signed_keys.add(notes.split('gate=')[1].split(';')[0])
+                                except Exception:
+                                    pass
+                        missing = [g['key'] for g in required_esign if g.get('key') not in signed_keys]
+                        if missing:
+                            raise HTTPException(status_code=400, detail=f"Missing e-sign for gates: {', '.join(missing)}")
+                except HTTPException:
+                    raise
+                except Exception:
+                    # Fail closed: if we cannot evaluate, require signature to be safe
+                    raise HTTPException(status_code=400, detail="Gate e-sign validation failed")
+
         result = service.request_stage_transition(
             process_id=process_id,
             current_stage_id=stage_id,
