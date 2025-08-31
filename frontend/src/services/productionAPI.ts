@@ -277,6 +277,10 @@ const productionAPI = {
     const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/gates/${gateKey}/sign`, payload);
     return res.data as { status: string; gate: string; signed_by: number; transition_id: number };
   },
+  getWorkflow: async (productType: string) => {
+    const res = await api.get(`/workflows/${productType}`);
+    return res.data as { name: string; version: number; stages: any[] };
+  },
 };
 
 export const suppliersAPI = {

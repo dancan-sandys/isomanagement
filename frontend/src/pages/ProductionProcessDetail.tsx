@@ -81,6 +81,8 @@ const ProductionProcessDetail: React.FC = () => {
   const [signOpen, setSignOpen] = useState(false);
   const [signForm, setSignForm] = useState<{ gateKey: string; password: string; reason?: string }>({ gateKey: '', password: '' });
 
+  const [stageGates, setStageGates] = useState<{ key: string; esign?: boolean }[] | null>(null);
+
   const loadDetails = useCallback(async () => {
     if (!id) return;
     try {
@@ -137,6 +139,18 @@ const ProductionProcessDetail: React.FC = () => {
     }
   }, [processDetails?.id, processDetails?.active_stage]);
 
+  const loadWorkflowGates = useCallback(async () => {
+    try {
+      if (!processDetails?.process_type) return;
+      const wf = await productionAPI.getWorkflow(processDetails.process_type);
+      const stageIdx = (explicitActiveStage?.sequence || 1) - 1;
+      const sdef = (wf.stages || [])[stageIdx] || null;
+      setStageGates((sdef?.gates || []).map((g: any) => ({ key: g.key, esign: !!g.esign })));
+    } catch {
+      setStageGates(null);
+    }
+  }, [processDetails?.process_type, explicitActiveStage?.sequence]);
+
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
@@ -148,6 +162,10 @@ const ProductionProcessDetail: React.FC = () => {
   useEffect(() => {
     hydrateActiveStage();
   }, [hydrateActiveStage]);
+
+  useEffect(() => {
+    loadWorkflowGates();
+  }, [loadWorkflowGates]);
 
   const handleRecordParameter = async () => {
     try {
@@ -336,36 +354,22 @@ const ProductionProcessDetail: React.FC = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} md={8}>
             <Stack direction="row" spacing={1}>
-              <Button variant="contained" color="success" size="small" onClick={() => navigate(`/api/v1/production/processes/${processDetails?.id}/transitions`)}>
-                View Transitions (API)
-              </Button>
-              <Button variant="outlined" size="small" onClick={() => navigate(`/api/v1/production/processes/${processDetails?.id}/audit-simple`)}>
-                View Audit (API)
-              </Button>
+              <Button variant="contained" color="success" size="small" onClick={handlePass}>Pass</Button>
+              <Button variant="outlined" color="warning" size="small" onClick={handleRework}>Rework</Button>
+              <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
+              <Button variant="outlined" size="small" onClick={handleOpenSign} startIcon={<Edit />}>Sign Gate</Button>
+              <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              {(stageGates || []).map(g => (
+                <Chip key={g.key} label={`${g.key}${g.esign ? ' (esign)' : ''}`} color={g.esign ? 'primary' : 'default'} size="small" />
+              ))}
             </Stack>
           </Grid>
           <Grid item xs={12} md={4}>
             <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
-              <Tooltip title="Mark current stage as Pass (requires criteria met)">
-                <span>
-                  <Button variant="contained" size="small" onClick={handlePass}>Pass</Button>
-                </span>
-              </Tooltip>
-              <Tooltip title="Fail current stage and request rework">
-                <span>
-                  <Button variant="outlined" color="warning" size="small" onClick={handleRework}>Rework</Button>
-                </span>
-              </Tooltip>
-              <Tooltip title="Divert batch (QA only)">
-                <span>
-                  <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
-                </span>
-              </Tooltip>
-              <Tooltip title="Sign Gate">
-                <span>
-                  <Button variant="outlined" size="small" onClick={handleOpenSign} startIcon={<Edit />}>Sign Gate</Button>
-                </span>
-              </Tooltip>
+              <Chip label={`Transitions: ${transitions.length}`} size="small" />
+              <Chip label={`Diverts: ${auditSimple?.diverts?.length || 0}`} color={(auditSimple?.diverts?.length || 0) > 0 ? 'warning' : 'default'} size="small" />
             </Stack>
           </Grid>
         </Grid>
