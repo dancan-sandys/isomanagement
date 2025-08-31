@@ -214,6 +214,51 @@ const ProductionProcessDetail: React.FC = () => {
     }
   };
 
+  const getActiveStageId = (): number | null => {
+    try {
+      const st = processDetails?.stages_list || processDetails?.stages; // depending on backend shape
+      if (Array.isArray(st)) {
+        const inProg = st.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
+        return inProg?.id || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handlePass = async () => {
+    try {
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      const evalRes = await productionAPI.evaluateStage(processDetails.id, stageId);
+      if (!evalRes.can_progress) {
+        setError('Stage cannot progress: criteria not met');
+        return;
+      }
+      await productionAPI.transitionStage(processDetails.id, stageId, { transition_type: 'normal', prerequisites_met: true, reason: 'Operator pass' });
+      await Promise.all([loadDetails(), loadOperatorData()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to pass stage');
+    }
+  };
+
+  const handleRework = async () => {
+    try {
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      await productionAPI.transitionStage(processDetails.id, stageId, { transition_type: 'rework', reason: 'Operator initiated rework' });
+      await Promise.all([loadDetails(), loadOperatorData()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to initiate rework');
+    }
+  };
+
+  const handleDivert = async () => {
+    // For now, divert handled via auto-divert. A manual divert path could be implemented as rollback/skip with reason.
+    setError('Manual divert not enabled. Use rework or rely on auto-divert.');
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -261,17 +306,17 @@ const ProductionProcessDetail: React.FC = () => {
             <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
               <Tooltip title="Mark current stage as Pass (requires criteria met)">
                 <span>
-                  <Button variant="contained" size="small" disabled>Pass</Button>
+                  <Button variant="contained" size="small" onClick={handlePass}>Pass</Button>
                 </span>
               </Tooltip>
               <Tooltip title="Fail current stage and request rework">
                 <span>
-                  <Button variant="outlined" color="warning" size="small" disabled>Rework</Button>
+                  <Button variant="outlined" color="warning" size="small" onClick={handleRework}>Rework</Button>
                 </span>
               </Tooltip>
               <Tooltip title="Divert batch (QA only)">
                 <span>
-                  <Button variant="outlined" color="error" size="small" disabled>Divert</Button>
+                  <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
                 </span>
               </Tooltip>
             </Stack>
