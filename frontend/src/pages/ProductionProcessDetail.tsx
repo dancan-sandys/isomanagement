@@ -319,6 +319,26 @@ const ProductionProcessDetail: React.FC = () => {
 
   const commonGateKeys = ['operator_gate', 'operator_ack', 'intake_ack', 'op_release', 'op_culture_added', 'op_mold_press'];
 
+  const signedGateKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const t of transitions || []) {
+      if (t.transition_type === 'gate_sign' && typeof t.transition_notes === 'string') {
+        const idx = t.transition_notes.indexOf('gate=');
+        if (idx >= 0) {
+          const k = t.transition_notes.substring(idx + 5).split(';')[0];
+          if (k) keys.add(k);
+        }
+      }
+    }
+    return keys;
+  }, [transitions]);
+
+  useEffect(() => {
+    // Prefill sign dialog gate key to first required esign gate
+    const firstEsign = (stageGates || []).find(g => g.esign);
+    if (firstEsign) setSignForm(s => ({ ...s, gateKey: firstEsign.key }));
+  }, [stageGates]);
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -361,9 +381,11 @@ const ProductionProcessDetail: React.FC = () => {
               <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
             </Stack>
             <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              {(stageGates || []).map(g => (
-                <Chip key={g.key} label={`${g.key}${g.esign ? ' (esign)' : ''}`} color={g.esign ? 'primary' : 'default'} size="small" />
-              ))}
+              {(stageGates || []).map(g => {
+                const isSigned = signedGateKeys.has(g.key);
+                const color = isSigned ? 'success' : (g.esign ? 'warning' : 'default');
+                return <Chip key={g.key} label={`${g.key}${g.esign ? ' (esign)' : ''}${isSigned ? ' ✓' : ''}`} color={color as any} size="small" />;
+              })}
             </Stack>
           </Grid>
           <Grid item xs={12} md={4}>

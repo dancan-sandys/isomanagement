@@ -1940,6 +1940,7 @@ def list_stage_transitions(
             "timestamp": t.transition_timestamp,
             "requires_approval": t.requires_approval,
             "approved_by": t.approved_by,
+            "transition_notes": t.transition_notes,
         }
         for t in transitions
     ]
