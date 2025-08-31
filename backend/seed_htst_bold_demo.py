@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+import json
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, init_db
@@ -87,6 +89,20 @@ def run_demo():
     # Record yield and transfer
     ps.record_yield(process_id, output_qty=950.0, unit="kg", expected_qty=1000.0)
     ps.record_transfer(process_id, quantity=950.0, unit="kg", location="Cold Room A", lot_number=batch.lot_number, verified_by=1)
+    summary = {
+        "batch_id": batch.id,
+        "batch_number": batch.batch_number,
+        "process_id": process_id,
+        "divert_logs": len(divert_logs),
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    print("DEMO_SUMMARY:", json.dumps(summary))
+    # Write to file for later verification
+    out_path = Path(__file__).resolve().parent / "demo_last_run.json"
+    try:
+        out_path.write_text(json.dumps(summary, indent=2))
+    except Exception:
+        pass
 
     db.close()
 
