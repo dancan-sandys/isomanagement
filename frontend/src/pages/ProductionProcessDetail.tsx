@@ -76,6 +76,8 @@ const ProductionProcessDetail: React.FC = () => {
   const [transitions, setTransitions] = useState<any[]>([]);
   const [auditSimple, setAuditSimple] = useState<{ diverts: any[] } | null>(null);
 
+  const [explicitActiveStage, setExplicitActiveStage] = useState<{ id: number; name: string; sequence: number; status: string } | null>(null);
+
   const loadDetails = useCallback(async () => {
     if (!id) return;
     try {
@@ -118,6 +120,20 @@ const ProductionProcessDetail: React.FC = () => {
     }
   }, [id]);
 
+  const hydrateActiveStage = useCallback(async () => {
+    if (!processDetails?.id) return;
+    try {
+      if (processDetails?.active_stage?.id) {
+        setExplicitActiveStage(processDetails.active_stage);
+        return;
+      }
+      const res = await productionAPI.getActiveStage(processDetails.id);
+      setExplicitActiveStage(res.active_stage || null);
+    } catch {
+      setExplicitActiveStage(null);
+    }
+  }, [processDetails?.id, processDetails?.active_stage]);
+
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
@@ -125,6 +141,10 @@ const ProductionProcessDetail: React.FC = () => {
   useEffect(() => {
     loadOperatorData();
   }, [loadOperatorData]);
+
+  useEffect(() => {
+    hydrateActiveStage();
+  }, [hydrateActiveStage]);
 
   const handleRecordParameter = async () => {
     try {
@@ -215,8 +235,9 @@ const ProductionProcessDetail: React.FC = () => {
   };
 
   const getActiveStageId = (): number | null => {
+    if (explicitActiveStage?.id) return explicitActiveStage.id;
     try {
-      const st = processDetails?.stages_list || processDetails?.stages; // depending on backend shape
+      const st = processDetails?.stages_list || processDetails?.stages;
       if (Array.isArray(st)) {
         const inProg = st.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
         return inProg?.id || null;
@@ -281,7 +302,7 @@ const ProductionProcessDetail: React.FC = () => {
           <Stack spacing={0.5}>
             <Typography variant="subtitle1">Operator Console</Typography>
             <Typography variant="body2" color="text.secondary">
-              Process #{processDetails?.id} • Status: {processDetails?.status} • Active Stage: {processDetails?.active_stage?.name || 'N/A'}
+              Process #{processDetails?.id} • Status: {processDetails?.status} • Active Stage: {explicitActiveStage?.name || processDetails?.active_stage?.name || 'N/A'}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={1}>

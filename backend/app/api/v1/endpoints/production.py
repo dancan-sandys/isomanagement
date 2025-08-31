@@ -589,8 +589,50 @@ def get_process_details(process_id: int, db: Session = Depends(get_db), current_
             for a in details["alerts"]
         ],
     }
+    response["stages_list"] = [
+        {
+            "id": st.id,
+            "stage_name": st.stage_name,
+            "sequence_order": st.sequence_order,
+            "status": st.status.value if hasattr(st.status, 'value') else str(st.status),
+            "is_ccp": st.is_critical_control_point,
+            "requires_approval": st.requires_approval,
+        }
+        for st in details.get("stages", [])
+    ]
+    if details.get("active_stage"):
+        a = details["active_stage"]
+        response["active_stage"] = {
+            "id": a.id,
+            "name": a.stage_name,
+            "sequence": a.sequence_order,
+            "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
+        }
     return response
 
+@router.get("/processes/{process_id}/active-stage")
+def get_active_stage_id(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Return the current active stage for a process (id, name, sequence, status)."""
+    from app.models.production import ProcessStage, StageStatus
+    st = (
+        db.query(ProcessStage)
+        .filter(ProcessStage.process_id == process_id, ProcessStage.status == StageStatus.IN_PROGRESS)
+        .first()
+    )
+    if not st:
+        return {"active_stage": None}
+    return {
+        "active_stage": {
+            "id": st.id,
+            "name": st.stage_name,
+            "sequence": st.sequence_order,
+            "status": st.status.value if hasattr(st.status, 'value') else str(st.status),
+        }
+    }
 
 @router.post("/processes/{process_id}/spec/bind")
 def bind_process_spec(
