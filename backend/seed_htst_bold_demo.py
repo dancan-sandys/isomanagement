@@ -5,7 +5,8 @@ from app.core.database import SessionLocal, init_db
 from app.models.traceability import Batch, BatchType, BatchStatus
 from app.services.workflow_engine import WorkflowEngine
 from app.services.production_service import ProductionService
-from app.models.production import ProductProcessType
+from app.services.batch_progression_service import BatchProgressionService, TransitionType
+from app.models.production import ProductProcessType, ProcessStage, StageStatus, ProcessLog, LogEvent
 
 
 def run_demo():
@@ -45,7 +46,7 @@ def run_demo():
             "measured_temp_c": 72.5,
             "source": "manual",
         })
-    # 10-second dip to 70C
+    # 10-second dip to 70C (should trigger auto-divert)
     for i in range(300, 310):
         ps.add_log(process_id, {
             "event": "reading",
@@ -61,6 +62,27 @@ def run_demo():
             "measured_temp_c": 72.3,
             "source": "manual",
         })
+
+    # Verify auto-divert log exists
+    divert_logs = db.query(ProcessLog).filter(ProcessLog.process_id == process_id, ProcessLog.event == LogEvent.DIVERT).all()
+    print(f"DIVERT_LOGS: {len(divert_logs)}")
+
+    # Initiate rework on current stage
+    active_stage = db.query(ProcessStage).filter(ProcessStage.process_id == process_id, ProcessStage.status == StageStatus.IN_PROGRESS).first()
+    if active_stage:
+        bps = BatchProgressionService(db)
+        bps.request_stage_transition(
+            process_id=process_id,
+            current_stage_id=active_stage.id,
+            user_id=1,
+            transition_type=TransitionType.REWORK,
+            transition_data={
+                "reason": "Auto-divert HTST criteria not met",
+                "notes": "Rework pasteurization",
+                "rework_reason": "Temperature dip"
+            }
+        )
+        print(f"REWORK_INITIATED_FOR_STAGE: {active_stage.id}")
 
     # Record yield and transfer
     ps.record_yield(process_id, output_qty=950.0, unit="kg", expected_qty=1000.0)
