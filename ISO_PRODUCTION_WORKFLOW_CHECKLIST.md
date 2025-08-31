@@ -1,23 +1,23 @@
 ### ISO 22000 Production Workflow Implementation Checklist (Stateful FSM + Audit)
 
-- [ ] Define data model mappings to existing SQLAlchemy models
+- [x] Define data model mappings to existing SQLAlchemy models
   - **Batch**: map to `app.models.traceability.Batch` (ensure status transitions are audited)
   - **Process/Stage**: use `ProductionProcess` and `ProcessStage` as FSM instances
   - **Measurements**: use `StageMonitoringRequirement` + `StageMonitoringLog` and `ProcessParameter`
   - **Audit**: leverage `log_audit_event` and `StageTransition`
 
-- [ ] Seed versioned workflow JSONs
+- [x] Seed versioned workflow JSONs
   - **fresh_milk_workflow.json**: HTST 72C x 15s with auto-divert
   - **yoghurt_mala_workflow.json**: fermentation params per variant
   - **cheese_workflow.json**: coagulation and ageing controls
 
-- [ ] Implement workflow engine
+- [x] Implement workflow engine
   - Load JSON by `product_type`
   - Instantiate `ProcessStage` rows in sequence
   - Derive `StageMonitoringRequirement` from conditions
   - Bind workflow version to `ProductionProcess.spec`
 
-- [ ] Expose APIs
+- [x] Expose APIs
   - GET `/api/v1/workflows/{product_type}`
   - POST `/api/v1/workflows/instantiate/{product_type}` {batch_id, operator_id, fields}
   - POST `/api/v1/workflows/validate` {process_id}
@@ -29,7 +29,7 @@
   - Pass/Fail/Rework/Divert actions
   - Timeline + audit viewer
 
-- [ ] Yield calculation
+- [x] Yield calculation
   - Formula: ((total_yield_kg - start_qty_kg)/start_qty_kg)*100
   - Store context for losses
 
