@@ -424,7 +424,6 @@ const ProductionProcessDetail: React.FC = () => {
             <Chip label={`Diverts: ${auditSimple?.diverts?.length || 0}`} color={(auditSimple?.diverts?.length || 0) > 0 ? 'warning' : 'default'} size="small" />
             <Chip label={samplingStatusForActive.ok ? 'Sampling OK' : `Sampling Missing: ${samplingStatusForActive.missing.length}`} color={samplingStatusForActive.ok ? 'success' : 'warning'} size="small" />
             <Button variant="outlined" color="secondary" size="small" onClick={handleQARelease}>QA Release</Button>
-            <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
           </Stack>
         </Stack>
         <Divider sx={{ my: 1.5 }} />
@@ -448,6 +447,31 @@ const ProductionProcessDetail: React.FC = () => {
                 return <Chip key={g.key} label={`${g.key}${g.esign ? ' (esign)' : ''}${isSigned ? ' ✓' : ''}`} color={color as any} size="small" />;
               })}
             </Stack>
+
+            {/* Stage Timeline */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Stage Timeline</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {(stagesWithMonitoring?.stages || []).map(s => {
+                  const color = s.status === 'in_progress' ? 'primary' : (s.status === 'completed' ? 'success' : (s.status === 'failed' ? 'error' : 'default'));
+                  return <Chip key={s.id} label={`${s.stage_name} (${s.status})`} color={color as any} size="small" />;
+                })}
+              </Stack>
+            </Box>
+
+            {/* Signed Gates Summary */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Signed Gates</Typography>
+              <List dense>
+                {Array.from(signedGateKeys).map(k => (
+                  <ListItem key={k} disableGutters>
+                    <ListItemIcon><Info fontSize="small" /></ListItemIcon>
+                    <ListItemText primary={k} secondary="Signed" />
+                  </ListItem>
+                ))}
+                {signedGateKeys.size === 0 && <Typography variant="caption" color="text.secondary">No gates signed yet</Typography>}
+              </List>
+            </Box>
           </Grid>
           <Grid item xs={12} md={4}>
             <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
