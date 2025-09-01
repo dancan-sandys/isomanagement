@@ -269,8 +269,20 @@ const ProductionProcessDetail: React.FC = () => {
     }
   };
 
+  const hasUnsignedRequiredGates = React.useMemo(() => {
+    const gates = stageGates || [];
+    for (const g of gates) {
+      if (g.esign && !signedGateKeys.has(g.key)) return true;
+    }
+    return false;
+  }, [stageGates, signedGateKeys]);
+
   const handlePass = async () => {
     try {
+      if (hasUnsignedRequiredGates) {
+        setError('Cannot pass: required gate(s) not signed');
+        return;
+      }
       const stageId = getActiveStageId();
       if (!stageId || !processDetails?.id) return;
       const evalRes = await productionAPI.evaluateStage(processDetails.id, stageId);
@@ -374,7 +386,11 @@ const ProductionProcessDetail: React.FC = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} md={8}>
             <Stack direction="row" spacing={1}>
-              <Button variant="contained" color="success" size="small" onClick={handlePass}>Pass</Button>
+              <Tooltip title={hasUnsignedRequiredGates ? 'Required gate(s) not signed' : ''}>
+                <span>
+                  <Button variant="contained" color="success" size="small" onClick={handlePass} disabled={hasUnsignedRequiredGates}>Pass</Button>
+                </span>
+              </Tooltip>
               <Button variant="outlined" color="warning" size="small" onClick={handleRework}>Rework</Button>
               <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
               <Button variant="outlined" size="small" onClick={handleOpenSign} startIcon={<Edit />}>Sign Gate</Button>
