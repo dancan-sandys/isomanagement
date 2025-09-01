@@ -648,3 +648,39 @@ def get_compliance_report(
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/qa-release")
+def qa_release_process(
+    process_id: int,
+    reason: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission_dependency("qa:release"))
+) -> Dict[str, Any]:
+    """QA-only release of a process from HOLD/DIVERT to allow continuation."""
+    from app.models.production import ProductionProcess, ProcessStage, StageStatus, ProcessStatus
+    proc = db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    if proc.status not in [ProcessStatus.DIVERTED, ProcessStatus.IN_PROGRESS]:
+        # Allow release even if already in progress (no-op)
+        pass
+    # Set next action: resume at current in-progress or reset failed stage to PENDING
+    failed = db.query(ProcessStage).filter(ProcessStage.process_id == process_id, ProcessStage.status == StageStatus.FAILED).all()
+    for st in failed:
+        st.status = StageStatus.PENDING
+        st.deviations_recorded = (st.deviations_recorded or '') + f"\nQA release: {reason or ''}"
+    proc.status = ProcessStatus.IN_PROGRESS
+    db.commit()
+    try:
+        log_audit_event(
+            db,
+            user_id=current_user.id,
+            action="qa.release",
+            resource_type="production_process",
+            resource_id=str(process_id),
+            details={"reason": reason}
+        )
+    except Exception:
+        pass
+    return {"status": "released", "process_id": process_id}
