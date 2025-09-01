@@ -1,0 +1,62 @@
+{
+  "name": "fresh_milk_workflow",
+  "version": 1,
+  "stages": [
+    {
+      "key": "intake",
+      "label": "Intake & Registration",
+      "conditions": [
+        {"key": "record_start_qty", "type": "required_field", "field": "start_qty_kg"},
+        {"key": "record_start_temp", "type": "optional_field", "field": "start_temp_c"}
+      ],
+      "gates": [
+        {"key": "intake_ack", "type": "operator_ack", "esign": true}
+      ],
+      "on_pass": "pasteurize_72C_15s"
+    },
+    {
+      "key": "pasteurize_72C_15s",
+      "label": "HTST Pasteurization 72°C x 15s",
+      "sampling": {"mode": "ONLINE_OR_30MIN"},
+      "conditions": [
+        {"key": "temp_threshold", "type": "min_value", "metric": "TEMP", "min": 72},
+        {"key": "hold_time", "type": "min_hold_seconds", "metric": "HOLD_TIME_SEC", "min": 15}
+      ],
+      "auto_divert": {
+        "if": {"any_fail": ["temp_threshold", "hold_time"]},
+        "to": "divert_to_start"
+      },
+      "on_pass": "cool_transfer_to_pasteurized_tank"
+    },
+    {
+      "key": "cool_transfer_to_pasteurized_tank",
+      "label": "Cool & Transfer to Pasteurized Tank",
+      "conditions": [
+        {"key": "cooling_complete", "type": "max_value", "metric": "TEMP", "max": 6}
+      ],
+      "gates": [{"key": "op_release", "type": "operator_gate", "esign": true}],
+      "on_pass": "pack",
+      "on_fail": "rework_pasteurize"
+    },
+    {
+      "key": "pack",
+      "label": "Pack & Label",
+      "conditions": [
+        {"key": "label_rules", "type": "checklist", "items": ["date_code", "lot", "product_code"]}
+      ],
+      "on_pass": "cold_room"
+    },
+    {
+      "key": "cold_room",
+      "label": "Transfer to Cold Room",
+      "conditions": [
+        {"key": "record_cold_room_qty", "type": "capture_metric", "metric": "VOLUME_OUT_KG"}
+      ],
+      "on_pass": "complete"
+    },
+    {"key": "divert_to_start", "label": "Auto Diversion to Start", "on_pass": "intake"},
+    {"key": "rework_pasteurize", "label": "Rework: Return to Pasteurization", "on_pass": "pasteurize_72C_15s"},
+    {"key": "complete", "label": "Complete"}
+  ]
+}
+

@@ -249,6 +249,48 @@ const productionAPI = {
     const res = await api.post(`/change-requests/${id}/approve`, { decision: payload.decision, comments: payload.comments }, { params: { sequence: payload.sequence } });
     return res.data;
   },
+
+  getTransitions: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/transitions`);
+    return res.data as Array<{ id: number; from_stage_id?: number; to_stage_id?: number; transition_type: string; auto_transition?: boolean; reason?: string; initiated_by: number; timestamp: string; requires_approval?: boolean; approved_by?: number|null }>;
+  },
+
+  getAuditSimple: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/audit-simple`);
+    return res.data as { process_id: number; transitions: any[]; diverts: any[] };
+  },
+
+  // Batch progression (FSM) endpoints
+  evaluateStage: async (processId: number, stageId: number) => {
+    const res = await api.get(`/batch-progression/processes/${processId}/stages/${stageId}/evaluate`);
+    return res.data as { can_progress: boolean; requires_approval: boolean; available_actions: string[]; next_stage?: any };
+  },
+  transitionStage: async (processId: number, stageId: number, payload: { transition_type: 'normal'|'rollback'|'skip'|'emergency'|'rework'; reason?: string; notes?: string; deviations_recorded?: string; corrective_actions?: string; prerequisites_met?: boolean }) => {
+    const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/transition`, payload);
+    return res.data;
+  },
+  getActiveStage: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/active-stage`);
+    return res.data as { active_stage: { id: number; name: string; sequence: number; status: string } | null };
+  },
+  signGate: async (processId: number, stageId: number, gateKey: string, payload: { password: string; reason?: string }) => {
+    const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/gates/${gateKey}/sign`, payload);
+    return res.data as { status: string; gate: string; signed_by: number; transition_id: number };
+  },
+  getWorkflow: async (productType: string) => {
+    const res = await api.get(`/workflows/${productType}`);
+    return res.data as { name: string; version: number; stages: any[] };
+  },
+
+  getProcessStagesWithMonitoring: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/stages`, { params: { include_monitoring: true } });
+    return res.data as { process_id: number; total_stages: number; stages: Array<{ id: number; stage_name: string; status: string; monitoring_requirements?: any[]; recent_monitoring_logs?: any[] }> };
+  },
+
+  qaRelease: async (processId: number, reason?: string) => {
+    const res = await api.post(`/batch-progression/processes/${processId}/qa-release`, null, { params: { reason } });
+    return res.data as { status: string; process_id: number };
+  },
 };
 
 export const suppliersAPI = {

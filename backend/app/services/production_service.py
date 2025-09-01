@@ -580,6 +580,8 @@ class ProductionService:
         except Exception:
             materials = []
         
+        stages = self.db.query(ProcessStage).filter(ProcessStage.process_id == process_id).order_by(ProcessStage.sequence_order).all()
+        active_stage = next((s for s in stages if s.status == StageStatus.IN_PROGRESS), None)
         return {
             "process": process,
             "steps": steps,
@@ -588,6 +590,8 @@ class ProductionService:
             "deviations": deviations,
             "alerts": alerts,
             "materials": materials,
+            "stages": stages,
+            "active_stage": active_stage,
         }
 
     def get_enhanced_analytics(self, process_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:
