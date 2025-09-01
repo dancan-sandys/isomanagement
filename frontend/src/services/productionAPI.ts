@@ -263,7 +263,17 @@ const productionAPI = {
   // Batch progression (FSM) endpoints
   evaluateStage: async (processId: number, stageId: number) => {
     const res = await api.get(`/batch-progression/processes/${processId}/stages/${stageId}/evaluate`);
-    return res.data as { can_progress: boolean; requires_approval: boolean; available_actions: string[]; next_stage?: any };
+    return res.data as { 
+      can_progress: boolean; 
+      requires_approval: boolean; 
+      available_actions: string[]; 
+      next_stage?: any;
+      readiness_assessment?: {
+        requirements_assessment?: any[];
+        [key: string]: any;
+      };
+      [key: string]: any;
+    };
   },
   transitionStage: async (processId: number, stageId: number, payload: { transition_type: 'normal'|'rollback'|'skip'|'emergency'|'rework'; reason?: string; notes?: string; deviations_recorded?: string; corrective_actions?: string; prerequisites_met?: boolean }) => {
     const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/transition`, payload);

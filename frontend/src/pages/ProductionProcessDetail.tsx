@@ -170,7 +170,8 @@ const ProductionProcessDetail: React.FC = () => {
       const res = await productionAPI.evaluateStage(processDetails.id, stageId);
       const ra = res?.readiness_assessment?.requirements_assessment || [];
       setReqAssessments(ra);
-    } catch {
+    } catch (error) {
+      console.warn('Failed to load readiness assessment:', error);
       setReqAssessments(null);
     }
   }, [processDetails?.id, explicitActiveStage?.id]);
@@ -225,7 +226,8 @@ const ProductionProcessDetail: React.FC = () => {
         }
       }
 
-      await productionAPI.recordParameter(processDetails.id, newParameter);
+      const result = await productionAPI.recordParameter(processDetails.id, newParameter);
+      
       setParameterDialogOpen(false);
       setNewParameter({
         parameter_name: '',
@@ -236,8 +238,10 @@ const ProductionProcessDetail: React.FC = () => {
         tolerance_max: undefined,
         notes: '',
       });
+      setError(null); // Clear any previous errors
       await loadDetails();
     } catch (e: any) {
+      console.error('Error in handleRecordParameter:', e);
       const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to record parameter';
       setError(errorMessage);
       console.error('Error recording parameter:', e);
@@ -301,6 +305,20 @@ const ProductionProcessDetail: React.FC = () => {
     }
   };
 
+  const signedGateKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const t of transitions || []) {
+      if (t.transition_type === 'gate_sign' && typeof t.transition_notes === 'string') {
+        const idx = t.transition_notes.indexOf('gate=');
+        if (idx >= 0) {
+          const k = t.transition_notes.substring(idx + 5).split(';')[0];
+          if (k) keys.add(k);
+        }
+      }
+    }
+    return keys;
+  }, [transitions]);
+
   const hasUnsignedRequiredGates = React.useMemo(() => {
     const gates = stageGates || [];
     for (const g of gates) {
@@ -362,20 +380,6 @@ const ProductionProcessDetail: React.FC = () => {
   };
 
   const commonGateKeys = ['operator_gate', 'operator_ack', 'intake_ack', 'op_release', 'op_culture_added', 'op_mold_press'];
-
-  const signedGateKeys = React.useMemo(() => {
-    const keys = new Set<string>();
-    for (const t of transitions || []) {
-      if (t.transition_type === 'gate_sign' && typeof t.transition_notes === 'string') {
-        const idx = t.transition_notes.indexOf('gate=');
-        if (idx >= 0) {
-          const k = t.transition_notes.substring(idx + 5).split(';')[0];
-          if (k) keys.add(k);
-        }
-      }
-    }
-    return keys;
-  }, [transitions]);
 
   const samplingStatusForActive = React.useMemo(() => {
     if (!explicitActiveStage || !stagesWithMonitoring?.stages) return { ok: true, missing: [] as string[] };
@@ -793,6 +797,7 @@ const ProductionProcessDetail: React.FC = () => {
               value={newParameter.parameter_name}
               onChange={(e) => setNewParameter({ ...newParameter, parameter_name: e.target.value })}
               fullWidth
+              required
             />
             <TextField
               label="Parameter Value"
@@ -800,6 +805,7 @@ const ProductionProcessDetail: React.FC = () => {
               value={newParameter.parameter_value}
               onChange={(e) => setNewParameter({ ...newParameter, parameter_value: parseFloat(e.target.value) })}
               fullWidth
+              required
             />
             <TextField
               label="Unit"
@@ -839,8 +845,14 @@ const ProductionProcessDetail: React.FC = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setParameterDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleRecordParameter} variant="contained">Record Parameter</Button>
+          <Button onClick={() => setParameterDialogOpen(false)} type="button">Cancel</Button>
+          <Button 
+            onClick={handleRecordParameter} 
+            variant="contained" 
+            type="button"
+          >
+            Record Parameter
+          </Button>
         </DialogActions>
       </Dialog>
 

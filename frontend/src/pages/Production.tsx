@@ -168,9 +168,37 @@ const ProductionPage: React.FC = () => {
   };
 
   const handleRecordParameter = async () => {
-    if (!selectedProcess) return;
+    if (!selectedProcess) {
+      setError('No process selected');
+      return;
+    }
+
     try {
-      await productionAPI.recordParameter(selectedProcess.id, newParameter);
+      console.log('Recording parameter for process:', selectedProcess.id);
+      console.log('Parameter data:', newParameter);
+
+      // Validate required fields
+      if (!newParameter.parameter_name.trim()) {
+        setError('Parameter name is required');
+        return;
+      }
+
+      if (newParameter.parameter_value === undefined || newParameter.parameter_value === null) {
+        setError('Parameter value is required');
+        return;
+      }
+
+      // Validate tolerance values if provided
+      if (newParameter.tolerance_min !== undefined && newParameter.tolerance_max !== undefined) {
+        if (newParameter.tolerance_min >= newParameter.tolerance_max) {
+          setError('Tolerance min must be less than tolerance max');
+          return;
+        }
+      }
+
+      const result = await productionAPI.recordParameter(selectedProcess.id, newParameter);
+      console.log('Parameter recorded successfully:', result);
+      
       setParameterDialogOpen(false);
       setNewParameter({
         parameter_name: '',
@@ -181,9 +209,11 @@ const ProductionPage: React.FC = () => {
         tolerance_max: undefined,
         notes: '',
       });
+      setError(null); // Clear any previous errors
       loadData();
-    } catch (e) {
-      setError('Failed to record parameter');
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to record parameter';
+      setError(errorMessage);
       console.error('Error recording parameter:', e);
     }
   };
@@ -607,7 +637,14 @@ const ProductionPage: React.FC = () => {
 
       {/* Record Parameter Dialog */}
       <Dialog open={parameterDialogOpen} onClose={() => setParameterDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Record Process Parameter</DialogTitle>
+        <DialogTitle>
+          Record Process Parameter
+          {selectedProcess && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Process #{selectedProcess.id} - {selectedProcess.process_type}
+            </Typography>
+          )}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
@@ -615,6 +652,7 @@ const ProductionPage: React.FC = () => {
               value={newParameter.parameter_name}
               onChange={(e) => setNewParameter({ ...newParameter, parameter_name: e.target.value })}
               fullWidth
+              required
             />
             <TextField
               label="Parameter Value"
@@ -622,6 +660,7 @@ const ProductionPage: React.FC = () => {
               value={newParameter.parameter_value}
               onChange={(e) => setNewParameter({ ...newParameter, parameter_value: parseFloat(e.target.value) })}
               fullWidth
+              required
             />
             <TextField
               label="Unit"
