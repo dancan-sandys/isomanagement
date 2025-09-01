@@ -50,6 +50,7 @@ import objectivesAPI from '../services/objectivesAPI';
 import { ObjectiveCreatePayload, ObjectiveUpdatePayload, ObjectiveTargetPayload, ObjectiveProgressPayload } from '../services/objectivesAPI';
 import ObjectiveDetailView from '../components/objectives/ObjectiveDetailView';
 import ObjectivesDashboard from '../components/objectives/ObjectivesDashboard';
+import { departmentsAPI } from '../services/departmentsAPI';
 
 interface Objective {
   id: number;
@@ -130,6 +131,8 @@ const ObjectivesPage: React.FC = () => {
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<number | null>(null);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentFilterId, setDepartmentFilterId] = useState<string>('');
   
   // Form states
   const [createFormData, setCreateFormData] = useState<ObjectiveCreatePayload>({
@@ -165,7 +168,17 @@ const ObjectivesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    loadDepartments();
   }, []);
+
+  const loadDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      setDepartments(res?.items || res?.data?.items || []);
+    } catch (e) {
+      setDepartments([]);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -173,11 +186,11 @@ const ObjectivesPage: React.FC = () => {
       setError(null);
       
       // Load basic objectives
-      const basicResponse = await objectivesAPI.listObjectives();
+      const basicResponse = await objectivesAPI.listObjectives({ department_id: departmentFilterId ? Number(departmentFilterId) : undefined });
       setObjectives(Array.isArray(basicResponse) ? basicResponse : []);
       
       // Load enhanced objectives
-      const enhancedResponse = await objectivesAPI.listEnhancedObjectives();
+      const enhancedResponse = await objectivesAPI.listEnhancedObjectives({ department_id: departmentFilterId ? Number(departmentFilterId) : undefined });
       setEnhancedObjectives(enhancedResponse?.objectives || []);
       
       // Load dashboard KPIs
@@ -194,6 +207,9 @@ const ObjectivesPage: React.FC = () => {
 
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
+    loadData();
+  };
+  const handleApplyDepartmentFilter = () => {
     loadData();
   };
 

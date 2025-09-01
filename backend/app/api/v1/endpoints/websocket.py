@@ -212,14 +212,37 @@ async def handle_client_message(message: dict, user_id: int, db: Session, rbac_s
         if message_type == 'subscribe_department':
             department_id = data.get('department_id')
             if department_id:
-                manager.subscribe_to_department(user_id, department_id)
-                await manager.send_personal_message({
-                    'type': 'subscription_confirmed',
-                    'data': {
-                        'subscription_type': 'department',
-                        'department_id': department_id
-                    }
-                }, user_id)
+                # Minimal permission-aware guard: only allow if user has access to this department
+                try:
+                    accessible_departments = rbac_service.get_accessible_departments(user_id)
+                    if (department_id in accessible_departments) or any(
+                        getattr(d, 'id', None) == department_id for d in accessible_departments
+                    ):
+                        manager.subscribe_to_department(user_id, department_id)
+                        await manager.send_personal_message({
+                            'type': 'subscription_confirmed',
+                            'data': {
+                                'subscription_type': 'department',
+                                'department_id': department_id
+                            }
+                        }, user_id)
+                    else:
+                        await manager.send_personal_message({
+                            'type': 'error',
+                            'data': {
+                                'message': 'Access denied to department',
+                                'department_id': department_id
+                            }
+                        }, user_id)
+                except Exception:
+                    # Fallback: deny on error to be safe
+                    await manager.send_personal_message({
+                        'type': 'error',
+                        'data': {
+                            'message': 'Access denied to department',
+                            'department_id': department_id
+                        }
+                    }, user_id)
         
         elif message_type == 'subscribe_kpi':
             kpi_id = data.get('kpi_id')

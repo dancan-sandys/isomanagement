@@ -38,6 +38,7 @@ import { AppDispatch } from '../../store';
 import { createDocument } from '../../store/slices/documentSlice';
 import { usersAPI, documentsAPI } from '../../services/api';
 import { haccpAPI } from '../../services/api';
+import { departmentsAPI } from '../../services/departmentsAPI';
 
 interface Product {
   id: number;
@@ -78,6 +79,8 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
   const [reviewerId, setReviewerId] = useState<number | null>(null);
   const [approverId, setApproverId] = useState<number | null>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentId, setDepartmentId] = useState<string>('');
 
   const documentTypes = [
     { value: 'policy', label: 'Policy' },
@@ -103,19 +106,7 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
     { value: 'general', label: 'General' },
   ];
 
-  const departments = [
-    'Quality Assurance',
-    'Production',
-    'Maintenance',
-    'Management',
-    'Operations',
-    'Engineering',
-    'Human Resources',
-    'Finance',
-    'Sales',
-    'Marketing',
-  ];
-
+  // Departments will be loaded dynamically
   const productLines = [
     'Milk Processing',
     'Yogurt Production',
@@ -145,6 +136,7 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
     if (open) {
       loadProducts();
       loadUsers();
+      loadDepartments();
     }
   }, [open]);
 
@@ -167,6 +159,16 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
     } catch (e) {
       console.error('Failed to load approval users:', e);
       setUsers([]);
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      setDepartments(res?.items || res?.data?.items || []);
+    } catch (e) {
+      console.error('Failed to load departments:', e);
+      setDepartments([]);
     }
   };
 
@@ -230,7 +232,12 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
       submitFormData.append('description', formData.description);
       submitFormData.append('document_type', formData.document_type);
       submitFormData.append('category', formData.category);
-      submitFormData.append('department', formData.department);
+      if (departmentId) {
+        const match = departments.find((d) => String(d.id) === String(departmentId));
+        submitFormData.append('department', (match && match.name) || '');
+      } else {
+        submitFormData.append('department', '');
+      }
       submitFormData.append('product_line', formData.product_line);
       submitFormData.append('keywords', formData.keywords);
       
@@ -407,14 +414,15 @@ const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
             <FormControl fullWidth>
               <InputLabel>Department</InputLabel>
               <Select
-                value={formData.department}
-                onChange={(e) => handleInputChange('department', e.target.value)}
+                value={departmentId}
+                onChange={(e) => setDepartmentId(String(e.target.value))}
                 disabled={loading}
+                label="Department"
               >
                 <MenuItem value="">Select Department</MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept} value={dept}>
-                    {dept}
+                {departments.map((d) => (
+                  <MenuItem key={d.id} value={String(d.id)}>
+                    {d.name}
                   </MenuItem>
                 ))}
               </Select>
