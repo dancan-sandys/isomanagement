@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, JSON, Date, Enum, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, JSON, Date, Enum, Numeric, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -130,6 +130,7 @@ class KPIValue(Base):
     
     # Indexes for performance
     __table_args__ = (
+        Index("ix_kpi_values_dept_period", "department_id", "period_start"),
         {'extend_existing': True}
     )
 

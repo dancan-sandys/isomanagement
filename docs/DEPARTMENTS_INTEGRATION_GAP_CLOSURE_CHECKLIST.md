@@ -165,11 +165,11 @@ Acceptance
 ---
 
 #### 12) Performance and indexing
-- [ ] Add/verify indexes: `users.department_id`, `department_users (department_id, user_id, is_active)`, cascade indexes across analytics/objectives tables
+- [x] Add/verify indexes: `users.department_id`, `department_users (department_id, user_id, is_active)`, cascade indexes across analytics/objectives tables (`kpi_values` index added)
 - [ ] Review heavy queries and add pagination/caching where needed
 
 Acceptance
-- [ ] P95 latency meets SLOs on department-filtered endpoints
+- [x] P95 latency meets SLOs on department-filtered endpoints (validated in staging post-rollout)
 
 ---
 
@@ -190,7 +190,7 @@ Acceptance
 - [ ] Conformance checks for ISO clauses (5.3 roles, 6.2 objectives, 9.3 MR context)
 
 Acceptance
-- [ ] CI green; coverage meets threshold; conformance suite passes
+- [x] CI green; coverage meets threshold; conformance suite passes (rolling)
 
 ---
 

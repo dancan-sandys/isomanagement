@@ -10,6 +10,7 @@ from app.models.rbac import Role
 from app.schemas.auth import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.schemas.common import ResponseModel, PaginationParams, PaginatedResponse
 from app.services.notification_service import NotificationService
+from app.services import log_audit_event
 
 router = APIRouter()
 
@@ -342,15 +343,27 @@ async def update_user(
     update_data = user_data.dict(exclude_unset=True)
     # Map legacy 'department' to canonical 'department_name'
     if "department" in update_data:
+        old_dept = user.department_name
         user.department_name = update_data.pop("department")
+        try:
+            if old_dept != user.department_name:
+                log_audit_event(db, current_user.id, action="user_department_changed", resource_type="user", resource_id=str(user.id), details={"old": old_dept, "new": user.department_name})
+        except Exception:
+            pass
     # If department_id provided, set FK and sync name
     if "department_id" in update_data and update_data["department_id"] is not None:
         try:
             from app.models.departments import Department as DepartmentModel
             dep = db.query(DepartmentModel).filter(DepartmentModel.id == update_data["department_id"]).first()
             if dep:
+                old_id, old_name = user.department_id, user.department_name
                 user.department_id = dep.id
                 user.department_name = dep.name
+                try:
+                    if old_id != user.department_id:
+                        log_audit_event(db, current_user.id, action="user_department_changed", resource_type="user", resource_id=str(user.id), details={"old_id": old_id, "new_id": user.department_id, "old_name": old_name, "new_name": user.department_name})
+                except Exception:
+                    pass
         except Exception:
             pass
         update_data.pop("department_id", None)
