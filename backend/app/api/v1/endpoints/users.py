@@ -115,9 +115,9 @@ async def get_users(
     if status:
         query = query.filter(User.status == status)
     
-    # Apply department filter
+    # Apply department filter (use department_name field)
     if department:
-        query = query.filter(User.department == department)
+        query = query.filter(User.department_name == department)
     
     # Get total count
     total = query.count()
@@ -146,7 +146,7 @@ async def get_users(
             role_id=user.role_id,
             role_name=role_name,
             status=user.status,
-            department=user.department,
+            department=user.department_name,
             position=user.position,
             phone=user.phone,
             employee_id=user.employee_id,
@@ -183,7 +183,27 @@ async def get_user(
             detail="User not found"
         )
     
-    return UserResponse.from_orm(user)
+    # Build response explicitly to ensure department_name is returned
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    role_name = role.name if role else None
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        role_name=role_name,
+        status=user.status,
+        department=user.department_name,
+        position=user.position,
+        phone=user.phone,
+        employee_id=user.employee_id,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
 
 
 @router.post("/", response_model=ResponseModel[UserResponse])
@@ -236,7 +256,7 @@ async def create_user(
         full_name=user_data.full_name,
         hashed_password=hashed_password,
         role_id=user_data.role_id,
-        department=user_data.department,
+        department_name=user_data.department,
         position=user_data.position,
         phone=user_data.phone,
         employee_id=user_data.employee_id,
@@ -254,7 +274,7 @@ async def create_user(
             user_id=db_user.id,
             username=db_user.username,
             role_name=role.name,
-            department=db_user.department or "Not specified",
+            department=db_user.department_name or "Not specified",
             login_url="/login"
         )
     except Exception as e:
@@ -270,7 +290,7 @@ async def create_user(
         role_id=db_user.role_id,
         role_name=role.name,
         status=db_user.status,
-        department=db_user.department,
+        department=db_user.department_name,
         position=db_user.position,
         phone=db_user.phone,
         employee_id=db_user.employee_id,
@@ -307,6 +327,9 @@ async def update_user(
     
     # Update fields if provided
     update_data = user_data.dict(exclude_unset=True)
+    # Map legacy 'department' to canonical 'department_name'
+    if "department" in update_data:
+        user.department_name = update_data.pop("department")
     for field, value in update_data.items():
         setattr(user, field, value)
     
@@ -314,7 +337,27 @@ async def update_user(
     db.commit()
     db.refresh(user)
     
-    return UserResponse.from_orm(user)
+    # Build response explicitly to ensure department_name is returned
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    role_name = role.name if role else None
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        role_name=role_name,
+        status=user.status,
+        department=user.department_name,
+        position=user.position,
+        phone=user.phone,
+        employee_id=user.employee_id,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
 
 
 @router.delete("/{user_id}")
