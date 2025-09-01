@@ -28,6 +28,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Autocomplete,
   FormHelperText,
   Alert,
   CircularProgress,
@@ -54,11 +55,13 @@ import productionAPI, {
 } from '../services/productionAPI';
 import { suppliersAPI } from '../services/productionAPI';
 import { traceabilityAPI } from '../services/traceabilityAPI';
+import { usersAPI } from '../services/api';
 
 const ProductionPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [processes, setProcesses] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -97,19 +100,25 @@ const ProductionPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [analyticsData, processesData, templatesData] = await Promise.all([
+      const [analyticsData, processesData, templatesData, usersData] = await Promise.all([
         productionAPI.getEnhancedAnalytics(),
         productionAPI.listProcesses(),
         productionAPI.getTemplates(),
+        usersAPI.getUsers({ page: 1, size: 100 }),
       ]);
       console.log('Analytics data received:', analyticsData);
       console.log('Processes data received:', processesData);
       setAnalytics(analyticsData);
       setProcesses(processesData);
       setTemplates(templatesData);
+      const usersList = usersData.items || usersData.data?.items || usersData.data || usersData || [];
+      console.log('Users loaded:', usersList.length, 'users');
+      setUsers(usersList);
     } catch (e) {
       setError('Failed to load production data');
       console.error('Error loading production data:', e);
+        // Set empty users list on error
+        setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -614,11 +623,44 @@ const ProductionPage: React.FC = () => {
               )}
             </FormControl>
             
-            <TextField
-              label="Operator ID"
-              type="number"
-              value={newProcess.operator_id || ''}
-              onChange={(e) => setNewProcess({ ...newProcess, operator_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                                    <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option ? `${option.full_name || option.username} (${option.email})` : ''}
+              value={users.find(user => user.id === newProcess.operator_id) || null}
+              onChange={(event, newValue) => {
+                setNewProcess({ ...newProcess, operator_id: newValue ? newValue.id : undefined });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Operator"
+                  placeholder={loading ? "Loading operators..." : "Search for an operator..."}
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              renderOption={(props, option) => (
+                <li {...props}>
+                  <div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {option.full_name || option.username}
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      {option.email}
+                    </div>
+                  </div>
+                </li>
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value?.id}
+              noOptionsText={loading ? "Loading operators..." : "No operators found"}
+              loading={loading}
               fullWidth
             />
           </Stack>

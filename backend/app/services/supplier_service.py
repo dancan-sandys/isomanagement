@@ -225,6 +225,14 @@ class SupplierService:
                 material_payload["allergens"] = _json.dumps(material_payload["allergens"])  # Text column
             if isinstance(material_payload.get("quality_parameters"), list):
                 material_payload["quality_parameters"] = _json.dumps(material_payload["quality_parameters"])  # Text column
+            # Handle specifications field - convert array to dict if needed
+            if isinstance(material_payload.get("specifications"), list):
+                # Convert array of specification objects to a dict
+                specs_dict = {}
+                for spec in material_payload["specifications"]:
+                    if isinstance(spec, dict) and "parameter_name" in spec:
+                        specs_dict[spec["parameter_name"]] = spec
+                material_payload["specifications"] = specs_dict
         except Exception:
             pass
         material = Material(

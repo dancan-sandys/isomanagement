@@ -37,6 +37,7 @@ import {
 } from '@mui/material';
 import { Warning, Error, Info, ArrowBack, Science, Edit, Refresh } from '@mui/icons-material';
 import productionAPI, { suppliersAPI, ProcessParameterPayload } from '../services/productionAPI';
+import { usersAPI } from '../services/api';
 import Autocomplete from '@mui/material/Autocomplete';
 
 const ProductionProcessDetail: React.FC = () => {
@@ -46,6 +47,7 @@ const ProductionProcessDetail: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [processDetails, setProcessDetails] = useState<any | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
   const [processAudit, setProcessAudit] = useState<any[]>([]);
   const [detailsTab, setDetailsTab] = useState(0);
   const [auditFilter, setAuditFilter] = useState({ action: '', from: '', to: '' });
@@ -95,6 +97,17 @@ const ProductionProcessDetail: React.FC = () => {
       // Use the productionAPI service instead of direct fetch
       const res = await productionAPI.getProcessDetails(processId);
       setProcessDetails(res);
+      
+      // Load users for operator dropdown
+      try {
+        const usersData = await usersAPI.getUsers({ page: 1, size: 100 });
+        const usersList = usersData.items || usersData.data?.items || usersData.data || usersData || [];
+        console.log('Users loaded in detail page:', usersList.length, 'users');
+        setUsers(usersList);
+      } catch (e) {
+        console.warn('Failed to load users:', e);
+        setUsers([]);
+      }
       
       try {
         const audit = await productionAPI.getProcessAudit(processId, { limit: 100, offset: 0 });
@@ -802,8 +815,11 @@ const ProductionProcessDetail: React.FC = () => {
             <TextField
               label="Parameter Value"
               type="number"
-              value={newParameter.parameter_value}
-              onChange={(e) => setNewParameter({ ...newParameter, parameter_value: parseFloat(e.target.value) })}
+              value={newParameter.parameter_value || ''}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : 0;
+                setNewParameter({ ...newParameter, parameter_value: isNaN(value) ? 0 : value });
+              }}
               fullWidth
               required
             />
@@ -817,21 +833,30 @@ const ProductionProcessDetail: React.FC = () => {
               label="Target Value"
               type="number"
               value={newParameter.target_value || ''}
-              onChange={(e) => setNewParameter({ ...newParameter, target_value: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                setNewParameter({ ...newParameter, target_value: value && !isNaN(value) ? value : undefined });
+              }}
               fullWidth
             />
             <TextField
               label="Tolerance Min"
               type="number"
               value={newParameter.tolerance_min || ''}
-              onChange={(e) => setNewParameter({ ...newParameter, tolerance_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                setNewParameter({ ...newParameter, tolerance_min: value && !isNaN(value) ? value : undefined });
+              }}
               fullWidth
             />
             <TextField
               label="Tolerance Max"
               type="number"
               value={newParameter.tolerance_max || ''}
-              onChange={(e) => setNewParameter({ ...newParameter, tolerance_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                setNewParameter({ ...newParameter, tolerance_max: value && !isNaN(value) ? value : undefined });
+              }}
               fullWidth
             />
             <TextField
@@ -861,11 +886,44 @@ const ProductionProcessDetail: React.FC = () => {
         <DialogTitle>Edit Process</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option ? `${option.full_name || option.username} (${option.email})` : ''}
+              value={users.find(user => user.id === editForm.operator_id) || null}
+              onChange={(event, newValue) => {
+                setEditForm({ ...editForm, operator_id: newValue ? newValue.id : undefined });
+              }}
+              renderInput={(params) => (
             <TextField
-              label="Operator ID"
-              type="number"
-              value={editForm.operator_id ?? ''}
-              onChange={(e) => setEditForm({ ...editForm, operator_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                  {...params}
+                  label="Operator"
+                  placeholder={loading ? "Loading operators..." : "Search for an operator..."}
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              renderOption={(props, option) => (
+                <li {...props}>
+                  <div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {option.full_name || option.username}
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      {option.email}
+                    </div>
+                  </div>
+                </li>
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value?.id}
+              noOptionsText={loading ? "Loading operators..." : "No operators found"}
+              loading={loading}
               fullWidth
             />
             <FormControl fullWidth>

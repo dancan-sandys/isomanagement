@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.get("/workflows/{product_type}")
-def get_workflow(product_type: str, db: Session = Depends(get_db), current_user: User = Depends(require_permission_dependency("production:read"))) -> Dict[str, Any]:
+def get_workflow(product_type: str, db: Session = Depends(get_db), current_user: User = Depends(require_permission_dependency("traceability:view"))) -> Dict[str, Any]:
     try:
         engine = WorkflowEngine(db)
         return engine.load_workflow(product_type)

@@ -485,7 +485,7 @@ def list_process_audit(
         "user_agent": r.user_agent,
     } for r in rows]
 
-@router.get("/processes/{process_id}/details", response_model=ProcessResponse)
+@router.get("/processes/{process_id}/details")
 def get_process_details(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
     """Get process with details (steps, logs, parameters, deviations, alerts)"""
     service = ProductionService(db)
@@ -1600,11 +1600,52 @@ def complete_stage_and_transition(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/processes/{process_id}/stages")
+def get_process_stages(
+    process_id: int,
+    include_monitoring: bool = Query(False, description="Include monitoring data"),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get all stages for a process with optional monitoring data"""
+    service = ProductionService(db)
+    try:
+        process = service.get_process_with_stages(process_id)
+        if not process:
+            raise HTTPException(status_code=404, detail="Process not found")
+        
+        stages_data = []
+        for stage in process.stages:
+            stage_data = {
+                "id": stage.id,
+                "stage_name": stage.stage_name,
+                "status": stage.status.value if hasattr(stage.status, "value") else str(stage.status),
+                "sequence_order": stage.sequence_order,
+                "start_time": stage.start_time,
+                "end_time": stage.end_time,
+                "notes": stage.notes
+            }
+            
+            if include_monitoring:
+                # Add monitoring requirements and logs if requested
+                stage_data["monitoring_requirements"] = []
+                stage_data["recent_monitoring_logs"] = []
+            
+            stages_data.append(stage_data)
+        
+        return {
+            "process_id": process_id,
+            "total_stages": len(stages_data),
+            "stages": stages_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/processes/{process_id}/fsm", response_model=ProcessResponse)
 def get_process_with_stages(
     process_id: int, 
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get a process with all its stages and monitoring data"""
     service = ProductionService(db)
@@ -1667,7 +1708,7 @@ def get_process_with_stages(
 def get_process_summary(
     process_id: int, 
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get a summary of the process including progress and quality metrics"""
     service = ProductionService(db)
@@ -1784,7 +1825,7 @@ def log_stage_monitoring(
 def get_stage_monitoring_logs(
     stage_id: int, 
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get all monitoring logs for a stage"""
     service = ProductionService(db)
@@ -1830,7 +1871,7 @@ def get_stage_monitoring_logs(
 def get_iso_stage_template(
     product_type: str,
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get ISO 22000:2018 compliant stage template for a product type"""
     try:
