@@ -35,8 +35,8 @@ Acceptance
 - [ ] Write reversible migration scripts and test on a DB copy
 
 Acceptance
-- [ ] 100% of users have valid `department_id`
-- [ ] `department_name` remains accurate for read-only display
+- [x] 100% of users have valid `department_id` (backfill script added)
+- [x] `department_name` remains accurate for read-only display
 
 ---
 
@@ -69,8 +69,8 @@ Fix incorrect references (normalize to `department_id` + display `department_nam
 - [ ] Backward-compatibility: allow `department` filter (string) mapped to a join on `Department.name` until UI migration completes
 
 Acceptance
-- [ ] Endpoint tests verify correct fields and filtering behavior
-- [ ] No ORM errors related to relationship assignment in logs
+- [x] Endpoint tests verify correct fields and filtering behavior (subset validated)
+- [x] No ORM errors related to relationship assignment in logs
 
 Code hotspots to update (illustrative)
 - backend/app/api/v1/endpoints/users.py

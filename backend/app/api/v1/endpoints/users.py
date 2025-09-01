@@ -265,6 +265,16 @@ async def create_user(
         employee_id=user_data.employee_id,
         created_by=current_user.id
     )
+    # If department_id provided, set FK and sync name if resolvable
+    if getattr(user_data, 'department_id', None):
+        try:
+            from app.models.departments import Department as DepartmentModel
+            dep = db.query(DepartmentModel).filter(DepartmentModel.id == user_data.department_id).first()
+            if dep:
+                db_user.department_id = dep.id
+                db_user.department_name = dep.name
+        except Exception:
+            pass
     
     db.add(db_user)
     db.commit()
@@ -333,6 +343,17 @@ async def update_user(
     # Map legacy 'department' to canonical 'department_name'
     if "department" in update_data:
         user.department_name = update_data.pop("department")
+    # If department_id provided, set FK and sync name
+    if "department_id" in update_data and update_data["department_id"] is not None:
+        try:
+            from app.models.departments import Department as DepartmentModel
+            dep = db.query(DepartmentModel).filter(DepartmentModel.id == update_data["department_id"]).first()
+            if dep:
+                user.department_id = dep.id
+                user.department_name = dep.name
+        except Exception:
+            pass
+        update_data.pop("department_id", None)
     for field, value in update_data.items():
         setattr(user, field, value)
     

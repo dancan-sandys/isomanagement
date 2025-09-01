@@ -312,6 +312,7 @@ const Users: React.FC = () => {
       if (userFormDepartmentId) {
         const match = departmentsList.find((d) => String(d.id) === String(userFormDepartmentId));
         if (match?.name) payload.department = match.name;
+        payload.department_id = parseInt(userFormDepartmentId);
       }
       await usersAPI.createUser(payload);
       setUserDialogOpen(false);
@@ -334,6 +335,7 @@ const Users: React.FC = () => {
       if (userFormDepartmentId) {
         const match = departmentsList.find((d) => String(d.id) === String(userFormDepartmentId));
         if (match?.name) updateData.department = match.name;
+        updateData.department_id = parseInt(userFormDepartmentId);
       }
       await usersAPI.updateUser(userId, updateData);
       setUserDialogOpen(false);
