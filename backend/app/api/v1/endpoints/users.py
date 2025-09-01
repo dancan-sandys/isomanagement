@@ -89,7 +89,8 @@ async def get_users(
     search: Optional[str] = Query(None, description="Search by username, email, or full name"),
     role_id: Optional[int] = Query(None, description="Filter by role ID"),
     status: Optional[UserStatus] = Query(None, description="Filter by status"),
-    department: Optional[str] = Query(None, description="Filter by department"),
+    department: Optional[str] = Query(None, description="Filter by department name (legacy)"),
+    department_id: Optional[int] = Query(None, description="Filter by department ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -115,8 +116,10 @@ async def get_users(
     if status:
         query = query.filter(User.status == status)
     
-    # Apply department filter (use department_name field)
-    if department:
+    # Apply department filters
+    if department_id:
+        query = query.filter(User.department_id == department_id)
+    elif department:
         query = query.filter(User.department_name == department)
     
     # Get total count
