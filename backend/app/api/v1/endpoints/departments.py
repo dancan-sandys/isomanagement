@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.security import get_current_active_user, require_permission
 from app.models.user import User
 from app.models.departments import Department as DepartmentModel, DepartmentUser as DepartmentUserModel
@@ -24,6 +25,8 @@ def list_departments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     query = db.query(DepartmentModel)
     if search:
         like = f"%{search}%"
@@ -45,6 +48,8 @@ def create_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("departments:create"))
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     # Uniqueness on department_code
     existing = db.query(DepartmentModel).filter(DepartmentModel.department_code == payload.department_code).first()
     if existing:
@@ -78,6 +83,8 @@ def get_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     dep = db.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
     if not dep:
         raise HTTPException(status_code=404, detail="Department not found")
@@ -91,6 +98,8 @@ def update_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("departments:update"))
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     dep = db.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
     if not dep:
         raise HTTPException(status_code=404, detail="Department not found")
@@ -116,6 +125,8 @@ def delete_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("departments:delete"))
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     dep = db.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
     if not dep:
         raise HTTPException(status_code=404, detail="Department not found")
@@ -136,6 +147,8 @@ def list_department_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     assignments = db.query(DepartmentUserModel).filter(
         DepartmentUserModel.department_id == department_id,
         DepartmentUserModel.is_active == True
@@ -159,10 +172,14 @@ def assign_user_to_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("departments:assign_user"))
 ):
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     dep = db.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
     if not dep:
         raise HTTPException(status_code=404, detail="Department not found")
     # Upsert active assignment
+    if not settings.FEATURE_DEPARTMENTS_ENABLED:
+        raise HTTPException(status_code=503, detail="Departments feature is disabled")
     assignment = db.query(DepartmentUserModel).filter(
         DepartmentUserModel.department_id == department_id,
         DepartmentUserModel.user_id == payload.user_id

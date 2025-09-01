@@ -195,7 +195,7 @@ Acceptance
 ---
 
 #### 15) Rollout and governance
-- [ ] Feature flag for new department selector and API changes
+- [x] Feature flag for new department selector and API changes
 - [ ] Backfill and validation executed in staging; sign-offs captured
 - [ ] Data privacy review of department-linked data visibility
 - [ ] Post-rollout monitoring and feedback loop
