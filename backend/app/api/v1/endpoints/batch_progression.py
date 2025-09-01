@@ -233,6 +233,22 @@ def request_stage_transition(
                         missing = [g['key'] for g in required_esign if g.get('key') not in signed_keys]
                         if missing:
                             raise HTTPException(status_code=400, detail=f"Missing e-sign for gates: {', '.join(missing)}")
+
+                    # Enforce sampling policy: ONLINE/30-min requirements must have logs
+                    from app.models.production import StageMonitoringRequirement as SMR, StageMonitoringLog as SML
+                    # Determine if sampling mode requires periodic/online logging
+                    sampling_mode = (stage_def.get('sampling') or {}).get('mode') if stage_def else None
+                    if sampling_mode in {"ONLINE", "PERIODIC_30MIN", "ONLINE_OR_30MIN"}:
+                        requirements = db.query(SMR).filter(SMR.stage_id == stage_id, SMR.is_mandatory == True).all()
+                        # If any requirement indicates 30-minute/continuous, require at least one log
+                        missing_req_names = []
+                        for req in requirements:
+                            if (req.monitoring_frequency or '').lower() in {"30_minutes", "continuous", "hourly"}:
+                                exists = db.query(SML).filter(SML.stage_id == stage_id, SML.requirement_id == req.id).first()
+                                if not exists:
+                                    missing_req_names.append(req.requirement_name)
+                        if missing_req_names:
+                            raise HTTPException(status_code=400, detail=f"Sampling incomplete: missing logs for {', '.join(missing_req_names)}")
                 except HTTPException:
                     raise
                 except Exception:
