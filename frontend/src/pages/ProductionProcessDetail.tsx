@@ -82,6 +82,7 @@ const ProductionProcessDetail: React.FC = () => {
   const [signForm, setSignForm] = useState<{ gateKey: string; password: string; reason?: string }>({ gateKey: '', password: '' });
 
   const [stageGates, setStageGates] = useState<{ key: string; esign?: boolean }[] | null>(null);
+  const [stagesWithMonitoring, setStagesWithMonitoring] = useState<{ stages: any[] } | null>(null);
 
   const loadDetails = useCallback(async () => {
     if (!id) return;
@@ -151,6 +152,16 @@ const ProductionProcessDetail: React.FC = () => {
     }
   }, [processDetails?.process_type, explicitActiveStage?.sequence]);
 
+  const loadMonitoringSummary = useCallback(async () => {
+    try {
+      if (!processDetails?.id) return;
+      const data = await productionAPI.getProcessStagesWithMonitoring(processDetails.id);
+      setStagesWithMonitoring({ stages: data.stages || [] });
+    } catch {
+      setStagesWithMonitoring(null);
+    }
+  }, [processDetails?.id]);
+
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
@@ -166,6 +177,10 @@ const ProductionProcessDetail: React.FC = () => {
   useEffect(() => {
     loadWorkflowGates();
   }, [loadWorkflowGates]);
+
+  useEffect(() => {
+    loadMonitoringSummary();
+  }, [loadMonitoringSummary]);
 
   const handleRecordParameter = async () => {
     try {
@@ -345,6 +360,34 @@ const ProductionProcessDetail: React.FC = () => {
     return keys;
   }, [transitions]);
 
+  const samplingStatusForActive = React.useMemo(() => {
+    if (!explicitActiveStage || !stagesWithMonitoring?.stages) return { ok: true, missing: [] as string[] };
+    const st = stagesWithMonitoring.stages.find(s => s.id === explicitActiveStage.id);
+    if (!st) return { ok: true, missing: [] };
+    const reqs = st.monitoring_requirements || [];
+    const logs = st.recent_monitoring_logs || [];
+    const missing: string[] = [];
+    for (const r of reqs) {
+      const freq = (r.requirement_type || '').toString();
+      // Basic heuristic: if marked mandatory or critical, require at least one log
+      if (r.is_mandatory || r.is_critical_limit) {
+        const hasLog = logs.some((l: any) => l && typeof l.id !== 'undefined');
+        if (!hasLog) missing.push(r.requirement_name);
+      }
+    }
+    return { ok: missing.length === 0, missing };
+  }, [explicitActiveStage, stagesWithMonitoring]);
+
+  const handleQARelease = async () => {
+    try {
+      if (!processDetails?.id) return;
+      await productionAPI.qaRelease(processDetails.id, 'QA release from HOLD');
+      await Promise.all([loadDetails(), loadOperatorData(), loadMonitoringSummary()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to release');
+    }
+  };
+
   useEffect(() => {
     // Prefill sign dialog gate key to first required esign gate
     const firstEsign = (stageGates || []).find(g => g.esign);
@@ -379,6 +422,8 @@ const ProductionProcessDetail: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Chip label={`Transitions: ${transitions.length}`} size="small" />
             <Chip label={`Diverts: ${auditSimple?.diverts?.length || 0}`} color={(auditSimple?.diverts?.length || 0) > 0 ? 'warning' : 'default'} size="small" />
+            <Chip label={samplingStatusForActive.ok ? 'Sampling OK' : `Sampling Missing: ${samplingStatusForActive.missing.length}`} color={samplingStatusForActive.ok ? 'success' : 'warning'} size="small" />
+            <Button variant="outlined" color="secondary" size="small" onClick={handleQARelease}>QA Release</Button>
             <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
           </Stack>
         </Stack>

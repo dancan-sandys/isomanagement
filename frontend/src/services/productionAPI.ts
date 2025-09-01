@@ -281,6 +281,16 @@ const productionAPI = {
     const res = await api.get(`/workflows/${productType}`);
     return res.data as { name: string; version: number; stages: any[] };
   },
+
+  getProcessStagesWithMonitoring: async (processId: number) => {
+    const res = await api.get(`/production/processes/${processId}/stages`, { params: { include_monitoring: true } });
+    return res.data as { process_id: number; total_stages: number; stages: Array<{ id: number; stage_name: string; status: string; monitoring_requirements?: any[]; recent_monitoring_logs?: any[] }> };
+  },
+
+  qaRelease: async (processId: number, reason?: string) => {
+    const res = await api.post(`/batch-progression/processes/${processId}/qa-release`, null, { params: { reason } });
+    return res.data as { status: string; process_id: number };
+  },
 };
 
 export const suppliersAPI = {
