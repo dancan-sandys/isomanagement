@@ -83,6 +83,7 @@ const ProductionProcessDetail: React.FC = () => {
 
   const [stageGates, setStageGates] = useState<{ key: string; esign?: boolean }[] | null>(null);
   const [stagesWithMonitoring, setStagesWithMonitoring] = useState<{ stages: any[] } | null>(null);
+  const [reqAssessments, setReqAssessments] = useState<any[] | null>(null);
 
   const loadDetails = useCallback(async () => {
     if (!id) return;
@@ -162,6 +163,18 @@ const ProductionProcessDetail: React.FC = () => {
     }
   }, [processDetails?.id]);
 
+  const loadReadiness = useCallback(async () => {
+    try {
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      const res = await productionAPI.evaluateStage(processDetails.id, stageId);
+      const ra = res?.readiness_assessment?.requirements_assessment || [];
+      setReqAssessments(ra);
+    } catch {
+      setReqAssessments(null);
+    }
+  }, [processDetails?.id, explicitActiveStage?.id]);
+
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
@@ -181,6 +194,10 @@ const ProductionProcessDetail: React.FC = () => {
   useEffect(() => {
     loadMonitoringSummary();
   }, [loadMonitoringSummary]);
+
+  useEffect(() => {
+    loadReadiness();
+  }, [loadReadiness]);
 
   const handleRecordParameter = async () => {
     try {
@@ -440,11 +457,14 @@ const ProductionProcessDetail: React.FC = () => {
               <Button variant="outlined" size="small" onClick={handleOpenSign} startIcon={<Edit />}>Sign Gate</Button>
               <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
             </Stack>
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              {(stageGates || []).map(g => {
-                const isSigned = signedGateKeys.has(g.key);
-                const color = isSigned ? 'success' : (g.esign ? 'warning' : 'default');
-                return <Chip key={g.key} label={`${g.key}${g.esign ? ' (esign)' : ''}${isSigned ? ' ✓' : ''}`} color={color as any} size="small" />;
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' as any }}>
+              {(reqAssessments || []).map(r => {
+                let color: any = 'default';
+                let label = r.requirement_name;
+                if (r.compliance_status === 'no_data') { color = 'warning'; label += ' (no data)'; }
+                else if (r.compliance_status === 'critical_failure' || r.compliance_status === 'recent_failure') { color = 'error'; label += ' (fail)'; }
+                else { color = 'success'; label += ' (pass)'; }
+                return <Chip key={r.requirement_id} label={label} color={color} size="small" sx={{ mr: 0.5, mb: 0.5 }} />;
               })}
             </Stack>
 

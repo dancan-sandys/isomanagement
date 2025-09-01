@@ -712,6 +712,35 @@ def export_production_sheet_pdf(
     if not details:
         raise HTTPException(status_code=404, detail="Process not found")
     release = service.get_latest_release(process_id)
+    # Gather additional context
+    stages = details.get("stages") or []
+    # Signed gates
+    from app.models.production import StageTransition as _ST, YieldRecord as _YR, ProcessStage as _PS, StageStatus as _SS
+    signed_gates = db.query(_ST).filter(_ST.process_id == process_id, _ST.transition_type == 'gate_sign').order_by(_ST.transition_timestamp.asc()).all()
+    # Yield
+    last_yield = db.query(_YR).filter(_YR.process_id == process_id).order_by(_YR.id.desc()).first()
+    overrun_pct = None
+    if last_yield and last_yield.expected_qty:
+        try:
+            overrun_pct = ((last_yield.output_qty - last_yield.expected_qty) / last_yield.expected_qty) * 100.0
+        except Exception:
+            overrun_pct = None
+    # Readiness/exceptions for active stage
+    active_stage = None
+    try:
+        active_stage = next((s for s in stages if getattr(s, 'status', None) == _SS.IN_PROGRESS), None)
+    except Exception:
+        active_stage = None
+    blocking_issues = []
+    if active_stage:
+        try:
+            from app.services.process_monitoring_service import ProcessMonitoringService as _PMS
+            pms = _PMS(db)
+            readiness = pms.evaluate_stage_completion_readiness(active_stage.id)
+            blocking_issues = readiness.get('blocking_issues', [])
+        except Exception:
+            blocking_issues = []
+
     # Generate PDF
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -723,13 +752,58 @@ def export_production_sheet_pdf(
     y -= 18
     c.setFont("Helvetica", 10)
     proc = details['process']
-    c.drawString(x, y, f"Type: {getattr(proc.process_type, 'value', str(proc.process_type))} | Status: {getattr(proc.status, 'value', str(proc.status))}")
+    c.drawString(x, y, f"Type: {getattr(proc.process_type, 'value', str(proc.process_type))} | Status: {getattr(proc.status, 'value', str(proc.status))} | ISO Mode")
     y -= 14
     c.drawString(x, y, f"Batch ID: {proc.batch_id} | Operator: {proc.operator_id or '-'} | Start: {proc.start_time}")
     y -= 14
     spec_link = service.get_spec_link(process_id)
     c.drawString(x, y, f"Spec Doc: {(spec_link.document_id if spec_link else '-') } v{(spec_link.document_version if spec_link else '-')}")
+    y -= 14
+    if last_yield:
+        c.drawString(x, y, f"Yield: {last_yield.output_qty}{last_yield.unit} vs {last_yield.expected_qty or '-'} • Variance: {round(overrun_pct,2) if overrun_pct is not None else '-'}%")
     y -= 20
+    # Stages overview
+    if stages:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(x, y, "Stages")
+        y -= 16
+        c.setFont("Helvetica", 9)
+        for st in stages:
+            if y < 60:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            c.drawString(x, y, f"- {st.stage_name} • seq={st.sequence_order} • status={getattr(st.status, 'value', str(st.status))}"); y -= 12
+        y -= 8
+    # Signed gates
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Signed Gates")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    if signed_gates:
+        for sg in signed_gates[:10]:
+            if y < 60:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            gate_key = ""
+            try:
+                notes = sg.transition_notes or ''
+                if 'gate=' in notes:
+                    gate_key = notes.split('gate=')[1].split(';')[0]
+            except Exception:
+                gate_key = ''
+            c.drawString(x, y, f"- {gate_key or 'gate'} • stage_id={sg.from_stage_id} • by={sg.initiated_by} • {sg.transition_timestamp}"); y -= 12
+    else:
+        c.drawString(x, y, "None")
+        y -= 12
+    # Exceptions
+    if blocking_issues:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(x, y, "Exceptions")
+        y -= 16
+        c.setFont("Helvetica", 9)
+        for bi in blocking_issues[:8]:
+            if y < 60:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            c.drawString(x, y, f"- {bi[:110]}"); y -= 12
+        y -= 8
     c.setFont("Helvetica-Bold", 12)
     c.drawString(x, y, "Parameters (latest 15)")
     y -= 16
