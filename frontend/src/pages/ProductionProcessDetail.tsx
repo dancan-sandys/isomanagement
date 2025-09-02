@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -86,6 +86,17 @@ const ProductionProcessDetail: React.FC = () => {
   const [stageGates, setStageGates] = useState<{ key: string; esign?: boolean }[] | null>(null);
   const [stagesWithMonitoring, setStagesWithMonitoring] = useState<{ stages: any[] } | null>(null);
   const [reqAssessments, setReqAssessments] = useState<any[] | null>(null);
+
+  // Map user id to display name for operator rendering
+  const userDisplayNameById = useMemo(() => {
+    const map: Record<number, string> = {};
+    users.forEach((u: any) => {
+      if (typeof u?.id === 'number') {
+        map[u.id] = u?.full_name || u?.username || `User #${u.id}`;
+      }
+    });
+    return map;
+  }, [users]);
 
   const loadDetails = useCallback(async () => {
     if (!id) return;
@@ -561,7 +572,7 @@ const ProductionProcessDetail: React.FC = () => {
                 </ListItem>
                 <ListItem>
                   <ListItemText 
-                    primary={`Operator: ${processDetails?.operator_id || '—'}`} 
+                    primary={`Operator: ${processDetails?.operator_id ? (userDisplayNameById[processDetails.operator_id] || processDetails.operator_id) : '—'}`} 
                     secondary={`Start: ${processDetails?.start_time ? new Date(processDetails.start_time).toLocaleString() : '—'}`} 
                   />
                 </ListItem>
