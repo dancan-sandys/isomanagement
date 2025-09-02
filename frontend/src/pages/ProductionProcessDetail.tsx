@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -86,6 +86,17 @@ const ProductionProcessDetail: React.FC = () => {
   const [stageGates, setStageGates] = useState<{ key: string; esign?: boolean }[] | null>(null);
   const [stagesWithMonitoring, setStagesWithMonitoring] = useState<{ stages: any[] } | null>(null);
   const [reqAssessments, setReqAssessments] = useState<any[] | null>(null);
+
+  // Map user id to display name for operator rendering
+  const userDisplayNameById = useMemo(() => {
+    const map: Record<number, string> = {};
+    users.forEach((u: any) => {
+      if (typeof u?.id === 'number') {
+        map[u.id] = u?.full_name || u?.username || `User #${u.id}`;
+      }
+    });
+    return map;
+  }, [users]);
 
   const loadDetails = useCallback(async () => {
     if (!id) return;
@@ -615,7 +626,7 @@ const ProductionProcessDetail: React.FC = () => {
                 </ListItem>
                 <ListItem>
                   <ListItemText 
-                    primary={`Operator: ${processDetails?.operator_id || '—'}`} 
+                    primary={`Operator: ${processDetails?.operator_id ? (userDisplayNameById[processDetails.operator_id] || processDetails.operator_id) : '—'}`} 
                     secondary={`Start: ${processDetails?.start_time ? new Date(processDetails.start_time).toLocaleString() : '—'}`} 
                   />
                 </ListItem>
@@ -841,7 +852,7 @@ const ProductionProcessDetail: React.FC = () => {
                         <TableRow key={r.id}>
                           <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
                           <TableCell><Chip label={r.action} size="small" /></TableCell>
-                          <TableCell>{r.user_id ?? '—'}</TableCell>
+                          <TableCell>{r.user_id ? (userDisplayNameById[r.user_id] || r.user_id) : '—'}</TableCell>
                           <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
                         </TableRow>
                       ))}

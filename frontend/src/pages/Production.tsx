@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -91,6 +91,18 @@ const ProductionPage: React.FC = () => {
     tolerance_max: undefined,
     notes: '',
   });
+
+  // Map user id to display name (full_name preferred, fallback to username)
+  const userDisplayNameById = useMemo(() => {
+    const map: Record<number, string> = {};
+    users.forEach((u: any) => {
+      const display = u?.full_name || u?.username || `User #${u?.id}`;
+      if (typeof u?.id === 'number') {
+        map[u.id] = display;
+      }
+    });
+    return map;
+  }, [users]);
 
   useEffect(() => {
     loadData();
@@ -396,7 +408,7 @@ const ProductionPage: React.FC = () => {
                       <TableCell>
                         {new Date(process.start_time).toLocaleString()}
                       </TableCell>
-                      <TableCell>{process.operator_id || '—'}</TableCell>
+                      <TableCell>{process.operator_id ? (userDisplayNameById[process.operator_id] || process.operator_id) : '—'}</TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1}>
                           <Tooltip title="View Details">
