@@ -9,8 +9,12 @@ import {
   CalendarToday as CalendarIcon, Schedule as ScheduleIcon, Add as AddIcon,
   Event as EventIcon, Warning as WarningIcon, CheckCircle as CheckCircleIcon,
   Notifications as NotificationsIcon, Person as PersonIcon, Edit as EditIcon,
-  Delete as DeleteIcon, Refresh as RefreshIcon, Today as TodayIcon
+  Delete as DeleteIcon, Refresh as RefreshIcon, Today as TodayIcon,
+  ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon
 } from '@mui/icons-material';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, 
+         isSameMonth, isSameDay, addMonths, addWeeks, subMonths, subWeeks, 
+         getDay, isToday, parseISO } from 'date-fns';
 import managementReviewAPI, { MRPayload } from '../services/managementReviewAPI';
 
 const ManagementReviewCalendar: React.FC = () => {
@@ -124,6 +128,253 @@ const ManagementReviewCalendar: React.FC = () => {
       case 'ad_hoc': return 'warning';
       default: return 'primary';
     }
+  };
+
+  // Calendar navigation functions
+  const goToPrevious = () => {
+    if (viewMode === 'month') {
+      setSelectedDate(subMonths(selectedDate, 1));
+    } else if (viewMode === 'week') {
+      setSelectedDate(subWeeks(selectedDate, 1));
+    }
+  };
+
+  const goToNext = () => {
+    if (viewMode === 'month') {
+      setSelectedDate(addMonths(selectedDate, 1));
+    } else if (viewMode === 'week') {
+      setSelectedDate(addWeeks(selectedDate, 1));
+    }
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  // Calendar view functions
+  const getMonthDays = () => {
+    const start = startOfMonth(selectedDate);
+    const end = endOfMonth(selectedDate);
+    const startWeek = startOfWeek(start);
+    const endWeek = endOfWeek(end);
+    return eachDayOfInterval({ start: startWeek, end: endWeek });
+  };
+
+  const getWeekDays = () => {
+    const start = startOfWeek(selectedDate);
+    const end = endOfWeek(selectedDate);
+    return eachDayOfInterval({ start, end });
+  };
+
+  const getReviewsForDate = (date: Date) => {
+    return reviews.filter(review => {
+      if (!review.review_date) return false;
+      const reviewDate = new Date(review.review_date);
+      return isSameDay(reviewDate, date);
+    });
+  };
+
+  const renderMonthView = () => {
+    const days = getMonthDays();
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    return (
+      <Box>
+        {/* Calendar Header */}
+        <Grid container sx={{ mb: 2 }}>
+          {weekDays.map(day => (
+            <Grid item xs key={day} sx={{ textAlign: 'center', py: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" color="text.secondary">
+                {day}
+              </Typography>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Calendar Grid */}
+        <Grid container>
+          {days.map((day, index) => {
+            const dayReviews = getReviewsForDate(day);
+            const isCurrentMonth = isSameMonth(day, selectedDate);
+            const isCurrentDay = isToday(day);
+
+            return (
+              <Grid 
+                item 
+                xs 
+                key={index}
+                sx={{
+                  minHeight: 120,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  p: 1,
+                  bgcolor: isCurrentDay ? 'action.hover' : 'background.paper',
+                  opacity: isCurrentMonth ? 1 : 0.5
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      fontWeight: isCurrentDay ? 'bold' : 'normal',
+                      color: isCurrentDay ? 'primary.main' : 'text.primary'
+                    }}
+                  >
+                    {format(day, 'd')}
+                  </Typography>
+                  {dayReviews.length > 0 && (
+                    <Chip 
+                      label={dayReviews.length} 
+                      size="small" 
+                      color="primary" 
+                      sx={{ minWidth: 20, height: 20 }}
+                    />
+                  )}
+                </Box>
+
+                {/* Events for this day */}
+                <Box sx={{ maxHeight: 80, overflow: 'hidden' }}>
+                  {dayReviews.slice(0, 2).map((review) => (
+                    <Box 
+                      key={review.id}
+                      sx={{
+                        bgcolor: getStatusColor(review.status) === 'success' ? 'success.light' : 
+                                getStatusColor(review.status) === 'warning' ? 'warning.light' : 'info.light',
+                        color: 'text.primary',
+                        p: 0.5,
+                        mb: 0.5,
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: getStatusColor(review.status) === 'success' ? 'success.main' : 
+                                  getStatusColor(review.status) === 'warning' ? 'warning.main' : 'info.main',
+                          color: 'white'
+                        }
+                      }}
+                      title={`${review.title} - ${review.status}`}
+                    >
+                      {review.title}
+                    </Box>
+                  ))}
+                  {dayReviews.length > 2 && (
+                    <Typography variant="caption" color="text.secondary">
+                      +{dayReviews.length - 2} more
+                    </Typography>
+                  )}
+                </Box>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
+    );
+  };
+
+  const renderWeekView = () => {
+    const days = getWeekDays();
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    return (
+      <Box>
+        {/* Week Header */}
+        <Grid container sx={{ mb: 2 }}>
+          {weekDays.map((day, index) => (
+            <Grid item xs key={day} sx={{ textAlign: 'center', py: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" color="text.secondary">
+                {day}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {format(days[index], 'MMM d')}
+              </Typography>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Week Grid */}
+        <Grid container>
+          {days.map((day, index) => {
+            const dayReviews = getReviewsForDate(day);
+            const isCurrentDay = isToday(day);
+
+            return (
+              <Grid 
+                item 
+                xs 
+                key={index}
+                sx={{
+                  minHeight: 200,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  p: 1,
+                  bgcolor: isCurrentDay ? 'action.hover' : 'background.paper'
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      fontWeight: isCurrentDay ? 'bold' : 'normal',
+                      color: isCurrentDay ? 'primary.main' : 'text.primary'
+                    }}
+                  >
+                    {format(day, 'd')}
+                  </Typography>
+                  {dayReviews.length > 0 && (
+                    <Chip 
+                      label={dayReviews.length} 
+                      size="small" 
+                      color="primary" 
+                      sx={{ minWidth: 20, height: 20 }}
+                    />
+                  )}
+                </Box>
+
+                {/* Events for this day */}
+                <Box>
+                  {dayReviews.map((review) => (
+                    <Box 
+                      key={review.id}
+                      sx={{
+                        bgcolor: getStatusColor(review.status) === 'success' ? 'success.light' : 
+                                getStatusColor(review.status) === 'warning' ? 'warning.light' : 'info.light',
+                        color: 'text.primary',
+                        p: 1,
+                        mb: 1,
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: getStatusColor(review.status) === 'success' ? 'success.main' : 
+                                  getStatusColor(review.status) === 'warning' ? 'warning.main' : 'info.main',
+                          color: 'white'
+                        }
+                      }}
+                      title={`${review.title} - ${review.status}`}
+                    >
+                      <Typography variant="caption" display="block" fontWeight="bold">
+                        {review.title}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        {review.status}
+                      </Typography>
+                      {review.review_date && (
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          {format(new Date(review.review_date), 'HH:mm')}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
+    );
   };
 
   const upcomingReviews = getUpcomingReviews();
@@ -259,6 +510,44 @@ const ManagementReviewCalendar: React.FC = () => {
                 </Select>
               </FormControl>
             </Stack>
+
+            {/* Calendar Navigation */}
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ChevronLeftIcon />}
+                  onClick={goToPrevious}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={goToToday}
+                >
+                  Today
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  endIcon={<ChevronRightIcon />}
+                  onClick={goToNext}
+                >
+                  Next
+                </Button>
+              </Stack>
+              
+              <Typography variant="h6" color="primary">
+                {viewMode === 'month' 
+                  ? format(selectedDate, 'MMMM yyyy')
+                  : viewMode === 'week'
+                  ? `${format(startOfWeek(selectedDate), 'MMM d')} - ${format(endOfWeek(selectedDate), 'MMM d, yyyy')}`
+                  : 'Agenda View'
+                }
+              </Typography>
+            </Stack>
             
             {viewMode === 'agenda' ? (
               <Box>
@@ -309,14 +598,10 @@ const ManagementReviewCalendar: React.FC = () => {
                   ))}
                 </List>
               </Box>
+            ) : viewMode === 'month' ? (
+              renderMonthView()
             ) : (
-              <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body1" color="text.secondary">
-                  Calendar grid view will be implemented with a calendar library
-                  <br />
-                  (e.g., react-big-calendar or @mui/x-date-pickers)
-                </Typography>
-              </Box>
+              renderWeekView()
             )}
           </Paper>
         </Grid>

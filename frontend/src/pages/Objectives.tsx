@@ -52,22 +52,6 @@ import ObjectiveDetailView from '../components/objectives/ObjectiveDetailView';
 import ObjectivesDashboard from '../components/objectives/ObjectivesDashboard';
 import { departmentsAPI } from '../services/departmentsAPI';
 
-interface Objective {
-  id: number;
-  objective_code: string;
-  title: string;
-  description?: string;
-  category?: string;
-  measurement_unit?: string;
-  frequency?: string;
-  responsible_person_id?: number;
-  review_frequency?: string;
-  status: string;
-  created_at: string;
-  updated_at?: string;
-  created_by?: number;
-}
-
 interface ObjectiveTarget {
   id: number;
   objective_id: number;
@@ -115,7 +99,6 @@ const StatusChip: React.FC<{ status?: string }> = ({ status }) => {
 };
 
 const ObjectivesPage: React.FC = () => {
-  const [objectives, setObjectives] = useState<Objective[]>([]);
   const [enhancedObjectives, setEnhancedObjectives] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,8 +111,8 @@ const ObjectivesPage: React.FC = () => {
   const [showTargetForm, setShowTargetForm] = useState(false);
   const [showProgressForm, setShowProgressForm] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
-  const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
-  const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
+  const [selectedObjective, setSelectedObjective] = useState<any | null>(null); // Changed to any
+  const [editingObjective, setEditingObjective] = useState<any | null>(null); // Changed to any
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<number | null>(null);
   const [departments, setDepartments] = useState<any[]>([]);
   const [departmentFilterId, setDepartmentFilterId] = useState<string>('');
@@ -184,10 +167,6 @@ const ObjectivesPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Load basic objectives
-      const basicResponse = await objectivesAPI.listObjectives({ department_id: departmentFilterId ? Number(departmentFilterId) : undefined });
-      setObjectives(Array.isArray(basicResponse) ? basicResponse : []);
       
       // Load enhanced objectives
       const enhancedResponse = await objectivesAPI.listEnhancedObjectives({ department_id: departmentFilterId ? Number(departmentFilterId) : undefined });
@@ -304,7 +283,7 @@ const ObjectivesPage: React.FC = () => {
     setActiveTab(newValue);
   };
 
-  if (loading && objectives.length === 0) {
+  if (loading && enhancedObjectives.length === 0) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />

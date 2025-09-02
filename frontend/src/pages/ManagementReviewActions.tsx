@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import managementReviewAPI, { ReviewActionPayload } from '../services/managementReviewAPI';
 import { actionsLogAPI } from '../services/actionsLogAPI';
-import { ActionLog } from '../types/actionsLog';
+import { ActionLog, ActionSource, ActionPriority } from '../types/actionsLog';
 
 const ManagementReviewActions: React.FC = () => {
   const [actions, setActions] = useState<any[]>([]);
@@ -35,13 +35,15 @@ const ManagementReviewActions: React.FC = () => {
   
   // Dialog states
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState<any>(null);
   const [actionForm, setActionForm] = useState<ReviewActionPayload>({
     title: '',
     description: '',
     priority: 'medium',
     due_date: '',
-    verification_required: false
+    verification_required: false,
+    resource_requirements: ''
   });
 
   // Menu state
@@ -58,23 +60,41 @@ const ManagementReviewActions: React.FC = () => {
         const resp = await managementReviewAPI.getOverdueActions();
         allActions = resp.data || [];
       } else {
-        // For now, we'll load actions from all reviews
-        // In a real implementation, this would be a dedicated endpoint
-        const reviewsResp = await managementReviewAPI.list();
-        const reviews = reviewsResp.data?.items || [];
-        
-        for (const review of reviews) {
-          try {
-            const actionsResp = await managementReviewAPI.listActions(review.id, statusFilter || undefined);
-            const reviewActions = (actionsResp.data || []).map((action: any) => ({
-              ...action,
-              review_title: review.title,
-              review_id: review.id
-            }));
-            allActions.push(...reviewActions);
-          } catch (e) {
-            console.error(`Failed to load actions for review ${review.id}:`, e);
+        // Load actions from management reviews
+        try {
+          const reviewsResp = await managementReviewAPI.list();
+          const reviews = reviewsResp.data?.items || [];
+          
+          for (const review of reviews) {
+            try {
+              const actionsResp = await managementReviewAPI.listActions(review.id, statusFilter || undefined);
+              const reviewActions = (actionsResp.data || []).map((action: any) => ({
+                ...action,
+                review_title: review.title,
+                review_id: review.id,
+                source: 'management_review'
+              }));
+              allActions.push(...reviewActions);
+            } catch (e) {
+              console.error(`Failed to load actions for review ${review.id}:`, e);
+            }
           }
+        } catch (e) {
+          console.error('Failed to load management review actions:', e);
+        }
+        
+        // Also load actions from actions log (management review source)
+        try {
+          const actionsLogActions = await actionsLogAPI.getActionsBySource('management_review');
+          const logActions = actionsLogActions.map((action: any) => ({
+            ...action,
+            review_title: 'Actions Log',
+            review_id: null,
+            source: 'actions_log'
+          }));
+          allActions.push(...logActions);
+        } catch (e) {
+          console.error('Failed to load actions log actions:', e);
         }
       }
 
@@ -82,6 +102,9 @@ const ManagementReviewActions: React.FC = () => {
       if (priorityFilter) {
         allActions = allActions.filter(action => action.priority === priorityFilter);
       }
+
+      // Sort by creation date (newest first)
+      allActions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setActions(allActions);
     } catch (e: any) {
@@ -117,6 +140,49 @@ const ManagementReviewActions: React.FC = () => {
     setSelectedActions(
       selectedActions.length === actions.length ? [] : actions.map(a => a.id)
     );
+  };
+
+  const openCreateDialog = () => {
+    setActionForm({
+      title: '',
+      description: '',
+      priority: 'medium',
+      due_date: '',
+      verification_required: false,
+      resource_requirements: ''
+    });
+    setCreateDialogOpen(true);
+  };
+
+  const createAction = async () => {
+    try {
+      // Create action in the actions log first
+      const actionLogEntry = await actionsLogAPI.createAction({
+        title: actionForm.title,
+        description: actionForm.description,
+        action_source: ActionSource.MANAGEMENT_REVIEW,
+        priority: getActionPriority(actionForm.priority),
+        due_date: actionForm.due_date,
+        assigned_by: 2 // Default to admin user for now
+      });
+
+      // Then create the review action
+      // Note: This would need to be associated with a specific review
+      // For now, we'll create it in the actions log
+      setCreateDialogOpen(false);
+      setActionForm({
+        title: '',
+        description: '',
+        priority: 'medium',
+        due_date: '',
+        verification_required: false,
+        resource_requirements: ''
+      });
+      await loadActions();
+      await loadActionsLogEntries();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create action');
+    }
   };
 
   const openEditDialog = (action: any) => {
@@ -186,6 +252,16 @@ const ManagementReviewActions: React.FC = () => {
     return diffDays;
   };
 
+  const getActionPriority = (priority: string): ActionPriority => {
+    switch (priority) {
+      case 'low': return ActionPriority.LOW;
+      case 'medium': return ActionPriority.MEDIUM;
+      case 'high': return ActionPriority.HIGH;
+      case 'critical': return ActionPriority.CRITICAL;
+      default: return ActionPriority.MEDIUM;
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -209,7 +285,7 @@ const ManagementReviewActions: React.FC = () => {
           <Button variant="outlined" startIcon={<DownloadIcon />}>
             Export
           </Button>
-          <Button variant="contained" startIcon={<AddIcon />}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
             New Action
           </Button>
         </Stack>
@@ -441,7 +517,18 @@ const ManagementReviewActions: React.FC = () => {
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2">{action.review_title}</Typography>
+                    <Box>
+                      <Typography variant="body2">{action.review_title}</Typography>
+                      {action.source && (
+                        <Chip 
+                          label={action.source === 'actions_log' ? 'Actions Log' : 'Review'} 
+                          size="small" 
+                          variant="outlined"
+                          color={action.source === 'actions_log' ? 'primary' : 'secondary'}
+                          sx={{ mt: 0.5 }}
+                        />
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell>
                     <Chip 
@@ -637,6 +724,86 @@ const ManagementReviewActions: React.FC = () => {
           <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={updateAction} disabled={!actionForm.title}>
             Update Action
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Action Dialog */}
+      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Create New Action Item</DialogTitle>
+        <DialogContent>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <TextField
+              label="Action Title"
+              fullWidth
+              value={actionForm.title}
+              onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
+              required
+            />
+            
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              rows={3}
+              value={actionForm.description}
+              onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+            />
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Priority</InputLabel>
+                  <Select
+                    value={actionForm.priority}
+                    onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as any })}
+                    label="Priority"
+                  >
+                    <MenuItem value="low">Low</MenuItem>
+                    <MenuItem value="medium">Medium</MenuItem>
+                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="critical">Critical</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Due Date"
+                  type="date"
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  value={actionForm.due_date}
+                  onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
+                />
+              </Grid>
+            </Grid>
+            
+            <TextField
+              label="Resource Requirements"
+              fullWidth
+              multiline
+              rows={2}
+              value={actionForm.resource_requirements || ''}
+              onChange={(e) => setActionForm({ ...actionForm, resource_requirements: e.target.value })}
+              placeholder="Describe any resource requirements for this action..."
+            />
+            
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={actionForm.verification_required}
+                  onChange={(e) => setActionForm({ ...actionForm, verification_required: e.target.checked })}
+                />
+              }
+              label="Verification Required Upon Completion"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={createAction} disabled={!actionForm.title}>
+            Create Action
           </Button>
         </DialogActions>
       </Dialog>
