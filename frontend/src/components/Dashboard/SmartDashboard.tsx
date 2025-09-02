@@ -40,6 +40,7 @@ import {
 import { RootState } from '../../store';
 import { dashboardAPI } from '../../services/api';
 import { PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area, RadialBarChart, RadialBar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import productionAPI from '../../services/productionAPI';
 
 interface SmartMetric {
   id: string;
@@ -96,6 +97,7 @@ const SmartDashboard: React.FC = () => {
   const [nearMissTrend, setNearMissTrend] = useState<Array<{ month: string; value: number }>>([]);
   const [projectKpiSeries, setProjectKpiSeries] = useState<Array<{ name: string; onTime: number; changeOrders: number; costVariance: number }>>([]);
   const [riskMatrix, setRiskMatrix] = useState<number[][]>([]);
+  const [productionOverview, setProductionOverview] = useState<{ total: number; active: number; deviations: number; alerts: number } | null>(null);
 
   const demoMode = (process.env.REACT_APP_DEMO_MODE || 'true').toLowerCase() === 'true';
 
@@ -217,6 +219,19 @@ const SmartDashboard: React.FC = () => {
       setOperationalSeries(opsSeries);
 
       if (demoMode) seedDemoData();
+
+      // Load production analytics summary for snapshot card
+      try {
+        const prod = await productionAPI.getEnhancedAnalytics();
+        setProductionOverview({
+          total: Number(prod?.total_processes || prod?.total_records || 0),
+          active: Number(prod?.active_processes || 0),
+          deviations: Number(prod?.total_deviations || 0),
+          alerts: Number(prod?.unacknowledged_alerts || 0),
+        });
+      } catch (e) {
+        setProductionOverview(null);
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       // Fallback to basic data on error
@@ -757,6 +772,28 @@ const SmartDashboard: React.FC = () => {
 
       {/* Smart Tasks, Insights and Quick Charts */}
       <Grid container spacing={3}>
+        {/* Production Snapshot */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" alignItems="center" spacing={2}>
+                  <Insights color="primary" />
+                  <Typography variant="h6" fontWeight={700}>Production Snapshot</Typography>
+                  {productionOverview && (
+                    <Stack direction="row" spacing={2}>
+                      <Chip label={`Total: ${productionOverview.total}`} />
+                      <Chip color="primary" label={`Active: ${productionOverview.active}`} />
+                      <Chip color="warning" label={`Deviations: ${productionOverview.deviations}`} />
+                      <Chip color="error" label={`Unacked Alerts: ${productionOverview.alerts}`} />
+                    </Stack>
+                  )}
+                </Stack>
+                <Button size="small" variant="outlined" onClick={() => { window.location.href = '/production?tab=analytics'; }}>Open Analytics</Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
         {/* Priority Tasks */}
         <Grid item xs={12} md={8}>
           <Fade in timeout={1000}>
