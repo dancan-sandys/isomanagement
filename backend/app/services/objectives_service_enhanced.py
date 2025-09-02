@@ -329,25 +329,81 @@ class ObjectivesServiceEnhanced:
         ).order_by(desc(ObjectiveProgress.period_start)).limit(limit).all()
 
     def get_trend_analysis(self, objective_id: int, periods: int = 6) -> Dict[str, Any]:
-        """Get trend analysis for an objective"""
-        
-        # Get recent progress entries
-        progress_entries = self.db.query(ObjectiveProgress).filter(
+        """Get deeper trend analysis for an objective using historical progress (no mock data)."""
+        # Fetch latest N periods of progress ordered by period_start ascending for correct series
+        progress_desc = self.db.query(ObjectiveProgress).filter(
             ObjectiveProgress.objective_id == objective_id
         ).order_by(desc(ObjectiveProgress.period_start)).limit(periods).all()
-        
-        if not progress_entries:
-            return {"trend": "no_data", "direction": None, "slope": 0, "values": [], "periods": 0}
-        
-        # Calculate trend
-        values = [entry.actual_value for entry in reversed(progress_entries)]
+
+        if not progress_desc:
+            return {
+                "trend": "no_data",
+                "direction": None,
+                "slope": 0.0,
+                "values": [],
+                "periods": 0,
+                "series": []
+            }
+
+        progress_entries = list(reversed(progress_desc))
+        values = [float(entry.actual_value) for entry in progress_entries]
+        dates = [entry.period_start for entry in progress_entries]
+
         if len(values) < 2:
-            return {"trend": "stable", "direction": TrendDirection.STABLE, "slope": 0, "values": values, "periods": len(values)}
-        
-        # Simple linear trend calculation
+            return {
+                "trend": "stable",
+                "direction": TrendDirection.STABLE,
+                "slope": 0.0,
+                "values": values,
+                "periods": len(values),
+                "series": [{"date": d, "value": v} for d, v in zip(dates, values)],
+                "trend_strength": None,
+                "confidence_level": None,
+                "predicted_value": values[-1] if values else None,
+                "change_percent": 0.0,
+                "intercept": None,
+            }
+
+        # X as 0..n-1 for regression over ordered series
         x_values = list(range(len(values)))
         slope = self._calculate_slope(x_values, values)
-        
+
+        # Compute intercept a = ȳ - b x̄
+        n = len(values)
+        mean_x = sum(x_values) / n
+        mean_y = sum(values) / n
+        intercept = mean_y - slope * mean_x
+
+        # Pearson correlation and R (trend strength)
+        def _pearson_r(xs: list[float], ys: list[float]) -> float:
+            n = len(xs)
+            if n < 2:
+                return 0.0
+            sum_x = sum(xs)
+            sum_y = sum(ys)
+            sum_x2 = sum(x * x for x in xs)
+            sum_y2 = sum(y * y for y in ys)
+            sum_xy = sum(x * y for x, y in zip(xs, ys))
+            denom = ((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y)) ** 0.5
+            if denom == 0:
+                return 0.0
+            return (n * sum_xy - sum_x * sum_y) / denom
+
+        r = _pearson_r(x_values, values)
+        trend_strength = round(r, 4)
+
+        # Simple confidence heuristic: map |r| to confidence 0..1
+        confidence_level = round(min(max(abs(trend_strength), 0.0), 1.0), 4)
+
+        # Predict next value using linear model y = a + b x
+        next_x = len(values)
+        predicted_value = intercept + slope * next_x
+
+        # Change percent from first to last
+        first, last = values[0], values[-1]
+        change_percent = round(((last - first) / first * 100.0) if first not in (0, None) else 0.0, 2)
+
+        # Determine qualitative trend with a small tolerance
         if slope > 0.1:
             direction = TrendDirection.IMPROVING
             trend = "improving"
@@ -357,13 +413,19 @@ class ObjectivesServiceEnhanced:
         else:
             direction = TrendDirection.STABLE
             trend = "stable"
-        
+
         return {
             "trend": trend,
             "direction": direction,
-            "slope": slope,
+            "slope": round(slope, 6),
             "values": values,
-            "periods": len(values)
+            "periods": n,
+            "intercept": round(intercept, 6),
+            "trend_strength": trend_strength,
+            "confidence_level": confidence_level,
+            "predicted_value": round(float(predicted_value), 6),
+            "change_percent": change_percent,
+            "series": [{"date": d, "value": v} for d, v in zip(dates, values)],
         }
 
     def get_dashboard_kpis(self) -> Dict[str, Any]:

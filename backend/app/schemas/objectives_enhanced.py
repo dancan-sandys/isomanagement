@@ -288,6 +288,13 @@ class TrendAnalysis(BaseModel):
     slope: float
     values: List[float]
     periods: int
+    # Extended analytics
+    intercept: Optional[float] = None
+    trend_strength: Optional[float] = None
+    confidence_level: Optional[float] = None
+    predicted_value: Optional[float] = None
+    change_percent: Optional[float] = None
+    series: List[Dict[str, Any]] = []
 
 
 class PerformanceAlert(BaseModel):
