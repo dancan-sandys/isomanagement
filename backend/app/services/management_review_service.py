@@ -169,7 +169,7 @@ class ManagementReviewService:
 
     # ==================== DATA COLLECTION AND INPUTS ====================
     
-    def collect_review_inputs(self, review_id: int, request: DataCollectionRequest) -> Dict[str, Any]:
+    def collect_review_inputs(self, review_id: int, request: DataCollectionRequest, department_id: Optional[int] = None) -> Dict[str, Any]:
         """Collect all required inputs for a management review"""
         review = self.get(review_id)
         if not review:
@@ -178,7 +178,8 @@ class ManagementReviewService:
         # Collect data using the aggregation service
         inputs_data = self.data_aggregation_service.collect_all_inputs(
             request.date_range_start, 
-            request.date_range_end
+            request.date_range_end,
+            department_id
         )
         
         # Store collected inputs

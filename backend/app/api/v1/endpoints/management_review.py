@@ -50,6 +50,7 @@ async def list_reviews(
     size: int = Query(20, ge=1, le=100),
     status: Optional[ManagementReviewStatus] = Query(None),
     review_type: Optional[ManagementReviewType] = Query(None),
+    department_id: Optional[int] = Query(None, description="Filter by department context where applicable"),
     db: Session = Depends(get_db)
 ):
     """List management reviews with enhanced filtering"""
@@ -116,11 +117,11 @@ async def delete_review(review_id: int, db: Session = Depends(get_db)):
 # ==================== DATA COLLECTION AND INPUTS ====================
 
 @router.post("/{review_id}/collect-inputs", response_model=ResponseModel)
-async def collect_review_inputs(review_id: int, request: DataCollectionRequest, db: Session = Depends(get_db)):
+async def collect_review_inputs(review_id: int, request: DataCollectionRequest, department_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """Collect all required inputs for a management review"""
     try:
         service = ManagementReviewService(db)
-        inputs_data = service.collect_review_inputs(review_id, request)
+        inputs_data = service.collect_review_inputs(review_id, request, department_id)
         return ResponseModel(success=True, message="Review inputs collected successfully", data=inputs_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
