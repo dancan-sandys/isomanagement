@@ -450,6 +450,7 @@ const ProductionProcessDetail: React.FC = () => {
     setSignOpen(true);
     console.log('signOpen set to true');
   };
+  const [signSubmitting, setSignSubmitting] = React.useState(false);
   const handleSubmitSign = async () => {
     try {
       console.log('handleSubmitSign called');
@@ -458,8 +459,14 @@ const ProductionProcessDetail: React.FC = () => {
       console.log('processDetails?.id:', processDetails?.id);
       if (!stageId || !processDetails?.id) {
         console.log('Missing stageId or processDetails.id, returning early');
+        setError('No active stage detected. Please refresh and try again.');
         return;
       }
+      if (!signForm.password || !signForm.password.trim()) {
+        setError('Password is required to e-sign this gate.');
+        return;
+      }
+      setSignSubmitting(true);
       
       // Debug authentication
       const token = localStorage.getItem('access_token');
@@ -477,6 +484,9 @@ const ProductionProcessDetail: React.FC = () => {
       console.error('Error status:', e?.response?.status);
       console.error('Error detail:', e?.response?.data?.detail);
       setError(e?.response?.data?.detail || e?.message || 'Failed to sign gate');
+    }
+    finally {
+      setSignSubmitting(false);
     }
   };
 
@@ -1095,11 +1105,16 @@ const ProductionProcessDetail: React.FC = () => {
             </FormControl>
             <TextField label="Password" type="password" value={signForm.password} onChange={(e) => setSignForm({ ...signForm, password: e.target.value })} size="small" />
             <TextField label="Reason (optional)" value={signForm.reason || ''} onChange={(e) => setSignForm({ ...signForm, reason: e.target.value })} size="small" />
+            {!getActiveStageId() && (
+              <Typography variant="caption" color="error">No active stage detected. Refresh data before signing.</Typography>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSignOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmitSign} variant="contained">Sign</Button>
+          <Button onClick={() => setSignOpen(false)} disabled={signSubmitting}>Cancel</Button>
+          <Button onClick={handleSubmitSign} variant="contained" disabled={signSubmitting || !signForm.password || !getActiveStageId()}>
+            {signSubmitting ? 'Signing...' : 'Sign'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
