@@ -94,6 +94,12 @@ class ProductionService:
             source=data.get("source", "manual"),
         )
         self.db.add(log)
+        # If a manual DIVERT log is recorded, mark the process as DIVERTED
+        try:
+            if log.event == LogEvent.DIVERT and process.status != ProcessStatus.DIVERTED:
+                process.status = ProcessStatus.DIVERTED
+        except Exception:
+            pass
         # Validate critical steps (e.g., HTST 72C for 15 sec)
         self._evaluate_diversion(process, log)
         self.db.commit()
