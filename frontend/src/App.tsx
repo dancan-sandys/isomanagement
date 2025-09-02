@@ -99,8 +99,6 @@ function App() {
                       <Route path="/dashboard/analytics" element={<DashboardAnalytics />} />
                       <Route path="/dashboard/reports" element={<DashboardReports />} />
                       <Route path="/objectives" element={<ObjectivesPage />} />
-                      <Route path="/objectives/dashboard" element={<ObjectivesPage />} />
-                      <Route path="/objectives/progress" element={<ObjectivesPage />} />
                       <Route path="/production" element={<ProductionPage />} />
                       <Route path="/production/processes/:id" element={<ProductionProcessDetail />} />
                       <Route path="/production/monitoring" element={<ProductionPage />} />
