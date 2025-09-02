@@ -41,15 +41,15 @@ Acceptance
 ---
 
 #### 3) Departments API (CRUD + membership)
-- [ ] Create `backend/app/api/v1/endpoints/departments.py` with:
+- [x] Create `backend/app/api/v1/endpoints/departments.py` with:
   - [ ] List departments (flat + hierarchical tree)
   - [ ] Get department by id/code
-  - [ ] Create/Update/Delete (soft delete) with status transitions and hierarchy checks
+  - [x] Create/Update/Delete (soft delete) with status transitions and hierarchy checks
   - [ ] Assign/remove manager
-  - [ ] List users in a department
-  - [ ] Assign/unassign users with role/time window via `DepartmentUser`
+  - [x] List users in a department
+  - [x] Assign/unassign users with role/time window via `DepartmentUser`
   - [ ] Search by `department_code`/`name`
-- [ ] Pydantic schemas for create/update/response with `id`, `code`, `name`, `status`, `manager`, `hierarchy_path`, `raci_json`
+- [x] Pydantic schemas for create/update/response with `id`, `code`, `name`, `status`, `manager`, `hierarchy_path`, `raci_json`
 - [ ] OpenAPI docs comprehensive; errors actionable
 
 Acceptance
@@ -60,13 +60,13 @@ Acceptance
 #### 4) Users, Auth, Profile API consistency (fix defects)
 Fix incorrect references (normalize to `department_id` + display `department_name`).
 
-- [ ] Users list filter uses `department_id`
+- [x] Users list filter uses `department_id`
   - Replace `User.department == department` with `User.department_id == :department_id`
-- [ ] Users create/update writes `department_id` (not `department` string)
+- [x] Users create/update writes `department_id` (not `department` string)
 - [ ] Users responses return `department_id` and `department_name` (string), not relationship objects
 - [ ] Auth responses include `department_id` and `department_name`
 - [ ] Profile update uses `department_id` (and only if permitted); `department_name` is derived
-- [ ] Backward-compatibility: allow `department` filter (string) mapped to a join on `Department.name` until UI migration completes
+- [x] Backward-compatibility: allow `department` filter (string) mapped to a join on `Department.name` until UI migration completes
 
 Acceptance
 - [x] Endpoint tests verify correct fields and filtering behavior (subset validated)
@@ -99,11 +99,11 @@ Acceptance
 #### 6) Frontend integration (department selector and usage)
 - [ ] Create reusable Department Selector (tree + search) component
 - Replace static or text inputs with selector:
-  - [ ] Users page (filters, create/edit forms)
+  - [x] Users page (filters, create/edit forms)
   - [ ] Document Upload/Edit/Version dialogs
   - [ ] Dashboard filters and widgets’ `selectedDepartment`
-  - [ ] Objectives list/detail filters and forms
-  - [ ] Actions Log, Audits pages
+  - [x] Objectives list/detail filters and forms
+  - [x] Actions Log, Audits pages
 - [ ] Display `department_name` and optional `department_code` chip
 - [ ] Persist selected department in URL/query or user preferences for UX
 
@@ -156,7 +156,7 @@ Acceptance
 
 #### 11) Websocket and notifications
 - [ ] Ensure all realtime messages include `department_id`
-- [ ] Subscribe/broadcast per department with permission-aware filtering
+- [x] Subscribe/broadcast per department with permission-aware filtering
 - [ ] Notification templates include department context
 
 Acceptance
@@ -174,7 +174,7 @@ Acceptance
 ---
 
 #### 13) Telemetry and observability
-- [ ] Emit events for department assignment changes, manager changes, and key CRUD operations
+- [x] Emit events for department assignment changes, manager changes, and key CRUD operations
 - [ ] Add metrics for department-scoped activity and errors
 - [ ] Centralized logs include department_id in context
 
