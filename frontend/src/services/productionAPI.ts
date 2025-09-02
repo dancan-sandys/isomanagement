@@ -262,7 +262,7 @@ const productionAPI = {
 
   // Batch progression (FSM) endpoints
   evaluateStage: async (processId: number, stageId: number) => {
-    const res = await api.get(`/api/v1/batch-progression/processes/${processId}/stages/${stageId}/evaluate`);
+    const res = await api.get(`/batch-progression/processes/${processId}/stages/${stageId}/evaluate`);
     return res.data as { 
       can_progress: boolean; 
       requires_approval: boolean; 
@@ -276,7 +276,7 @@ const productionAPI = {
     };
   },
   transitionStage: async (processId: number, stageId: number, payload: { transition_type: 'normal'|'rollback'|'skip'|'emergency'|'rework'; reason?: string; notes?: string; deviations_recorded?: string; corrective_actions?: string; prerequisites_met?: boolean }) => {
-    const res = await api.post(`/api/v1/batch-progression/processes/${processId}/stages/${stageId}/transition`, payload);
+    const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/transition`, payload);
     return res.data;
   },
   getActiveStage: async (processId: number) => {
@@ -284,11 +284,11 @@ const productionAPI = {
     return res.data as { active_stage: { id: number; name: string; sequence: number; status: string } | null };
   },
   signGate: async (processId: number, stageId: number, gateKey: string, payload: { password: string; reason?: string }) => {
-    const res = await api.post(`/api/v1/batch-progression/processes/${processId}/stages/${stageId}/gates/${gateKey}/sign`, payload);
+    const res = await api.post(`/batch-progression/processes/${processId}/stages/${stageId}/gates/${gateKey}/sign`, payload);
     return res.data as { status: string; gate: string; signed_by: number; transition_id: number };
   },
   getWorkflow: async (productType: string) => {
-    const res = await api.get(`/api/v1/workflows/${productType}`);
+    const res = await api.get(`/workflows/${productType}`);
     return res.data as { name: string; version: number; stages: any[] };
   },
 
@@ -298,7 +298,7 @@ const productionAPI = {
   },
 
   qaRelease: async (processId: number, reason?: string) => {
-    const res = await api.post(`/api/v1/batch-progression/processes/${processId}/qa-release`, null, { params: { reason } });
+    const res = await api.post(`/batch-progression/processes/${processId}/qa-release`, null, { params: { reason } });
     return res.data as { status: string; process_id: number };
   },
 };

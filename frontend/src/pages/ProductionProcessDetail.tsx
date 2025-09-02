@@ -180,9 +180,13 @@ const ProductionProcessDetail: React.FC = () => {
   const loadMonitoringSummary = useCallback(async () => {
     try {
       if (!processDetails?.id) return;
+      console.log('Loading monitoring summary for process:', processDetails.id);
       const data = await productionAPI.getProcessStagesWithMonitoring(processDetails.id);
+      console.log('Monitoring summary data received:', data);
       setStagesWithMonitoring({ stages: data.stages || [] });
-    } catch {
+      console.log('Stages with monitoring set:', data.stages || []);
+    } catch (error) {
+      console.error('Error loading monitoring summary:', error);
       setStagesWithMonitoring(null);
     }
   }, [processDetails?.id]);
@@ -345,17 +349,28 @@ const ProductionProcessDetail: React.FC = () => {
     try {
       const st = processDetails?.stages_list || processDetails?.stages;
       console.log('stages data:', st);
-      if (Array.isArray(st)) {
+      if (Array.isArray(st) && st.length > 0) {
         const inProg = st.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
         console.log('in_progress stage found:', inProg);
-        return inProg?.id || null;
+        if (inProg?.id) {
+          return inProg.id;
+        }
+        // If no in_progress stage found, use the first available stage
+        console.log('No in_progress stage found, using first stage:', st[0].id);
+        return st[0].id;
       }
-      console.log('stages is not an array or is null');
+      console.log('stages is not an array or is empty');
       
       // Final fallback: if we have a process ID, try to use stage ID 1
       if (processDetails?.id) {
         console.log('Using fallback stage ID 1 for process:', processDetails.id);
         return 1; // Assume stage 1 exists for this process
+      }
+      
+      // Ultimate fallback: try to get stage ID from workflow
+      if (processDetails?.process_type && stageGates && stageGates.length > 0) {
+        console.log('Using workflow-based fallback, stage ID 1');
+        return 1;
       }
       
       return null;
@@ -445,6 +460,12 @@ const ProductionProcessDetail: React.FC = () => {
         console.log('Missing stageId or processDetails.id, returning early');
         return;
       }
+      
+      // Debug authentication
+      const token = localStorage.getItem('access_token');
+      console.log('Auth token exists:', !!token);
+      console.log('Token preview:', token ? `${token.substring(0, 20)}...` : 'No token');
+      
       console.log('Calling signGate API...');
       await productionAPI.signGate(processDetails.id, stageId, signForm.gateKey || 'operator_gate', { password: signForm.password, reason: signForm.reason });
       console.log('Sign gate successful!');
@@ -452,6 +473,9 @@ const ProductionProcessDetail: React.FC = () => {
       await loadOperatorData();
     } catch (e: any) {
       console.error('Sign gate error:', e);
+      console.error('Error response:', e?.response);
+      console.error('Error status:', e?.response?.status);
+      console.error('Error detail:', e?.response?.data?.detail);
       setError(e?.response?.data?.detail || e?.message || 'Failed to sign gate');
     }
   };
