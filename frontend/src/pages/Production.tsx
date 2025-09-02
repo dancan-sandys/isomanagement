@@ -289,16 +289,6 @@ const ProductionPage: React.FC = () => {
           >
             Create Process
           </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => {
-              console.log('Current analytics state:', analytics);
-              console.log('Current processes state:', processes);
-            }}
-          >
-            Debug Data
-          </Button>
         </Stack>
       </Stack>
 
