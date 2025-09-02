@@ -419,8 +419,14 @@ const ProductionProcessDetail: React.FC = () => {
   };
 
   const handleDivert = async () => {
-    // For now, divert handled via auto-divert. A manual divert path could be implemented as rollback/skip with reason.
-    setError('Manual divert not enabled. Use rework or rely on auto-divert.');
+    try {
+      if (!processDetails?.id) return;
+      // Log a manual divert event; backend will set status to DIVERTED
+      await productionAPI.addLog(processDetails.id, { event: 'divert', note: 'Operator manual divert', auto_flag: false, source: 'manual' });
+      await Promise.all([loadDetails(), loadOperatorData()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to divert process');
+    }
   };
 
   const handleOpenSign = () => {
