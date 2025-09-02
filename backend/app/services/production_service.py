@@ -11,7 +11,8 @@ from app.models.production import (
     ProcessParameter, ProcessDeviation, ProcessAlert, ProductSpecification, ProcessTemplate,
     ProductProcessType, ProcessStatus, StepType, LogEvent,
     ProcessControlChart, ProcessControlPoint, ProcessCapabilityStudy, YieldAnalysisReport,
-    YieldDefectCategory, ProcessMonitoringDashboard, ProcessMonitoringAlert
+    YieldDefectCategory, ProcessMonitoringDashboard, ProcessMonitoringAlert,
+    ProcessStage, StageStatus, StageTransition
 )
 from app.models.traceability import Batch, BatchStatus, BatchType
 from app.models.production import ProcessSpecLink, ReleaseRecord
@@ -93,6 +94,12 @@ class ProductionService:
             source=data.get("source", "manual"),
         )
         self.db.add(log)
+        # If a manual DIVERT log is recorded, mark the process as DIVERTED
+        try:
+            if log.event == LogEvent.DIVERT and process.status != ProcessStatus.DIVERTED:
+                process.status = ProcessStatus.DIVERTED
+        except Exception:
+            pass
         # Validate critical steps (e.g., HTST 72C for 15 sec)
         self._evaluate_diversion(process, log)
         self.db.commit()
@@ -580,6 +587,8 @@ class ProductionService:
         except Exception:
             materials = []
         
+        stages = self.db.query(ProcessStage).filter(ProcessStage.process_id == process_id).order_by(ProcessStage.sequence_order).all()
+        active_stage = next((s for s in stages if s.status == StageStatus.IN_PROGRESS), None)
         return {
             "process": process,
             "steps": steps,
@@ -588,6 +597,8 @@ class ProductionService:
             "deviations": deviations,
             "alerts": alerts,
             "materials": materials,
+            "stages": stages,
+            "active_stage": active_stage,
         }
 
     def get_enhanced_analytics(self, process_type: Optional[ProductProcessType] = None) -> Dict[str, Any]:

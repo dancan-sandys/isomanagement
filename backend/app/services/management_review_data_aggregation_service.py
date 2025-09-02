@@ -25,7 +25,8 @@ class ManagementReviewDataAggregationService:
         self.db = db
     
     def collect_all_inputs(self, date_range_start: Optional[datetime] = None, 
-                          date_range_end: Optional[datetime] = None) -> Dict[ReviewInputType, Dict[str, Any]]:
+                          date_range_end: Optional[datetime] = None,
+                          department_id: Optional[int] = None) -> Dict[ReviewInputType, Dict[str, Any]]:
         """Collect all required inputs for management review"""
         if not date_range_end:
             date_range_end = datetime.utcnow()
@@ -35,16 +36,16 @@ class ManagementReviewDataAggregationService:
         inputs = {}
         
         # Collect audit results
-        inputs[ReviewInputType.AUDIT_RESULTS] = self.collect_audit_results(date_range_start, date_range_end)
+        inputs[ReviewInputType.AUDIT_RESULTS] = self.collect_audit_results(date_range_start, date_range_end, department_id)
         
         # Collect NC/CAPA status
-        inputs[ReviewInputType.NC_CAPA_STATUS] = self.collect_nc_capa_status(date_range_start, date_range_end)
+        inputs[ReviewInputType.NC_CAPA_STATUS] = self.collect_nc_capa_status(date_range_start, date_range_end, department_id)
         
         # Collect supplier performance
         inputs[ReviewInputType.SUPPLIER_PERFORMANCE] = self.collect_supplier_performance(date_range_start, date_range_end)
         
         # Collect KPI metrics
-        inputs[ReviewInputType.KPI_METRICS] = self.collect_kpi_metrics(date_range_start, date_range_end)
+        inputs[ReviewInputType.KPI_METRICS] = self.collect_kpi_metrics(date_range_start, date_range_end, department_id)
         
         # Collect HACCP performance
         inputs[ReviewInputType.HACCP_PERFORMANCE] = self.collect_haccp_performance(date_range_start, date_range_end)
@@ -60,16 +61,19 @@ class ManagementReviewDataAggregationService:
         
         return inputs
     
-    def collect_audit_results(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    def collect_audit_results(self, start_date: datetime, end_date: datetime, department_id: Optional[int] = None) -> Dict[str, Any]:
         """Collect audit results and findings"""
         try:
             # Get audits in the date range
-            audits = self.db.query(Audit).filter(
+            q = self.db.query(Audit).filter(
                 and_(
                     Audit.scheduled_date >= start_date,
                     Audit.scheduled_date <= end_date
                 )
-            ).all()
+            )
+            if department_id is not None:
+                q = q.filter(Audit.auditee_department_id == department_id) if hasattr(Audit, 'auditee_department_id') else q
+            audits = q.all()
             
             # Get audit findings
             audit_ids = [audit.id for audit in audits]
@@ -122,16 +126,19 @@ class ManagementReviewDataAggregationService:
                 "collection_date": datetime.utcnow().isoformat()
             }
     
-    def collect_nc_capa_status(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    def collect_nc_capa_status(self, start_date: datetime, end_date: datetime, department_id: Optional[int] = None) -> Dict[str, Any]:
         """Collect nonconformance and CAPA status"""
         try:
             # Get nonconformances in date range
-            ncs = self.db.query(NonConformance).filter(
+            q = self.db.query(NonConformance).filter(
                 and_(
                     NonConformance.created_at >= start_date,
                     NonConformance.created_at <= end_date
                 )
-            ).all()
+            )
+            if department_id is not None and hasattr(NonConformance, 'department_id'):
+                q = q.filter(NonConformance.department_id == department_id)
+            ncs = q.all()
             
             # Get CAPA actions
             nc_ids = [nc.id for nc in ncs]
@@ -227,16 +234,19 @@ class ManagementReviewDataAggregationService:
                 "collection_date": datetime.utcnow().isoformat()
             }
     
-    def collect_kpi_metrics(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    def collect_kpi_metrics(self, start_date: datetime, end_date: datetime, department_id: Optional[int] = None) -> Dict[str, Any]:
         """Collect KPI metrics from risk management"""
         try:
             # Get KPIs with recent updates
-            kpis = self.db.query(RiskKPI).filter(
+            q = self.db.query(RiskKPI).filter(
                 and_(
                     RiskKPI.last_updated >= start_date,
                     RiskKPI.last_updated <= end_date
                 )
-            ).all()
+            )
+            if department_id is not None and hasattr(RiskKPI, 'department_id'):
+                q = q.filter(RiskKPI.department_id == department_id)
+            kpis = q.all()
             
             # Calculate performance
             on_target_kpis = len([k for k in kpis if k.kpi_current_value and k.kpi_target and k.kpi_current_value >= k.kpi_target])

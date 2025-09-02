@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     # API Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 100
     
+    # Feature Flags
+    FEATURE_DEPARTMENTS_ENABLED: bool = True
+    FEATURE_DEPT_SCOPED_RBAC: bool = True
+    
     @field_validator("ALLOWED_FILE_TYPES")
     @classmethod
     def parse_allowed_file_types(cls, v):

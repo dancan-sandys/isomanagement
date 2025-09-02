@@ -56,6 +56,7 @@ import {
   CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
 import { usersAPI, trainingAPI } from '../services/api';
+import { departmentsAPI } from '../services/departmentsAPI';
 import { RootState } from '../store';
 import { canManageUsers } from '../store/slices/authSlice';
 import PageHeader from '../components/UI/PageHeader';
@@ -124,6 +125,7 @@ const Users: React.FC = () => {
   const [assignEquipmentId, setAssignEquipmentId] = useState<string>('');
   const [programs, setPrograms] = useState<any[]>([]);
   const [scopedRequired, setScopedRequired] = useState<any[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<any[]>([]);
 
   // Form states
   const [userForm, setUserForm] = useState({
@@ -138,6 +140,7 @@ const Users: React.FC = () => {
     employee_id: '',
     bio: ''
   });
+  const [userFormDepartmentId, setUserFormDepartmentId] = useState<string>('');
   const [createConfirmPassword, setCreateConfirmPassword] = useState('');
   const [formErrors, setFormErrors] = useState<{
     username?: string;
@@ -183,6 +186,7 @@ const Users: React.FC = () => {
     if (hasUserManagementPermission) {
       fetchDashboardData();
       fetchUsers();
+      fetchDepartments();
     }
   }, [hasUserManagementPermission]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -206,7 +210,7 @@ const Users: React.FC = () => {
       if (userFilters.search?.trim()) params.search = userFilters.search;
       if (userFilters.role?.trim()) params.role_id = parseInt(userFilters.role);
       if (userFilters.status?.trim()) params.status = userFilters.status;
-      if (userFilters.department?.trim()) params.department = userFilters.department;
+      if (userFilters.department?.trim()) params.department = userFilters.department; // legacy name filter
       const response = await usersAPI.getUsers(params);
       // Backend returns PaginatedResponse directly (no data wrapper)
       setUsers(response.items || []);
@@ -220,6 +224,17 @@ const Users: React.FC = () => {
       setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      const items = res?.items || res?.data?.items || [];
+      setDepartmentsList(items);
+    } catch (err) {
+      // Non-fatal
+      console.error('Failed to load departments', err);
     }
   };
 
@@ -293,7 +308,13 @@ const Users: React.FC = () => {
     if (!validateUserForm(false)) return;
     try {
       setLoading(true);
-      await usersAPI.createUser({ ...userForm, role_id: parseInt(userForm.role_id) });
+      let payload: any = { ...userForm, role_id: parseInt(userForm.role_id) };
+      if (userFormDepartmentId) {
+        const match = departmentsList.find((d) => String(d.id) === String(userFormDepartmentId));
+        if (match?.name) payload.department = match.name;
+        payload.department_id = parseInt(userFormDepartmentId);
+      }
+      await usersAPI.createUser(payload);
       setUserDialogOpen(false);
       resetUserForm();
       fetchUsers();
@@ -311,6 +332,11 @@ const Users: React.FC = () => {
       const updateData: any = { ...userForm };
       if (userForm.role_id) updateData.role_id = parseInt(userForm.role_id);
       if (!userForm.password) delete updateData.password;
+      if (userFormDepartmentId) {
+        const match = departmentsList.find((d) => String(d.id) === String(userFormDepartmentId));
+        if (match?.name) updateData.department = match.name;
+        updateData.department_id = parseInt(userFormDepartmentId);
+      }
       await usersAPI.updateUser(userId, updateData);
       setUserDialogOpen(false);
       resetUserForm();
@@ -375,6 +401,7 @@ const Users: React.FC = () => {
     setSelectedUser(null);
     setCreateConfirmPassword('');
     setFormErrors({});
+    setUserFormDepartmentId('');
   };
 
   // Utility functions
@@ -622,7 +649,13 @@ const Users: React.FC = () => {
                         <IconButton size="small" title="Training & Competency" onClick={() => openCompetencyDialog(user)}><SchoolIcon /></IconButton>
                       )}
                       <IconButton size="small" title="Permissions" onClick={() => openPermissionsDialog(user)}><LockIcon /></IconButton>
-                      <IconButton size="small" onClick={() => { setSelectedUser(user); setUserForm({ username: user.username, email: user.email, full_name: user.full_name, password: '', role_id: user.role_id.toString(), department: user.department || '', position: user.position || '', phone: user.phone || '', employee_id: user.employee_id || '', bio: user.bio || '' }); setUserDialogOpen(true); }}><EditIcon /></IconButton>
+                      <IconButton size="small" onClick={() => { 
+                        setSelectedUser(user);
+                        setUserForm({ username: user.username, email: user.email, full_name: user.full_name, password: '', role_id: user.role_id.toString(), department: user.department || '', position: user.position || '', phone: user.phone || '', employee_id: user.employee_id || '', bio: user.bio || '' }); 
+                        const match = departmentsList.find((d) => (d.name || '').toLowerCase() === (user.department || '').toLowerCase());
+                        setUserFormDepartmentId(match ? String(match.id) : '');
+                        setUserDialogOpen(true); 
+                      }}><EditIcon /></IconButton>
                       <IconButton size="small" onClick={() => { setSelectedUser(user); setResetPassword(''); setResetDialogOpen(true); }} title="Reset Password"><PasswordIcon /></IconButton>
                       {user.is_active ? (
                         <IconButton size="small" onClick={() => handleDeactivateUser(user.id)}><LockIcon /></IconButton>
@@ -683,7 +716,21 @@ const Users: React.FC = () => {
                 {formErrors.role_id && <Typography variant="caption" color="error">{formErrors.role_id}</Typography>}
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Department" value={userForm.department} onChange={(e) => setUserForm({ ...userForm, department: e.target.value })} /></Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Department</InputLabel>
+                <Select
+                  value={userFormDepartmentId}
+                  label="Department"
+                  onChange={(e) => setUserFormDepartmentId(String(e.target.value))}
+                >
+                  <MenuItem value="">Unassigned</MenuItem>
+                  {departmentsList.map((d) => (
+                    <MenuItem key={d.id} value={String(d.id)}>{d.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Position" value={userForm.position} onChange={(e) => setUserForm({ ...userForm, position: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Phone" value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Employee ID" value={userForm.employee_id} onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })} /></Grid>

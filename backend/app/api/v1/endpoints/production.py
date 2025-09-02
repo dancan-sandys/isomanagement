@@ -485,7 +485,7 @@ def list_process_audit(
         "user_agent": r.user_agent,
     } for r in rows]
 
-@router.get("/processes/{process_id}/details", response_model=ProcessResponse)
+@router.get("/processes/{process_id}/details")
 def get_process_details(process_id: int, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:view"))):
     """Get process with details (steps, logs, parameters, deviations, alerts)"""
     service = ProductionService(db)
@@ -589,8 +589,50 @@ def get_process_details(process_id: int, db: Session = Depends(get_db), current_
             for a in details["alerts"]
         ],
     }
+    response["stages_list"] = [
+        {
+            "id": st.id,
+            "stage_name": st.stage_name,
+            "sequence_order": st.sequence_order,
+            "status": st.status.value if hasattr(st.status, 'value') else str(st.status),
+            "is_ccp": st.is_critical_control_point,
+            "requires_approval": st.requires_approval,
+        }
+        for st in details.get("stages", [])
+    ]
+    if details.get("active_stage"):
+        a = details["active_stage"]
+        response["active_stage"] = {
+            "id": a.id,
+            "name": a.stage_name,
+            "sequence": a.sequence_order,
+            "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
+        }
     return response
 
+@router.get("/processes/{process_id}/active-stage")
+def get_active_stage_id(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Return the current active stage for a process (id, name, sequence, status)."""
+    from app.models.production import ProcessStage, StageStatus
+    st = (
+        db.query(ProcessStage)
+        .filter(ProcessStage.process_id == process_id, ProcessStage.status == StageStatus.IN_PROGRESS)
+        .first()
+    )
+    if not st:
+        return {"active_stage": None}
+    return {
+        "active_stage": {
+            "id": st.id,
+            "name": st.stage_name,
+            "sequence": st.sequence_order,
+            "status": st.status.value if hasattr(st.status, 'value') else str(st.status),
+        }
+    }
 
 @router.post("/processes/{process_id}/spec/bind")
 def bind_process_spec(
@@ -670,6 +712,35 @@ def export_production_sheet_pdf(
     if not details:
         raise HTTPException(status_code=404, detail="Process not found")
     release = service.get_latest_release(process_id)
+    # Gather additional context
+    stages = details.get("stages") or []
+    # Signed gates
+    from app.models.production import StageTransition as _ST, YieldRecord as _YR, ProcessStage as _PS, StageStatus as _SS
+    signed_gates = db.query(_ST).filter(_ST.process_id == process_id, _ST.transition_type == 'gate_sign').order_by(_ST.transition_timestamp.asc()).all()
+    # Yield
+    last_yield = db.query(_YR).filter(_YR.process_id == process_id).order_by(_YR.id.desc()).first()
+    overrun_pct = None
+    if last_yield and last_yield.expected_qty:
+        try:
+            overrun_pct = ((last_yield.output_qty - last_yield.expected_qty) / last_yield.expected_qty) * 100.0
+        except Exception:
+            overrun_pct = None
+    # Readiness/exceptions for active stage
+    active_stage = None
+    try:
+        active_stage = next((s for s in stages if getattr(s, 'status', None) == _SS.IN_PROGRESS), None)
+    except Exception:
+        active_stage = None
+    blocking_issues = []
+    if active_stage:
+        try:
+            from app.services.process_monitoring_service import ProcessMonitoringService as _PMS
+            pms = _PMS(db)
+            readiness = pms.evaluate_stage_completion_readiness(active_stage.id)
+            blocking_issues = readiness.get('blocking_issues', [])
+        except Exception:
+            blocking_issues = []
+
     # Generate PDF
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -681,13 +752,58 @@ def export_production_sheet_pdf(
     y -= 18
     c.setFont("Helvetica", 10)
     proc = details['process']
-    c.drawString(x, y, f"Type: {getattr(proc.process_type, 'value', str(proc.process_type))} | Status: {getattr(proc.status, 'value', str(proc.status))}")
+    c.drawString(x, y, f"Type: {getattr(proc.process_type, 'value', str(proc.process_type))} | Status: {getattr(proc.status, 'value', str(proc.status))} | ISO Mode")
     y -= 14
     c.drawString(x, y, f"Batch ID: {proc.batch_id} | Operator: {proc.operator_id or '-'} | Start: {proc.start_time}")
     y -= 14
     spec_link = service.get_spec_link(process_id)
     c.drawString(x, y, f"Spec Doc: {(spec_link.document_id if spec_link else '-') } v{(spec_link.document_version if spec_link else '-')}")
+    y -= 14
+    if last_yield:
+        c.drawString(x, y, f"Yield: {last_yield.output_qty}{last_yield.unit} vs {last_yield.expected_qty or '-'} • Variance: {round(overrun_pct,2) if overrun_pct is not None else '-'}%")
     y -= 20
+    # Stages overview
+    if stages:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(x, y, "Stages")
+        y -= 16
+        c.setFont("Helvetica", 9)
+        for st in stages:
+            if y < 60:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            c.drawString(x, y, f"- {st.stage_name} • seq={st.sequence_order} • status={getattr(st.status, 'value', str(st.status))}"); y -= 12
+        y -= 8
+    # Signed gates
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, "Signed Gates")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    if signed_gates:
+        for sg in signed_gates[:10]:
+            if y < 60:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            gate_key = ""
+            try:
+                notes = sg.transition_notes or ''
+                if 'gate=' in notes:
+                    gate_key = notes.split('gate=')[1].split(';')[0]
+            except Exception:
+                gate_key = ''
+            c.drawString(x, y, f"- {gate_key or 'gate'} • stage_id={sg.from_stage_id} • by={sg.initiated_by} • {sg.transition_timestamp}"); y -= 12
+    else:
+        c.drawString(x, y, "None")
+        y -= 12
+    # Exceptions
+    if blocking_issues:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(x, y, "Exceptions")
+        y -= 16
+        c.setFont("Helvetica", 9)
+        for bi in blocking_issues[:8]:
+            if y < 60:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            c.drawString(x, y, f"- {bi[:110]}"); y -= 12
+        y -= 8
     c.setFont("Helvetica-Bold", 12)
     c.drawString(x, y, "Parameters (latest 15)")
     y -= 16
@@ -1484,11 +1600,52 @@ def complete_stage_and_transition(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/processes/{process_id}/stages")
+def get_process_stages(
+    process_id: int,
+    include_monitoring: bool = Query(False, description="Include monitoring data"),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get all stages for a process with optional monitoring data"""
+    service = ProductionService(db)
+    try:
+        process = service.get_process_with_stages(process_id)
+        if not process:
+            raise HTTPException(status_code=404, detail="Process not found")
+        
+        stages_data = []
+        for stage in process.stages:
+            stage_data = {
+                "id": stage.id,
+                "stage_name": stage.stage_name,
+                "status": stage.status.value if hasattr(stage.status, "value") else str(stage.status),
+                "sequence_order": stage.sequence_order,
+                "start_time": stage.start_time,
+                "end_time": stage.end_time,
+                "notes": stage.notes
+            }
+            
+            if include_monitoring:
+                # Add monitoring requirements and logs if requested
+                stage_data["monitoring_requirements"] = []
+                stage_data["recent_monitoring_logs"] = []
+            
+            stages_data.append(stage_data)
+        
+        return {
+            "process_id": process_id,
+            "total_stages": len(stages_data),
+            "stages": stages_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/processes/{process_id}/fsm", response_model=ProcessResponse)
 def get_process_with_stages(
     process_id: int, 
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get a process with all its stages and monitoring data"""
     service = ProductionService(db)
@@ -1551,7 +1708,7 @@ def get_process_with_stages(
 def get_process_summary(
     process_id: int, 
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get a summary of the process including progress and quality metrics"""
     service = ProductionService(db)
@@ -1668,7 +1825,7 @@ def log_stage_monitoring(
 def get_stage_monitoring_logs(
     stage_id: int, 
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get all monitoring logs for a stage"""
     service = ProductionService(db)
@@ -1714,7 +1871,7 @@ def get_stage_monitoring_logs(
 def get_iso_stage_template(
     product_type: str,
     db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:read"))
+    current_user = Depends(require_permission_dependency("traceability:view"))
 ):
     """Get ISO 22000:2018 compliant stage template for a product type"""
     try:
@@ -1865,4 +2022,78 @@ def create_process_from_iso_template(
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/processes/{process_id}/transitions")
+def list_stage_transitions(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """List stage transitions for a production process (for divert/rework verification)."""
+    from app.models.production import StageTransition
+    from app.services.production_service import ProductionService
+    svc = ProductionService(db)
+    proc = svc.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    transitions = (
+        db.query(StageTransition)
+        .filter(StageTransition.process_id == process_id)
+        .order_by(StageTransition.transition_timestamp.asc())
+        .all()
+    )
+    return [
+        {
+            "id": t.id,
+            "from_stage_id": t.from_stage_id,
+            "to_stage_id": t.to_stage_id,
+            "transition_type": t.transition_type,
+            "auto_transition": t.auto_transition,
+            "reason": t.transition_reason,
+            "initiated_by": t.initiated_by,
+            "timestamp": t.transition_timestamp,
+            "requires_approval": t.requires_approval,
+            "approved_by": t.approved_by,
+            "transition_notes": t.transition_notes,
+        }
+        for t in transitions
+    ]
+
+@router.get("/processes/{process_id}/audit-simple")
+def get_process_audit_simple(
+    process_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Simple audit bundle: stage transitions and divert logs."""
+    from app.models.production import ProcessLog, LogEvent
+    from app.services.production_service import ProductionService
+    svc = ProductionService(db)
+    proc = svc.get_process(process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    # Transitions
+    transitions = list_stage_transitions(process_id, db, current_user)
+    # Divert logs
+    diverts = (
+        db.query(ProcessLog)
+        .filter(ProcessLog.process_id == process_id, ProcessLog.event == LogEvent.DIVERT)
+        .order_by(ProcessLog.timestamp.asc())
+        .all()
+    )
+    return {
+        "process_id": process_id,
+        "transitions": transitions,
+        "diverts": [
+            {
+                "id": d.id,
+                "timestamp": d.timestamp,
+                "measured_temp_c": d.measured_temp_c,
+                "note": d.note,
+                "auto_flag": d.auto_flag,
+            }
+            for d in diverts
+        ],
+    }
 

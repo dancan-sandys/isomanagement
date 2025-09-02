@@ -215,7 +215,26 @@ class ProcessMonitoringService:
                             "expected_range": f"{requirement.tolerance_min}-{requirement.tolerance_max}",
                             "severity": log_entry.deviation_severity
                         })
-                        
+                        # If critical limit, place process on HOLD and notify QA
+                        if requirement.is_critical_limit:
+                            try:
+                                current_stage.status = StageStatus.FAILED
+                                process.status = ProcessStatus.DIVERTED
+                                self.db.commit()
+                                from app.services.notification_service import NotificationService
+                                from app.models.notification import NotificationType, NotificationPriority, NotificationCategory
+                                ns = NotificationService(self.db)
+                                ns.send_role_based_notifications(
+                                    role_names=["QA", "QUALITY"],
+                                    title="Critical limit exceeded - HOLD",
+                                    message=f"Process {process_id} placed on HOLD. Stage '{current_stage.stage_name}' parameter '{requirement.requirement_name}' out of limit.",
+                                    notification_type=NotificationType.ALERT,
+                                    category=NotificationCategory.PRODUCTION,
+                                    priority=NotificationPriority.HIGH,
+                                    data={"process_id": process_id, "stage_id": current_stage.id}
+                                )
+                            except Exception:
+                                pass
             except Exception as e:
                 logger.error(f"Error logging parameter for requirement {requirement.id}: {str(e)}")
         

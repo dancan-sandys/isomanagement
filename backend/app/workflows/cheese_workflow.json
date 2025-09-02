@@ -1,0 +1,30 @@
+{
+  "name": "cheese_workflow",
+  "version": 1,
+  "stages": [
+    {"key": "intake", "on_pass": "pasteurize_90c_30m"},
+    {
+      "key": "pasteurize_90c_30m",
+      "conditions": [
+        {"key": "temp_threshold", "type": "min_value", "metric": "TEMP", "min": 90},
+        {"key": "hold_time", "type": "min_hold_minutes", "metric": "HOLD_TIME_MIN", "min": 30}
+      ],
+      "on_pass": "cool_to_culture_temp"
+    },
+    {"key": "cool_to_culture_temp", "on_pass": "add_culture"},
+    {"key": "add_culture", "gates": [{"key": "op_culture_added", "type": "operator_gate", "esign": true}], "on_pass": "coagulate_3_4h"},
+    {
+      "key": "coagulate_3_4h",
+      "conditions": [
+        {"key": "time_window", "type": "range_hold_hours", "metric": "HOLD_TIME_HR", "min": 3, "max": 4}
+      ],
+      "on_pass": "cut_curd_hold_temp"
+    },
+    {"key": "cut_curd_hold_temp", "on_pass": "drain_press"},
+    {"key": "drain_press", "gates": [{"key": "op_mold_press", "type": "operator_gate", "esign": true}], "on_pass": "cold_room"},
+    {"key": "cold_room", "conditions": [{"key": "record_cold_room_qty", "type": "capture_metric", "metric": "VOLUME_OUT_KG"}], "on_pass": "ageing"},
+    {"key": "ageing", "conditions": [{"key": "age_temp", "type": "range_value", "metric": "ROOM_TEMP_C", "min": 10, "max": 14}], "notes": "2w to 2y depending on cheese"},
+    {"key": "complete"}
+  ]
+}
+

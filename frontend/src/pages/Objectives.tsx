@@ -50,6 +50,7 @@ import objectivesAPI from '../services/objectivesAPI';
 import { ObjectiveCreatePayload, ObjectiveUpdatePayload, ObjectiveTargetPayload, ObjectiveProgressPayload } from '../services/objectivesAPI';
 import ObjectiveDetailView from '../components/objectives/ObjectiveDetailView';
 import ObjectivesDashboard from '../components/objectives/ObjectivesDashboard';
+import { departmentsAPI } from '../services/departmentsAPI';
 
 interface Objective {
   id: number;
@@ -130,6 +131,8 @@ const ObjectivesPage: React.FC = () => {
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<number | null>(null);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentFilterId, setDepartmentFilterId] = useState<string>('');
   
   // Form states
   const [createFormData, setCreateFormData] = useState<ObjectiveCreatePayload>({
@@ -165,7 +168,17 @@ const ObjectivesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    loadDepartments();
   }, []);
+
+  const loadDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      setDepartments(res?.items || res?.data?.items || []);
+    } catch (e) {
+      setDepartments([]);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -173,11 +186,11 @@ const ObjectivesPage: React.FC = () => {
       setError(null);
       
       // Load basic objectives
-      const basicResponse = await objectivesAPI.listObjectives();
+      const basicResponse = await objectivesAPI.listObjectives({ department_id: departmentFilterId ? Number(departmentFilterId) : undefined });
       setObjectives(Array.isArray(basicResponse) ? basicResponse : []);
       
       // Load enhanced objectives
-      const enhancedResponse = await objectivesAPI.listEnhancedObjectives();
+      const enhancedResponse = await objectivesAPI.listEnhancedObjectives({ department_id: departmentFilterId ? Number(departmentFilterId) : undefined });
       setEnhancedObjectives(enhancedResponse?.objectives || []);
       
       // Load dashboard KPIs
@@ -194,6 +207,9 @@ const ObjectivesPage: React.FC = () => {
 
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
+    loadData();
+  };
+  const handleApplyDepartmentFilter = () => {
     loadData();
   };
 
@@ -382,82 +398,13 @@ const ObjectivesPage: React.FC = () => {
         </Grid>
       )}
 
-      {/* Tabs */}
+      {/* Enhanced Objectives Only */}
       <Paper sx={{ width: '100%' }}>
         <Tabs value={activeTab} onChange={handleTabChange} aria-label="objectives tabs">
-          <Tab label="Basic Objectives" />
           <Tab label="Enhanced Objectives" />
-          <Tab label="Dashboard" />
         </Tabs>
 
-        {/* Basic Objectives Tab */}
         {activeTab === 0 && (
-          <Box p={3}>
-            <Grid container spacing={2}>
-              {objectives.map((objective) => (
-                <Grid item xs={12} md={6} lg={4} key={objective.id}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        {objective.objective_code}
-                      </Typography>
-                      <Typography variant="h6" gutterBottom>
-                        {objective.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {objective.description}
-                      </Typography>
-                      
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="body2">Category:</Typography>
-                        <Chip label={objective.category || 'N/A'} size="small" />
-                      </Stack>
-                      
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="body2">Status:</Typography>
-                        <StatusChip status={objective.status} />
-                      </Stack>
-                      
-                      <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                        <Button 
-                          size="small" 
-                          startIcon={<AddIcon />}
-                          onClick={() => {
-                            setTargetFormData(prev => ({ ...prev, objective_id: objective.id }));
-                            setShowTargetForm(true);
-                          }}
-                        >
-                          Add Target
-                        </Button>
-                        <Button 
-                          size="small" 
-                          startIcon={<AddIcon />}
-                          onClick={() => {
-                            setProgressFormData(prev => ({ ...prev, objective_id: objective.id }));
-                            setShowProgressForm(true);
-                          }}
-                        >
-                          Add Progress
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-            
-            {(!loading && objectives.length === 0) && (
-              <Box textAlign="center" py={4}>
-                <Typography variant="body2" color="text.secondary">
-                  No objectives found. Create your first objective to get started.
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {/* Enhanced Objectives Tab */}
-        {activeTab === 1 && (
           <Box p={3}>
             <Grid container spacing={2}>
               {enhancedObjectives.map((objective) => (
@@ -517,6 +464,26 @@ const ObjectivesPage: React.FC = () => {
                         >
                           Edit
                         </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            setTargetFormData(prev => ({ ...prev, objective_id: objective.id }));
+                            setShowTargetForm(true);
+                          }}
+                        >
+                          Add Target
+                        </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            setProgressFormData(prev => ({ ...prev, objective_id: objective.id }));
+                            setShowProgressForm(true);
+                          }}
+                        >
+                          Add Progress
+                        </Button>
                       </Stack>
                     </CardContent>
                   </Card>
@@ -534,12 +501,7 @@ const ObjectivesPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Dashboard Tab */}
-        {activeTab === 2 && (
-          <Box p={3}>
-            <ObjectivesDashboard refreshTrigger={refreshTrigger} />
-          </Box>
-        )}
+        {/* Dashboard Tab removed */}
       </Paper>
 
       {/* Create Objective Dialog */}

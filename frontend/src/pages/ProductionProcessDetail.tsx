@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -35,8 +35,9 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { Warning, Error, Info, ArrowBack, Science, Edit, Refresh } from '@mui/icons-material';
+import { Warning, Error, Info, ArrowBack, Science, Edit, Refresh, Add } from '@mui/icons-material';
 import productionAPI, { suppliersAPI, ProcessParameterPayload } from '../services/productionAPI';
+import { usersAPI } from '../services/api';
 import Autocomplete from '@mui/material/Autocomplete';
 
 const ProductionProcessDetail: React.FC = () => {
@@ -46,12 +47,14 @@ const ProductionProcessDetail: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [processDetails, setProcessDetails] = useState<any | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
   const [processAudit, setProcessAudit] = useState<any[]>([]);
   const [detailsTab, setDetailsTab] = useState(0);
   const [auditFilter, setAuditFilter] = useState({ action: '', from: '', to: '' });
 
   const [materialOptions, setMaterialOptions] = useState<any[]>([]);
   const [matForm, setMatForm] = useState({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
+  const [materialSearchText, setMaterialSearchText] = useState('');
 
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
@@ -72,6 +75,30 @@ const ProductionProcessDetail: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<{ operator_id?: number; status?: string; notes?: string }>({});
 
+  const [operatorPanelOpen, setOperatorPanelOpen] = useState<boolean>(true);
+  const [transitions, setTransitions] = useState<any[]>([]);
+  const [auditSimple, setAuditSimple] = useState<{ diverts: any[] } | null>(null);
+
+  const [explicitActiveStage, setExplicitActiveStage] = useState<{ id: number; name: string; sequence: number; status: string } | null>(null);
+
+  const [signOpen, setSignOpen] = useState(false);
+  const [signForm, setSignForm] = useState<{ gateKey: string; password: string; reason?: string }>({ gateKey: '', password: '' });
+
+  const [stageGates, setStageGates] = useState<{ key: string; esign?: boolean }[] | null>(null);
+  const [stagesWithMonitoring, setStagesWithMonitoring] = useState<{ stages: any[] } | null>(null);
+  const [reqAssessments, setReqAssessments] = useState<any[] | null>(null);
+
+  // Map user id to display name for operator rendering
+  const userDisplayNameById = useMemo(() => {
+    const map: Record<number, string> = {};
+    users.forEach((u: any) => {
+      if (typeof u?.id === 'number') {
+        map[u.id] = u?.full_name || u?.username || `User #${u.id}`;
+      }
+    });
+    return map;
+  }, [users]);
+
   const loadDetails = useCallback(async () => {
     if (!id) return;
     try {
@@ -82,6 +109,17 @@ const ProductionProcessDetail: React.FC = () => {
       // Use the productionAPI service instead of direct fetch
       const res = await productionAPI.getProcessDetails(processId);
       setProcessDetails(res);
+      
+      // Load users for operator dropdown
+      try {
+        const usersData = await usersAPI.getUsers({ page: 1, size: 100 });
+        const usersList = usersData.items || usersData.data?.items || usersData.data || usersData || [];
+        console.log('Users loaded in detail page:', usersList.length, 'users');
+        setUsers(usersList);
+      } catch (e) {
+        console.warn('Failed to load users:', e);
+        setUsers([]);
+      }
       
       try {
         const audit = await productionAPI.getProcessAudit(processId, { limit: 100, offset: 0 });
@@ -99,9 +137,97 @@ const ProductionProcessDetail: React.FC = () => {
     }
   }, [id]);
 
+  const loadOperatorData = useCallback(async () => {
+    if (!id) return;
+    try {
+      const processId = parseInt(id, 10);
+      const [t, a] = await Promise.all([
+        productionAPI.getTransitions(processId).catch(() => []),
+        productionAPI.getAuditSimple(processId).catch(() => null),
+      ]);
+      setTransitions(t || []);
+      setAuditSimple(a);
+    } catch (e) {
+      // non-blocking
+    }
+  }, [id]);
+
+  const hydrateActiveStage = useCallback(async () => {
+    if (!processDetails?.id) return;
+    try {
+      if (processDetails?.active_stage?.id) {
+        setExplicitActiveStage(processDetails.active_stage);
+        return;
+      }
+      const res = await productionAPI.getActiveStage(processDetails.id);
+      setExplicitActiveStage(res.active_stage || null);
+    } catch {
+      setExplicitActiveStage(null);
+    }
+  }, [processDetails?.id, processDetails?.active_stage]);
+
+  const loadWorkflowGates = useCallback(async () => {
+    try {
+      if (!processDetails?.process_type) return;
+      const wf = await productionAPI.getWorkflow(processDetails.process_type);
+      const stageIdx = (explicitActiveStage?.sequence || 1) - 1;
+      const sdef = (wf.stages || [])[stageIdx] || null;
+      setStageGates((sdef?.gates || []).map((g: any) => ({ key: g.key, esign: !!g.esign })));
+    } catch {
+      setStageGates(null);
+    }
+  }, [processDetails?.process_type, explicitActiveStage?.sequence]);
+
+  const loadMonitoringSummary = useCallback(async () => {
+    try {
+      if (!processDetails?.id) return;
+      console.log('Loading monitoring summary for process:', processDetails.id);
+      const data = await productionAPI.getProcessStagesWithMonitoring(processDetails.id);
+      console.log('Monitoring summary data received:', data);
+      setStagesWithMonitoring({ stages: data.stages || [] });
+      console.log('Stages with monitoring set:', data.stages || []);
+    } catch (error) {
+      console.error('Error loading monitoring summary:', error);
+      setStagesWithMonitoring(null);
+    }
+  }, [processDetails?.id]);
+
+  const loadReadiness = useCallback(async () => {
+    try {
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      const res = await productionAPI.evaluateStage(processDetails.id, stageId);
+      const ra = res?.readiness_assessment?.requirements_assessment || [];
+      setReqAssessments(ra);
+    } catch (error) {
+      console.warn('Failed to load readiness assessment:', error);
+      setReqAssessments(null);
+    }
+  }, [processDetails?.id, explicitActiveStage?.id]);
+
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
+
+  useEffect(() => {
+    loadOperatorData();
+  }, [loadOperatorData]);
+
+  useEffect(() => {
+    hydrateActiveStage();
+  }, [hydrateActiveStage]);
+
+  useEffect(() => {
+    loadWorkflowGates();
+  }, [loadWorkflowGates]);
+
+  useEffect(() => {
+    loadMonitoringSummary();
+  }, [loadMonitoringSummary]);
+
+  useEffect(() => {
+    loadReadiness();
+  }, [loadReadiness]);
 
   const handleRecordParameter = async () => {
     try {
@@ -129,7 +255,8 @@ const ProductionProcessDetail: React.FC = () => {
         }
       }
 
-      await productionAPI.recordParameter(processDetails.id, newParameter);
+      const result = await productionAPI.recordParameter(processDetails.id, newParameter);
+      
       setParameterDialogOpen(false);
       setNewParameter({
         parameter_name: '',
@@ -140,8 +267,10 @@ const ProductionProcessDetail: React.FC = () => {
         tolerance_max: undefined,
         notes: '',
       });
+      setError(null); // Clear any previous errors
       await loadDetails();
     } catch (e: any) {
+      console.error('Error in handleRecordParameter:', e);
       const errorMessage = e?.response?.data?.detail || e?.message || 'Failed to record parameter';
       setError(errorMessage);
       console.error('Error recording parameter:', e);
@@ -191,6 +320,213 @@ const ProductionProcessDetail: React.FC = () => {
     }
   };
 
+  const getActiveStageId = (): number | null => {
+    console.log('getActiveStageId called');
+    console.log('explicitActiveStage:', explicitActiveStage);
+    console.log('processDetails:', processDetails);
+    console.log('stagesWithMonitoring:', stagesWithMonitoring);
+    
+    if (explicitActiveStage?.id) {
+      console.log('Returning explicitActiveStage.id:', explicitActiveStage.id);
+      return explicitActiveStage.id;
+    }
+    
+    // Try to get stage ID from stagesWithMonitoring first
+    if (stagesWithMonitoring?.stages && Array.isArray(stagesWithMonitoring.stages)) {
+      const inProgStage = stagesWithMonitoring.stages.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
+      if (inProgStage?.id) {
+        console.log('Found stage from stagesWithMonitoring:', inProgStage.id);
+        return inProgStage.id;
+      }
+      
+      // Fallback: if no in_progress stage, use the first available stage
+      if (stagesWithMonitoring.stages.length > 0) {
+        const firstStage = stagesWithMonitoring.stages[0];
+        console.log('Using first available stage as fallback:', firstStage.id);
+        return firstStage.id;
+      }
+    }
+    
+    try {
+      const st = processDetails?.stages_list || processDetails?.stages;
+      console.log('stages data:', st);
+      if (Array.isArray(st) && st.length > 0) {
+        const inProg = st.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
+        console.log('in_progress stage found:', inProg);
+        if (inProg?.id) {
+          return inProg.id;
+        }
+        // If no in_progress stage found, use the first available stage
+        console.log('No in_progress stage found, using first stage:', st[0].id);
+        return st[0].id;
+      }
+      console.log('stages is not an array or is empty');
+      
+      // Final fallback: if we have a process ID, try to use stage ID 1
+      if (processDetails?.id) {
+        console.log('Using fallback stage ID 1 for process:', processDetails.id);
+        return 1; // Assume stage 1 exists for this process
+      }
+      
+      // Ultimate fallback: try to get stage ID from workflow
+      if (processDetails?.process_type && stageGates && stageGates.length > 0) {
+        console.log('Using workflow-based fallback, stage ID 1');
+        return 1;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in getActiveStageId:', error);
+      return null;
+    }
+  };
+
+  const signedGateKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const t of transitions || []) {
+      if (t.transition_type === 'gate_sign' && typeof t.transition_notes === 'string') {
+        const idx = t.transition_notes.indexOf('gate=');
+        if (idx >= 0) {
+          const k = t.transition_notes.substring(idx + 5).split(';')[0];
+          if (k) keys.add(k);
+        }
+      }
+    }
+    return keys;
+  }, [transitions]);
+
+  const hasUnsignedRequiredGates = React.useMemo(() => {
+    const gates = stageGates || [];
+    for (const g of gates) {
+      if (g.esign && !signedGateKeys.has(g.key)) return true;
+    }
+    return false;
+  }, [stageGates, signedGateKeys]);
+
+  const handlePass = async () => {
+    try {
+      if (hasUnsignedRequiredGates) {
+        setError('Cannot pass: required gate(s) not signed');
+        return;
+      }
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      const evalRes = await productionAPI.evaluateStage(processDetails.id, stageId);
+      if (!evalRes.can_progress) {
+        setError('Stage cannot progress: criteria not met');
+        return;
+      }
+      await productionAPI.transitionStage(processDetails.id, stageId, { transition_type: 'normal', prerequisites_met: true, reason: 'Operator pass' });
+      await Promise.all([loadDetails(), loadOperatorData()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to pass stage');
+    }
+  };
+
+  const handleRework = async () => {
+    try {
+      const stageId = getActiveStageId();
+      if (!stageId || !processDetails?.id) return;
+      await productionAPI.transitionStage(processDetails.id, stageId, { transition_type: 'rework', reason: 'Operator initiated rework' });
+      await Promise.all([loadDetails(), loadOperatorData()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to initiate rework');
+    }
+  };
+
+  const handleDivert = async () => {
+    try {
+      if (!processDetails?.id) return;
+      // Log a manual divert event; backend will set status to DIVERTED
+      await productionAPI.addLog(processDetails.id, { event: 'divert', note: 'Operator manual divert', auto_flag: false, source: 'manual' });
+      await Promise.all([loadDetails(), loadOperatorData()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to divert process');
+    }
+  };
+
+  const handleOpenSign = () => {
+    console.log('handleOpenSign called');
+    setSignForm({ gateKey: 'operator_gate', password: '' });
+    setSignOpen(true);
+    console.log('signOpen set to true');
+  };
+  const [signSubmitting, setSignSubmitting] = React.useState(false);
+  const handleSubmitSign = async () => {
+    try {
+      console.log('handleSubmitSign called');
+      const stageId = getActiveStageId();
+      console.log('stageId:', stageId);
+      console.log('processDetails?.id:', processDetails?.id);
+      if (!stageId || !processDetails?.id) {
+        console.log('Missing stageId or processDetails.id, returning early');
+        setError('No active stage detected. Please refresh and try again.');
+        return;
+      }
+      if (!signForm.password || !signForm.password.trim()) {
+        setError('Password is required to e-sign this gate.');
+        return;
+      }
+      setSignSubmitting(true);
+      
+      // Debug authentication
+      const token = localStorage.getItem('access_token');
+      console.log('Auth token exists:', !!token);
+      console.log('Token preview:', token ? `${token.substring(0, 20)}...` : 'No token');
+      
+      console.log('Calling signGate API...');
+      await productionAPI.signGate(processDetails.id, stageId, signForm.gateKey || 'operator_gate', { password: signForm.password, reason: signForm.reason });
+      console.log('Sign gate successful!');
+      setSignOpen(false);
+      await loadOperatorData();
+    } catch (e: any) {
+      console.error('Sign gate error:', e);
+      console.error('Error response:', e?.response);
+      console.error('Error status:', e?.response?.status);
+      console.error('Error detail:', e?.response?.data?.detail);
+      setError(e?.response?.data?.detail || e?.message || 'Failed to sign gate');
+    }
+    finally {
+      setSignSubmitting(false);
+    }
+  };
+
+  const commonGateKeys = ['operator_gate', 'operator_ack', 'intake_ack', 'op_release', 'op_culture_added', 'op_mold_press'];
+
+  const samplingStatusForActive = React.useMemo(() => {
+    if (!explicitActiveStage || !stagesWithMonitoring?.stages) return { ok: true, missing: [] as string[] };
+    const st = stagesWithMonitoring.stages.find(s => s.id === explicitActiveStage.id);
+    if (!st) return { ok: true, missing: [] };
+    const reqs = st.monitoring_requirements || [];
+    const logs = st.recent_monitoring_logs || [];
+    const missing: string[] = [];
+    for (const r of reqs) {
+      const freq = (r.requirement_type || '').toString();
+      // Basic heuristic: if marked mandatory or critical, require at least one log
+      if (r.is_mandatory || r.is_critical_limit) {
+        const hasLog = logs.some((l: any) => l && typeof l.id !== 'undefined');
+        if (!hasLog) missing.push(r.requirement_name);
+      }
+    }
+    return { ok: missing.length === 0, missing };
+  }, [explicitActiveStage, stagesWithMonitoring]);
+
+  const handleQARelease = async () => {
+    try {
+      if (!processDetails?.id) return;
+      await productionAPI.qaRelease(processDetails.id, 'QA release from HOLD');
+      await Promise.all([loadDetails(), loadOperatorData(), loadMonitoringSummary()]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to release');
+    }
+  };
+
+  useEffect(() => {
+    // Prefill sign dialog gate key to first required esign gate
+    const firstEsign = (stageGates || []).find(g => g.esign);
+    if (firstEsign) setSignForm(s => ({ ...s, gateKey: firstEsign.key }));
+  }, [stageGates]);
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -202,38 +538,92 @@ const ProductionProcessDetail: React.FC = () => {
   return (
     <Box p={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button startIcon={<ArrowBack />} onClick={() => navigate('/production')}>Back</Button>
-          <Typography variant="h5">Process Details</Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Refresh />}
-            onClick={loadDetails}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-
-          <Tooltip title="Record Parameter">
-            <IconButton size="small" onClick={() => setParameterDialogOpen(true)}>
-              <Science />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Edit Process">
-            <IconButton size="small" onClick={handleOpenEdit}>
-              <Edit />
-            </IconButton>
-          </Tooltip>
-        </Stack>
+        <Button startIcon={<ArrowBack />} onClick={() => navigate(-1)}>Back</Button>
+        <Typography variant="h5">Production Process Detail</Typography>
+        <Box />
       </Stack>
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+
+      {/* Operator Console */}
+      <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack spacing={0.5}>
+            <Typography variant="subtitle1">Operator Console</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Process #{processDetails?.id} • Status: {processDetails?.status} • Active Stage: {explicitActiveStage?.name || processDetails?.active_stage?.name || 'N/A'}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <Chip label={`Transitions: ${transitions.length}`} size="small" />
+            <Chip label={`Diverts: ${auditSimple?.diverts?.length || 0}`} color={(auditSimple?.diverts?.length || 0) > 0 ? 'warning' : 'default'} size="small" />
+            <Chip label={samplingStatusForActive.ok ? 'Sampling OK' : `Sampling Missing: ${samplingStatusForActive.missing.length}`} color={samplingStatusForActive.ok ? 'success' : 'warning'} size="small" />
+            <Button variant="outlined" color="secondary" size="small" onClick={handleQARelease}>QA Release</Button>
+          </Stack>
+        </Stack>
+        <Divider sx={{ my: 1.5 }} />
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={8}>
+            <Stack direction="row" spacing={1}>
+              <Tooltip title={hasUnsignedRequiredGates ? 'Required gate(s) not signed' : ''}>
+                <span>
+                  <Button variant="contained" color="success" size="small" onClick={handlePass} disabled={hasUnsignedRequiredGates}>Pass</Button>
+                </span>
+              </Tooltip>
+              <Button variant="outlined" color="warning" size="small" onClick={handleRework}>Rework</Button>
+              <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                onClick={handleOpenSign} 
+                startIcon={<Edit />}
+              >
+                Sign Gate
+              </Button>
+              <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' as any }}>
+              {(reqAssessments || []).map(r => {
+                let color: any = 'default';
+                let label = r.requirement_name;
+                if (r.compliance_status === 'no_data') { color = 'warning'; label += ' (no data)'; }
+                else if (r.compliance_status === 'critical_failure' || r.compliance_status === 'recent_failure') { color = 'error'; label += ' (fail)'; }
+                else { color = 'success'; label += ' (pass)'; }
+                return <Chip key={r.requirement_id} label={label} color={color} size="small" sx={{ mr: 0.5, mb: 0.5 }} />;
+              })}
+            </Stack>
+
+            {/* Stage Timeline */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Stage Timeline</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {(stagesWithMonitoring?.stages || []).map(s => {
+                  const color = s.status === 'in_progress' ? 'primary' : (s.status === 'completed' ? 'success' : (s.status === 'failed' ? 'error' : 'default'));
+                  return <Chip key={s.id} label={`${s.stage_name} (${s.status})`} color={color as any} size="small" />;
+                })}
+              </Stack>
+            </Box>
+
+            {/* Signed Gates Summary */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Signed Gates</Typography>
+              <List dense>
+                {Array.from(signedGateKeys).map(k => (
+                  <ListItem key={k} disableGutters>
+                    <ListItemIcon><Info fontSize="small" /></ListItemIcon>
+                    <ListItemText primary={k} secondary="Signed" />
+                  </ListItem>
+                ))}
+                {signedGateKeys.size === 0 && <Typography variant="caption" color="text.secondary">No gates signed yet</Typography>}
+              </List>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
+              <Chip label={`Transitions: ${transitions.length}`} size="small" />
+              <Chip label={`Diverts: ${auditSimple?.diverts?.length || 0}`} color={(auditSimple?.diverts?.length || 0) > 0 ? 'warning' : 'default'} size="small" />
+            </Stack>
+          </Grid>
+        </Grid>
+      </Paper>
 
       <Paper sx={{ width: '100%', mb: 2 }}>
         <Tabs value={detailsTab} onChange={(_, v) => setDetailsTab(v)} sx={{ px: 2 }}>
@@ -277,7 +667,7 @@ const ProductionProcessDetail: React.FC = () => {
                 </ListItem>
                 <ListItem>
                   <ListItemText 
-                    primary={`Operator: ${processDetails?.operator_id || '—'}`} 
+                    primary={`Operator: ${processDetails?.operator_id ? (userDisplayNameById[processDetails.operator_id] || processDetails.operator_id) : '—'}`} 
                     secondary={`Start: ${processDetails?.start_time ? new Date(processDetails.start_time).toLocaleString() : '—'}`} 
                   />
                 </ListItem>
@@ -300,6 +690,7 @@ const ProductionProcessDetail: React.FC = () => {
                   options={materialOptions}
                   getOptionLabel={(o: any) => o.name || o.code || String(o.id)}
                   onInputChange={async (_, value) => {
+                    setMaterialSearchText(value || '');
                     if (value && value.length >= 2) {
                       try {
                         const results = await suppliersAPI.searchMaterials(value, 10);
@@ -355,6 +746,20 @@ const ProductionProcessDetail: React.FC = () => {
                   }
                 }}>Record</Button>
               </Stack>
+              {materialSearchText.length >= 2 && materialOptions.length === 0 && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  No matching materials found. You can add a new one in Suppliers.
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    startIcon={<Add />} 
+                    onClick={() => navigate('/suppliers?tab=2')} 
+                    sx={{ ml: 2 }}
+                  >
+                    Go to Materials
+                  </Button>
+                </Alert>
+              )}
               <Typography variant="subtitle2" color="text.secondary">Consumptions</Typography>
               <Table size="small" sx={{ mb: 1 }}>
                 <TableHead>
@@ -380,6 +785,20 @@ const ProductionProcessDetail: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
+              {((processDetails?.materials || []).length === 0) && (
+                <Alert severity="info">
+                  No materials recorded yet.
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    startIcon={<Add />} 
+                    onClick={() => navigate('/suppliers?tab=2')} 
+                    sx={{ ml: 2 }}
+                  >
+                    Go to Materials
+                  </Button>
+                </Alert>
+              )}
             </Box>
           )}
 
@@ -503,7 +922,7 @@ const ProductionProcessDetail: React.FC = () => {
                         <TableRow key={r.id}>
                           <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
                           <TableCell><Chip label={r.action} size="small" /></TableCell>
-                          <TableCell>{r.user_id ?? '—'}</TableCell>
+                          <TableCell>{r.user_id ? (userDisplayNameById[r.user_id] || r.user_id) : '—'}</TableCell>
                           <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
                         </TableRow>
                       ))}
@@ -526,13 +945,18 @@ const ProductionProcessDetail: React.FC = () => {
               value={newParameter.parameter_name}
               onChange={(e) => setNewParameter({ ...newParameter, parameter_name: e.target.value })}
               fullWidth
+              required
             />
             <TextField
               label="Parameter Value"
               type="number"
-              value={newParameter.parameter_value}
-              onChange={(e) => setNewParameter({ ...newParameter, parameter_value: parseFloat(e.target.value) })}
+              value={newParameter.parameter_value || ''}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : 0;
+                setNewParameter({ ...newParameter, parameter_value: isNaN(value) ? 0 : value });
+              }}
               fullWidth
+              required
             />
             <TextField
               label="Unit"
@@ -544,21 +968,30 @@ const ProductionProcessDetail: React.FC = () => {
               label="Target Value"
               type="number"
               value={newParameter.target_value || ''}
-              onChange={(e) => setNewParameter({ ...newParameter, target_value: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                setNewParameter({ ...newParameter, target_value: value && !isNaN(value) ? value : undefined });
+              }}
               fullWidth
             />
             <TextField
               label="Tolerance Min"
               type="number"
               value={newParameter.tolerance_min || ''}
-              onChange={(e) => setNewParameter({ ...newParameter, tolerance_min: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                setNewParameter({ ...newParameter, tolerance_min: value && !isNaN(value) ? value : undefined });
+              }}
               fullWidth
             />
             <TextField
               label="Tolerance Max"
               type="number"
               value={newParameter.tolerance_max || ''}
-              onChange={(e) => setNewParameter({ ...newParameter, tolerance_max: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                setNewParameter({ ...newParameter, tolerance_max: value && !isNaN(value) ? value : undefined });
+              }}
               fullWidth
             />
             <TextField
@@ -572,8 +1005,14 @@ const ProductionProcessDetail: React.FC = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setParameterDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleRecordParameter} variant="contained">Record Parameter</Button>
+          <Button onClick={() => setParameterDialogOpen(false)} type="button">Cancel</Button>
+          <Button 
+            onClick={handleRecordParameter} 
+            variant="contained" 
+            type="button"
+          >
+            Record Parameter
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -582,11 +1021,44 @@ const ProductionProcessDetail: React.FC = () => {
         <DialogTitle>Edit Process</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Autocomplete
+              options={users}
+              getOptionLabel={(option) => option ? `${option.full_name || option.username} (${option.email})` : ''}
+              value={users.find(user => user.id === editForm.operator_id) || null}
+              onChange={(event, newValue) => {
+                setEditForm({ ...editForm, operator_id: newValue ? newValue.id : undefined });
+              }}
+              renderInput={(params) => (
             <TextField
-              label="Operator ID"
-              type="number"
-              value={editForm.operator_id ?? ''}
-              onChange={(e) => setEditForm({ ...editForm, operator_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                  {...params}
+                  label="Operator"
+                  placeholder={loading ? "Loading operators..." : "Search for an operator..."}
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              renderOption={(props, option) => (
+                <li {...props}>
+                  <div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {option.full_name || option.username}
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      {option.email}
+                    </div>
+                  </div>
+                </li>
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value?.id}
+              noOptionsText={loading ? "Loading operators..." : "No operators found"}
+              loading={loading}
               fullWidth
             />
             <FormControl fullWidth>
@@ -648,6 +1120,31 @@ const ProductionProcessDetail: React.FC = () => {
               setError('Failed to submit change request');
             }
           }}>Submit</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={signOpen} onClose={() => setSignOpen(false)}>
+        <DialogTitle>Sign Gate</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormControl size="small">
+              <InputLabel id="gate-key-label">Gate Key</InputLabel>
+              <Select labelId="gate-key-label" label="Gate Key" value={signForm.gateKey} onChange={(e) => setSignForm({ ...signForm, gateKey: String(e.target.value) })}>
+                {commonGateKeys.map(k => <MenuItem key={k} value={k}>{k}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <TextField label="Password" type="password" value={signForm.password} onChange={(e) => setSignForm({ ...signForm, password: e.target.value })} size="small" />
+            <TextField label="Reason (optional)" value={signForm.reason || ''} onChange={(e) => setSignForm({ ...signForm, reason: e.target.value })} size="small" />
+            {!getActiveStageId() && (
+              <Typography variant="caption" color="error">No active stage detected. Refresh data before signing.</Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSignOpen(false)} disabled={signSubmitting}>Cancel</Button>
+          <Button onClick={handleSubmitSign} variant="contained" disabled={signSubmitting || !signForm.password || !getActiveStageId()}>
+            {signSubmitting ? 'Signing...' : 'Sign'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

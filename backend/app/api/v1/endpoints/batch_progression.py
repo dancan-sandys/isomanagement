@@ -10,11 +10,13 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user
+from app.core.security import get_current_active_user, verify_password
 from app.core.permissions import require_permission_dependency
-from app.models.user import User
+from app.models.user import User as UserModel
+from app.services import log_audit_event
 from app.services.batch_progression_service import BatchProgressionService, TransitionType
 from app.services.process_monitoring_service import ProcessMonitoringService
+from app.services.workflow_engine import WorkflowEngine
 from app.schemas.production import (
     ProcessCreateWithStages, ProcessStartRequest, ProcessSummaryResponse,
     StageMonitoringRequirementCreate, StageMonitoringLogCreate
@@ -80,7 +82,7 @@ def initiate_batch_process(
     batch_id: int,
     request: BatchProcessInitiationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:create"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:create"))
 ) -> Dict[str, Any]:
     """
     Initiate a new batch process with all stages and control points defined
@@ -110,7 +112,7 @@ def start_batch_process(
     request: BatchProcessStartRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """
     Start the batch process and activate the first stage
@@ -143,7 +145,7 @@ def evaluate_stage_progression(
     process_id: int,
     stage_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> StageEvaluationResponse:
     """
     Evaluate if a stage can progress to the next stage
@@ -172,7 +174,7 @@ def request_stage_transition(
     stage_id: int,
     request: StageTransitionRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """
     Request a stage transition with approval workflow
@@ -204,6 +206,56 @@ def request_stage_transition(
             "prerequisites_met": request.prerequisites_met
         }
         
+        # Enforce e-sign on gates for critical stages before NORMAL pass
+        if transition_type == TransitionType.NORMAL:
+            # Load gates for this stage from workflow definition
+            from app.models.production import ProcessStage, StageTransition as ST, ProductionProcess
+            stage = db.query(ProcessStage).filter(ProcessStage.id == stage_id, ProcessStage.process_id == process_id).first()
+            process = db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
+            if stage and process:
+                try:
+                    engine = WorkflowEngine(db)
+                    wf = engine.load_workflow(getattr(process.process_type, 'value', str(process.process_type)))
+                    idx = max(0, stage.sequence_order - 1)
+                    stage_def = (wf.get('stages') or [])[idx] if idx < len(wf.get('stages') or []) else None
+                    gates = (stage_def.get('gates') if stage_def else []) or []
+                    required_esign = [g for g in gates if g.get('esign')]
+                    if required_esign:
+                        # Count gate_sign transitions for this stage
+                        signed = db.query(ST).filter(ST.process_id == process_id, ST.from_stage_id == stage_id, ST.to_stage_id == stage_id, ST.transition_type == 'gate_sign').all()
+                        signed_keys = set()
+                        for s in signed:
+                            notes = (s.transition_notes or '')
+                            if 'gate=' in notes:
+                                try:
+                                    signed_keys.add(notes.split('gate=')[1].split(';')[0])
+                                except Exception:
+                                    pass
+                        missing = [g['key'] for g in required_esign if g.get('key') not in signed_keys]
+                        if missing:
+                            raise HTTPException(status_code=400, detail=f"Missing e-sign for gates: {', '.join(missing)}")
+
+                    # Enforce sampling policy: ONLINE/30-min requirements must have logs
+                    from app.models.production import StageMonitoringRequirement as SMR, StageMonitoringLog as SML
+                    # Determine if sampling mode requires periodic/online logging
+                    sampling_mode = (stage_def.get('sampling') or {}).get('mode') if stage_def else None
+                    if sampling_mode in {"ONLINE", "PERIODIC_30MIN", "ONLINE_OR_30MIN"}:
+                        requirements = db.query(SMR).filter(SMR.stage_id == stage_id, SMR.is_mandatory == True).all()
+                        # If any requirement indicates 30-minute/continuous, require at least one log
+                        missing_req_names = []
+                        for req in requirements:
+                            if (req.monitoring_frequency or '').lower() in {"30_minutes", "continuous", "hourly"}:
+                                exists = db.query(SML).filter(SML.stage_id == stage_id, SML.requirement_id == req.id).first()
+                                if not exists:
+                                    missing_req_names.append(req.requirement_name)
+                        if missing_req_names:
+                            raise HTTPException(status_code=400, detail=f"Sampling incomplete: missing logs for {', '.join(missing_req_names)}")
+                except HTTPException:
+                    raise
+                except Exception:
+                    # Fail closed: if we cannot evaluate, require signature to be safe
+                    raise HTTPException(status_code=400, detail="Gate e-sign validation failed")
+
         result = service.request_stage_transition(
             process_id=process_id,
             current_stage_id=stage_id,
@@ -216,13 +268,52 @@ def request_stage_transition(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/processes/{process_id}/stages/{stage_id}/gates/{gate_key}/sign")
+def sign_stage_gate(
+    process_id: int,
+    stage_id: int,
+    gate_key: str,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
+) -> Dict[str, Any]:
+    """Operator e-sign for a stage gate. Requires re-auth via password; stores signature hash.
+    payload: { password: string, reason?: string }
+    """
+    try:
+        # Re-auth
+        user = db.query(UserModel).filter(UserModel.id == current_user.id).first()
+        if not user or not verify_password(payload.get("password", ""), user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid credentials for e-sign")
+        # Create an audit transition event placeholder (no movement) with signature
+        from app.models.production import StageTransition
+        st = StageTransition(
+            process_id=process_id,
+            from_stage_id=stage_id,
+            to_stage_id=stage_id,
+            transition_type="gate_sign",
+            transition_reason=payload.get("reason") or f"Gate signed: {gate_key}",
+            auto_transition=False,
+            initiated_by=current_user.id,
+            transition_notes=f"gate={gate_key}",
+            requires_approval=False,
+        )
+        db.add(st)
+        db.commit()
+        return {"status": "signed", "gate": gate_key, "signed_by": current_user.id, "transition_id": st.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # =================== MONITORING MANAGEMENT ===================
 
 @router.get("/processes/{process_id}/monitoring/status")
 def get_monitoring_status(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """Get current monitoring status for a process"""
     try:
@@ -237,7 +328,7 @@ def get_monitoring_status(
 def execute_monitoring_cycle(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> MonitoringCycleResponse:
     """
     Execute a monitoring cycle for all active requirements
@@ -261,7 +352,7 @@ def add_stage_monitoring_requirement(
     stage_id: int,
     request: StageMonitoringRequirementCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """Add a monitoring requirement to a stage"""
     try:
@@ -289,7 +380,7 @@ def log_stage_monitoring(
     stage_id: int,
     request: StageMonitoringLogCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """Log monitoring data for a stage"""
     try:
@@ -318,7 +409,7 @@ def log_stage_monitoring(
 def get_process_summary(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> ProcessSummaryResponse:
     """Get a comprehensive summary of the process including progress and quality metrics"""
     try:
@@ -335,7 +426,7 @@ def get_process_stages(
     process_id: int,
     include_monitoring: bool = Query(False, description="Include monitoring data"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """Get all stages for a process with optional monitoring data"""
     try:
@@ -425,7 +516,7 @@ async def schedule_monitoring_cycles(process_id: int, db: Session):
 
 @router.get("/transition-types")
 def get_available_transition_types(
-    current_user: User = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """Get available transition types and their descriptions"""
     return {
@@ -463,7 +554,7 @@ def get_available_transition_types(
 def get_compliance_report(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """
     Generate ISO 22000:2018 compliance report for a process
@@ -574,3 +665,39 @@ def get_compliance_report(
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/processes/{process_id}/qa-release")
+def qa_release_process(
+    process_id: int,
+    reason: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_permission_dependency("qa:release"))
+) -> Dict[str, Any]:
+    """QA-only release of a process from HOLD/DIVERT to allow continuation."""
+    from app.models.production import ProductionProcess, ProcessStage, StageStatus, ProcessStatus
+    proc = db.query(ProductionProcess).filter(ProductionProcess.id == process_id).first()
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    if proc.status not in [ProcessStatus.DIVERTED, ProcessStatus.IN_PROGRESS]:
+        # Allow release even if already in progress (no-op)
+        pass
+    # Set next action: resume at current in-progress or reset failed stage to PENDING
+    failed = db.query(ProcessStage).filter(ProcessStage.process_id == process_id, ProcessStage.status == StageStatus.FAILED).all()
+    for st in failed:
+        st.status = StageStatus.PENDING
+        st.deviations_recorded = (st.deviations_recorded or '') + f"\nQA release: {reason or ''}"
+    proc.status = ProcessStatus.IN_PROGRESS
+    db.commit()
+    try:
+        log_audit_event(
+            db,
+            user_id=current_user.id,
+            action="qa.release",
+            resource_type="production_process",
+            resource_id=str(process_id),
+            details={"reason": reason}
+        )
+    except Exception:
+        pass
+    return {"status": "released", "process_id": process_id}

@@ -26,6 +26,7 @@ import {
   Edit,
 } from '@mui/icons-material';
 import { documentsAPI } from '../../services/api';
+import { departmentsAPI } from '../../services/departmentsAPI';
 
 interface Document {
   id: number;
@@ -79,6 +80,8 @@ const DocumentEditDialog: React.FC<DocumentEditDialogProps> = ({
     keywords: '',
   });
   const [newFile, setNewFile] = useState<File | null>(null);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentId, setDepartmentId] = useState<string>('');
 
   useEffect(() => {
     if (document) {
@@ -91,8 +94,28 @@ const DocumentEditDialog: React.FC<DocumentEditDialogProps> = ({
         product_line: document.product_line || '',
         keywords: document.keywords || '',
       });
+      loadDepartments();
+      // Preselect department id by matching name
+      setTimeout(() => {
+        const match = (departments || []).find((d: any) => (d.name || '').toLowerCase() === (document.department || '').toLowerCase());
+        setDepartmentId(match ? String(match.id) : '');
+      }, 0);
     }
   }, [document]);
+
+  const loadDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      const items = res?.items || res?.data?.items || [];
+      setDepartments(items);
+      if (document) {
+        const m = items.find((d: any) => (d.name || '').toLowerCase() === (document.department || '').toLowerCase());
+        setDepartmentId(m ? String(m.id) : '');
+      }
+    } catch (e) {
+      setDepartments([]);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -125,6 +148,10 @@ const DocumentEditDialog: React.FC<DocumentEditDialogProps> = ({
           metadataFormData.append(key, value);
         }
       });
+      if (departmentId) {
+        const match = departments.find((d) => String(d.id) === String(departmentId));
+        metadataFormData.set('department', (match && match.name) || '');
+      }
 
       // Update document metadata
       await documentsAPI.updateDocument(document.id, metadataFormData);
@@ -272,12 +299,19 @@ const DocumentEditDialog: React.FC<DocumentEditDialogProps> = ({
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Department"
-              value={formData.department}
-              onChange={(e) => handleInputChange('department', e.target.value)}
-            />
+            <FormControl fullWidth>
+              <InputLabel>Department</InputLabel>
+              <Select
+                value={departmentId}
+                label="Department"
+                onChange={(e) => setDepartmentId(String(e.target.value))}
+              >
+                <MenuItem value="">Unassigned</MenuItem>
+                {departments.map((d) => (
+                  <MenuItem key={d.id} value={String(d.id)}>{d.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
 
           <Grid item xs={12} md={6}>

@@ -216,6 +216,7 @@ async def get_material(
 
 
 @router.post("/materials/", response_model=ResponseModel[MaterialResponse])
+@router.post("/materials", response_model=ResponseModel[MaterialResponse])
 async def create_material(
     material_data: MaterialCreate,
     db: Session = Depends(get_db)
@@ -224,10 +225,10 @@ async def create_material(
     service = SupplierService(db)
     
     # Check if material code already exists for this supplier
-    existing_material = service.db.query(service.db.query(Material).filter(
+    existing_material = service.db.query(Material).filter(
         Material.material_code == material_data.material_code,
         Material.supplier_id == material_data.supplier_id
-    ).exists()).scalar()
+    ).first()
     
     if existing_material:
         raise HTTPException(
@@ -686,9 +687,9 @@ async def create_supplier(
     service = SupplierService(db)
     
     # Check if supplier code already exists
-    existing_supplier = service.db.query(service.db.query(Supplier).filter(
+    existing_supplier = service.db.query(Supplier).filter(
         Supplier.supplier_code == supplier_data.supplier_code
-    ).exists()).scalar()
+    ).first()
     
     if existing_supplier:
         raise HTTPException(
@@ -842,6 +843,7 @@ async def get_evaluation(
 
 
 @router.post("/evaluations/", response_model=ResponseModel[SupplierEvaluationResponse])
+@router.post("/evaluations", response_model=ResponseModel[SupplierEvaluationResponse])
 async def create_evaluation(
     evaluation_data: SupplierEvaluationCreate,
     db: Session = Depends(get_db)
@@ -1147,6 +1149,7 @@ async def get_delivery(
  
  
 @router.post("/deliveries/", response_model=ResponseModel[IncomingDeliveryResponse])
+@router.post("/deliveries", response_model=ResponseModel[IncomingDeliveryResponse])
 async def create_delivery(
     delivery_data: IncomingDeliveryCreate,
     db: Session = Depends(get_db)
