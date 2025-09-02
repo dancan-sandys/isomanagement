@@ -382,82 +382,13 @@ const ObjectivesPage: React.FC = () => {
         </Grid>
       )}
 
-      {/* Tabs */}
+      {/* Enhanced Objectives Only */}
       <Paper sx={{ width: '100%' }}>
         <Tabs value={activeTab} onChange={handleTabChange} aria-label="objectives tabs">
-          <Tab label="Basic Objectives" />
           <Tab label="Enhanced Objectives" />
-          <Tab label="Dashboard" />
         </Tabs>
 
-        {/* Basic Objectives Tab */}
         {activeTab === 0 && (
-          <Box p={3}>
-            <Grid container spacing={2}>
-              {objectives.map((objective) => (
-                <Grid item xs={12} md={6} lg={4} key={objective.id}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        {objective.objective_code}
-                      </Typography>
-                      <Typography variant="h6" gutterBottom>
-                        {objective.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {objective.description}
-                      </Typography>
-                      
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="body2">Category:</Typography>
-                        <Chip label={objective.category || 'N/A'} size="small" />
-                      </Stack>
-                      
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="body2">Status:</Typography>
-                        <StatusChip status={objective.status} />
-                      </Stack>
-                      
-                      <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                        <Button 
-                          size="small" 
-                          startIcon={<AddIcon />}
-                          onClick={() => {
-                            setTargetFormData(prev => ({ ...prev, objective_id: objective.id }));
-                            setShowTargetForm(true);
-                          }}
-                        >
-                          Add Target
-                        </Button>
-                        <Button 
-                          size="small" 
-                          startIcon={<AddIcon />}
-                          onClick={() => {
-                            setProgressFormData(prev => ({ ...prev, objective_id: objective.id }));
-                            setShowProgressForm(true);
-                          }}
-                        >
-                          Add Progress
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-            
-            {(!loading && objectives.length === 0) && (
-              <Box textAlign="center" py={4}>
-                <Typography variant="body2" color="text.secondary">
-                  No objectives found. Create your first objective to get started.
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {/* Enhanced Objectives Tab */}
-        {activeTab === 1 && (
           <Box p={3}>
             <Grid container spacing={2}>
               {enhancedObjectives.map((objective) => (
@@ -517,6 +448,26 @@ const ObjectivesPage: React.FC = () => {
                         >
                           Edit
                         </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            setTargetFormData(prev => ({ ...prev, objective_id: objective.id }));
+                            setShowTargetForm(true);
+                          }}
+                        >
+                          Add Target
+                        </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            setProgressFormData(prev => ({ ...prev, objective_id: objective.id }));
+                            setShowProgressForm(true);
+                          }}
+                        >
+                          Add Progress
+                        </Button>
                       </Stack>
                     </CardContent>
                   </Card>
@@ -534,12 +485,7 @@ const ObjectivesPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Dashboard Tab */}
-        {activeTab === 2 && (
-          <Box p={3}>
-            <ObjectivesDashboard refreshTrigger={refreshTrigger} />
-          </Box>
-        )}
+        {/* Dashboard Tab removed */}
       </Paper>
 
       {/* Create Objective Dialog */}

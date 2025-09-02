@@ -123,8 +123,6 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'System Administrator'],
     items: [
       { text: 'Objectives Overview', path: '/objectives' },
-      { text: 'Performance Dashboard', path: '/objectives/dashboard' },
-      { text: 'Progress Tracking', path: '/objectives/progress' },
     ],
   },
   
