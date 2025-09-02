@@ -39,6 +39,7 @@ import {
   ShowChart as ShowChartIcon
 } from '@mui/icons-material';
 import objectivesAPI from '../../services/objectivesAPI';
+import { safeFormatDate } from '../../utils/nullSafeUtils';
 
 interface ObjectiveDetailViewProps {
   open: boolean;
@@ -115,9 +116,7 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
+  const formatDate = (dateString: string) => safeFormatDate(dateString, 'N/A');
 
   const calculateProgress = (actual: number, target: number) => {
     if (target === 0) return 0;
@@ -226,7 +225,6 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                 <Tab label="Targets" />
                 <Tab label="Progress" />
                 <Tab label="Trend Analysis" />
-                <Tab label="Child Objectives" />
               </Tabs>
 
               {/* Overview Tab */}
@@ -486,46 +484,7 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                 </Box>
               )}
 
-              {/* Child Objectives Tab */}
-              {activeTab === 4 && (
-                <Box p={3}>
-                  {detail.child_objectives && detail.child_objectives.length > 0 ? (
-                    <Grid container spacing={2}>
-                      {detail.child_objectives.map((child) => (
-                        <Grid item xs={12} md={6} key={child.id}>
-                          <Card>
-                            <CardContent>
-                              <Typography variant="h6" gutterBottom>
-                                {child.title}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                {child.description}
-                              </Typography>
-                              
-                              <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-                                <Chip 
-                                  label={child.objective_type} 
-                                  size="small" 
-                                  color="primary"
-                                />
-                                <Chip 
-                                  label={child.status} 
-                                  size="small" 
-                                  color={getStatusColor(child.status) as 'success' | 'warning' | 'error' | 'default'}
-                                />
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  ) : (
-                    <Alert severity="info">
-                      No child objectives found.
-                    </Alert>
-                  )}
-                </Box>
-              )}
+              {/* Child Objectives temporarily removed per request */}
             </Paper>
           </>
         )}
