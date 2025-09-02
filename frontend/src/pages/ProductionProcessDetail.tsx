@@ -35,7 +35,7 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { Warning, Error, Info, ArrowBack, Science, Edit, Refresh } from '@mui/icons-material';
+import { Warning, Error, Info, ArrowBack, Science, Edit, Refresh, Add } from '@mui/icons-material';
 import productionAPI, { suppliersAPI, ProcessParameterPayload } from '../services/productionAPI';
 import { usersAPI } from '../services/api';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -54,6 +54,7 @@ const ProductionProcessDetail: React.FC = () => {
 
   const [materialOptions, setMaterialOptions] = useState<any[]>([]);
   const [matForm, setMatForm] = useState({ material_id: '', quantity: '', unit: 'kg', lot_number: '' });
+  const [materialSearchText, setMaterialSearchText] = useState('');
 
   const [mocOpen, setMocOpen] = useState(false);
   const [mocForm, setMocForm] = useState({ title: '', reason: '', risk_rating: 'medium' });
@@ -689,6 +690,7 @@ const ProductionProcessDetail: React.FC = () => {
                   options={materialOptions}
                   getOptionLabel={(o: any) => o.name || o.code || String(o.id)}
                   onInputChange={async (_, value) => {
+                    setMaterialSearchText(value || '');
                     if (value && value.length >= 2) {
                       try {
                         const results = await suppliersAPI.searchMaterials(value, 10);
@@ -744,6 +746,20 @@ const ProductionProcessDetail: React.FC = () => {
                   }
                 }}>Record</Button>
               </Stack>
+              {materialSearchText.length >= 2 && materialOptions.length === 0 && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  No matching materials found. You can add a new one in Suppliers.
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    startIcon={<Add />} 
+                    onClick={() => navigate('/suppliers?tab=2')} 
+                    sx={{ ml: 2 }}
+                  >
+                    Go to Materials
+                  </Button>
+                </Alert>
+              )}
               <Typography variant="subtitle2" color="text.secondary">Consumptions</Typography>
               <Table size="small" sx={{ mb: 1 }}>
                 <TableHead>
@@ -769,6 +785,20 @@ const ProductionProcessDetail: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
+              {((processDetails?.materials || []).length === 0) && (
+                <Alert severity="info">
+                  No materials recorded yet.
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    startIcon={<Add />} 
+                    onClick={() => navigate('/suppliers?tab=2')} 
+                    sx={{ ml: 2 }}
+                  >
+                    Go to Materials
+                  </Button>
+                </Alert>
+              )}
             </Box>
           )}
 
