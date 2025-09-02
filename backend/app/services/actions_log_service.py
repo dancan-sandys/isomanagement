@@ -217,7 +217,7 @@ class ActionsLogService:
         query = self.db.query(SWOTAnalysis)
         
         if is_active is not None:
-            query = query.filter(SWOTAnalysis.is_active == is_active)
+            query = query.filter(SWOTAnalysis.status == "active" if is_active else SWOTAnalysis.status != "active")
         if scope:
             query = query.filter(SWOTAnalysis.scope == scope)
             
@@ -334,7 +334,7 @@ class ActionsLogService:
         query = self.db.query(PESTELAnalysis)
         
         if is_active is not None:
-            query = query.filter(PESTELAnalysis.is_active == is_active)
+            query = query.filter(PESTELAnalysis.status == "active" if is_active else PESTELAnalysis.status != "active")
         if scope:
             query = query.filter(PESTELAnalysis.scope == scope)
             
@@ -416,7 +416,7 @@ class ActionsLogService:
         """Get comprehensive SWOT analytics with ISO compliance metrics"""
         total_analyses = self.db.query(func.count(SWOTAnalysis.id)).scalar() or 0
         active_analyses = self.db.query(func.count(SWOTAnalysis.id)).filter(
-            SWOTAnalysis.is_active == True
+            SWOTAnalysis.status == "active"
         ).scalar() or 0
         
         # Count items by category
@@ -465,7 +465,7 @@ class ActionsLogService:
         """Get comprehensive PESTEL analytics with ISO compliance metrics"""
         total_analyses = self.db.query(func.count(PESTELAnalysis.id)).scalar() or 0
         active_analyses = self.db.query(func.count(PESTELAnalysis.id)).filter(
-            PESTELAnalysis.is_active == True
+            PESTELAnalysis.status == "active"
         ).scalar() or 0
         
         # Count items by category
@@ -525,11 +525,11 @@ class ActionsLogService:
         """Get ISO compliance metrics for SWOT/PESTEL analyses"""
         # Count analyses with strategic context defined
         swot_with_context = self.db.query(func.count(SWOTAnalysis.id)).filter(
-            SWOTAnalysis.strategic_context.isnot(None)
+            and_(SWOTAnalysis.strategic_context.isnot(None), SWOTAnalysis.status == "active")
         ).scalar() or 0
         
         pestel_with_context = self.db.query(func.count(PESTELAnalysis.id)).filter(
-            PESTELAnalysis.strategic_context.isnot(None)
+            PESTELAnalysis.context.isnot(None)
         ).scalar() or 0
         
         total_analyses_with_context = swot_with_context + pestel_with_context
@@ -560,7 +560,7 @@ class ActionsLogService:
         ).scalar() or 0
         
         pestel_with_risk = self.db.query(func.count(PESTELAnalysis.id)).filter(
-            PESTELAnalysis.risk_assessment_id.isnot(None)
+            PESTELAnalysis.scope.isnot(None)
         ).scalar() or 0
         
         risk_integration_rate = ((swot_with_risk + pestel_with_risk) / total_analyses * 100) if total_analyses > 0 else 0

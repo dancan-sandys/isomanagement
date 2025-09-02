@@ -144,6 +144,43 @@ async def get_roles(
     return [RoleResponse.from_orm(role) for role in roles]
 
 
+@router.get("/roles/summary", response_model=RoleSummaryResponse)
+async def get_role_summary(
+    current_user: User = Depends(require_permission("roles:read")),
+    db: Session = Depends(get_db)
+):
+    """Get role summary with user counts"""
+    rbac_service = RBACService(db)
+    
+    summary_data = rbac_service.get_role_summary()
+    
+    # Convert to proper RoleSummary objects
+    from app.schemas.rbac import RoleSummary, PermissionSummary
+    summary = []
+    for item in summary_data:
+        # Convert permission dictionaries to PermissionSummary models
+        permission_responses = []
+        for perm_data in item["permissions"]:
+            permission_responses.append(PermissionSummary(
+                id=perm_data["id"],  # Access dictionary key, not attribute
+                module=perm_data["module"],  # Already a string from the service
+                action=perm_data["action"],  # Already a string from the service
+                description=perm_data["description"],
+                created_at=perm_data["created_at"]
+            ))
+        summary.append(RoleSummary(
+            role_id=item["role_id"],
+            role_name=item["role_name"],
+            user_count=item["user_count"],
+            permissions=permission_responses
+        ))
+    
+    return RoleSummaryResponse(
+        success=True,
+        data=summary
+    )
+
+
 @router.get("/roles/{role_id}", response_model=RoleResponse)
 async def get_role(
     role_id: int,
@@ -254,43 +291,6 @@ async def delete_role(
     return ResponseModel(
         success=True,
         message="Role deleted successfully"
-    )
-
-
-@router.get("/roles/summary", response_model=RoleSummaryResponse)
-async def get_role_summary(
-    current_user: User = Depends(require_permission("roles:read")),
-    db: Session = Depends(get_db)
-):
-    """Get role summary with user counts"""
-    rbac_service = RBACService(db)
-    
-    summary_data = rbac_service.get_role_summary()
-    
-    # Convert to proper RoleSummary objects
-    from app.schemas.rbac import RoleSummary, Permission as PermissionResponse
-    summary = []
-    for item in summary_data:
-        # Convert SQLAlchemy permission objects to Pydantic models manually
-        permission_responses = []
-        for perm in item["permissions"]:
-            permission_responses.append(PermissionResponse(
-                id=perm.id,
-                module=perm.module.value,  # Convert enum to string
-                action=perm.action.value,  # Convert enum to string
-                description=perm.description,
-                created_at=perm.created_at
-            ))
-        summary.append(RoleSummary(
-            role_id=item["role_id"],
-            role_name=item["role_name"],
-            user_count=item["user_count"],
-            permissions=permission_responses
-        ))
-    
-    return RoleSummaryResponse(
-        success=True,
-        data=summary
     )
 
 

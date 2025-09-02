@@ -90,11 +90,20 @@ class RoleClone(BaseModel):
     permissions: List[int] = []
 
 
+class PermissionSummary(BaseModel):
+    """Permission summary for role summary - uses strings instead of enums"""
+    id: int
+    module: str  # String representation of module
+    action: str  # String representation of action
+    description: Optional[str] = None
+    created_at: datetime
+
+
 class RoleSummary(BaseModel):
     role_id: int
     role_name: str
     user_count: int
-    permissions: List[Permission]
+    permissions: List[PermissionSummary]
 
 
 class PermissionMatrix(BaseModel):

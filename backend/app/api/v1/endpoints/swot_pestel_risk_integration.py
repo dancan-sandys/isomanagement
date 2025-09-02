@@ -281,7 +281,7 @@ def get_continuous_monitoring_dashboard(db: Session = Depends(get_db)):
         and_(
             SWOTAnalysis.next_review_date.isnot(None),
             SWOTAnalysis.next_review_date < now,
-            SWOTAnalysis.is_active == True
+            SWOTAnalysis.status == "active"
         )
     ).count()
     
@@ -289,7 +289,7 @@ def get_continuous_monitoring_dashboard(db: Session = Depends(get_db)):
         and_(
             PESTELAnalysis.next_review_date.isnot(None),
             PESTELAnalysis.next_review_date < now,
-            PESTELAnalysis.is_active == True
+            PESTELAnalysis.status == "active"
         )
     ).count()
     
@@ -299,7 +299,7 @@ def get_continuous_monitoring_dashboard(db: Session = Depends(get_db)):
             SWOTAnalysis.next_review_date.isnot(None),
             SWOTAnalysis.next_review_date >= now,
             SWOTAnalysis.next_review_date <= now + timedelta(days=30),
-            SWOTAnalysis.is_active == True
+            SWOTAnalysis.status == "active"
         )
     ).count()
     
@@ -308,7 +308,7 @@ def get_continuous_monitoring_dashboard(db: Session = Depends(get_db)):
             PESTELAnalysis.next_review_date.isnot(None),
             PESTELAnalysis.next_review_date >= now,
             PESTELAnalysis.next_review_date <= now + timedelta(days=30),
-            PESTELAnalysis.is_active == True
+            PESTELAnalysis.status == "active"
         )
     ).count()
     

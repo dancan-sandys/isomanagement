@@ -229,7 +229,7 @@ def require_permission(permission: Union[str, tuple]):
         action_mapping = {
             "read": "VIEW",
             "view": "VIEW",
-            "write": "CREATE",
+            "write": "UPDATE",  # Changed from CREATE to UPDATE for settings
             "create": "CREATE",
             "edit": "UPDATE",
             "update": "UPDATE",

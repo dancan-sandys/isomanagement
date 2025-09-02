@@ -246,11 +246,23 @@ class RBACService:
         
         for role in roles:
             user_count = self.db.query(User).filter(User.role_id == role.id).count()
+            
+            # Convert permissions to proper format
+            permissions_data = []
+            for perm in role.permissions:
+                permissions_data.append({
+                    "id": perm.id,
+                    "module": perm.module.value,  # Convert enum to string
+                    "action": perm.action.value,  # Convert enum to string
+                    "description": perm.description,
+                    "created_at": perm.created_at
+                })
+            
             summary.append({
                 "role_id": role.id,
                 "role_name": role.name,
                 "user_count": user_count,
-                "permissions": role.permissions
+                "permissions": permissions_data
             })
         
         return summary
