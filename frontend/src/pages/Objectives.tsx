@@ -405,7 +405,7 @@ const ObjectivesPage: React.FC = () => {
       {/* Enhanced Objectives Only */}
       <Paper sx={{ width: '100%' }}>
         <Tabs value={activeTab} onChange={handleTabChange} aria-label="objectives tabs">
-          <Tab label="Enhanced Objectives" />
+          <Tab label="Organisational objectives" />
         </Tabs>
 
         {activeTab === 0 && (
