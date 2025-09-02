@@ -798,7 +798,7 @@ const ProductionProcessDetail: React.FC = () => {
                         <TableRow key={r.id}>
                           <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
                           <TableCell><Chip label={r.action} size="small" /></TableCell>
-                          <TableCell>{r.user_id ?? '—'}</TableCell>
+                          <TableCell>{r.user_id ? (userDisplayNameById[r.user_id] || r.user_id) : '—'}</TableCell>
                           <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
                         </TableRow>
                       ))}
