@@ -20,6 +20,7 @@ import {
 import { useFormik } from 'formik';
 import * as yup from 'yup';
 import { objectivesService } from '../../services/objectivesService';
+import { Box as MuiBox } from '@mui/system';
 
 interface ProgressEntryFormProps {
   open: boolean;
@@ -43,6 +44,8 @@ const ProgressEntryForm: React.FC<ProgressEntryFormProps> = ({
   const [objective, setObjective] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [evidenceNotes, setEvidenceNotes] = useState<string>('');
 
   useEffect(() => {
     if (open) {
@@ -79,6 +82,29 @@ const ProgressEntryForm: React.FC<ProgressEntryFormProps> = ({
         };
 
         await objectivesService.createProgress(objectiveId, progressData);
+
+        // If evidence selected, link it to the most recent progress entry
+        if (evidenceFile) {
+          try {
+            const history = await objectivesService.getObjectiveProgress(objectiveId);
+            const entries = history.data || [];
+            const latest = entries
+              .slice()
+              .sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
+            const progressId = latest?.id;
+            await objectivesService.uploadEvidence(objectiveId, {
+              file: evidenceFile,
+              notes: evidenceNotes || undefined,
+              progress_id: progressId,
+            });
+          } catch (e) {
+            // Non-blocking: evidence upload failure should not prevent progress save
+            console.error('Evidence upload failed', e);
+          } finally {
+            setEvidenceFile(null);
+            setEvidenceNotes('');
+          }
+        }
         onSubmit();
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to record progress');
@@ -151,6 +177,22 @@ const ProgressEntryForm: React.FC<ProgressEntryFormProps> = ({
                   {objective.current_value || objective.baseline_value || 0} {objective.unit_of_measure}
                 </Typography>
               </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="textSecondary">
+                  Start Date
+                </Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {objective.start_date ? new Date(objective.start_date).toLocaleDateString() : '—'}
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="textSecondary">
+                  Target Date
+                </Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {objective.target_date ? new Date(objective.target_date).toLocaleDateString() : '—'}
+                </Typography>
+              </Grid>
             </Grid>
           </Box>
         )}
@@ -212,6 +254,48 @@ const ProgressEntryForm: React.FC<ProgressEntryFormProps> = ({
                 }
                 placeholder="Describe any factors that influenced this progress, challenges encountered, or next steps..."
               />
+            </Grid>
+
+            {/* Evidence Attachment */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" gutterBottom>
+                Evidence (optional)
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    disabled={loading}
+                  >
+                    {evidenceFile ? 'Change File' : 'Attach File'}
+                    <input
+                      type="file"
+                      hidden
+                      onChange={(e) => {
+                        const f = e.target.files && e.target.files[0];
+                        setEvidenceFile(f || null);
+                      }}
+                    />
+                  </Button>
+                  {evidenceFile && (
+                    <Typography variant="body2" sx={{ ml: 2, display: 'inline' }}>
+                      {evidenceFile.name}
+                    </Typography>
+                  )}
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Evidence Notes (optional)"
+                    value={evidenceNotes}
+                    onChange={(e) => setEvidenceNotes(e.target.value)}
+                  />
+                </Grid>
+              </Grid>
+              <FormHelperText>
+                If you attach a file, it will be linked to this progress entry.
+              </FormHelperText>
             </Grid>
 
             {formik.values.recorded_value && (
