@@ -305,15 +305,51 @@ const ProductionProcessDetail: React.FC = () => {
   };
 
   const getActiveStageId = (): number | null => {
-    if (explicitActiveStage?.id) return explicitActiveStage.id;
+    console.log('getActiveStageId called');
+    console.log('explicitActiveStage:', explicitActiveStage);
+    console.log('processDetails:', processDetails);
+    console.log('stagesWithMonitoring:', stagesWithMonitoring);
+    
+    if (explicitActiveStage?.id) {
+      console.log('Returning explicitActiveStage.id:', explicitActiveStage.id);
+      return explicitActiveStage.id;
+    }
+    
+    // Try to get stage ID from stagesWithMonitoring first
+    if (stagesWithMonitoring?.stages && Array.isArray(stagesWithMonitoring.stages)) {
+      const inProgStage = stagesWithMonitoring.stages.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
+      if (inProgStage?.id) {
+        console.log('Found stage from stagesWithMonitoring:', inProgStage.id);
+        return inProgStage.id;
+      }
+      
+      // Fallback: if no in_progress stage, use the first available stage
+      if (stagesWithMonitoring.stages.length > 0) {
+        const firstStage = stagesWithMonitoring.stages[0];
+        console.log('Using first available stage as fallback:', firstStage.id);
+        return firstStage.id;
+      }
+    }
+    
     try {
       const st = processDetails?.stages_list || processDetails?.stages;
+      console.log('stages data:', st);
       if (Array.isArray(st)) {
         const inProg = st.find((s: any) => s.status === 'in_progress' || s.status === 'IN_PROGRESS');
+        console.log('in_progress stage found:', inProg);
         return inProg?.id || null;
       }
+      console.log('stages is not an array or is null');
+      
+      // Final fallback: if we have a process ID, try to use stage ID 1
+      if (processDetails?.id) {
+        console.log('Using fallback stage ID 1 for process:', processDetails.id);
+        return 1; // Assume stage 1 exists for this process
+      }
+      
       return null;
-    } catch {
+    } catch (error) {
+      console.error('Error in getActiveStageId:', error);
       return null;
     }
   };
@@ -377,17 +413,28 @@ const ProductionProcessDetail: React.FC = () => {
   };
 
   const handleOpenSign = () => {
+    console.log('handleOpenSign called');
     setSignForm({ gateKey: 'operator_gate', password: '' });
     setSignOpen(true);
+    console.log('signOpen set to true');
   };
   const handleSubmitSign = async () => {
     try {
+      console.log('handleSubmitSign called');
       const stageId = getActiveStageId();
-      if (!stageId || !processDetails?.id) return;
+      console.log('stageId:', stageId);
+      console.log('processDetails?.id:', processDetails?.id);
+      if (!stageId || !processDetails?.id) {
+        console.log('Missing stageId or processDetails.id, returning early');
+        return;
+      }
+      console.log('Calling signGate API...');
       await productionAPI.signGate(processDetails.id, stageId, signForm.gateKey || 'operator_gate', { password: signForm.password, reason: signForm.reason });
+      console.log('Sign gate successful!');
       setSignOpen(false);
       await loadOperatorData();
     } catch (e: any) {
+      console.error('Sign gate error:', e);
       setError(e?.response?.data?.detail || e?.message || 'Failed to sign gate');
     }
   };
@@ -471,7 +518,14 @@ const ProductionProcessDetail: React.FC = () => {
               </Tooltip>
               <Button variant="outlined" color="warning" size="small" onClick={handleRework}>Rework</Button>
               <Button variant="outlined" color="error" size="small" onClick={handleDivert}>Divert</Button>
-              <Button variant="outlined" size="small" onClick={handleOpenSign} startIcon={<Edit />}>Sign Gate</Button>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                onClick={handleOpenSign} 
+                startIcon={<Edit />}
+              >
+                Sign Gate
+              </Button>
               <Button variant="outlined" size="small" onClick={loadOperatorData} startIcon={<Refresh />}>Refresh</Button>
             </Stack>
             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' as any }}>

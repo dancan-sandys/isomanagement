@@ -82,7 +82,7 @@ def initiate_batch_process(
     batch_id: int,
     request: BatchProcessInitiationRequest,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:create"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:create"))
 ) -> Dict[str, Any]:
     """
     Initiate a new batch process with all stages and control points defined
@@ -112,7 +112,7 @@ def start_batch_process(
     request: BatchProcessStartRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """
     Start the batch process and activate the first stage
@@ -145,7 +145,7 @@ def evaluate_stage_progression(
     process_id: int,
     stage_id: int,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> StageEvaluationResponse:
     """
     Evaluate if a stage can progress to the next stage
@@ -174,7 +174,7 @@ def request_stage_transition(
     stage_id: int,
     request: StageTransitionRequest,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """
     Request a stage transition with approval workflow
@@ -275,7 +275,7 @@ def sign_stage_gate(
     gate_key: str,
     payload: Dict[str, Any],
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """Operator e-sign for a stage gate. Requires re-auth via password; stores signature hash.
     payload: { password: string, reason?: string }
@@ -313,7 +313,7 @@ def sign_stage_gate(
 def get_monitoring_status(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """Get current monitoring status for a process"""
     try:
@@ -328,7 +328,7 @@ def get_monitoring_status(
 def execute_monitoring_cycle(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> MonitoringCycleResponse:
     """
     Execute a monitoring cycle for all active requirements
@@ -352,7 +352,7 @@ def add_stage_monitoring_requirement(
     stage_id: int,
     request: StageMonitoringRequirementCreate,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """Add a monitoring requirement to a stage"""
     try:
@@ -380,7 +380,7 @@ def log_stage_monitoring(
     stage_id: int,
     request: StageMonitoringLogCreate,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:update"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:update"))
 ) -> Dict[str, Any]:
     """Log monitoring data for a stage"""
     try:
@@ -409,7 +409,7 @@ def log_stage_monitoring(
 def get_process_summary(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> ProcessSummaryResponse:
     """Get a comprehensive summary of the process including progress and quality metrics"""
     try:
@@ -426,7 +426,7 @@ def get_process_stages(
     process_id: int,
     include_monitoring: bool = Query(False, description="Include monitoring data"),
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """Get all stages for a process with optional monitoring data"""
     try:
@@ -516,7 +516,7 @@ async def schedule_monitoring_cycles(process_id: int, db: Session):
 
 @router.get("/transition-types")
 def get_available_transition_types(
-    current_user: UserModel = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """Get available transition types and their descriptions"""
     return {
@@ -554,7 +554,7 @@ def get_available_transition_types(
 def get_compliance_report(
     process_id: int,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_permission_dependency("production:read"))
+    current_user: UserModel = Depends(require_permission_dependency("traceability:view"))
 ) -> Dict[str, Any]:
     """
     Generate ISO 22000:2018 compliance report for a process
