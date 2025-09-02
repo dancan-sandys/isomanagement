@@ -23,7 +23,21 @@ async def get_my_profile(
     """
     Get current user's profile information
     """
-    return UserProfile.from_orm(current_user)
+    return UserProfile(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role_id=current_user.role_id,
+        role_name=None,
+        department=current_user.department_name,
+        position=current_user.position,
+        phone=current_user.phone,
+        employee_id=current_user.employee_id,
+        profile_picture=current_user.profile_picture,
+        bio=current_user.bio,
+        last_login=current_user.last_login
+    )
 
 
 @router.put("/me", response_model=UserProfile)
@@ -43,7 +57,7 @@ async def update_my_profile(
     if full_name is not None:
         current_user.full_name = full_name
     if department is not None:
-        current_user.department = department
+        current_user.department_name = department
     if position is not None:
         current_user.position = position
     if phone is not None:
@@ -55,7 +69,21 @@ async def update_my_profile(
     db.commit()
     db.refresh(current_user)
     
-    return UserProfile.from_orm(current_user)
+    return UserProfile(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role_id=current_user.role_id,
+        role_name=None,
+        department=current_user.department_name,
+        position=current_user.position,
+        phone=current_user.phone,
+        employee_id=current_user.employee_id,
+        profile_picture=current_user.profile_picture,
+        bio=current_user.bio,
+        last_login=current_user.last_login
+    )
 
 
 @router.post("/me/change-password")

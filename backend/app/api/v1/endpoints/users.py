@@ -10,6 +10,7 @@ from app.models.rbac import Role
 from app.schemas.auth import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.schemas.common import ResponseModel, PaginationParams, PaginatedResponse
 from app.services.notification_service import NotificationService
+from app.services import log_audit_event
 
 router = APIRouter()
 
@@ -89,7 +90,8 @@ async def get_users(
     search: Optional[str] = Query(None, description="Search by username, email, or full name"),
     role_id: Optional[int] = Query(None, description="Filter by role ID"),
     status: Optional[UserStatus] = Query(None, description="Filter by status"),
-    department: Optional[str] = Query(None, description="Filter by department"),
+    department: Optional[str] = Query(None, description="Filter by department name (legacy)"),
+    department_id: Optional[int] = Query(None, description="Filter by department ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -115,9 +117,11 @@ async def get_users(
     if status:
         query = query.filter(User.status == status)
     
-    # Apply department filter
-    if department:
-        query = query.filter(User.department == department)
+    # Apply department filters
+    if department_id:
+        query = query.filter(User.department_id == department_id)
+    elif department:
+        query = query.filter(User.department_name == department)
     
     # Get total count
     total = query.count()
@@ -146,7 +150,7 @@ async def get_users(
             role_id=user.role_id,
             role_name=role_name,
             status=user.status,
-            department=user.department,
+            department=user.department_name,
             position=user.position,
             phone=user.phone,
             employee_id=user.employee_id,
@@ -183,7 +187,27 @@ async def get_user(
             detail="User not found"
         )
     
-    return UserResponse.from_orm(user)
+    # Build response explicitly to ensure department_name is returned
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    role_name = role.name if role else None
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        role_name=role_name,
+        status=user.status,
+        department=user.department_name,
+        position=user.position,
+        phone=user.phone,
+        employee_id=user.employee_id,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
 
 
 @router.post("/", response_model=ResponseModel[UserResponse])
@@ -236,12 +260,22 @@ async def create_user(
         full_name=user_data.full_name,
         hashed_password=hashed_password,
         role_id=user_data.role_id,
-        department=user_data.department,
+        department_name=user_data.department,
         position=user_data.position,
         phone=user_data.phone,
         employee_id=user_data.employee_id,
         created_by=current_user.id
     )
+    # If department_id provided, set FK and sync name if resolvable
+    if getattr(user_data, 'department_id', None):
+        try:
+            from app.models.departments import Department as DepartmentModel
+            dep = db.query(DepartmentModel).filter(DepartmentModel.id == user_data.department_id).first()
+            if dep:
+                db_user.department_id = dep.id
+                db_user.department_name = dep.name
+        except Exception:
+            pass
     
     db.add(db_user)
     db.commit()
@@ -254,7 +288,7 @@ async def create_user(
             user_id=db_user.id,
             username=db_user.username,
             role_name=role.name,
-            department=db_user.department or "Not specified",
+            department=db_user.department_name or "Not specified",
             login_url="/login"
         )
     except Exception as e:
@@ -270,7 +304,7 @@ async def create_user(
         role_id=db_user.role_id,
         role_name=role.name,
         status=db_user.status,
-        department=db_user.department,
+        department=db_user.department_name,
         position=db_user.position,
         phone=db_user.phone,
         employee_id=db_user.employee_id,
@@ -307,6 +341,32 @@ async def update_user(
     
     # Update fields if provided
     update_data = user_data.dict(exclude_unset=True)
+    # Map legacy 'department' to canonical 'department_name'
+    if "department" in update_data:
+        old_dept = user.department_name
+        user.department_name = update_data.pop("department")
+        try:
+            if old_dept != user.department_name:
+                log_audit_event(db, current_user.id, action="user_department_changed", resource_type="user", resource_id=str(user.id), details={"old": old_dept, "new": user.department_name})
+        except Exception:
+            pass
+    # If department_id provided, set FK and sync name
+    if "department_id" in update_data and update_data["department_id"] is not None:
+        try:
+            from app.models.departments import Department as DepartmentModel
+            dep = db.query(DepartmentModel).filter(DepartmentModel.id == update_data["department_id"]).first()
+            if dep:
+                old_id, old_name = user.department_id, user.department_name
+                user.department_id = dep.id
+                user.department_name = dep.name
+                try:
+                    if old_id != user.department_id:
+                        log_audit_event(db, current_user.id, action="user_department_changed", resource_type="user", resource_id=str(user.id), details={"old_id": old_id, "new_id": user.department_id, "old_name": old_name, "new_name": user.department_name})
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        update_data.pop("department_id", None)
     for field, value in update_data.items():
         setattr(user, field, value)
     
@@ -314,7 +374,27 @@ async def update_user(
     db.commit()
     db.refresh(user)
     
-    return UserResponse.from_orm(user)
+    # Build response explicitly to ensure department_name is returned
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    role_name = role.name if role else None
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        role_name=role_name,
+        status=user.status,
+        department=user.department_name,
+        position=user.position,
+        phone=user.phone,
+        employee_id=user.employee_id,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
 
 
 @router.delete("/{user_id}")

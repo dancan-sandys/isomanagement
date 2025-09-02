@@ -3,6 +3,7 @@ import { Box, Card, CardContent, Typography, Stack, Button, Table, TableHead, Ta
 import { Add, Edit, Delete, Download, AttachFile, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { auditsAPI, usersAPI } from '../services/api';
+import { departmentsAPI } from '../services/departmentsAPI';
 
 const Audits: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ const Audits: React.FC = () => {
   const [stats, setStats] = useState<any | null>(null);
   const [kpis, setKpis] = useState<any | null>(null);
   const [kpiFilters, setKpiFilters] = useState({ period: 'month' as 'month' | 'week' | 'quarter' | 'year', department: '', auditor_id: undefined as number | undefined });
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentId, setDepartmentId] = useState<string>('');
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsAuditId, setAttachmentsAuditId] = useState<number | null>(null);
@@ -56,7 +59,16 @@ const Audits: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadDepartments(); }, []);
+
+  const loadDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      setDepartments(res?.items || res?.data?.items || []);
+    } catch (e) {
+      setDepartments([]);
+    }
+  };
   useEffect(() => {
     // hydrate selected values when editing existing audit
     if (editing) {
@@ -94,7 +106,11 @@ const Audits: React.FC = () => {
   }, [leadOpen, auditorOpen, leadInput, auditorInput]);
 
   const handleSubmit = async () => {
-    const payload = { ...form };
+    const payload = { ...form } as any;
+    if (departmentId) {
+      const match = departments.find((d) => String(d.id) === String(departmentId));
+      payload.auditee_department = match?.name || form.auditee_department || '';
+    }
     if (editing) {
       await auditsAPI.updateAudit(editing.id, payload);
     } else {
@@ -187,18 +203,19 @@ const Audits: React.FC = () => {
                 <MenuItem value="year">Year</MenuItem>
               </Select>
             </FormControl>
-            <TextField 
-              size="small" 
-              label="Department" 
-              value={kpiFilters.department}
-              onChange={(e) => setKpiFilters({ ...kpiFilters, department: e.target.value })}
-              onKeyPress={(e) => e.key === 'Enter' && load()}
-              sx={{ minWidth: 150 }}
-            />
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Department</InputLabel>
+              <Select value={departmentId} label="Department" onChange={(e) => setDepartmentId(String(e.target.value))}>
+                <MenuItem value="">All</MenuItem>
+                {departments.map((d) => (
+                  <MenuItem key={d.id} value={String(d.id)}>{d.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <Button 
               variant="contained" 
               size="small"
-              onClick={() => load()}
+              onClick={() => { setKpiFilters({ ...kpiFilters, department: (departments.find(d => String(d.id) === departmentId)?.name) || '' }); load(); }}
             >
               Apply Filters
             </Button>
@@ -305,7 +322,15 @@ const Audits: React.FC = () => {
             <TextField label="Scope" value={form.scope || ''} onChange={(e) => setForm({ ...form, scope: e.target.value })} fullWidth multiline minRows={2} />
             <TextField label="Objectives" value={form.objectives || ''} onChange={(e) => setForm({ ...form, objectives: e.target.value })} fullWidth multiline minRows={2} />
             <TextField label="Criteria" value={form.criteria || ''} onChange={(e) => setForm({ ...form, criteria: e.target.value })} fullWidth multiline minRows={2} />
-            <TextField label="Auditee Department" value={form.auditee_department || ''} onChange={(e) => setForm({ ...form, auditee_department: e.target.value })} fullWidth />
+            <FormControl fullWidth>
+              <InputLabel>Auditee Department</InputLabel>
+              <Select value={departmentId} label="Auditee Department" onChange={(e) => setDepartmentId(String(e.target.value))}>
+                <MenuItem value="">Unassigned</MenuItem>
+                {departments.map((d) => (
+                  <MenuItem key={d.id} value={String(d.id)}>{d.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <Autocomplete
                 options={userOptions}

@@ -141,6 +141,7 @@ export const usersAPI = {
     role_id?: number;
     status?: string;
     department?: string;
+    department_id?: number;
   }) => {
     // Filter out empty string parameters
     const filteredParams: any = {};

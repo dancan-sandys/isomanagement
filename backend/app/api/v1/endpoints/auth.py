@@ -103,7 +103,7 @@ async def login(
         role_id=user.role_id,
         role_name=role_name,
         status=user.status,
-        department=user.department,
+        department=user.department_name,
         position=user.position,
         phone=user.phone,
         employee_id=user.employee_id,
@@ -334,7 +334,7 @@ async def refresh_token(
         role_id=user.role_id,
         role_name=role_name,
         status=user.status,
-        department=user.department,
+        department=user.department_name,
         position=user.position,
         phone=user.phone,
         employee_id=user.employee_id,
@@ -406,7 +406,7 @@ async def register(
         full_name=user_data.full_name,
         hashed_password=hashed_password,
         role_id=user_data.role_id,
-        department=user_data.department,
+        department_name=user_data.department,
         position=user_data.position,
         phone=user_data.phone,
         employee_id=user_data.employee_id
@@ -423,7 +423,7 @@ async def register(
             user_id=db_user.id,
             username=db_user.username,
             role_name=role.name,
-            department=db_user.department or "Not specified",
+            department=db_user.department_name or "Not specified",
             login_url="/login"
         )
     except Exception as e:
@@ -439,7 +439,7 @@ async def register(
         role_id=db_user.role_id,
         role_name=role.name,
         status=db_user.status,
-        department=db_user.department,
+        department=db_user.department_name,
         position=db_user.position,
         phone=db_user.phone,
         employee_id=db_user.employee_id,
@@ -483,7 +483,7 @@ async def get_current_user_info(
         role_id=current_user.role_id,
         role_name=role_name,
         status=current_user.status,
-        department=current_user.department,
+        department=current_user.department_name,
         position=current_user.position,
         phone=current_user.phone,
         employee_id=current_user.employee_id,

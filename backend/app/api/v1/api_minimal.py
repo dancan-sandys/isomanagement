@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, dashboard, documents, haccp, prp, notifications, settings, suppliers, traceability, rbac, users, profile, nonconformance, audits, training, risk, equipment, allergen_label, management_review, complaints, search, demo, objectives, production, objectives_enhanced, actions_log, analytics, swot_pestel, workflows, batch_progression
+from app.api.v1.endpoints import auth, dashboard, documents, haccp, prp, notifications, settings, suppliers, traceability, rbac, users, profile, nonconformance, audits, training, risk, equipment, allergen_label, management_review, complaints, search, demo, objectives, production, objectives_enhanced, actions_log, analytics, swot_pestel, workflows, batch_progression, departments
 
 api_router = APIRouter()
 
@@ -34,3 +34,4 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(swot_pestel.router, prefix="/swot-pestel", tags=["swot-pestel"])
 api_router.include_router(workflows.router, prefix="", tags=["workflows"])
 api_router.include_router(batch_progression.router, prefix="/batch-progression", tags=["batch-progression"]) 
+api_router.include_router(departments.router, prefix="/departments", tags=["departments"])

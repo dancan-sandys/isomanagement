@@ -42,6 +42,7 @@ class UserCreate(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     role_id: int = Field(..., description="ID of the role to assign")
     department: Optional[str] = Field(None, max_length=100)
+    department_id: Optional[int] = Field(None, description="Canonical department FK")
     position: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     employee_id: Optional[str] = Field(None, max_length=50)
@@ -52,6 +53,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     role_id: Optional[int] = None
     department: Optional[str] = Field(None, max_length=100)
+    department_id: Optional[int] = None
     position: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     employee_id: Optional[str] = Field(None, max_length=50)

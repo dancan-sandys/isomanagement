@@ -46,6 +46,7 @@ import {
   TimelineOppositeContent
 } from '@mui/lab';
 import { actionsLogAPI } from '../../services/actionsLogAPI';
+import { departmentsAPI } from '../../services/departmentsAPI';
 import { 
   ActionLog, 
   ActionLogCreate, 
@@ -121,9 +122,12 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     due_date: '',
     progress_percent: 0
   });
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentId, setDepartmentId] = useState<string>('');
 
   useEffect(() => {
     loadActions();
+    loadDepartments();
   }, []);
 
   const loadActions = async () => {
@@ -140,6 +144,15 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
     }
   };
 
+  const loadDepartments = async () => {
+    try {
+      const res: any = await departmentsAPI.list({ size: 1000 });
+      setDepartments(res?.items || res?.data?.items || []);
+    } catch (e) {
+      setDepartments([]);
+    }
+  };
+
   const handleCreateAction = () => {
     setEditingAction(null);
     setFormData({
@@ -151,6 +164,7 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
       due_date: '',
       progress_percent: 0
     });
+    setDepartmentId('');
     setDialogOpen(true);
   };
 
@@ -165,6 +179,7 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
       due_date: action.due_date || '',
       progress_percent: action.progress_percent
     });
+    setDepartmentId(action.department_id ? String(action.department_id) : '');
     setDialogOpen(true);
   };
 
@@ -180,6 +195,7 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
           due_date: formData.due_date || undefined,
           progress_percent: formData.progress_percent
         };
+        if (departmentId) (updateData as any).department_id = parseInt(departmentId);
         const updatedAction = await actionsLogAPI.updateAction(editingAction.id, updateData);
         setActions(actions.map(action =>
           action.id === editingAction.id ? updatedAction : action
@@ -194,6 +210,7 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
           due_date: formData.due_date || undefined,
           assigned_by: 1 // TODO: Get current user ID from auth context
         };
+        if (departmentId) (createData as any).department_id = parseInt(departmentId);
         const newAction = await actionsLogAPI.createAction(createData);
         setActions([...actions, newAction]);
       }
@@ -761,6 +778,17 @@ const ActionsLogManagement: React.FC<ActionsLogManagementProps> = ({ onRefresh }
                 margin="normal"
                 inputProps={{ min: 0, max: 100 }}
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Department</InputLabel>
+                <Select label="Department" value={departmentId} onChange={(e) => setDepartmentId(String(e.target.value))}>
+                  <MenuItem value="">Unassigned</MenuItem>
+                  {departments.map((d) => (
+                    <MenuItem key={d.id} value={String(d.id)}>{d.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </DialogContent>
