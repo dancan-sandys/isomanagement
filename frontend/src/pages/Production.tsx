@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -56,6 +56,21 @@ import productionAPI, {
 import { suppliersAPI } from '../services/productionAPI';
 import { traceabilityAPI } from '../services/traceabilityAPI';
 import { usersAPI } from '../services/api';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ReTooltip,
+  Legend,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 
 const ProductionPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
@@ -69,6 +84,7 @@ const ProductionPage: React.FC = () => {
   const [selectedProcess, setSelectedProcess] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Form states
   const [newProcess, setNewProcess] = useState<ProcessCreatePayload>({
@@ -107,6 +123,20 @@ const ProductionPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Support direct navigation to analytics tab: /production?tab=analytics
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab') || params.get('view');
+    if (tabParam) {
+      if (tabParam.toLowerCase() === 'analytics') {
+        setActiveTab(2);
+      } else if (!Number.isNaN(Number(tabParam))) {
+        const idx = Number(tabParam);
+        if (idx >= 0 && idx <= 2) setActiveTab(idx);
+      }
+    }
+  }, [location.search]);
 
   const loadData = async () => {
     setLoading(true);
@@ -470,7 +500,8 @@ const ProductionPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Analytics Tab */}
+        {/* Analytics Tab */
+        }
         {activeTab === 2 && (
           <Box p={2}>
             <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
@@ -505,55 +536,129 @@ const ProductionPage: React.FC = () => {
                 }
               }}>Export PDF</Button>
             </Stack>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Process Type Breakdown
-                    </Typography>
-                    <List>
-                      {analytics?.process_type_breakdown && 
-                        Object.entries(analytics.process_type_breakdown).map(([type, count]) => (
-                          <ListItem key={type}>
-                            <ListItemText
-                              primary={type}
-                              secondary={`${count} processes`}
-                            />
-                          </ListItem>
-                        ))
-                      }
-                    </List>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      30-Day Trends
-                    </Typography>
-                    <Typography variant="subtitle2">Yield Records</Typography>
-                    <List dense>
-                      {analytics?.yield_trends?.map((row: any) => (
-                        <ListItem key={`y-${row.date}`}>
-                          <ListItemText primary={`${row.date}`} secondary={`${row.count} records`} />
-                        </ListItem>
-                      ))}
-                    </List>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2">Deviations</Typography>
-                    <List dense>
-                      {analytics?.deviation_trends?.map((row: any) => (
-                        <ListItem key={`d-${row.date}`}>
-                          <ListItemText primary={`${row.date}`} secondary={`${row.count} deviations`} />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
+            {(() => {
+              const processTypeData = Object.entries(analytics?.process_type_breakdown || {})
+                .map(([name, value]) => ({ name, value: Number(value) }));
+              const deviationPie = [
+                { name: 'Deviations', value: Number(analytics?.total_deviations || 0) },
+                { name: 'Critical', value: Number(analytics?.critical_deviations || 0) },
+              ];
+              const alertPie = [
+                { name: 'Total', value: Number(analytics?.total_alerts || 0) },
+                { name: 'Unacknowledged', value: Number(analytics?.unacknowledged_alerts || 0) },
+              ];
+              const yieldTrend = (analytics?.yield_trends || []).map((r: any) => ({ date: r.date, count: Number(r.count) }));
+              const deviationTrend = (analytics?.deviation_trends || []).map((r: any) => ({ date: r.date, count: Number(r.count) }));
+              const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'];
+
+              return (
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Process Type Breakdown
+                        </Typography>
+                        <Box sx={{ height: 260 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={processTypeData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" />
+                              <YAxis allowDecimals={false} />
+                              <ReTooltip />
+                              <Legend />
+                              <Bar dataKey="value" name="Processes" fill="#3B82F6" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Alerts Overview
+                        </Typography>
+                        <Box sx={{ height: 260, display: 'flex', gap: 2 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={deviationPie} dataKey="value" nameKey="name" outerRadius={80} label>
+                                  {deviationPie.map((_, idx) => (
+                                    <Cell key={`c-dev-${idx}`} fill={colors[idx % colors.length]} />
+                                  ))}
+                                </Pie>
+                                <ReTooltip />
+                                <Legend />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </Box>
+                          <Box sx={{ flex: 1 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={alertPie} dataKey="value" nameKey="name" outerRadius={80} label>
+                                  {alertPie.map((_, idx) => (
+                                    <Cell key={`c-al-${idx}`} fill={colors[(idx + 2) % colors.length]} />
+                                  ))}
+                                </Pie>
+                                <ReTooltip />
+                                <Legend />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          30-Day Yield Trend
+                        </Typography>
+                        <Box sx={{ height: 260 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={yieldTrend} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="date" />
+                              <YAxis allowDecimals={false} />
+                              <ReTooltip />
+                              <Legend />
+                              <Line type="monotone" dataKey="count" name="Yield Records" stroke="#10B981" strokeWidth={2} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          30-Day Deviations Trend
+                        </Typography>
+                        <Box sx={{ height: 260 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={deviationTrend} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="date" />
+                              <YAxis allowDecimals={false} />
+                              <ReTooltip />
+                              <Legend />
+                              <Line type="monotone" dataKey="count" name="Deviations" stroke="#EF4444" strokeWidth={2} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              );
+            })()}
           </Box>
         )}
       </Paper>
