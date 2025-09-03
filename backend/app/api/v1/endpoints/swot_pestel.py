@@ -4,7 +4,9 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.actions_log import SWOTAnalysis, SWOTItem, PESTELAnalysis, PESTELItem, SWOTAction, PESTELAction
+from app.models.user import User
 from sqlalchemy import func, and_
 from app.schemas.swot_pestel import (
     SWOTAnalysisCreate, SWOTAnalysisUpdate, SWOTAnalysisResponse,
@@ -20,11 +22,15 @@ router = APIRouter()
 @router.post("/swot-analyses/", response_model=SWOTAnalysisResponse)
 def create_swot_analysis(
     analysis: SWOTAnalysisCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new SWOT analysis"""
     service = ActionsLogService(db)
-    return service.create_swot_analysis(analysis)
+    # Set the created_by field to the current user's ID
+    analysis_dict = analysis.dict()
+    analysis_dict['created_by'] = current_user.id
+    return service.create_swot_analysis(analysis_dict)
 
 @router.get("/swot-analyses/", response_model=List[SWOTAnalysisResponse])
 def list_swot_analyses(
@@ -124,11 +130,15 @@ def delete_swot_item(
 @router.post("/pestel-analyses/", response_model=PESTELAnalysisResponse)
 def create_pestel_analysis(
     analysis: PESTELAnalysisCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new PESTEL analysis"""
     service = ActionsLogService(db)
-    return service.create_pestel_analysis(analysis)
+    # Set the created_by field to the current user's ID
+    analysis_dict = analysis.dict()
+    analysis_dict['created_by'] = current_user.id
+    return service.create_pestel_analysis(analysis_dict)
 
 @router.get("/pestel-analyses/", response_model=List[PESTELAnalysisResponse])
 def list_pestel_analyses(
