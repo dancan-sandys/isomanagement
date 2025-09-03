@@ -38,7 +38,7 @@ const SWOT_PESTEL_BASE = `${API_BASE_URL}/swot-pestel`;
 
 // Configure axios with auth token
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
