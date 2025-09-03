@@ -78,6 +78,8 @@ const ProductionProcessDetail: React.FC = () => {
   const [operatorPanelOpen, setOperatorPanelOpen] = useState<boolean>(true);
   const [transitions, setTransitions] = useState<any[]>([]);
   const [auditSimple, setAuditSimple] = useState<{ diverts: any[] } | null>(null);
+  const [auditDetailsOpen, setAuditDetailsOpen] = useState<boolean>(false);
+  const [selectedAuditRecord, setSelectedAuditRecord] = useState<any | null>(null);
 
   const [explicitActiveStage, setExplicitActiveStage] = useState<{ id: number; name: string; sequence: number; status: string } | null>(null);
 
@@ -918,14 +920,36 @@ const ProductionProcessDetail: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filtered.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
-                          <TableCell><Chip label={r.action} size="small" /></TableCell>
-                          <TableCell>{r.user_id ? (userDisplayNameById[r.user_id] || r.user_id) : '—'}</TableCell>
-                          <TableCell><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.details || {}, null, 2)}</pre></TableCell>
-                        </TableRow>
-                      ))}
+                      {filtered.map((r) => {
+                        const entries = Object.entries(r.details || {});
+                        const previewEntries = entries.slice(0, 3);
+                        const remainingCount = Math.max(0, entries.length - previewEntries.length);
+                        return (
+                          <TableRow key={r.id}>
+                            <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
+                            <TableCell><Chip label={r.action} size="small" /></TableCell>
+                            <TableCell>{r.user_id ? (userDisplayNameById[r.user_id] || r.user_id) : '—'}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                                {previewEntries.length === 0 && (
+                                  <Typography variant="body2" color="text.secondary">No details</Typography>
+                                )}
+                                {previewEntries.map(([k, v]) => (
+                                  <Chip key={k} size="small" label={`${k}: ${typeof v === 'object' ? '[object]' : String(v)}`} />
+                                ))}
+                                {remainingCount > 0 && (
+                                  <Chip size="small" color="default" label={`+${remainingCount} more`} />
+                                )}
+                                <Button 
+                                  size="small" 
+                                  variant="outlined"
+                                  onClick={() => { setSelectedAuditRecord(r); setAuditDetailsOpen(true); }}
+                                >View</Button>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 );
@@ -1013,6 +1037,62 @@ const ProductionProcessDetail: React.FC = () => {
           >
             Record Parameter
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Audit Details Dialog */}
+      <Dialog open={auditDetailsOpen} onClose={() => setAuditDetailsOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Audit Details</DialogTitle>
+        <DialogContent>
+          {selectedAuditRecord ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">Timestamp</Typography>
+                  <Typography variant="body1">{new Date(selectedAuditRecord.created_at).toLocaleString()}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">Action</Typography>
+                  <Typography variant="body1">{selectedAuditRecord.action}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">User</Typography>
+                  <Typography variant="body1">{selectedAuditRecord.user_id ? (userDisplayNameById[selectedAuditRecord.user_id] || selectedAuditRecord.user_id) : '—'}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">IP Address</Typography>
+                  <Typography variant="body1">{selectedAuditRecord.ip_address || '—'}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">User Agent</Typography>
+                  <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>{selectedAuditRecord.user_agent || '—'}</Typography>
+                </Grid>
+              </Grid>
+
+              <Divider />
+
+              <Typography variant="subtitle2">Details</Typography>
+              {selectedAuditRecord.details && Object.keys(selectedAuditRecord.details).length > 0 ? (
+                <List>
+                  {Object.entries(selectedAuditRecord.details).map(([key, value]) => (
+                    <ListItem key={key} disableGutters>
+                      <ListItemText 
+                        primary={key} 
+                        secondary={typeof value === 'object' ? JSON.stringify(value) : String(value)} 
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">No additional details</Typography>
+              )}
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.secondary">No record selected</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAuditDetailsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 

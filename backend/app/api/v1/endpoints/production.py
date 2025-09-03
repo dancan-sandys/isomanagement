@@ -13,9 +13,9 @@ from app.services.production_service import ProductionService
 from app.schemas.production import (
     ProcessCreate, ProcessLogCreate, YieldCreate, TransferCreate, AgingCreate,
     ProcessParameterCreate, ProcessDeviationCreate, ProcessAlertCreate,
-    ProcessTemplateCreate, ProcessTemplateUpdate, ProcessCreateEnhanced,
+    ProcessCreateEnhanced,
     ProcessUpdate, ProcessResponse, ProcessParameterResponse, ProcessDeviationResponse,
-    ProcessAlertResponse, ProcessTemplateResponse, ProductionAnalytics,
+    ProcessAlertResponse, ProductionAnalytics,
     ProcessControlChartCreate, ProcessControlChartResponse, ProcessControlPointResponse,
     ProcessCapabilityStudyCreate, ProcessCapabilityStudyResponse,
     YieldAnalysisReportCreate, YieldAnalysisReportResponse, YieldDefectCategoryResponse,
@@ -105,12 +105,6 @@ def create_process_enhanced(payload: ProcessCreateEnhanced, db: Session = Depend
     try:
         print(f"DEBUG: Received payload: batch_id={payload.batch_id}, process_type={payload.process_type}, operator_id={payload.operator_id}")
         
-        if payload.template_id:
-            # Use template if provided
-            template = service.get_process_templates()
-            # TODO: Implement template-based process creation
-            pass
-        
         proc = service.create_process(
             payload.batch_id, 
             ProductProcessType(payload.process_type), 
@@ -181,30 +175,6 @@ def list_processes(
         result.append(process_dict)
     
     return result
-
-
-@router.get("/templates", response_model=List[ProcessTemplateResponse])
-def get_templates(
-    product_type: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
-):
-    """Get process templates"""
-    service = ProductionService(db)
-    
-    # Safe enum conversion with error handling
-    pt = None
-    if product_type:
-        try:
-            pt = ProductProcessType(product_type)
-        except ValueError:
-            raise HTTPException(status_code=422, detail=f"Invalid product_type: {product_type}")
-    
-    templates = service.get_process_templates(pt)
-    return templates
-
-
-
-
 
 @router.put("/processes/{process_id}", response_model=ProcessResponse)
 def update_process(
@@ -340,28 +310,7 @@ def acknowledge_alert(alert_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/templates", response_model=ProcessTemplateResponse)
-def create_template(payload: ProcessTemplateCreate, db: Session = Depends(get_db), current_user = Depends(require_permission_dependency("traceability:create"))):
-    """Create a process template"""
-    service = ProductionService(db)
-    try:
-        template = service.create_process_template(payload.model_dump())
-        return template
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/templates", response_model=List[ProcessTemplateResponse])
-def get_templates(
-    product_type: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-    current_user = Depends(require_permission_dependency("traceability:view"))
-):
-    """Get process templates"""
-    service = ProductionService(db)
-    pt = ProductProcessType(product_type) if product_type else None
-    templates = service.get_process_templates(pt)
-    return templates
+    
 @router.get("/analytics/enhanced", response_model=ProductionAnalytics)
 def get_enhanced_analytics(
     process_type: Optional[str] = Query(None),
@@ -1867,161 +1816,7 @@ def get_stage_monitoring_logs(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/templates/stages/{product_type}")
-def get_iso_stage_template(
-    product_type: str,
-    db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:view"))
-):
-    """Get ISO 22000:2018 compliant stage template for a product type"""
-    try:
-        from app.utils.iso_stage_templates import ISO22000StageTemplates
-        
-        # Validate product type
-        valid_types = ["fresh_milk", "pasteurized_milk", "yoghurt", "cheese", "mala", "fermented_products"]
-        if product_type not in valid_types:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid product type. Valid types: {', '.join(valid_types)}"
-            )
-        
-        # Get stage template
-        stages = ISO22000StageTemplates.get_template_by_product_type(product_type)
-        
-        # Add monitoring requirements for each stage
-        for stage in stages:
-            stage["monitoring_requirements"] = ISO22000StageTemplates.get_monitoring_requirements_for_stage(
-                stage["stage_name"], 
-                stage.get("is_critical_control_point", False)
-            )
-        
-        # Validate ISO compliance
-        validation = ISO22000StageTemplates.validate_iso_compliance(stages)
-        
-        return {
-            "product_type": product_type,
-            "stages": stages,
-            "iso_compliance": validation,
-            "total_stages": len(stages),
-            "ccps_count": sum(1 for s in stages if s.get("is_critical_control_point", False)),
-            "oprps_count": sum(1 for s in stages if s.get("is_operational_prp", False)),
-            "estimated_total_duration_hours": round(sum(s.get("duration_minutes", 0) for s in stages) / 60, 2)
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/processes/fsm/from-template")
-def create_process_from_iso_template(
-    payload: Dict[str, Any],
-    db: Session = Depends(get_db), 
-    current_user = Depends(require_permission_dependency("traceability:create"))
-):
-    """Create a new process using an ISO 22000:2018 compliant template"""
-    try:
-        from app.utils.iso_stage_templates import ISO22000StageTemplates
-        from app.models.production import ProductProcessType
-        
-        batch_id = payload.get("batch_id")
-        product_type = payload.get("process_type")
-        operator_id = payload.get("operator_id")
-        
-        if not batch_id or not product_type:
-            raise HTTPException(status_code=400, detail="batch_id and process_type are required")
-        
-        # Get template stages
-        template_stages = ISO22000StageTemplates.get_template_by_product_type(product_type)
-        if not template_stages:
-            raise HTTPException(status_code=400, detail=f"No template available for product type: {product_type}")
-        
-        # Validate ISO compliance
-        validation = ISO22000StageTemplates.validate_iso_compliance(template_stages)
-        if not validation["is_compliant"]:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Template validation failed: {'; '.join(validation['errors'])}"
-            )
-        
-        # Create process with template stages
-        service = ProductionService(db)
-        process = service.create_process_with_stages(
-            batch_id=batch_id,
-            process_type=ProductProcessType(product_type),
-            operator_id=operator_id,
-            spec=payload.get("spec", {}),
-            stages_data=template_stages,
-            notes=f"Created from ISO 22000:2018 template for {product_type}. Template validation: {validation['is_compliant']}"
-        )
-        
-        # Add monitoring requirements for each stage
-        for stage in process.stages:
-            stage_name = stage.stage_name
-            is_ccp = stage.is_critical_control_point
-            
-            monitoring_requirements = ISO22000StageTemplates.get_monitoring_requirements_for_stage(stage_name, is_ccp)
-            
-            for req_data in monitoring_requirements:
-                service.add_stage_monitoring_requirement(
-                    stage_id=stage.id,
-                    requirement_data=req_data,
-                    created_by=getattr(current_user, 'id', 1)
-                )
-        
-        # Convert to response format
-        process_dict = {
-            "id": process.id,
-            "batch_id": process.batch_id,
-            "process_type": process.process_type.value,
-            "operator_id": process.operator_id,
-            "status": process.status.value,
-            "start_time": process.start_time,
-            "end_time": process.end_time,
-            "spec": process.spec,
-            "notes": process.notes,
-            "created_at": process.created_at,
-            "updated_at": process.updated_at,
-            "stages": [
-                {
-                    "id": stage.id,
-                    "process_id": stage.process_id,
-                    "stage_name": stage.stage_name,
-                    "stage_description": stage.stage_description,
-                    "sequence_order": stage.sequence_order,
-                    "status": stage.status.value,
-                    "is_critical_control_point": stage.is_critical_control_point,
-                    "is_operational_prp": stage.is_operational_prp,
-                    "planned_start_time": stage.planned_start_time,
-                    "actual_start_time": stage.actual_start_time,
-                    "planned_end_time": stage.planned_end_time,
-                    "actual_end_time": stage.actual_end_time,
-                    "duration_minutes": stage.duration_minutes,
-                    "completion_criteria": stage.completion_criteria,
-                    "auto_advance": stage.auto_advance,
-                    "requires_approval": stage.requires_approval,
-                    "assigned_operator_id": stage.assigned_operator_id,
-                    "completed_by_id": stage.completed_by_id,
-                    "approved_by_id": stage.approved_by_id,
-                    "stage_notes": stage.stage_notes,
-                    "deviations_recorded": stage.deviations_recorded,
-                    "corrective_actions": stage.corrective_actions,
-                    "created_at": stage.created_at,
-                    "updated_at": stage.updated_at
-                } for stage in process.stages
-            ],
-            "current_stage_id": None,  # Process is in DRAFT status
-            "template_info": {
-                "template_used": product_type,
-                "iso_compliant": validation["is_compliant"],
-                "ccps_count": sum(1 for s in process.stages if s.is_critical_control_point),
-                "oprps_count": sum(1 for s in process.stages if s.is_operational_prp)
-            }
-        }
-        
-        return ProcessResponse(**process_dict)
-        
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    
 
 
 @router.get("/processes/{process_id}/transitions")

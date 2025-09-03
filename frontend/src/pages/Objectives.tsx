@@ -135,6 +135,8 @@ const ObjectivesPage: React.FC = () => {
     period_start: '',
     period_end: '',
     target_value: 0,
+    lower_threshold: undefined,
+    upper_threshold: undefined,
     weight: 1.0,
     is_lower_better: false,
     created_by: 2
@@ -227,6 +229,8 @@ const ObjectivesPage: React.FC = () => {
         period_start: '',
         period_end: '',
         target_value: 0,
+        lower_threshold: undefined,
+        upper_threshold: undefined,
         weight: 1.0,
         is_lower_better: false,
         created_by: 2
@@ -610,6 +614,26 @@ const ObjectivesPage: React.FC = () => {
                 type="number"
                 value={targetFormData.weight}
                 onChange={(e) => setTargetFormData(prev => ({ ...prev, weight: parseFloat(e.target.value) || 1.0 }))}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Lower Threshold"
+                type="number"
+                value={targetFormData.lower_threshold ?? ''}
+                onChange={(e) => setTargetFormData(prev => ({ ...prev, lower_threshold: e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0) }))}
+                helperText="Optional: minimum acceptable value"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Upper Threshold"
+                type="number"
+                value={targetFormData.upper_threshold ?? ''}
+                onChange={(e) => setTargetFormData(prev => ({ ...prev, upper_threshold: e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0) }))}
+                helperText="Optional: maximum acceptable value"
               />
             </Grid>
           </Grid>
