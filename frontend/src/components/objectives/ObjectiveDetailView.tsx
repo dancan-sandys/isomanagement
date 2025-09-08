@@ -457,17 +457,43 @@ const ObjectiveDetailView: React.FC<ObjectiveDetailViewProps> = ({
                             <Typography variant="body1">
                               Slope: {detail.trend_analysis.slope?.toFixed(4)}
                             </Typography>
+                            {typeof detail.trend_analysis.trend_strength !== 'undefined' && (
+                              <Typography variant="body2" color="text.secondary">
+                                Correlation: {Number(detail.trend_analysis.trend_strength).toFixed(3)}
+                              </Typography>
+                            )}
+                            {typeof detail.trend_analysis.confidence_level !== 'undefined' && (
+                              <Typography variant="body2" color="text.secondary">
+                                Confidence: {Math.round(Number(detail.trend_analysis.confidence_level) * 100)}%
+                              </Typography>
+                            )}
                           </Grid>
+
+                          {typeof detail.trend_analysis.predicted_value !== 'undefined' && (
+                            <Grid item xs={12} md={6}>
+                              <Typography variant="subtitle2" gutterBottom>
+                                Prediction
+                              </Typography>
+                              <Typography variant="body1">
+                                Next period value: {Number(detail.trend_analysis.predicted_value).toFixed(2)}
+                              </Typography>
+                              {typeof detail.trend_analysis.change_percent !== 'undefined' && (
+                                <Typography variant="body2" color="text.secondary">
+                                  Change from first to last: {Number(detail.trend_analysis.change_percent).toFixed(2)}%
+                                </Typography>
+                              )}
+                            </Grid>
+                          )}
                           
-                          {detail.trend_analysis.values && detail.trend_analysis.values.length > 0 && (
+                          {detail.trend_analysis.series && detail.trend_analysis.series.length > 0 && (
                             <Grid item xs={12}>
                               <Typography variant="subtitle2" gutterBottom>
-                                Recent Values
+                                Series (Date, Value)
                               </Typography>
                               <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-                                {detail.trend_analysis.values.map((value: number, index: number) => (
+                                {detail.trend_analysis.series.map((pt: any, index: number) => (
                                   <Typography key={index} variant="body2">
-                                    Point {index + 1}: {value}
+                                    {formatDate(pt.date)}: {pt.value}
                                   </Typography>
                                 ))}
                               </Box>

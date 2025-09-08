@@ -35,7 +35,8 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  CloudUpload as CloudUploadIcon
 } from '@mui/icons-material';
 import { objectivesService } from '../../services/objectivesService';
 import { Objective, ObjectiveType, HierarchyLevel } from '../../types/objectives';
@@ -183,6 +184,21 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({ onObjectiveSelect, refr
     }
   };
 
+  const getStatusChipColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'primary';
+      case 'completed':
+        return 'success';
+      case 'on_hold':
+        return 'warning';
+      case 'cancelled':
+        return 'default';
+      default:
+        return 'default';
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={3}>
@@ -287,8 +303,11 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({ onObjectiveSelect, refr
               <TableCell>Type</TableCell>
               <TableCell>Level</TableCell>
               <TableCell>Department</TableCell>
-              <TableCell>Progress</TableCell>
+              <TableCell>Start Date</TableCell>
+              <TableCell>End Date</TableCell>
+              <TableCell>Attainment</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Performance</TableCell>
               <TableCell>Trend</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -330,14 +349,27 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({ onObjectiveSelect, refr
                       {objective.department_name || 'N/A'}
                     </TableCell>
                     <TableCell>
+                      {objective.start_date ? new Date(objective.start_date).toLocaleDateString() : '—'}
+                    </TableCell>
+                    <TableCell>
+                      {objective.target_date ? new Date(objective.target_date).toLocaleDateString() : '—'}
+                    </TableCell>
+                    <TableCell>
                       <Box display="flex" alignItems="center" gap={1}>
                         <Typography variant="body2">
-                          {objective.current_value || 0} / {objective.target_value}
+                          {Math.round(((objective.current_value || 0) / objective.target_value) * 100)}%
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          ({Math.round(((objective.current_value || 0) / objective.target_value) * 100)}%)
+                          ({objective.current_value || 0} / {objective.target_value})
                         </Typography>
                       </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={objective.status}
+                        size="small"
+                        color={getStatusChipColor(objective.status) as any}
+                      />
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -354,6 +386,11 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({ onObjectiveSelect, refr
                         <Tooltip title="View Details">
                           <IconButton size="small" onClick={() => handleView(objective)}>
                             <ViewIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Evidence">
+                          <IconButton size="small" onClick={() => handleView(objective)}>
+                            <CloudUploadIcon />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Edit">

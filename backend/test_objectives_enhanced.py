@@ -104,6 +104,11 @@ def test_enhanced_objectives():
             print(f"   Trend for '{objectives[0].title}': {trend['trend']}")
             print(f"   Direction: {trend['direction']}")
             print(f"   Slope: {trend['slope']}")
+            # Extended analytics checks (printing for visibility)
+            print(f"   Strength (r): {trend.get('trend_strength')}")
+            print(f"   Confidence: {trend.get('confidence_level')}")
+            print(f"   Predicted Next: {trend.get('predicted_value')}")
+            print(f"   Series points: {len(trend.get('series', []))}")
         
         print("\n9. Testing Hierarchical Structure...")
         
