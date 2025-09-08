@@ -225,19 +225,19 @@ def require_permission(permission: Union[str, tuple]):
                 detail=f"Invalid permission format: {permission_str}"
             )
         module, action = parts[0], parts[1]
-        # Map common legacy action names to RBAC actions
+        # Map common legacy action names to RBAC actions (use lowercase to match enum values)
         action_mapping = {
-            "read": "VIEW",
-            "view": "VIEW",
-            "write": "UPDATE",  # Changed from CREATE to UPDATE for settings
-            "create": "CREATE",
-            "edit": "UPDATE",
-            "update": "UPDATE",
-            "remove": "DELETE",
-            "delete": "DELETE",
+            "read": "view",
+            "view": "view",
+            "write": "update",  # Changed from CREATE to UPDATE for settings
+            "create": "create",
+            "edit": "update",
+            "update": "update",
+            "remove": "delete",
+            "delete": "delete",
         }
-        normalized_action = action_mapping.get(action.lower(), action.upper())
-        return module.upper(), normalized_action
+        normalized_action = action_mapping.get(action.lower(), action.lower())
+        return module.lower(), normalized_action
 
     def permission_checker(
         current_user: User = Depends(get_current_active_user),
@@ -246,8 +246,8 @@ def require_permission(permission: Union[str, tuple]):
         # Handle tuple form
         if isinstance(permission, tuple) and len(permission) == 2:
             module, action = permission
-            module_norm = (module or "").strip().upper()
-            action_norm = (action or "").strip().upper()
+            module_norm = (module or "").strip().lower()
+            action_norm = (action or "").strip().lower()
             if not module_norm or not action_norm:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

@@ -18,7 +18,7 @@ import managementReviewAPI, { ReviewActionPayload } from '../services/management
 import { actionsLogAPI } from '../services/actionsLogAPI';
 import { ActionLog, ActionSource, ActionPriority } from '../types/actionsLog';
 
-const ManagementReviewActions: React.FC = () => {
+const ManagementReviewActions: React.FC = (): JSX.Element => {
   const [actions, setActions] = useState<any[]>([]);
   const [actionsLogEntries, setActionsLogEntries] = useState<ActionLog[]>([]);
   const [showActionsLog, setShowActionsLog] = useState(false);

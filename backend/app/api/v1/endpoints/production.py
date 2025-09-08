@@ -1892,3 +1892,73 @@ def get_process_audit_simple(
         ],
     }
 
+
+@router.get("/templates")
+def get_process_templates(
+    product_type: Optional[str] = Query(None, description="Filter by product type"),
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:view"))
+):
+    """Get process templates"""
+    service = ProductionService(db)
+    try:
+        pt = ProductProcessType(product_type) if product_type else None
+        templates = service.get_process_templates(pt)
+        
+        # Convert to response format
+        templates_data = []
+        for template in templates:
+            template_dict = {
+                "id": template.id,
+                "template_name": template.template_name,
+                "product_type": template.product_type.value if hasattr(template.product_type, 'value') else str(template.product_type),
+                "description": template.description,
+                "steps": template.steps,
+                "parameters": template.parameters,
+                "created_by": template.created_by,
+                "created_at": template.created_at.isoformat() if template.created_at else None,
+                "updated_at": template.updated_at.isoformat() if template.updated_at else None
+            }
+            templates_data.append(template_dict)
+        
+        return templates_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/templates")
+def create_process_template(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user = Depends(require_permission_dependency("traceability:create"))
+):
+    """Create a process template"""
+    service = ProductionService(db)
+    try:
+        # Get current user ID
+        user_id = getattr(current_user, 'id', 1)
+        
+        template_data = payload.copy()
+        template_data['created_by'] = user_id
+        
+        template = service.create_process_template(template_data)
+        
+        # Convert to response format
+        template_dict = {
+            "id": template.id,
+            "template_name": template.template_name,
+            "product_type": template.product_type.value if hasattr(template.product_type, 'value') else str(template.product_type),
+            "description": template.description,
+            "steps": template.steps,
+            "parameters": template.parameters,
+            "created_by": template.created_by,
+            "created_at": template.created_at.isoformat() if template.created_at else None,
+            "updated_at": template.updated_at.isoformat() if template.updated_at else None
+        }
+        
+        return template_dict
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
