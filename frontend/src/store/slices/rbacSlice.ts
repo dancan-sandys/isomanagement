@@ -28,7 +28,7 @@ export const fetchRoles = createAsyncThunk(
   'rbac/fetchRoles',
   async (params?: { page?: number; size?: number; search?: string; is_active?: boolean }) => {
     const response = await rbacAPI.getRoles(params);
-    return response.data;
+    return response; // Backend returns roles directly, not wrapped in data
   }
 );
 
@@ -127,7 +127,7 @@ const rbacSlice = createSlice({
       })
       .addCase(fetchPermissions.fulfilled, (state, action) => {
         state.loading = false;
-        state.permissions = action.payload.data;
+        state.permissions = action.payload.data || action.payload;
       })
       .addCase(fetchPermissions.rejected, (state, action) => {
         state.loading = false;
@@ -212,7 +212,7 @@ const rbacSlice = createSlice({
       })
       .addCase(fetchRoleSummary.fulfilled, (state, action) => {
         state.loading = false;
-        state.roleSummary = action.payload.data;
+        state.roleSummary = action.payload.data || action.payload;
       })
       .addCase(fetchRoleSummary.rejected, (state, action) => {
         state.loading = false;
@@ -227,7 +227,7 @@ const rbacSlice = createSlice({
       })
       .addCase(fetchPermissionMatrix.fulfilled, (state, action) => {
         state.loading = false;
-        state.permissionMatrix = action.payload.data;
+        state.permissionMatrix = action.payload.data || action.payload;
       })
       .addCase(fetchPermissionMatrix.rejected, (state, action) => {
         state.loading = false;

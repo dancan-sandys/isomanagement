@@ -88,7 +88,7 @@ export const rbacAPI = {
   // Role endpoints
   getRoles: async (params?: { page?: number; size?: number; search?: string; is_active?: boolean }) => {
     const response = await api.get('/rbac/roles', { params });
-    return response.data;
+    return response.data; // Backend returns roles directly
   },
 
   getRole: async (roleId: number) => {
