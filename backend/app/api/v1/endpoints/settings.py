@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user, require_permission, get_current_user
+from app.core.security import get_current_active_user, get_current_user
+from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.settings import ApplicationSetting, UserPreference, SettingCategory, SettingType
 from app.schemas.settings import (
@@ -25,19 +26,12 @@ router = APIRouter()
 @router.get("/", response_model=SettingsResponse)
 async def get_settings(
     category: Optional[SettingCategory] = Query(None, description="Filter by category"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission_dependency("settings:view")),
     db: Session = Depends(get_db)
 ):
     """
     Get all application settings, optionally filtered by category
     """
-    # Manual permission check
-    from app.services.rbac_service import check_user_permission
-    if not check_user_permission(db, current_user.id, "settings", "view"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions: settings:view required"
-        )
     
     query = db.query(ApplicationSetting)
     
@@ -68,7 +62,7 @@ async def get_settings(
 
 @router.get("/categories", response_model=List[str])
 async def get_setting_categories(
-    current_user: User = Depends(require_permission("settings:read")),
+    current_user: User = Depends(require_permission_dependency("settings:view")),
     db: Session = Depends(get_db)
 ):
     """
@@ -81,7 +75,7 @@ async def get_setting_categories(
 @router.get("/key/{setting_key}", response_model=SettingResponse)
 async def get_setting(
     setting_key: str,
-    current_user: User = Depends(require_permission("settings:read")),
+    current_user: User = Depends(require_permission_dependency("settings:view")),
     db: Session = Depends(get_db)
 ):
     """
@@ -187,7 +181,7 @@ async def get_backup_status(
 async def update_setting(
     setting_key: str,
     setting_update: SettingUpdate,
-    current_user: User = Depends(require_permission("settings:write")),
+    current_user: User = Depends(require_permission_dependency("settings:update")),
     db: Session = Depends(get_db)
 ):
     """
@@ -225,7 +219,7 @@ async def update_setting(
 @router.post("/bulk-update", response_model=SettingsValidationResponse)
 async def bulk_update_settings(
     bulk_update: BulkSettingsUpdate,
-    current_user: User = Depends(require_permission("settings:write")),
+    current_user: User = Depends(require_permission_dependency("settings:update")),
     db: Session = Depends(get_db)
 ):
     """
@@ -279,7 +273,7 @@ async def bulk_update_settings(
 
 @router.post("/initialize", response_model=ResponseModel)
 async def initialize_default_settings(
-    current_user: User = Depends(require_permission("settings:write")),
+    current_user: User = Depends(require_permission_dependency("settings:update")),
     db: Session = Depends(get_db)
 ):
     """
@@ -326,7 +320,7 @@ async def initialize_default_settings(
 @router.post("/reset/{setting_key}", response_model=SettingResponse)
 async def reset_setting_to_default(
     setting_key: str,
-    current_user: User = Depends(require_permission("settings:write")),
+    current_user: User = Depends(require_permission_dependency("settings:update")),
     db: Session = Depends(get_db)
 ):
     """
@@ -479,7 +473,7 @@ async def delete_user_preference(
 # Utility endpoints
 @router.get("/export/json", response_model=Dict[str, Any])
 async def export_settings_json(
-    current_user: User = Depends(require_permission("settings:read")),
+    current_user: User = Depends(require_permission_dependency("settings:view")),
     db: Session = Depends(get_db)
 ):
     """
@@ -509,7 +503,7 @@ async def export_settings_json(
 @router.post("/import/json", response_model=ResponseModel)
 async def import_settings_json(
     settings_data: Dict[str, Any],
-    current_user: User = Depends(require_permission("settings:write")),
+    current_user: User = Depends(require_permission_dependency("settings:update")),
     db: Session = Depends(get_db)
 ):
     """

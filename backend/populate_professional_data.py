@@ -446,10 +446,10 @@ def create_professional_ccp_monitoring_logs(conn):
         conn.execute(text("""
             INSERT INTO hazards (hazard_name, description, hazard_type, likelihood, severity, risk_score, 
                                risk_level, control_measures, is_controlled, control_effectiveness, is_ccp, 
-                               rationale, created_at, created_by)
+                               rationale, created_at, created_by, product_id, process_step_id)
             VALUES (:hazard_name, :description, :hazard_type, :likelihood, :severity, :risk_score, 
                    :risk_level, :control_measures, :is_controlled, :control_effectiveness, :is_ccp, 
-                   :rationale, :created_at, :created_by)
+                   :rationale, :created_at, :created_by, :product_id, :process_step_id)
         """), {
             'hazard_name': hazard_name,
             'description': description,
@@ -464,7 +464,9 @@ def create_professional_ccp_monitoring_logs(conn):
             'is_ccp': is_ccp,
             'rationale': rationale,
             'created_at': datetime.now().isoformat(),
-            'created_by': created_by
+            'created_by': created_by,
+            'product_id': 1,  # Use the first product (Fresh Milk)
+            'process_step_id': 1  # Use the first process step
         })
     
     print("  ✓ Created hazards")
@@ -748,16 +750,14 @@ def create_professional_equipment_data(conn):
     
     for name, equipment_type, serial_number, location, notes, created_by in equipment_data:
         conn.execute(text("""
-            INSERT INTO equipment (name, equipment_type, serial_number, location, notes, is_active, critical_to_food_safety, created_at, created_by)
-            VALUES (:name, :equipment_type, :serial_number, :location, :notes, :is_active, :critical_to_food_safety, :created_at, :created_by)
+            INSERT INTO equipment (name, equipment_type, serial_number, location, notes, created_at, created_by)
+            VALUES (:name, :equipment_type, :serial_number, :location, :notes, :created_at, :created_by)
         """), {
             'name': name,
             'equipment_type': equipment_type,
             'serial_number': serial_number,
             'location': location,
             'notes': notes,
-            'is_active': 1,  # Set as active
-            'critical_to_food_safety': 1,  # Set as critical to food safety
             'created_at': datetime.now().isoformat(),
             'created_by': created_by
         })
