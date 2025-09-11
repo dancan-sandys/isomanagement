@@ -736,9 +736,27 @@ def create_professional_training_data(conn):
     
     print("  ✓ Created training programs")
 
+def get_equipment_schema(conn):
+    """Get the equipment table schema to determine what columns exist"""
+    cursor = conn.cursor()
+    cursor.execute('PRAGMA table_info(equipment)')
+    columns = cursor.fetchall()
+    
+    schema_info = {
+        'has_is_active': any(col[1] == 'is_active' for col in columns),
+        'has_critical_to_food_safety': any(col[1] == 'critical_to_food_safety' for col in columns),
+        'columns': [col[1] for col in columns]
+    }
+    
+    return schema_info
+
 def create_professional_equipment_data(conn):
-    """Create professional equipment data"""
+    """Create professional equipment data with dynamic schema handling"""
     print("\n🔧 Creating professional equipment data...")
+    
+    # Get equipment table schema
+    schema_info = get_equipment_schema(conn)
+    print(f"  Equipment schema: is_active={schema_info['has_is_active']}, critical_to_food_safety={schema_info['has_critical_to_food_safety']}")
     
     equipment_data = [
         ('Pasteurizer HTST-001', 'pasteurizer', 'HTST-001', 'Production Floor A', 'High Temperature Short Time pasteurizer for milk processing', 1),
@@ -748,11 +766,26 @@ def create_professional_equipment_data(conn):
         ('Cleaning System CS-001', 'cleaning_equipment', 'CS-001', 'Sanitation Area', 'Automated cleaning-in-place system for equipment sanitization', 1),
     ]
     
+    # Build dynamic INSERT statement based on schema
+    base_columns = ['name', 'equipment_type', 'serial_number', 'location', 'notes', 'created_at', 'created_by']
+    base_values = [':name', ':equipment_type', ':serial_number', ':location', ':notes', ':created_at', ':created_by']
+    
+    if schema_info['has_is_active']:
+        base_columns.append('is_active')
+        base_values.append(':is_active')
+    
+    if schema_info['has_critical_to_food_safety']:
+        base_columns.append('critical_to_food_safety')
+        base_values.append(':critical_to_food_safety')
+    
+    insert_sql = f"""
+        INSERT INTO equipment ({', '.join(base_columns)})
+        VALUES ({', '.join(base_values)})
+    """
+    
     for name, equipment_type, serial_number, location, notes, created_by in equipment_data:
-        conn.execute(text("""
-            INSERT INTO equipment (name, equipment_type, serial_number, location, notes, created_at, created_by)
-            VALUES (:name, :equipment_type, :serial_number, :location, :notes, :created_at, :created_by)
-        """), {
+        # Build parameters dynamically
+        params = {
             'name': name,
             'equipment_type': equipment_type,
             'serial_number': serial_number,
@@ -760,7 +793,16 @@ def create_professional_equipment_data(conn):
             'notes': notes,
             'created_at': datetime.now().isoformat(),
             'created_by': created_by
-        })
+        }
+        
+        # Add optional columns if they exist
+        if schema_info['has_is_active']:
+            params['is_active'] = 1
+        
+        if schema_info['has_critical_to_food_safety']:
+            params['critical_to_food_safety'] = 1
+        
+        conn.execute(text(insert_sql), params)
     
     print("  ✓ Created equipment records")
 
