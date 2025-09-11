@@ -25,12 +25,20 @@ router = APIRouter()
 @router.get("/", response_model=SettingsResponse)
 async def get_settings(
     category: Optional[SettingCategory] = Query(None, description="Filter by category"),
-    current_user: User = Depends(require_permission("settings:read")),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Get all application settings, optionally filtered by category
     """
+    # Manual permission check
+    from app.services.rbac_service import check_user_permission
+    if not check_user_permission(db, current_user.id, "settings", "view"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions: settings:view required"
+        )
+    
     query = db.query(ApplicationSetting)
     
     if category:

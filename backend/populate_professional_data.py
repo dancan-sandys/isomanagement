@@ -33,6 +33,7 @@ def populate_professional_data():
             create_professional_documents(conn)
             create_professional_batches(conn)
             create_professional_haccp_data(conn)
+            create_professional_ccp_monitoring_logs(conn)
             # create_professional_prp_data(conn)  # Skip for now due to complex schema
             create_professional_training_data(conn)
             create_professional_equipment_data(conn)
@@ -46,6 +47,8 @@ def populate_professional_data():
             print("   - 25 Professional Documents (SOPs, Manuals)")
             print("   - 20 Production Batches")
             print("   - Complete HACCP Plans")
+            print("   - 8 Critical Control Points (CCPs)")
+            print("   - 30+ CCP Monitoring Logs")
             print("   - Training Programs")
             print("   - Equipment Records")
             print("\n🎯 Ready for professional demonstrations!")
@@ -425,6 +428,248 @@ def create_professional_haccp_data(conn):
         })
     
     print("  ✓ Created HACCP plans")
+
+def create_professional_ccp_monitoring_logs(conn):
+    """Create professional CCP monitoring logs with all required columns"""
+    print("\n📊 Creating professional CCP monitoring logs...")
+    
+    # First, create hazards for the CCPs
+    hazards_data = [
+        ('Biological Hazard - Pathogenic Bacteria', 'Contamination by pathogenic bacteria such as Salmonella, E. coli, Listeria', 'biological', 4, 5, 20, 'high', 'Proper temperature control and pasteurization', True, 4, True, 'Temperature control is critical for pathogen destruction', 1),
+        ('Biological Hazard - Spoilage Microorganisms', 'Growth of spoilage microorganisms affecting product quality', 'biological', 3, 3, 9, 'medium', 'Temperature control and proper storage', True, 3, False, 'Controlled by temperature and storage conditions', 1),
+        ('Physical Hazard - Foreign Objects', 'Presence of foreign objects in food products', 'physical', 2, 4, 8, 'medium', 'Visual inspection and metal detection', True, 4, False, 'Controlled by inspection and detection equipment', 1),
+        ('Chemical Hazard - Allergens', 'Presence of undeclared allergens in products', 'chemical', 3, 5, 15, 'high', 'Allergen control and proper labeling', True, 4, True, 'Allergen control is critical for consumer safety', 1),
+        ('Chemical Hazard - Chemical Contamination', 'Contamination by cleaning chemicals or other chemicals', 'chemical', 2, 3, 6, 'low', 'Proper cleaning procedures and chemical control', True, 3, False, 'Controlled by proper procedures and training', 1)
+    ]
+    
+    for hazard_name, description, hazard_type, likelihood, severity, risk_score, risk_level, control_measures, is_controlled, control_effectiveness, is_ccp, rationale, created_by in hazards_data:
+        conn.execute(text("""
+            INSERT INTO hazards (hazard_name, description, hazard_type, likelihood, severity, risk_score, 
+                               risk_level, control_measures, is_controlled, control_effectiveness, is_ccp, 
+                               rationale, created_at, created_by)
+            VALUES (:hazard_name, :description, :hazard_type, :likelihood, :severity, :risk_score, 
+                   :risk_level, :control_measures, :is_controlled, :control_effectiveness, :is_ccp, 
+                   :rationale, :created_at, :created_by)
+        """), {
+            'hazard_name': hazard_name,
+            'description': description,
+            'hazard_type': hazard_type,
+            'likelihood': likelihood,
+            'severity': severity,
+            'risk_score': risk_score,
+            'risk_level': risk_level,
+            'control_measures': control_measures,
+            'is_controlled': is_controlled,
+            'control_effectiveness': control_effectiveness,
+            'is_ccp': is_ccp,
+            'rationale': rationale,
+            'created_at': datetime.now().isoformat(),
+            'created_by': created_by
+        })
+    
+    print("  ✓ Created hazards")
+    
+    # Get hazard IDs for CCP creation
+    hazard_result = conn.execute(text("SELECT id, hazard_name FROM hazards"))
+    hazards = {hazard_name: hazard_id for hazard_id, hazard_name in hazard_result.fetchall()}
+    
+    # Now create CCPs (Critical Control Points) for the products
+    ccp_data = [
+        # Fresh Milk CCPs
+        (1, hazards['Biological Hazard - Pathogenic Bacteria'], 'CCP-001', 'Milk Pasteurization Temperature', 'Temperature monitoring during pasteurization', 'active', 72.0, 85.0, '°C', 'Temperature must be maintained between 72-85°C for 15 seconds', 'Temperature monitoring every 30 minutes', 'Digital thermometer', 'QA Technician', 'Daily calibration check', 'QA Supervisor', 'Weekly verification', 'QA Manager', 1),
+        (1, hazards['Biological Hazard - Spoilage Microorganisms'], 'CCP-002', 'Milk Cooling Temperature', 'Rapid cooling after pasteurization', 'active', 0.0, 4.0, '°C', 'Milk must be cooled to 4°C within 2 hours', 'Temperature monitoring every 15 minutes', 'Digital thermometer', 'Production Operator', 'Daily calibration check', 'QA Technician', 'Daily verification', 'QA Supervisor', 1),
+        
+        # Greek Yogurt CCPs
+        (2, hazards['Biological Hazard - Pathogenic Bacteria'], 'CCP-003', 'Yogurt Fermentation Temperature', 'Temperature control during fermentation', 'active', 40.0, 45.0, '°C', 'Fermentation temperature must be maintained at 42±2°C', 'Temperature monitoring every hour', 'Digital thermometer', 'Production Operator', 'Daily calibration check', 'QA Technician', 'Daily verification', 'QA Supervisor', 1),
+        (2, hazards['Biological Hazard - Pathogenic Bacteria'], 'CCP-004', 'Yogurt pH Control', 'pH monitoring during fermentation', 'active', 4.0, 4.5, 'pH', 'Final pH must be between 4.0-4.5', 'pH monitoring every 2 hours', 'pH meter', 'QA Technician', 'Weekly calibration check', 'QA Supervisor', 'Daily verification', 'QA Manager', 1),
+        
+        # Cheddar Cheese CCPs
+        (3, hazards['Biological Hazard - Pathogenic Bacteria'], 'CCP-005', 'Cheese Cooking Temperature', 'Temperature during cheese cooking', 'active', 35.0, 40.0, '°C', 'Cooking temperature must be maintained at 38±2°C', 'Temperature monitoring every 30 minutes', 'Digital thermometer', 'Cheese Maker', 'Daily calibration check', 'QA Technician', 'Daily verification', 'QA Supervisor', 1),
+        (3, hazards['Physical Hazard - Foreign Objects'], 'CCP-006', 'Cheese Pressing Pressure', 'Pressure during cheese pressing', 'active', 2.0, 3.0, 'bar', 'Pressing pressure must be maintained at 2.5±0.5 bar', 'Pressure monitoring every hour', 'Pressure gauge', 'Cheese Maker', 'Weekly calibration check', 'QA Technician', 'Daily verification', 'QA Supervisor', 1),
+        
+        # Ground Beef CCPs
+        (5, hazards['Biological Hazard - Pathogenic Bacteria'], 'CCP-007', 'Beef Grinding Temperature', 'Temperature during grinding process', 'active', 0.0, 7.0, '°C', 'Grinding temperature must not exceed 7°C', 'Temperature monitoring every 15 minutes', 'Digital thermometer', 'Production Operator', 'Daily calibration check', 'QA Technician', 'Daily verification', 'QA Supervisor', 1),
+        (5, hazards['Biological Hazard - Spoilage Microorganisms'], 'CCP-008', 'Beef Packaging Temperature', 'Temperature during packaging', 'active', 0.0, 4.0, '°C', 'Packaging temperature must be maintained at 2±2°C', 'Temperature monitoring every 30 minutes', 'Digital thermometer', 'Packaging Operator', 'Daily calibration check', 'QA Technician', 'Daily verification', 'QA Supervisor', 1)
+    ]
+    
+    for (product_id, hazard_id, ccp_number, ccp_name, description, status, critical_limit_min, 
+         critical_limit_max, critical_limit_unit, critical_limit_description, 
+         monitoring_frequency, monitoring_method, monitoring_responsible, 
+         verification_frequency, verification_method, verification_responsible, 
+         verification_manager, created_by) in ccp_data:
+        
+        conn.execute(text("""
+            INSERT INTO ccps (product_id, hazard_id, ccp_number, ccp_name, description, status, 
+                            critical_limit_min, critical_limit_max, critical_limit_unit, 
+                            critical_limit_description, monitoring_frequency, monitoring_method, 
+                            monitoring_responsible, verification_frequency, verification_method, 
+                            verification_responsible, created_at, created_by)
+            VALUES (:product_id, :hazard_id, :ccp_number, :ccp_name, :description, :status, 
+                   :critical_limit_min, :critical_limit_max, :critical_limit_unit, 
+                   :critical_limit_description, :monitoring_frequency, :monitoring_method, 
+                   :monitoring_responsible, :verification_frequency, :verification_method, 
+                   :verification_responsible, :created_at, :created_by)
+        """), {
+            'product_id': product_id,
+            'hazard_id': hazard_id,
+            'ccp_number': ccp_number,
+            'ccp_name': ccp_name,
+            'description': description,
+            'status': status,
+            'critical_limit_min': critical_limit_min,
+            'critical_limit_max': critical_limit_max,
+            'critical_limit_unit': critical_limit_unit,
+            'critical_limit_description': critical_limit_description,
+            'monitoring_frequency': monitoring_frequency,
+            'monitoring_method': monitoring_method,
+            'monitoring_responsible': monitoring_responsible,
+            'verification_frequency': verification_frequency,
+            'verification_method': verification_method,
+            'verification_responsible': verification_responsible,
+            'created_at': datetime.now().isoformat(),
+            'created_by': created_by
+        })
+    
+    print("  ✓ Created CCPs")
+    
+    # Get created CCPs and batches for monitoring logs
+    ccp_result = conn.execute(text("SELECT id, ccp_number, ccp_name, critical_limit_min, critical_limit_max, critical_limit_unit FROM ccps"))
+    ccps = ccp_result.fetchall()
+    
+    batch_result = conn.execute(text("SELECT id, batch_number, product_id FROM batches"))
+    batches = batch_result.fetchall()
+    
+    # Create monitoring logs for each CCP
+    monitoring_logs_created = 0
+    
+    for ccp_id, ccp_number, ccp_name, min_limit, max_limit, unit in ccps:
+        # Find batches for this CCP's product
+        product_batches = [b for b in batches if b[2] == next((c[0] for c in ccp_data if c[1] == ccp_number), None)]
+        
+        # Create 3-5 monitoring logs per CCP
+        for i in range(random.randint(3, 5)):
+            # Select a random batch or None
+            batch_id = random.choice(product_batches)[0] if product_batches else None
+            batch_number = random.choice(product_batches)[1] if product_batches else f"BATCH-{ccp_number}-{i+1:03d}"
+            
+            # Generate realistic monitoring data
+            monitoring_time = datetime.now() - timedelta(hours=random.randint(1, 72))
+            
+            # Generate measured value within or slightly outside limits (90% within limits)
+            if random.random() < 0.9:  # 90% within limits
+                measured_value = random.uniform(min_limit, max_limit)
+                is_within_limits = True
+                corrective_action_taken = False
+                corrective_action_description = None
+                corrective_action_by = None
+            else:  # 10% out of limits
+                if random.random() < 0.5:
+                    measured_value = random.uniform(min_limit - 2, min_limit)  # Below minimum
+                else:
+                    measured_value = random.uniform(max_limit, max_limit + 2)  # Above maximum
+                is_within_limits = False
+                corrective_action_taken = random.choice([True, False])
+                if corrective_action_taken:
+                    corrective_action_description = f"Corrective action taken: Adjusted {ccp_name.lower()} to bring within limits"
+                    corrective_action_by = random.randint(1, 12)  # Random user ID
+                else:
+                    corrective_action_description = None
+                    corrective_action_by = None
+            
+            # Generate additional parameters based on CCP type
+            if 'temperature' in ccp_name.lower():
+                additional_parameters = {
+                    "ambient_temperature": round(random.uniform(18, 25), 1),
+                    "equipment_status": random.choice(["normal", "normal", "normal", "maintenance_required"]),
+                    "operator_id": f"OP-{random.randint(100, 999)}"
+                }
+            elif 'ph' in ccp_name.lower():
+                additional_parameters = {
+                    "calibration_date": (datetime.now() - timedelta(days=random.randint(1, 7))).isoformat(),
+                    "buffer_solution_used": random.choice(["pH 4.0", "pH 7.0", "pH 10.0"]),
+                    "temperature_compensation": round(random.uniform(20, 25), 1)
+                }
+            elif 'pressure' in ccp_name.lower():
+                additional_parameters = {
+                    "equipment_pressure": round(random.uniform(2.0, 3.0), 1),
+                    "valve_position": random.choice(["open", "partially_open", "closed"]),
+                    "system_status": "operational"
+                }
+            else:
+                additional_parameters = {
+                    "equipment_status": "normal",
+                    "operator_notes": f"Standard monitoring for {ccp_name}"
+                }
+            
+            # Generate observations
+            observations = [
+                f"Monitoring completed for {ccp_name}",
+                f"Equipment functioning normally",
+                f"Measured value: {measured_value} {unit}",
+                f"Critical limits: {min_limit}-{max_limit} {unit}"
+            ]
+            
+            if not is_within_limits:
+                observations.append("⚠️ OUT OF SPECIFICATION - Requires immediate attention")
+                if corrective_action_taken:
+                    observations.append("✅ Corrective action implemented")
+                else:
+                    observations.append("❌ Corrective action pending")
+            
+            # Generate evidence files (simulated file references)
+            evidence_files = []
+            if random.random() < 0.7:  # 70% have evidence files
+                evidence_files = [
+                    f"monitoring_photo_{ccp_id}_{i+1}.jpg",
+                    f"calibration_cert_{datetime.now().strftime('%Y%m%d')}.pdf"
+                ]
+            
+            # Generate log metadata
+            log_metadata = {
+                "monitoring_device": f"Device-{ccp_id}-{random.randint(100, 999)}",
+                "calibration_due": (datetime.now() + timedelta(days=random.randint(1, 30))).isoformat(),
+                "operator_signature": f"OP-{random.randint(100, 999)}",
+                "supervisor_approval": random.choice([True, False]),
+                "data_quality": random.choice(["excellent", "good", "acceptable"])
+            }
+            
+            # Insert monitoring log with all required columns
+            conn.execute(text("""
+                INSERT INTO ccp_monitoring_logs (
+                    ccp_id, batch_id, batch_number, monitoring_time, measured_value, unit, 
+                    is_within_limits, additional_parameters, observations, evidence_files, 
+                    corrective_action_taken, corrective_action_description, corrective_action_by, 
+                    equipment_id, action_log_id, created_by, created_at, log_metadata
+                ) VALUES (
+                    :ccp_id, :batch_id, :batch_number, :monitoring_time, :measured_value, :unit, 
+                    :is_within_limits, :additional_parameters, :observations, :evidence_files, 
+                    :corrective_action_taken, :corrective_action_description, :corrective_action_by, 
+                    :equipment_id, :action_log_id, :created_by, :created_at, :log_metadata
+                )
+            """), {
+                'ccp_id': ccp_id,
+                'batch_id': batch_id,
+                'batch_number': batch_number,
+                'monitoring_time': monitoring_time.isoformat(),
+                'measured_value': measured_value,
+                'unit': unit,
+                'is_within_limits': is_within_limits,
+                'additional_parameters': str(additional_parameters).replace("'", '"'),  # Convert to JSON string
+                'observations': '; '.join(observations),
+                'evidence_files': str(evidence_files).replace("'", '"'),  # Convert to JSON string
+                'corrective_action_taken': corrective_action_taken,
+                'corrective_action_description': corrective_action_description,
+                'corrective_action_by': corrective_action_by,
+                'equipment_id': random.randint(1, 5),  # Random equipment ID
+                'action_log_id': None,  # No action log for demo data
+                'created_by': random.randint(1, 12),  # Random user ID
+                'created_at': monitoring_time.isoformat(),
+                'log_metadata': str(log_metadata).replace("'", '"')  # Convert to JSON string
+            })
+            
+            monitoring_logs_created += 1
+    
+    print(f"  ✓ Created {monitoring_logs_created} professional CCP monitoring logs")
 
 def create_professional_prp_data(conn):
     """Create professional PRP data"""
