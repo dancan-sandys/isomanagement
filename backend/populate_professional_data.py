@@ -738,9 +738,9 @@ def create_professional_training_data(conn):
 
 def get_equipment_schema(conn):
     """Get the equipment table schema to determine what columns exist"""
-    cursor = conn.cursor()
-    cursor.execute('PRAGMA table_info(equipment)')
-    columns = cursor.fetchall()
+    # Use SQLAlchemy text() for raw SQL queries
+    result = conn.execute(text('PRAGMA table_info(equipment)'))
+    columns = result.fetchall()
     
     schema_info = {
         'has_is_active': any(col[1] == 'is_active' for col in columns),
