@@ -108,17 +108,19 @@ def create_professional_users(conn):
         ('admin', 'admin@foodsafe.com', 'System Administrator', 'System Administrator', 'IT', '+1-555-0000', 'ADM001')
     ]
     
-    # Hash for 'password123'
-    hashed_password = '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iQeO'
+    # Hash for 'admin123' - Default password for all demo users
+    # Using simple SHA256 hash for compatibility (fallback method from auth system)
+    # To change password, use: python -c "import hashlib; print(hashlib.sha256('your_new_password'.encode()).hexdigest())"
+    hashed_password = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'
     
     for username, email, full_name, position, department, phone, employee_id in users_data:
         conn.execute(text("""
             INSERT INTO users (username, email, full_name, hashed_password, role_id, status, 
                              department_name, position, phone, employee_id, is_active, is_verified, 
-                             created_at, created_by)
+                             failed_login_attempts, locked_until, created_at, created_by)
             VALUES (:username, :email, :full_name, :hashed_password, 1, 'active', 
                    :department, :position, :phone, :employee_id, 1, 1, 
-                   :created_at, 1)
+                   0, NULL, :created_at, 1)
         """), {
             'username': username,
             'email': email,
