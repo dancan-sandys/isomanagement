@@ -9,9 +9,31 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from app.core.config import settings
 import random
+
+def check_tables_exist(conn):
+    """Check if required tables exist in the database"""
+    try:
+        inspector = inspect(conn)
+        tables = inspector.get_table_names()
+        
+        required_tables = [
+            'users', 'products', 'suppliers', 'documents', 'batches', 
+            'haccp_plans', 'ccps', 'hazards', 'equipment'
+        ]
+        
+        missing_tables = [table for table in required_tables if table not in tables]
+        
+        if missing_tables:
+            print(f"⚠️  Missing tables: {', '.join(missing_tables)}")
+            return False
+        
+        return True
+    except Exception as e:
+        print(f"⚠️  Could not check tables: {e}")
+        return False
 
 def populate_professional_data():
     """Populate database with professional food safety management data"""
@@ -22,6 +44,11 @@ def populate_professional_data():
         with engine.connect() as conn:
             print("🏭 Creating professional ISO 22000 FSMS demo data...")
             print("=" * 60)
+            
+            # Check if tables exist first
+            if not check_tables_exist(conn):
+                print("❌ Database tables do not exist. Please run setup_database_complete.py first.")
+                return False
             
             # Clear existing unprofessional data
             clear_existing_data(conn)

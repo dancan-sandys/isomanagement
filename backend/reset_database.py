@@ -1,65 +1,46 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Utility to erase all application data from the database (for demo resets).
+Database Reset Script
+This script completely resets the database by dropping all tables and recreating them
+Use this if you encounter persistent table creation issues
+"""
 
-WARNING: This irreversibly deletes all rows from all application tables.
-"""
 import sys
 import os
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from sqlalchemy import text
-from sqlalchemy.engine import Connection
-from app.core.database import engine
+import sqlite3
+from sqlalchemy import create_engine, text
+from app.core.config import settings
 
-
-def _sqlite_reset(conn: Connection):
-    # Disable foreign key checks for bulk deletes
-    conn.execute(text("PRAGMA foreign_keys=OFF"))
-    # Collect table names excluding alembic_version
-    rows = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
-    tables = [r[0] for r in rows if r[0] != 'alembic_version']
-    for table in tables:
-        conn.execute(text(f"DELETE FROM {table}"))
-    conn.execute(text("PRAGMA foreign_keys=ON"))
-
-
-def _generic_reset(conn: Connection):
-    # Best-effort generic reset for PostgreSQL or others
-    # Disable constraints
-    try:
-        conn.execute(text("SET session_replication_role = 'replica'"))
-    except Exception:
-        pass
-    # Fetch table list
-    tables = []
-    try:
-        res = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public'"))
-        tables = [r[0] for r in res if r[0] != 'alembic_version']
-    except Exception:
-        pass
-    for table in tables:
-        conn.execute(text(f"TRUNCATE TABLE {table} CASCADE"))
-    try:
-        conn.execute(text("SET session_replication_role = 'origin'"))
-    except Exception:
-        pass
-
-
-def wipe_all_data():
-    print("⚠️  Wiping all database data...")
-    with engine.begin() as conn:
-        url = str(getattr(getattr(conn, 'engine', None), 'url', ''))
-        if url.startswith('sqlite'):
-            _sqlite_reset(conn)
+def reset_database():
+    """Completely reset the database"""
+    print("🗑️  Resetting database...")
+    
+    # Get database URL
+    database_url = settings.DATABASE_URL
+    if database_url.startswith('sqlite:///'):
+        db_path = database_url.replace('sqlite:///', '')
+        
+        # Delete the database file
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            print(f"  ✓ Deleted database file: {db_path}")
         else:
-            _generic_reset(conn)
-    print("✅ Database wiped successfully.")
-
+            print(f"  ⚠️  Database file not found: {db_path}")
+        
+        # Create new empty database
+        engine = create_engine(database_url)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))  # Test connection
+        print("  ✓ Created new empty database")
+        
+        print("✅ Database reset complete!")
+        print("  💡 You can now run setup_database_complete.py to populate the database")
+        
+    else:
+        print("❌ This reset script only works with SQLite databases")
+        print(f"  Current database URL: {database_url}")
 
 if __name__ == "__main__":
-    wipe_all_data()
-
-
+    reset_database()

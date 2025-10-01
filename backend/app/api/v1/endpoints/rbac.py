@@ -58,8 +58,8 @@ async def get_audit_logs(
 # Permission endpoints
 @router.get("/permissions", response_model=PermissionListResponse)
 async def get_permissions(
-    module: Optional[Module] = Query(None, description="Filter by module"),
-    action: Optional[PermissionType] = Query(None, description="Filter by action"),
+    module: Optional[str] = Query(None, description="Filter by module"),
+    action: Optional[str] = Query(None, description="Filter by action"),
     current_user: User = Depends(require_permission("roles:read")),
     db: Session = Depends(get_db)
 ):
@@ -80,8 +80,8 @@ async def get_permissions(
     for perm in permissions:
         permission_responses.append(PermissionResponse(
             id=perm.id,
-            module=perm.module.value,  # Convert enum to string
-            action=perm.action.value,  # Convert enum to string
+            module=perm.module,  # Already a string
+            action=perm.action,  # Already a string
             description=perm.description,
             created_at=perm.created_at
         ))

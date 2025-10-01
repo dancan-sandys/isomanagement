@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from app.models.rbac import Role, Permission, UserPermission, Module, PermissionType
@@ -9,13 +9,6 @@ from fastapi import HTTPException, status
 
 def check_user_permission(db: Session, user_id: int, module: str, action: str) -> bool:
     """Standalone function to check if user has specific permission"""
-    try:
-        # Convert string to enum (use lowercase to match enum values)
-        module_enum = Module(module.lower())
-        action_enum = PermissionType(action.lower())
-    except ValueError:
-        return False
-    
     # Get user
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
@@ -24,13 +17,13 @@ def check_user_permission(db: Session, user_id: int, module: str, action: str) -
     # Check role permissions
     if user.role:
         for permission in user.role.permissions:
-            if permission.module == module_enum and permission.action == action_enum:
+            if permission.module.lower() == module.lower() and permission.action.lower() == action.lower():
                 return True
     
     # Check custom permissions
     for user_perm in user.custom_permissions:
-        if (user_perm.permission.module == module_enum and 
-            user_perm.permission.action == action_enum and 
+        if (user_perm.permission.module.lower() == module.lower() and 
+            user_perm.permission.action.lower() == action.lower() and 
             user_perm.granted):
             return True
     
@@ -62,27 +55,35 @@ class RBACService:
         
         return list(unique_permissions)
 
-    def has_permission(self, user_id: int, module: Module, action: PermissionType) -> bool:
+    def has_permission(self, user_id: int, module: Union[Module, str], action: Union[PermissionType, str]) -> bool:
         """Check if user has specific permission"""
+        # Convert enums to strings if needed
+        module_str = module.value if isinstance(module, Module) else str(module)
+        action_str = action.value if isinstance(action, PermissionType) else str(action)
+        
         permissions = self.get_user_permissions(user_id)
         
         for permission in permissions:
-            if permission.module == module and permission.action == action:
+            if permission.module.lower() == module_str.lower() and permission.action.lower() == action_str.lower():
                 return True
         
         return False
 
-    def has_any_permission(self, user_id: int, module: Module, actions: List[PermissionType]) -> bool:
+    def has_any_permission(self, user_id: int, module: Union[Module, str], actions: List[Union[PermissionType, str]]) -> bool:
         """Check if user has any of the specified permissions for a module"""
+        # Convert enums to strings if needed
+        module_str = module.value if isinstance(module, Module) else str(module)
+        action_strings = [action.value if isinstance(action, PermissionType) else str(action) for action in actions]
+        
         permissions = self.get_user_permissions(user_id)
         
         for permission in permissions:
-            if permission.module == module and permission.action in actions:
+            if permission.module.lower() == module_str.lower() and permission.action.lower() in [a.lower() for a in action_strings]:
                 return True
         
         return False
 
-    def get_user_modules(self, user_id: int) -> List[Module]:
+    def get_user_modules(self, user_id: int) -> List[str]:
         """Get all modules user has access to"""
         permissions = self.get_user_permissions(user_id)
         modules = set()

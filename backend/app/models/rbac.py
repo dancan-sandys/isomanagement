@@ -53,6 +53,7 @@ class Role(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
+    display_name = Column(String(100), nullable=True)  # Added display_name field
     description = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
     is_editable = Column(Boolean, default=True, nullable=False)
@@ -68,8 +69,8 @@ class Permission(Base):
     __tablename__ = "permissions"
     
     id = Column(Integer, primary_key=True, index=True)
-    module = Column(Enum(Module), nullable=False)
-    action = Column(Enum(PermissionType), nullable=False)
+    module = Column(String(50), nullable=False)
+    action = Column(String(50), nullable=False)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

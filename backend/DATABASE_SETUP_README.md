@@ -1,240 +1,144 @@
-# Database Setup Guide - ISO 22000 FSMS Platform
+# Database Setup Guide
 
-## 🎯 Overview
+This guide explains how to set up the ISO 22000 FSMS database with professional demo data.
 
-This guide explains how to set up a new database for the ISO 22000 FSMS platform with all enum values correctly set to lowercase from the start, preventing the need for migrations.
+## Quick Setup
 
-## 🚀 Quick Setup (Recommended)
-
-For a new database setup, use the simple setup script:
+### Option 1: Complete Setup (Recommended)
+Run the complete database setup script that creates all tables and populates them with professional data:
 
 ```bash
 cd backend
-python setup_new_database.py
+python setup_database_complete.py
 ```
 
 This script will:
-- ✅ Validate all enum values are lowercase
-- ✅ Create database tables with correct enum definitions
-- ✅ Set up permissions and roles
-- ✅ Create admin user
-- ✅ Verify database integrity
+- Create all database tables
+- Create default roles and permissions
+- Populate the database with professional food safety demo data
+- Set up 12 professional users with realistic roles
+- Create 8 food products (dairy, meat, bakery)
+- Add 15 food industry suppliers
+- Generate 24 professional documents (SOPs, manuals, etc.)
+- Create production batches and HACCP plans
+- Set up equipment records and training programs
 
-## 📋 Available Scripts
+### Option 2: Tables Only
+If you only want to create the database tables without demo data:
 
-### 1. `setup_new_database.py` (Recommended for new setups)
-- **Purpose**: Complete database setup with validation
-- **Use when**: Setting up a new database from scratch
-- **Features**: 
-  - Validates enum values before creating tables
-  - Comprehensive error checking
-  - User-friendly prompts
-  - Automatic verification
-
-### 2. `init_database_improved.py` (Advanced users)
-- **Purpose**: Detailed database initialization with enum validation
-- **Use when**: You need more control over the setup process
-- **Features**:
-  - Step-by-step validation
-  - Detailed logging
-  - Comprehensive enum checking
-  - Database integrity verification
-
-### 3. `init_database.py` (Legacy)
-- **Purpose**: Basic table creation
-- **Use when**: You only need to create tables (not recommended)
-- **Features**: Simple table creation only
-
-## 🔧 Manual Setup Steps
-
-If you prefer to set up the database manually:
-
-### Step 1: Validate Enum Values
 ```bash
 cd backend
-python -c "
-from init_database_improved import validate_enum_values
-validate_enum_values()
-"
+python init_database.py
 ```
 
-### Step 2: Create Tables
-```bash
-python -c "
-from init_database_improved import create_database_tables
-create_database_tables()
-"
-```
-
-### Step 3: Set Up Permissions and Roles
-```bash
-python -c "
-from init_database_improved import create_permissions, create_default_roles
-create_permissions()
-create_default_roles()
-"
-```
-
-### Step 4: Create Admin User
-```bash
-python -c "
-from init_database_improved import create_admin_user
-create_admin_user()
-"
-```
-
-## 🔍 Verification
-
-After setup, verify that everything is working:
+### Option 3: Data Population Only
+If tables already exist and you only want to populate with demo data:
 
 ```bash
-python -c "
-from init_database_improved import verify_database_integrity
-verify_database_integrity()
-"
-```
-
-## 📊 What Gets Created
-
-### Database Tables
-- All application tables with proper enum definitions
-- Enum columns use lowercase values from the start
-
-### Permissions
-- All module permissions (VIEW, CREATE, UPDATE, DELETE)
-- Organized by module (HACCP, PRP, SUPPLIERS, etc.)
-
-### Roles
-- **System Administrator**: Full access to all modules
-- **QA Manager**: Quality Assurance management access
-- **QA Specialist**: Limited management access
-- **Production Manager**: Production and HACCP access
-- **Production Operator**: Basic operational access
-- **Viewer**: Read-only access
-
-### Admin User
-- **Username**: admin
-- **Password**: admin123
-- **Role**: System Administrator
-- **Status**: active (lowercase)
-
-## 🎉 Benefits
-
-### ✅ No Migration Needed
-- All enum values are lowercase from the start
-- No need to run enum migration scripts
-- Consistent data format across frontend and backend
-
-### ✅ Production Ready
-- Proper validation and error handling
-- Comprehensive verification
-- Ready for immediate use
-
-### ✅ Consistent Data
-- Frontend and backend use identical enum values
-- No data format inconsistencies
-- Proper ISO 22000 compliance
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-#### 1. "Enum validation failed"
-**Cause**: Some enum values are still uppercase in the model files
-**Solution**: 
-```bash
-# Check which enums are incorrect
-python -c "
-from init_database_improved import validate_enum_values
-validate_enum_values()
-"
-```
-
-#### 2. "Database file already exists"
-**Cause**: Previous database setup
-**Solution**: 
-```bash
-# Delete existing database
-rm iso22000_fsms.db
-# Run setup again
-python setup_new_database.py
-```
-
-#### 3. "Import error"
-**Cause**: Missing dependencies or wrong directory
-**Solution**:
-```bash
-# Ensure you're in the backend directory
 cd backend
-# Install dependencies
-pip install -r requirements.txt
-# Run setup
-python setup_new_database.py
+python populate_professional_data.py
 ```
 
-### Getting Help
+## Default Login Credentials
 
-If you encounter issues:
+After running the complete setup, you can log in with:
 
-1. **Check the error messages** - They provide specific guidance
-2. **Verify prerequisites** - Ensure you're in the backend directory
-3. **Check enum values** - Run the validation function
-4. **Review logs** - Look for specific error details
+- **Username:** `admin`
+- **Password:** `admin123`
 
-## 🔄 Migration from Existing Database
+All demo users use the password: `admin123`
 
-If you have an existing database with uppercase enum values:
+## Demo Users Created
 
-1. **Backup your data**:
-   ```bash
-   cp iso22000_fsms.db iso22000_fsms_backup.db
-   ```
+The system creates 12 professional users with realistic food safety roles:
 
-2. **Run the migration script**:
-   ```bash
-   python migrations/enum_value_migration.py
-   ```
+### Management
+- **Food Safety Manager** (fs_manager) - Sarah Johnson
+- **QA Director** (qa_director) - Michael Chen  
+- **Plant Manager** (plant_manager) - Robert Williams
 
-3. **Verify migration**:
-   ```bash
-   python -c "
-   from init_database_improved import verify_database_integrity
-   verify_database_integrity()
-   "
-   ```
+### Quality Assurance
+- **QA Supervisor** (qa_supervisor) - Lisa Rodriguez
+- **HACCP Coordinator** (haccp_coordinator) - David Kim
+- **Microbiologist** (microbiologist) - Jennifer Lee
 
-## 📝 Next Steps
+### Production
+- **Production Supervisor** (production_supervisor) - James Brown
+- **Sanitation Lead** (sanitation_lead) - Maria Garcia
+- **Line Operator** (line_operator) - Thomas Wilson
 
-After successful database setup:
+### Maintenance
+- **Maintenance Manager** (maintenance_manager) - Kevin Davis
+- **Calibration Technician** (calibration_tech) - Amanda Taylor
 
-1. **Start the backend server**:
-   ```bash
-   python -m uvicorn app.main:app --reload
-   ```
+### System
+- **System Administrator** (admin) - System Administrator
 
-2. **Start the frontend**:
-   ```bash
-   cd ../frontend
-   npm start
-   ```
+## Demo Data Overview
 
-3. **Login with admin credentials**:
-   - Username: admin
-   - Password: admin123
+### Products (8)
+- Fresh Whole Milk (DAI-001)
+- Greek Yogurt (DAI-002)
+- Cheddar Cheese (DAI-003)
+- Butter (DAI-004)
+- Ground Beef (MEA-001)
+- Chicken Breast (MEA-002)
+- Whole Wheat Bread (BAK-001)
+- Chocolate Chip Cookies (BAK-002)
 
-4. **Begin using the system**:
-   - Create additional users
-   - Set up HACCP plans
-   - Configure PRP programs
-   - Add suppliers and documents
+### Suppliers (15)
+- Raw Materials: Green Valley Dairy Farm, Premium Beef Ranch, Golden Grain Mills
+- Packaging: EcoPack Solutions, FreshSeal Packaging
+- Ingredients: Pure Cultures Inc, Sweet Sugar Co
+- Services: CleanTech Sanitation, CalibPro Services
+- Equipment: FoodTech Equipment, ColdChain Solutions
+- Testing: FoodLab Testing, MicroTest Labs
+- Transportation: FreshLogistics, SafeHaul Transport
 
-## 🎯 Summary
+### Documents (24)
+- Food Safety Manuals (3)
+- Standard Operating Procedures (5)
+- Work Instructions (3)
+- Forms and Records (4)
+- Training Materials (3)
+- Policies (3)
+- Specifications (3)
 
-The improved database setup ensures that:
-- ✅ All enum values are lowercase from the start
-- ✅ No migration scripts are needed for new databases
-- ✅ Frontend and backend are perfectly synchronized
-- ✅ The system is ready for production use
-- ✅ ISO 22000 compliance is maintained
+### Production Data
+- 20+ Production Batches
+- Complete HACCP Plans
+- 8 Critical Control Points (CCPs)
+- 30+ CCP Monitoring Logs
+- Equipment Records
+- Training Programs
 
-Use `python setup_new_database.py` for the easiest and most reliable setup experience.
+## Troubleshooting
+
+### Tables Don't Exist Error
+If you get "no such table" errors, run the complete setup first:
+```bash
+python setup_database_complete.py
+```
+
+### Permission Errors
+Make sure you have write permissions to the backend directory and that the database file can be created.
+
+### Port Conflicts
+If you get port conflicts when starting the server, make sure no other instance is running on the same port.
+
+## Database File Location
+
+The SQLite database file is created as `iso22000_fsms.db` in the backend directory.
+
+## Next Steps
+
+After setting up the database:
+
+1. Start the backend server: `python main.py`
+2. Start the frontend development server: `npm start` (in frontend directory)
+3. Access the application at `http://localhost:3000`
+4. Log in with the admin credentials above
+
+## Support
+
+If you encounter any issues with the database setup, check the console output for specific error messages and ensure all dependencies are installed correctly.
