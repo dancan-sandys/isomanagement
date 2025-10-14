@@ -174,9 +174,6 @@ const HACCPPlanReport: React.FC<HACCPPlanReportProps> = ({ isOpen, onClose }) =>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <Typography variant="body2" color="textSecondary">
-                  <strong>Category:</strong> {reportData.product.category}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
                   <strong>Approval Date:</strong> {reportData.product.approvalDate}
                 </Typography>
               </Grid>

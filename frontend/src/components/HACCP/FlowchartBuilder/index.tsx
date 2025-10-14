@@ -23,6 +23,7 @@ import type { Hazard as StoreHazard, CCP as StoreCCP } from '../../../store/slic
 interface HACCPFlowchartBuilderProps {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   productId?: string;
   productName?: string;
   initialFlowchartId?: string;
@@ -34,6 +35,7 @@ interface HACCPFlowchartBuilderProps {
 const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
   open,
   onClose,
+  onSuccess,
   productId,
   productName = '',
   initialFlowchartId,
@@ -48,6 +50,7 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
   const [currentFlowchart, setCurrentFlowchart] = useState<HACCPFlowchart | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isNewFlowchart, setIsNewFlowchart] = useState(true);
 
   useEffect(() => {
@@ -274,27 +277,115 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
     setError(null);
     
     try {
-      // TODO: Replace with actual API call
-      if (isNewFlowchart) {
-        // Create new flowchart
-        // const response = await haccpAPI.createFlowchart(flowchart);
-        console.log('Creating new flowchart:', flowchart);
-      } else {
-        // Update existing flowchart
-        // const response = await haccpAPI.updateFlowchart(flowchart.id!, flowchart);
-        console.log('Updating flowchart:', flowchart);
+      if (!productId) {
+        throw new Error('Product ID is required to save flowchart');
       }
+
+      const numericProductId = Number(productId);
+      
+      // Fetch existing process flows once before the loop
+      const productData = await haccpAPI.getProduct(numericProductId);
+      const existingProcessFlows = productData?.data?.process_flows || [];
+      
+      // Build a map of existing steps by their stored node ID (from parameters)
+      const existingStepsByNodeId = new Map<string, any>();
+      const existingStepsByStepNumber = new Map<number, any>();
+      
+      existingProcessFlows.forEach((pf: any) => {
+        try {
+          const params = JSON.parse(pf.parameters || '{}');
+          if (params.id) {
+            existingStepsByNodeId.set(params.id, pf);
+          }
+        } catch (e) {
+          // If parameters can't be parsed, use step_number as fallback
+        }
+        if (pf.step_number) {
+          existingStepsByStepNumber.set(pf.step_number, pf);
+        }
+      });
+      
+      // Filter out visual-only nodes and assign step numbers
+      const processNodes = flowchart.nodes.filter(
+        node => node.type !== 'start' && node.type !== 'end'
+      );
+      
+      // Auto-assign step numbers if not set
+      processNodes.forEach((node, index) => {
+        if (!node.data?.stepNumber) {
+          node.data = { ...node.data, stepNumber: index + 1 };
+        }
+      });
+      
+      console.log(`Saving ${processNodes.length} process steps...`);
+      
+      // Save each process step
+      let createdCount = 0;
+      let updatedCount = 0;
+      
+      for (const node of processNodes) {
+        const processFlowData: any = {
+          step_number: node.data?.stepNumber || 0,
+          step_name: node.label || '',
+          description: node.data?.description || '',
+          equipment: node.data?.equipment || '',
+          temperature: node.data?.temperature?.target || null,
+          time_minutes: node.data?.time?.duration || null,
+          ph: node.data?.ph?.target || null,
+          aw: node.data?.waterActivity?.target || null,
+          // Store position and node ID for future updates
+          parameters: JSON.stringify({
+            position: node.position,
+            id: node.id,
+            type: node.type
+          })
+        };
+
+        // Check if this node already exists in the database
+        const existingStep = existingStepsByNodeId.get(node.id) || 
+                            existingStepsByStepNumber.get(processFlowData.step_number);
+
+        try {
+          if (existingStep) {
+            // Update existing process flow
+            await haccpAPI.updateProcessFlow(existingStep.id, processFlowData);
+            updatedCount++;
+            console.log(`Updated step ${processFlowData.step_number}: ${processFlowData.step_name}`);
+          } else {
+            // Create new process flow
+            await haccpAPI.createProcessFlow(numericProductId, processFlowData);
+            createdCount++;
+            console.log(`Created step ${processFlowData.step_number}: ${processFlowData.step_name}`);
+          }
+        } catch (stepError: any) {
+          console.error(`Failed to save step ${processFlowData.step_number}:`, stepError);
+          throw stepError;
+        }
+      }
+      
+      console.log(`Save complete: ${createdCount} created, ${updatedCount} updated`);
       
       // Update local state
       setCurrentFlowchart(flowchart);
       setIsNewFlowchart(false);
       
-      // Show success message or close dialog
-      // For now, just log success
-      console.log('Flowchart saved successfully');
+      // Show success message with details
+      setError(null);
+      const successMsg = `Flowchart saved successfully! ${createdCount} step(s) created, ${updatedCount} step(s) updated.`;
+      setSuccess(successMsg);
+      console.log('Flowchart saved successfully:', successMsg);
       
-    } catch (err) {
-      setError('Failed to save flowchart');
+      // Call onSuccess callback to refresh parent component
+      if (onSuccess) {
+        onSuccess();
+      }
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
+      
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Failed to save flowchart';
+      setError(errorMessage);
       console.error('Error saving flowchart:', err);
     } finally {
       setLoading(false);
@@ -305,6 +396,7 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
     setCurrentFlowchart(null);
     setTemplateDialogOpen(false);
     setError(null);
+    setSuccess(null);
     setIsNewFlowchart(true);
     onClose();
   };
@@ -350,6 +442,16 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
             sx={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999 }}
           >
             {error}
+          </Alert>
+        )}
+        
+        {success && (
+          <Alert 
+            severity="success" 
+            onClose={() => setSuccess(null)}
+            sx={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999 }}
+          >
+            {success}
           </Alert>
         )}
         

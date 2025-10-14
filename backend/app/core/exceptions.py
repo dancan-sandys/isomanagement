@@ -63,10 +63,6 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle validation errors with detailed error information"""
     
-    logger.warning(
-        f"Validation Error: {request.method} {request.url.path} - {len(exc.errors())} validation errors"
-    )
-    
     # Format validation errors for better readability
     formatted_errors = []
     for error in exc.errors():
@@ -75,6 +71,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": error["msg"],
             "type": error["type"]
         })
+    
+    logger.warning(
+        f"Validation Error: {request.method} {request.url.path} - {len(exc.errors())} validation errors: {formatted_errors}"
+    )
     
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

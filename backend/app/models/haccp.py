@@ -88,12 +88,19 @@ class Product(Base):
     product_code = Column(String(50), unique=True, index=True, nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    category = Column(String(100))  # milk, yogurt, cheese, etc.
-    formulation = Column(Text)  # JSON string of ingredients and proportions
-    allergens = Column(Text)  # JSON array of allergens
-    shelf_life_days = Column(Integer)
+    composition = Column(Text)
+    high_risk_ingredients = Column(Text)
+    physical_chemical_biological_description = Column(Text)
+    main_processing_steps = Column(Text)
+    distribution_serving_methods = Column(Text)
+    product_contact_surfaces = Column(Text)
+    consumer_groups = Column(Text)
     storage_conditions = Column(Text)
+    shelf_life_days = Column(Integer)
     packaging_type = Column(String(100))
+    inherent_hazards = Column(Text)
+    fs_acceptance_criteria = Column(Text)
+    law_regulation_requirement = Column(Text)
     
     # HACCP information
     haccp_plan_approved = Column(Boolean, default=False)

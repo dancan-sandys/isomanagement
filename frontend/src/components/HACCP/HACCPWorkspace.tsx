@@ -396,7 +396,7 @@ const HACCPWorkspace: React.FC = () => {
                           secondary={
                             <Box>
                               <Typography variant="body2" color="textSecondary">
-                                {product.product_code} • {product.category}
+                                {product.product_code}
                               </Typography>
                               <Box sx={{ mt: 1 }}>
                                 <StatusChip

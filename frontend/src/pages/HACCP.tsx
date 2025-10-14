@@ -226,30 +226,7 @@ const HACCP: React.FC = () => {
     // We intentionally depend on the stored ids only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ccpForm.monitoring_responsible, ccpForm.verification_responsible]);
-  const [productForm, setProductForm] = useState({
-    product_code: '',
-    name: '',
-    description: '',
-    category: '',
-    formulation: '',
-    allergens: '',
-    shelf_life_days: '',
-    storage_conditions: '',
-    packaging_type: '',
-    haccp_plan_approved: false as boolean,
-    haccp_plan_version: '',
-  });
-
-  const handleInputChange = (key: keyof typeof productForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setProductForm(prev => ({ ...prev, [key]: e.target.value }));
-  };
-
-  const handleBooleanChange = (key: keyof typeof productForm) => (
-    _e: React.ChangeEvent<HTMLInputElement>,
-    checked: boolean,
-  ) => {
-    setProductForm(prev => ({ ...prev, [key]: checked }));
-  };
+  // Removed productForm state and handlers - now using ProductDialog component
 
   const handleOpenFlowchartBuilder = (product: any) => {
     setSelectedProductForFlowchart(product);
@@ -259,6 +236,15 @@ const HACCP: React.FC = () => {
   const handleCloseFlowchartBuilder = () => {
     setFlowchartBuilderOpen(false);
     setSelectedProductForFlowchart(null);
+  };
+
+  const handleFlowchartSaved = () => {
+    // Reload products to show updated process flows
+    loadProducts();
+    // Optionally reload product details if viewing a specific product
+    if (selectedProductForFlowchart?.id) {
+      loadProductDetails(selectedProductForFlowchart.id);
+    }
   };
 
   // Role-based permissions
@@ -511,57 +497,7 @@ const HACCP: React.FC = () => {
     } catch (e) { /* noop */ }
   };
 
-  // Populate form when editing
-  useEffect(() => {
-    if (selectedProductForEdit) {
-      setProductForm({
-        product_code: selectedProductForEdit.product_code || '',
-        name: selectedProductForEdit.name || '',
-        description: selectedProductForEdit.description || '',
-        category: selectedProductForEdit.category || '',
-        formulation: selectedProductForEdit.formulation || '',
-        allergens: selectedProductForEdit.allergens || '',
-        shelf_life_days: String(selectedProductForEdit.shelf_life_days ?? ''),
-        storage_conditions: selectedProductForEdit.storage_conditions || '',
-        packaging_type: selectedProductForEdit.packaging_type || '',
-        haccp_plan_approved: !!selectedProductForEdit.haccp_plan_approved,
-        haccp_plan_version: selectedProductForEdit.haccp_plan_version || '',
-      });
-    } else {
-      setProductForm({
-        product_code: '',
-        name: '',
-        description: '',
-        category: '',
-        formulation: '',
-        allergens: '',
-        shelf_life_days: '',
-        storage_conditions: '',
-        packaging_type: '',
-        haccp_plan_approved: false,
-        haccp_plan_version: '',
-      });
-    }
-  }, [selectedProductForEdit]);
-
-  const handleSaveProduct = async () => {
-    const payload: any = {
-      ...productForm,
-      shelf_life_days: productForm.shelf_life_days === '' ? null : Number(productForm.shelf_life_days),
-    };
-    try {
-      if (selectedProductForEdit) {
-        await dispatch(updateProduct({ productId: selectedProductForEdit.id, productData: payload })).unwrap();
-      } else {
-        await dispatch(createProduct(payload)).unwrap();
-      }
-      setProductDialogOpen(false);
-      setSelectedProductForEdit(null);
-      loadProducts();
-    } catch (e) {
-      console.error('Failed to save product', e);
-    }
-  };
+  // Removed product form handlers - now using ProductDialog component
 
 
 
@@ -1121,112 +1057,17 @@ const HACCP: React.FC = () => {
 
       
 
-      {/* Dialogs for creating/editing products, process flows, hazards, and CCPs */}
-      <Dialog open={productDialogOpen} onClose={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }} maxWidth="md" fullWidth>
-        <DialogTitle>{selectedProductForEdit ? 'Edit Product' : 'Add Product'}</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Product Code"
-                value={productForm.product_code}
-                onChange={handleInputChange('product_code')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Name"
-                value={productForm.name}
-                onChange={handleInputChange('name')}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Description"
-                value={productForm.description}
-                onChange={handleInputChange('description')}
-                multiline
-                rows={3}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Category"
-                value={productForm.category}
-                onChange={handleInputChange('category')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Formulation"
-                value={productForm.formulation}
-                onChange={handleInputChange('formulation')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Allergens"
-                value={productForm.allergens}
-                onChange={handleInputChange('allergens')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Shelf Life (days)"
-                value={productForm.shelf_life_days}
-                onChange={handleInputChange('shelf_life_days')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Storage Conditions"
-                value={productForm.storage_conditions}
-                onChange={handleInputChange('storage_conditions')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Packaging Type"
-                value={productForm.packaging_type}
-                onChange={handleInputChange('packaging_type')}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={productForm.haccp_plan_approved}
-                    onChange={handleBooleanChange('haccp_plan_approved')}
-                  />
-                }
-                label="HACCP Plan Approved"
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="HACCP Plan Version"
-                value={productForm.haccp_plan_version}
-                onChange={handleInputChange('haccp_plan_version')}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveProduct}>Save</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Product Dialog */}
+      <ProductDialog 
+        open={productDialogOpen} 
+        onClose={() => { setProductDialogOpen(false); setSelectedProductForEdit(null); }} 
+        product={selectedProductForEdit}
+        onSuccess={() => {
+          setProductDialogOpen(false);
+          setSelectedProductForEdit(null);
+          loadProducts();
+        }}
+      />
 
       {/* Process Flow Dialog */}
       <Dialog open={processFlowDialogOpen} onClose={() => { setProcessFlowDialogOpen(false); setSelectedFlow(null); }} maxWidth="md" fullWidth>
@@ -1426,8 +1267,11 @@ const HACCP: React.FC = () => {
       <HACCPFlowchartBuilder
         open={flowchartBuilderOpen}
         onClose={handleCloseFlowchartBuilder}
+        onSuccess={handleFlowchartSaved}
         productId={selectedProductForFlowchart?.id?.toString()}
         productName={selectedProductForFlowchart?.name}
+        hazards={hazards}
+        ccps={ccps}
         readOnly={!canManageHACCP}
       />
     </Box>

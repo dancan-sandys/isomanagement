@@ -10,7 +10,7 @@ from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
-    HazardType, RiskLevel, CCPStatus, RiskThreshold
+    HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig
 )
 from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
@@ -55,7 +55,19 @@ async def get_products(
                 "product_code": product.product_code,
                 "name": product.name,
                 "description": product.description,
-                "category": product.category,
+                "composition": product.composition,
+                "high_risk_ingredients": product.high_risk_ingredients,
+                "physical_chemical_biological_description": product.physical_chemical_biological_description,
+                "main_processing_steps": product.main_processing_steps,
+                "distribution_serving_methods": product.distribution_serving_methods,
+                "product_contact_surfaces": product.product_contact_surfaces,
+                "consumer_groups": product.consumer_groups,
+                "storage_conditions": product.storage_conditions,
+                "shelf_life_days": product.shelf_life_days,
+                "packaging_type": product.packaging_type,
+                "inherent_hazards": product.inherent_hazards,
+                "fs_acceptance_criteria": product.fs_acceptance_criteria,
+                "law_regulation_requirement": product.law_regulation_requirement,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
                 "ccp_count": ccp_count,
@@ -98,7 +110,6 @@ async def get_product(
         creator_name = creator.full_name if creator else "Unknown"
         
         # Get risk configuration
-        from app.models.haccp import ProductRiskConfig
         risk_config = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
         risk_config_data = None
         if risk_config:
@@ -223,12 +234,19 @@ async def get_product(
                 "product_code": product.product_code,
                 "name": product.name,
                 "description": product.description,
-                "category": product.category,
-                "formulation": product.formulation,
-                "allergens": product.allergens,
-                "shelf_life_days": product.shelf_life_days,
+                "composition": product.composition,
+                "high_risk_ingredients": product.high_risk_ingredients,
+                "physical_chemical_biological_description": product.physical_chemical_biological_description,
+                "main_processing_steps": product.main_processing_steps,
+                "distribution_serving_methods": product.distribution_serving_methods,
+                "product_contact_surfaces": product.product_contact_surfaces,
+                "consumer_groups": product.consumer_groups,
                 "storage_conditions": product.storage_conditions,
+                "shelf_life_days": product.shelf_life_days,
                 "packaging_type": product.packaging_type,
+                "inherent_hazards": product.inherent_hazards,
+                "fs_acceptance_criteria": product.fs_acceptance_criteria,
+                "law_regulation_requirement": product.law_regulation_requirement,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
                 "risk_config": risk_config_data,
@@ -289,12 +307,19 @@ async def create_product(
             product_code=product_data.product_code,
             name=product_data.name,
             description=product_data.description,
-            category=product_data.category,
-            formulation=product_data.formulation,
-            allergens=product_data.allergens,
-            shelf_life_days=product_data.shelf_life_days,
+            composition=product_data.composition,
+            high_risk_ingredients=product_data.high_risk_ingredients,
+            physical_chemical_biological_description=product_data.physical_chemical_biological_description,
+            main_processing_steps=product_data.main_processing_steps,
+            distribution_serving_methods=product_data.distribution_serving_methods,
+            product_contact_surfaces=product_data.product_contact_surfaces,
+            consumer_groups=product_data.consumer_groups,
             storage_conditions=product_data.storage_conditions,
+            shelf_life_days=product_data.shelf_life_days,
             packaging_type=product_data.packaging_type,
+            inherent_hazards=product_data.inherent_hazards,
+            fs_acceptance_criteria=product_data.fs_acceptance_criteria,
+            law_regulation_requirement=product_data.law_regulation_requirement,
             created_by=current_user.id
         )
         
@@ -314,12 +339,19 @@ async def create_product(
                 "product_code": product.product_code,
                 "name": product.name,
                 "description": product.description,
-                "category": product.category,
-                "formulation": product.formulation,
-                "allergens": product.allergens,
-                "shelf_life_days": product.shelf_life_days,
+                "composition": product.composition,
+                "high_risk_ingredients": product.high_risk_ingredients,
+                "physical_chemical_biological_description": product.physical_chemical_biological_description,
+                "main_processing_steps": product.main_processing_steps,
+                "distribution_serving_methods": product.distribution_serving_methods,
+                "product_contact_surfaces": product.product_contact_surfaces,
+                "consumer_groups": product.consumer_groups,
                 "storage_conditions": product.storage_conditions,
+                "shelf_life_days": product.shelf_life_days,
                 "packaging_type": product.packaging_type,
+                "inherent_hazards": product.inherent_hazards,
+                "fs_acceptance_criteria": product.fs_acceptance_criteria,
+                "law_regulation_requirement": product.law_regulation_requirement,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
                 "created_by": creator_name,
@@ -364,18 +396,32 @@ async def update_product(
             product.name = product_data.name
         if product_data.description is not None:
             product.description = product_data.description
-        if product_data.category is not None:
-            product.category = product_data.category
-        if product_data.formulation is not None:
-            product.formulation = product_data.formulation
-        if product_data.allergens is not None:
-            product.allergens = product_data.allergens
-        if product_data.shelf_life_days is not None:
-            product.shelf_life_days = product_data.shelf_life_days
+        if product_data.composition is not None:
+            product.composition = product_data.composition
+        if product_data.high_risk_ingredients is not None:
+            product.high_risk_ingredients = product_data.high_risk_ingredients
+        if product_data.physical_chemical_biological_description is not None:
+            product.physical_chemical_biological_description = product_data.physical_chemical_biological_description
+        if product_data.main_processing_steps is not None:
+            product.main_processing_steps = product_data.main_processing_steps
+        if product_data.distribution_serving_methods is not None:
+            product.distribution_serving_methods = product_data.distribution_serving_methods
+        if product_data.product_contact_surfaces is not None:
+            product.product_contact_surfaces = product_data.product_contact_surfaces
+        if product_data.consumer_groups is not None:
+            product.consumer_groups = product_data.consumer_groups
         if product_data.storage_conditions is not None:
             product.storage_conditions = product_data.storage_conditions
+        if product_data.shelf_life_days is not None:
+            product.shelf_life_days = product_data.shelf_life_days
         if product_data.packaging_type is not None:
             product.packaging_type = product_data.packaging_type
+        if product_data.inherent_hazards is not None:
+            product.inherent_hazards = product_data.inherent_hazards
+        if product_data.fs_acceptance_criteria is not None:
+            product.fs_acceptance_criteria = product_data.fs_acceptance_criteria
+        if product_data.law_regulation_requirement is not None:
+            product.law_regulation_requirement = product_data.law_regulation_requirement
         if product_data.haccp_plan_approved is not None:
             product.haccp_plan_approved = product_data.haccp_plan_approved
         if product_data.haccp_plan_version is not None:
@@ -384,7 +430,6 @@ async def update_product(
         # Handle optional embedded risk configuration
         if product_data.risk_config is not None:
             try:
-                from app.models.haccp import ProductRiskConfig
                 rc = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
                 payload = product_data.risk_config or {}
                 print(f"DEBUG: Processing risk config payload: {payload}")
@@ -465,12 +510,19 @@ async def update_product(
                 "product_code": product.product_code,
                 "name": product.name,
                 "description": product.description,
-                "category": product.category,
-                "formulation": product.formulation,
-                "allergens": product.allergens,
-                "shelf_life_days": product.shelf_life_days,
+                "composition": product.composition,
+                "high_risk_ingredients": product.high_risk_ingredients,
+                "physical_chemical_biological_description": product.physical_chemical_biological_description,
+                "main_processing_steps": product.main_processing_steps,
+                "distribution_serving_methods": product.distribution_serving_methods,
+                "product_contact_surfaces": product.product_contact_surfaces,
+                "consumer_groups": product.consumer_groups,
                 "storage_conditions": product.storage_conditions,
+                "shelf_life_days": product.shelf_life_days,
                 "packaging_type": product.packaging_type,
+                "inherent_hazards": product.inherent_hazards,
+                "fs_acceptance_criteria": product.fs_acceptance_criteria,
+                "law_regulation_requirement": product.law_regulation_requirement,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
                 "risk_config": risk_config_data,

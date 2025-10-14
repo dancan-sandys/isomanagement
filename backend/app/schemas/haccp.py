@@ -368,23 +368,37 @@ class ProductCreate(BaseModel):
     product_code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    category: Optional[str] = Field(None, max_length=100)
-    formulation: Optional[str] = None
-    allergens: Optional[str] = None
-    shelf_life_days: Optional[int] = Field(None, ge=1)
+    composition: Optional[str] = None
+    high_risk_ingredients: Optional[str] = None
+    physical_chemical_biological_description: Optional[str] = None
+    main_processing_steps: Optional[str] = None
+    distribution_serving_methods: Optional[str] = None
+    product_contact_surfaces: Optional[str] = None
+    consumer_groups: Optional[str] = None
     storage_conditions: Optional[str] = None
+    shelf_life_days: Optional[int] = Field(None, ge=1)
     packaging_type: Optional[str] = Field(None, max_length=100)
+    inherent_hazards: Optional[str] = None
+    fs_acceptance_criteria: Optional[str] = None
+    law_regulation_requirement: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
-    category: Optional[str] = Field(None, max_length=100)
-    formulation: Optional[str] = None
-    allergens: Optional[str] = None
-    shelf_life_days: Optional[int] = Field(None, ge=1)
+    composition: Optional[str] = None
+    high_risk_ingredients: Optional[str] = None
+    physical_chemical_biological_description: Optional[str] = None
+    main_processing_steps: Optional[str] = None
+    distribution_serving_methods: Optional[str] = None
+    product_contact_surfaces: Optional[str] = None
+    consumer_groups: Optional[str] = None
     storage_conditions: Optional[str] = None
+    shelf_life_days: Optional[int] = Field(None, ge=1)
     packaging_type: Optional[str] = Field(None, max_length=100)
+    inherent_hazards: Optional[str] = None
+    fs_acceptance_criteria: Optional[str] = None
+    law_regulation_requirement: Optional[str] = None
     haccp_plan_approved: Optional[bool] = None
     haccp_plan_version: Optional[str] = None
     # Optional embedded risk configuration payload
@@ -396,12 +410,19 @@ class ProductResponse(BaseModel):
     product_code: str
     name: str
     description: Optional[str] = None
-    category: Optional[str] = None
-    formulation: Optional[str] = None
-    allergens: Optional[str] = None
-    shelf_life_days: Optional[int] = None
+    composition: Optional[str] = None
+    high_risk_ingredients: Optional[str] = None
+    physical_chemical_biological_description: Optional[str] = None
+    main_processing_steps: Optional[str] = None
+    distribution_serving_methods: Optional[str] = None
+    product_contact_surfaces: Optional[str] = None
+    consumer_groups: Optional[str] = None
     storage_conditions: Optional[str] = None
+    shelf_life_days: Optional[int] = None
     packaging_type: Optional[str] = None
+    inherent_hazards: Optional[str] = None
+    fs_acceptance_criteria: Optional[str] = None
+    law_regulation_requirement: Optional[str] = None
     haccp_plan_approved: bool
     haccp_plan_version: Optional[str] = None
     created_by: str
