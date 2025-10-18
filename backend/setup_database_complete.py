@@ -1150,7 +1150,7 @@ def create_professional_haccp_data(conn):
                 VALUES (:product_id, :hazard_id, :oprp_number, :oprp_name, :description,
                        'active', :op_limits, :op_min, :op_max, :op_unit, :op_desc,
                        :mon_freq, :mon_method, :mon_resp, :mon_equip, :corr_actions,
-                       :ver_freq, :ver_method, :ver_resp, :justification, :objective, :sop_ref,
+                       :ver_freq, :ver_method, :ver_resp, :justification, :objective, :sop_reference,
                        :created_at, :created_by)
             """), {
                 'product_id': product_id,
