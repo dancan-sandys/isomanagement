@@ -20,6 +20,16 @@ class RiskLevel(str, enum.Enum):
     CRITICAL = "critical"
 
 
+class RiskStrategy(str, enum.Enum):
+    """Risk control strategy for hazards"""
+    CCP = "ccp"  # Critical Control Point
+    OPPRP = "opprp"  # Operational Prerequisite Program
+    USE_EXISTING_PRPS = "use_existing_prps"  # Use existing Prerequisite Programs (for low risks)
+    ACCEPT = "accept"  # Risk accepted (typically for low risks)
+    FURTHER_ANALYSIS = "further_analysis"  # Requires decision tree analysis
+    NOT_DETERMINED = "not_determined"  # Not yet determined
+
+
 class RiskThreshold(Base):
     __tablename__ = "risk_thresholds"
 
@@ -124,6 +134,7 @@ class Product(Base):
     process_flows = relationship("ProcessFlow", back_populates="product")
     hazards = relationship("Hazard", back_populates="product")
     ccps = relationship("CCP", back_populates="product")
+    oprps = relationship("OPRP", back_populates="product")
     risk_config = relationship("ProductRiskConfig", back_populates="product", uselist=False)
     
     def __repr__(self):
@@ -181,7 +192,7 @@ class Hazard(Base):
     description = Column(Text)
     
     # Hazard analysis data capture (Principle 1)
-    rationale = Column(Text)  # Reasoning for hazard identification and assessment
+    consequences = Column(Text)  # Potential consequences if hazard occurs (replaces rationale)
     prp_reference_ids = Column(JSON)  # Array of PRP/SOP document IDs that control this hazard
     reference_documents = Column(JSON)  # Array of reference documents (studies, regulations, etc.)
     
@@ -196,9 +207,20 @@ class Hazard(Base):
     is_controlled = Column(Boolean, default=False)
     control_effectiveness = Column(Integer)  # 1-5 scale
     
-    # CCP determination
+    # Risk Strategy (ISO 22000 approach)
+    risk_strategy = Column(
+        Enum(RiskStrategy, values_callable=lambda obj: [e.value for e in obj]), 
+        default=RiskStrategy.NOT_DETERMINED.value
+    )
+    risk_strategy_justification = Column(Text)  # Justification for risk strategy selection
+    subsequent_step = Column(Text)  # Name of subsequent step that controls the hazard (from decision tree Q2)
+    
+    # CCP determination - kept for backward compatibility
     is_ccp = Column(Boolean, default=False)
     ccp_justification = Column(Text)
+    
+    # OPPRP justification
+    opprp_justification = Column(Text)
     # Persisted decision tree outcome (serialized JSON of DecisionTreeStep list)
     decision_tree_steps = Column(Text)
     decision_tree_run_at = Column(DateTime(timezone=True))
@@ -227,6 +249,7 @@ class Hazard(Base):
     product = relationship("Product", back_populates="hazards")
     process_step = relationship("ProcessFlow", back_populates="hazards")
     ccp = relationship("CCP", back_populates="hazard", uselist=False)
+    oprps = relationship("OPRP", back_populates="hazard", cascade="all, delete-orphan")
     reviews = relationship("HazardReview", back_populates="hazard", cascade="all, delete-orphan")
     decision_tree = relationship("DecisionTree", back_populates="hazard", uselist=False, cascade="all, delete-orphan")
     risk_register_item = relationship("RiskRegisterItem", foreign_keys=[risk_register_item_id])
@@ -691,8 +714,16 @@ class DecisionTree(Base):
     q4_answered_by = Column(Integer, ForeignKey("users.id"))
     q4_answered_at = Column(DateTime)
     
+    # Question 5: Is this control measure preventive or does it significantly reduce the hazard?
+    # (Used for OPPRP vs CCP determination - ISO 22000 approach)
+    q5_answer = Column(Boolean)  # True = Yes (OPPRP), False = No (CCP)
+    q5_justification = Column(Text)
+    q5_answered_by = Column(Integer, ForeignKey("users.id"))
+    q5_answered_at = Column(DateTime)
+    
     # Decision result
     is_ccp = Column(Boolean)  # Final CCP determination
+    is_opprp = Column(Boolean)  # OPPRP determination
     decision_reasoning = Column(Text)  # Explanation of the decision
     decision_date = Column(DateTime)
     decision_by = Column(Integer, ForeignKey("users.id"))
@@ -710,6 +741,7 @@ class DecisionTree(Base):
     q2_user = relationship("User", foreign_keys=[q2_answered_by])
     q3_user = relationship("User", foreign_keys=[q3_answered_by])
     q4_user = relationship("User", foreign_keys=[q4_answered_by])
+    q5_user = relationship("User", foreign_keys=[q5_answered_by])
     decision_user = relationship("User", foreign_keys=[decision_by])
     
     def get_current_question(self) -> int:
@@ -722,6 +754,8 @@ class DecisionTree(Base):
             return 3
         elif self.q4_answer is None:
             return 4
+        elif self.q5_answer is None:
+            return 5
         else:
             return 0  # All questions answered
     
@@ -735,25 +769,41 @@ class DecisionTree(Base):
             return False
         return True
     
+    def determine_risk_strategy(self) -> tuple[str, bool, bool, str]:
+        """
+        Determine risk strategy based on decision tree (ISO 22000 + Codex approach)
+        Returns: (strategy, is_ccp, is_opprp, reasoning)
+        Strategy can be: 'ACCEPT', 'OPPRP', or 'CCP'
+        """
+        # Q1: Is control at this step necessary for safety?
+        if self.q1_answer is False:
+            return "ACCEPT", False, False, "Q1: Control at this step is not necessary for safety - Risk Accepted"
+        
+        # Q2: Is control necessary to eliminate or reduce hazard likelihood to acceptable level?
+        if self.q2_answer is False:
+            return "ACCEPT", False, False, "Q2: Control not necessary to eliminate/reduce hazard - Risk Accepted"
+        
+        # Q3: Could contamination occur or increase to unacceptable levels?
+        if self.q3_answer is False:
+            return "ACCEPT", False, False, "Q3: Contamination unlikely to occur or increase - Risk Accepted"
+        
+        # Q4: Will a subsequent step eliminate or reduce the hazard?
+        if self.q4_answer is True:
+            return "OPPRP", False, True, "Q4: Subsequent step will control hazard - Operational PRP"
+        
+        # Q5: Is this control measure preventive or does it significantly reduce the hazard?
+        if self.q5_answer is True:
+            return "OPPRP", False, True, "Q5: Control measure is preventive/significantly reduces hazard - Operational PRP"
+        else:
+            return "CCP", True, False, "Q5: Control measure is critical - Critical Control Point"
+    
     def determine_ccp_decision(self) -> tuple[bool, str]:
         """
-        Determine CCP decision based on Codex Alimentarius decision tree
+        Determine CCP decision based on Codex Alimentarius decision tree (backward compatibility)
         Returns: (is_ccp, reasoning)
         """
-        if self.q1_answer is False:
-            return False, "Q1: Control at this step is not necessary for safety"
-        
-        if self.q2_answer is False:
-            return False, "Q2: Control at this step is not necessary to eliminate or reduce hazard likelihood"
-        
-        if self.q3_answer is False:
-            return False, "Q3: Contamination with identified hazard(s) could not occur or increase to unacceptable levels"
-        
-        if self.q4_answer is True:
-            return False, "Q4: A subsequent step will eliminate or reduce the hazard likelihood to acceptable levels"
-        
-        # If we reach here, it's a CCP
-        return True, "All questions answered affirmatively - this is a Critical Control Point"
+        strategy, is_ccp, is_opprp, reasoning = self.determine_risk_strategy()
+        return is_ccp, reasoning
 
 
 class CCPMonitoringSchedule(Base):

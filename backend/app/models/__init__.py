@@ -3,6 +3,7 @@ from .rbac import Role, Permission, UserPermission
 from .user import User, UserSession, PasswordReset
 from .document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
 from .haccp import Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog, ProductRiskConfig, DecisionTree, CCPMonitoringSchedule, CCPVerificationProgram, CCPValidation, HACCPEvidenceAttachment, HACCPAuditLog, RiskLevel
+from .oprp import OPRP, OPRPMonitoringLog, OPRPVerificationLog, OPRPMonitoringSchedule, OPRPVerificationProgram, OPRPValidation
 from .prp import (
     PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule,
     RiskMatrix, RiskAssessment, RiskControl, CorrectiveAction, PRPPreventiveAction,

@@ -13,9 +13,6 @@ import {
   ListItemIcon,
   Button,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Table,
   TableBody,
   TableCell,
@@ -26,7 +23,6 @@ import {
   Stack,
   Alert,
   IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -43,12 +39,12 @@ import {
   MenuItem,
 } from '@mui/material';
 import {
-  ExpandMore,
   Security,
   Warning,
   CheckCircle,
   Add,
   Edit,
+  Visibility,
   Science,
   Delete,
 } from '@mui/icons-material';
@@ -57,8 +53,6 @@ import { AppDispatch, RootState } from '../store';
 import {
   fetchProducts,
   fetchProduct,
-  createProduct,
-  updateProduct,
   deleteProduct,
   createProcessFlow,
   updateProcessFlow,
@@ -69,10 +63,12 @@ import {
   createCCP,
   updateCCP,
   deleteCCP,
+  fetchOPRPs,
+  createOPRP,
+  updateOPRP,
+  deleteOPRP,
   fetchDashboard,
   setSelectedProduct,
-  setSelectedCCP,
-  setSelectedHazard,
   clearError,
 } from '../store/slices/haccpSlice';
 import { hasRole, isSystemAdministrator } from '../store/slices/authSlice';
@@ -82,6 +78,7 @@ import PageHeader from '../components/UI/PageHeader';
 import StatusChip from '../components/UI/StatusChip';
 import ProductDialog from '../components/HACCP/ProductDialog';
 import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
+import HazardViewDialog from '../components/HACCP/HazardViewDialog';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -114,6 +111,7 @@ const HACCP: React.FC = () => {
     processFlows, 
     hazards, 
     ccps, 
+    oprps,
     dashboardStats, 
     loading, 
     error 
@@ -122,15 +120,17 @@ const HACCP: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
-  const [expanded, setExpanded] = useState<string | false>('panel1');
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [processFlowDialogOpen, setProcessFlowDialogOpen] = useState(false);
   const [hazardDialogOpen, setHazardDialogOpen] = useState(false);
+  const [hazardViewDialogOpen, setHazardViewDialogOpen] = useState(false);
   const [ccpDialogOpen, setCcpDialogOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<any>(null);
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [selectedHazardItem, setSelectedHazardItem] = useState<any>(null);
   const [selectedCcpItem, setSelectedCcpItem] = useState<any>(null);
+  const [selectedOprpItem, setSelectedOprpItem] = useState<any>(null);
+  const [oprpDialogOpen, setOprpDialogOpen] = useState(false);
   const [flowchartBuilderOpen, setFlowchartBuilderOpen] = useState(false);
   const [selectedProductForFlowchart, setSelectedProductForFlowchart] = useState<any>(null);
   const [flowForm, setFlowForm] = useState({
@@ -148,13 +148,16 @@ const HACCP: React.FC = () => {
     hazard_type: 'biological',
     hazard_name: '',
     description: '',
+    consequences: '',
     likelihood: '1',
     severity: '1',
     control_measures: '',
     is_controlled: false as boolean,
     control_effectiveness: '',
+    risk_strategy: 'not_determined',
     is_ccp: false as boolean,
     ccp_justification: '',
+    opprp_justification: '',
   });
   const [ccpForm, setCcpForm] = useState({
     hazard_id: '',
@@ -172,6 +175,25 @@ const HACCP: React.FC = () => {
     verification_frequency: '',
     verification_method: '',
     verification_responsible: '',
+  });
+  const [oprpForm, setOprpForm] = useState({
+    hazard_id: '',
+    oprp_number: '',
+    oprp_name: '',
+    description: '',
+    operational_limit_min: '',
+    operational_limit_max: '',
+    operational_limit_unit: '',
+    monitoring_frequency: '',
+    monitoring_method: '',
+    monitoring_responsible: '',
+    monitoring_equipment: '',
+    corrective_actions: '',
+    verification_frequency: '',
+    verification_method: '',
+    verification_responsible: '',
+    justification: '',
+    effectiveness_validation: '',
   });
   const [userSearch, setUserSearch] = useState('');
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
@@ -228,11 +250,6 @@ const HACCP: React.FC = () => {
   }, [ccpForm.monitoring_responsible, ccpForm.verification_responsible]);
   // Removed productForm state and handlers - now using ProductDialog component
 
-  const handleOpenFlowchartBuilder = (product: any) => {
-    setSelectedProductForFlowchart(product);
-    setFlowchartBuilderOpen(true);
-  };
-
   const handleCloseFlowchartBuilder = () => {
     setFlowchartBuilderOpen(false);
     setSelectedProductForFlowchart(null);
@@ -283,15 +300,11 @@ const HACCP: React.FC = () => {
 
   const loadProductDetails = (productId: number) => {
     dispatch(fetchProduct(productId));
+    dispatch(fetchOPRPs(productId));
   };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
-  };
-
-  const handleProductSelect = (product: any) => {
-    dispatch(setSelectedProduct(product));
-    loadProductDetails(product.id);
   };
 
   const handleDeleteProduct = async (productId: number) => {
@@ -319,13 +332,25 @@ const HACCP: React.FC = () => {
     try {
       await dispatch(deleteHazard(hazardId)).unwrap();
       if (selectedProduct) loadProductDetails(selectedProduct.id);
-    } catch (e) { /* noop */ }
+      alert('Hazard deleted successfully!');
+    } catch (error: any) {
+      console.error('Failed to delete hazard:', error);
+      alert(`Failed to delete hazard: ${error}`);
+    }
   };
 
   const handleDeleteCCP = async (ccpId: number) => {
     if (!window.confirm('Delete this CCP?')) return;
     try {
       await dispatch(deleteCCP(ccpId)).unwrap();
+      if (selectedProduct) loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  const handleDeleteOPRP = async (oprpId: number) => {
+    if (!window.confirm('Delete this OPRP?')) return;
+    try {
+      await dispatch(deleteOPRP(oprpId)).unwrap();
       if (selectedProduct) loadProductDetails(selectedProduct.id);
     } catch (e) { /* noop */ }
   };
@@ -355,16 +380,34 @@ const HACCP: React.FC = () => {
         hazard_type: selectedHazardItem.hazard_type || 'biological',
         hazard_name: selectedHazardItem.hazard_name || '',
         description: selectedHazardItem.description || '',
+        consequences: selectedHazardItem.consequences || '',
         likelihood: String(selectedHazardItem.likelihood ?? '1'),
         severity: String(selectedHazardItem.severity ?? '1'),
         control_measures: selectedHazardItem.control_measures || '',
         is_controlled: !!selectedHazardItem.is_controlled,
         control_effectiveness: String(selectedHazardItem.control_effectiveness ?? ''),
+        risk_strategy: selectedHazardItem.risk_strategy || 'not_determined',
         is_ccp: !!selectedHazardItem.is_ccp,
         ccp_justification: selectedHazardItem.ccp_justification || '',
+        opprp_justification: selectedHazardItem.opprp_justification || '',
       });
     } else {
-      setHazardForm({ process_step_id: '', hazard_type: 'biological', hazard_name: '', description: '', likelihood: '1', severity: '1', control_measures: '', is_controlled: false, control_effectiveness: '', is_ccp: false, ccp_justification: '' });
+      setHazardForm({ 
+        process_step_id: '', 
+        hazard_type: 'biological', 
+        hazard_name: '', 
+        description: '', 
+        consequences: '',
+        likelihood: '1', 
+        severity: '1', 
+        control_measures: '', 
+        is_controlled: false, 
+        control_effectiveness: '', 
+        risk_strategy: 'not_determined',
+        is_ccp: false, 
+        ccp_justification: '',
+        opprp_justification: ''
+      });
     }
   }, [selectedHazardItem]);
 
@@ -391,6 +434,32 @@ const HACCP: React.FC = () => {
       setCcpForm({ hazard_id: '', ccp_number: '', ccp_name: '', description: '', critical_limit_min: '', critical_limit_max: '', critical_limit_unit: '', monitoring_frequency: '', monitoring_method: '', monitoring_responsible: '', monitoring_equipment: '', corrective_actions: '', verification_frequency: '', verification_method: '', verification_responsible: '' });
     }
   }, [selectedCcpItem]);
+
+  useEffect(() => {
+    if (selectedOprpItem) {
+      setOprpForm({
+        hazard_id: String(selectedOprpItem.hazard_id ?? ''),
+        oprp_number: selectedOprpItem.oprp_number || '',
+        oprp_name: selectedOprpItem.oprp_name || '',
+        description: selectedOprpItem.description || '',
+        operational_limit_min: String(selectedOprpItem.operational_limit_min ?? ''),
+        operational_limit_max: String(selectedOprpItem.operational_limit_max ?? ''),
+        operational_limit_unit: selectedOprpItem.operational_limit_unit || '',
+        monitoring_frequency: selectedOprpItem.monitoring_frequency || '',
+        monitoring_method: selectedOprpItem.monitoring_method || '',
+        monitoring_responsible: String(selectedOprpItem.monitoring_responsible ?? ''),
+        monitoring_equipment: selectedOprpItem.monitoring_equipment || '',
+        corrective_actions: selectedOprpItem.corrective_actions || '',
+        verification_frequency: selectedOprpItem.verification_frequency || '',
+        verification_method: selectedOprpItem.verification_method || '',
+        verification_responsible: String(selectedOprpItem.verification_responsible ?? ''),
+        justification: selectedOprpItem.justification || '',
+        effectiveness_validation: selectedOprpItem.effectiveness_validation || '',
+      });
+    } else {
+      setOprpForm({ hazard_id: '', oprp_number: '', oprp_name: '', description: '', operational_limit_min: '', operational_limit_max: '', operational_limit_unit: '', monitoring_frequency: '', monitoring_method: '', monitoring_responsible: '', monitoring_equipment: '', corrective_actions: '', verification_frequency: '', verification_method: '', verification_responsible: '', justification: '', effectiveness_validation: '' });
+    }
+  }, [selectedOprpItem]);
 
   const handleSaveFlow = async () => {
     if (!selectedProduct) return;
@@ -446,20 +515,50 @@ const HACCP: React.FC = () => {
       hazard_type: hazardForm.hazard_type,
       hazard_name: hazardForm.hazard_name.trim(),
       description: hazardForm.description,
+      consequences: hazardForm.consequences,
       likelihood: Number(hazardForm.likelihood),
       severity: Number(hazardForm.severity),
       control_measures: hazardForm.control_measures,
       is_controlled: hazardForm.is_controlled,
       control_effectiveness: hazardForm.control_effectiveness === '' ? null : Number(hazardForm.control_effectiveness),
+      risk_strategy: hazardForm.risk_strategy,
       is_ccp: hazardForm.is_ccp,
       ccp_justification: hazardForm.ccp_justification,
+      opprp_justification: hazardForm.opprp_justification,
     };
     try {
+      let hazardId;
       if (selectedHazardItem) {
-        await dispatch(updateHazard({ hazardId: selectedHazardItem.id, hazardData: payload })).unwrap();
+        const result = await dispatch(updateHazard({ hazardId: selectedHazardItem.id, hazardData: payload })).unwrap();
+        hazardId = selectedHazardItem.id;
       } else {
-        await dispatch(createHazard({ productId: selectedProduct.id, hazardData: payload })).unwrap();
+        const result = await dispatch(createHazard({ productId: selectedProduct.id, hazardData: payload })).unwrap();
+        hazardId = result.data.id;
       }
+      
+      // If risk strategy is OPPRP, create an OPRP
+      if (hazardForm.risk_strategy === 'opprp' && hazardId) {
+        const oprpPayload = {
+          hazard_id: hazardId,
+          oprp_number: `OPRP-${hazardId}`,
+          oprp_name: `OPRP for ${hazardForm.hazard_name}`,
+          description: `Operational prerequisite program for ${hazardForm.hazard_name}`,
+          justification: hazardForm.opprp_justification || 'Operational prerequisite program as determined by risk assessment',
+          monitoring_frequency: 'As per monitoring schedule',
+          monitoring_method: 'Visual inspection and measurement',
+          corrective_actions: 'Implement corrective actions as per SOP',
+          verification_frequency: 'Monthly',
+          verification_method: 'Review of monitoring records and effectiveness',
+        };
+        
+        try {
+          await dispatch(createOPRP({ productId: selectedProduct.id, oprpData: oprpPayload })).unwrap();
+        } catch (oprpError) {
+          console.error('Failed to create OPRP:', oprpError);
+          // Don't fail the hazard creation if OPRP creation fails
+        }
+      }
+      
       setHazardDialogOpen(false);
       setSelectedHazardItem(null);
       loadProductDetails(selectedProduct.id);
@@ -493,6 +592,39 @@ const HACCP: React.FC = () => {
       }
       setCcpDialogOpen(false);
       setSelectedCcpItem(null);
+      loadProductDetails(selectedProduct.id);
+    } catch (e) { /* noop */ }
+  };
+
+  const handleSaveOPRP = async () => {
+    if (!selectedProduct) return;
+    const payload: any = {
+      hazard_id: oprpForm.hazard_id === '' ? null : Number(oprpForm.hazard_id),
+      oprp_number: oprpForm.oprp_number,
+      oprp_name: oprpForm.oprp_name,
+      description: oprpForm.description,
+      operational_limit_min: oprpForm.operational_limit_min === '' ? null : Number(oprpForm.operational_limit_min),
+      operational_limit_max: oprpForm.operational_limit_max === '' ? null : Number(oprpForm.operational_limit_max),
+      operational_limit_unit: oprpForm.operational_limit_unit,
+      monitoring_frequency: oprpForm.monitoring_frequency,
+      monitoring_method: oprpForm.monitoring_method,
+      monitoring_responsible: oprpForm.monitoring_responsible === '' ? null : Number(oprpForm.monitoring_responsible),
+      monitoring_equipment: oprpForm.monitoring_equipment,
+      corrective_actions: oprpForm.corrective_actions,
+      verification_frequency: oprpForm.verification_frequency,
+      verification_method: oprpForm.verification_method,
+      verification_responsible: oprpForm.verification_responsible === '' ? null : Number(oprpForm.verification_responsible),
+      justification: oprpForm.justification,
+      effectiveness_validation: oprpForm.effectiveness_validation,
+    };
+    try {
+      if (selectedOprpItem) {
+        await dispatch(updateOPRP({ oprpId: selectedOprpItem.id, oprpData: payload })).unwrap();
+      } else {
+        await dispatch(createOPRP({ productId: selectedProduct.id, oprpData: payload })).unwrap();
+      }
+      setOprpDialogOpen(false);
+      setSelectedOprpItem(null);
       loadProductDetails(selectedProduct.id);
     } catch (e) { /* noop */ }
   };
@@ -784,8 +916,12 @@ const HACCP: React.FC = () => {
               color="primary"
             />
             <Chip
-              label={`${hazards.length} Hazards`}
+              label={`${oprps.length} OPRPs`}
               color="secondary"
+            />
+            <Chip
+              label={`${hazards.length} Hazards`}
+              color="info"
             />
           </Stack>
         </Box>
@@ -794,6 +930,7 @@ const HACCP: React.FC = () => {
           <Tab label="Process Flow" />
           <Tab label="Hazards" />
           <Tab label="CCPs" />
+          <Tab label="OPRPs" />
           <Tab label="Monitoring" />
         </Tabs>
 
@@ -834,8 +971,8 @@ const HACCP: React.FC = () => {
                       {canManageHACCP && (
                         <Stack direction="row" spacing={1}>
                           <IconButton size="small" onClick={() => { setSelectedFlow(flow); setProcessFlowDialogOpen(true); }}>
-                          <Edit />
-                        </IconButton>
+                            <Edit />
+                          </IconButton>
                           <IconButton size="small" onClick={() => handleDeleteFlow(flow.id)}>
                             <Delete />
                           </IconButton>
@@ -879,7 +1016,7 @@ const HACCP: React.FC = () => {
                     <Typography variant="body2" paragraph>
                       {hazard.description}
                     </Typography>
-                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" gap={0.5}>
                       <Chip
                         label={`Risk: ${hazard.risk_level}`}
                         color={getRiskLevelColor(hazard.risk_level) as any}
@@ -890,7 +1027,14 @@ const HACCP: React.FC = () => {
                         color="primary"
                         size="small"
                       />
-                      {hazard.is_ccp && (
+                      {hazard.risk_strategy && hazard.risk_strategy !== 'not_determined' && (
+                        <Chip 
+                          label={hazard.risk_strategy === 'ccp' ? 'CCP' : hazard.risk_strategy === 'opprp' ? 'OPRP' : hazard.risk_strategy === 'use_existing_prps' ? 'PRPs' : 'Analysis Needed'} 
+                          color={hazard.risk_strategy === 'ccp' ? 'error' : hazard.risk_strategy === 'opprp' ? 'warning' : 'info'} 
+                          size="small" 
+                        />
+                      )}
+                      {hazard.is_ccp === true && (
                         <Chip
                           label="CCP"
                           color="error"
@@ -900,10 +1044,17 @@ const HACCP: React.FC = () => {
                     </Stack>
                     {canManageHACCP && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <IconButton size="small" onClick={() => { setSelectedHazardItem(hazard); setHazardDialogOpen(true); }}>
-                          <Edit />
+                        <IconButton 
+                          size="small" 
+                          onClick={() => { 
+                            setSelectedHazardItem(hazard); 
+                            setHazardViewDialogOpen(true); 
+                          }} 
+                          title="View Hazard"
+                        >
+                          <Visibility />
                         </IconButton>
-                        <IconButton size="small" onClick={() => handleDeleteHazard(hazard.id)}>
+                        <IconButton size="small" onClick={() => handleDeleteHazard(hazard.id)} title="Delete Hazard">
                           <Delete />
                         </IconButton>
                       </Box>
@@ -968,6 +1119,62 @@ const HACCP: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={selectedTab} index={3}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Operational Prerequisites (OPRPs)</Typography>
+            {canManageHACCP && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => { setSelectedOprpItem(null); setOprpDialogOpen(true); }}
+              >
+                Add OPRP
+              </Button>
+            )}
+          </Box>
+          <Grid container spacing={2}>
+            {oprps.map((oprp) => (
+              <Grid item xs={12} sm={6} md={4} key={oprp.id}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      {oprp.oprp_name}
+                    </Typography>
+                    <Typography color="textSecondary" gutterBottom>
+                      {oprp.oprp_number}
+                    </Typography>
+                    <Typography variant="body2" paragraph>
+                      {oprp.description}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                      <Chip
+                        label={oprp.status}
+                        color={oprp.status === 'active' ? 'success' : 'warning'}
+                        size="small"
+                      />
+                    </Stack>
+                    {oprp.operational_limit_min && oprp.operational_limit_max && (
+                      <Typography variant="body2" color="textSecondary">
+                        Limits: {oprp.operational_limit_min} - {oprp.operational_limit_max} {oprp.operational_limit_unit}
+                      </Typography>
+                    )}
+                    {canManageHACCP && (
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                        <IconButton size="small" onClick={() => { setSelectedOprpItem(oprp); setOprpDialogOpen(true); }}>
+                          <Edit />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => handleDeleteOPRP(oprp.id)}>
+                          <Delete />
+                        </IconButton>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </TabPanel>
+
+        <TabPanel value={selectedTab} index={4}>
           <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
           <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
             <Autocomplete
@@ -1055,6 +1262,12 @@ const HACCP: React.FC = () => {
         {renderProducts()}
       </TabPanel>
 
+      {selectedProduct && (
+        <TabPanel value={selectedTab} index={2}>
+          {renderProductDetails()}
+        </TabPanel>
+      )}
+
       
 
       {/* Product Dialog */}
@@ -1108,8 +1321,13 @@ const HACCP: React.FC = () => {
 
       {/* Hazard Dialog */}
       <Dialog open={hazardDialogOpen} onClose={() => { setHazardDialogOpen(false); setSelectedHazardItem(null); }} maxWidth="md" fullWidth>
-        <DialogTitle>{selectedHazardItem ? 'Edit Hazard' : 'Add Hazard'}</DialogTitle>
+        <DialogTitle>{selectedHazardItem ? 'View Hazard' : 'Add Hazard'}</DialogTitle>
         <DialogContent>
+          {selectedHazardItem && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This is a read-only view of the hazard information.
+            </Alert>
+          )}
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
@@ -1118,6 +1336,7 @@ const HACCP: React.FC = () => {
                   value={hazardForm.process_step_id}
                   label="Process Step"
                   onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })}
+                  disabled={!!selectedHazardItem}
                 >
                   {processFlows.map((flow) => (
                     <MenuItem key={flow.id} value={flow.id}>
@@ -1134,6 +1353,7 @@ const HACCP: React.FC = () => {
                   value={hazardForm.hazard_type}
                   label="Hazard Type"
                   onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })}
+                  disabled={!!selectedHazardItem}
                 >
                               <MenuItem value="biological">Biological</MenuItem>
             <MenuItem value="chemical">Chemical</MenuItem>
@@ -1143,10 +1363,13 @@ const HACCP: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} />
+              <TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} disabled={!!selectedHazardItem} />
             </Grid>
             <Grid item xs={12}>
-              <TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} />
+              <TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} disabled={!!selectedHazardItem} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth multiline rows={3} label="Consequences" helperText="Potential consequences if this hazard occurs" value={hazardForm.consequences} onChange={(e) => setHazardForm({ ...hazardForm, consequences: e.target.value })} />
             </Grid>
             <Grid item xs={12} md={3}>
               <TextField fullWidth type="number" label="Likelihood" value={hazardForm.likelihood} onChange={(e) => setHazardForm({ ...hazardForm, likelihood: e.target.value })} />
@@ -1157,18 +1380,43 @@ const HACCP: React.FC = () => {
             <Grid item xs={12}>
               <TextField fullWidth label="Control Measures" value={hazardForm.control_measures} onChange={(e) => setHazardForm({ ...hazardForm, control_measures: e.target.value })} />
             </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Risk Strategy</InputLabel>
+                <Select
+                  value={hazardForm.risk_strategy}
+                  label="Risk Strategy"
+                  onChange={(e) => setHazardForm({ ...hazardForm, risk_strategy: e.target.value })}
+                >
+                  <MenuItem value="not_determined">Not Determined</MenuItem>
+                  <MenuItem value="ccp">CCP - Critical Control Point</MenuItem>
+                  <MenuItem value="opprp">OPPRP - Operational PRP</MenuItem>
+                  <MenuItem value="accept">Accept Risk</MenuItem>
+                  <MenuItem value="further_analysis">Further Analysis (Decision Tree)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={12} md={3}>
               <FormControlLabel control={<Switch checked={hazardForm.is_controlled} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_controlled: c })} />} label="Is Controlled" />
             </Grid>
             <Grid item xs={12} md={3}>
               <TextField fullWidth type="number" label="Control Effectiveness" value={hazardForm.control_effectiveness} onChange={(e) => setHazardForm({ ...hazardForm, control_effectiveness: e.target.value })} />
             </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControlLabel control={<Switch checked={hazardForm.is_ccp} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_ccp: c })} />} label="Is CCP" />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField fullWidth label="CCP Justification" value={hazardForm.ccp_justification} onChange={(e) => setHazardForm({ ...hazardForm, ccp_justification: e.target.value })} />
-            </Grid>
+            {hazardForm.risk_strategy === 'ccp' && (
+              <>
+                <Grid item xs={12} md={3}>
+                  <FormControlLabel control={<Switch checked={hazardForm.is_ccp} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_ccp: c })} />} label="Is CCP" />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth label="CCP Justification" value={hazardForm.ccp_justification} onChange={(e) => setHazardForm({ ...hazardForm, ccp_justification: e.target.value })} />
+                </Grid>
+              </>
+            )}
+            {hazardForm.risk_strategy === 'opprp' && (
+              <Grid item xs={12}>
+                <TextField fullWidth label="OPPRP Justification" multiline rows={2} value={hazardForm.opprp_justification} onChange={(e) => setHazardForm({ ...hazardForm, opprp_justification: e.target.value })} />
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -1260,6 +1508,107 @@ const HACCP: React.FC = () => {
           <Button variant="contained" onClick={handleSaveCCP}>Save</Button>
         </DialogActions>
       </Dialog>
+
+      {/* OPRP Dialog */}
+      <Dialog open={oprpDialogOpen} onClose={() => { setOprpDialogOpen(false); setSelectedOprpItem(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedOprpItem ? 'Edit OPRP' : 'Add OPRP'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Hazard ID" value={oprpForm.hazard_id} onChange={(e) => setOprpForm({ ...oprpForm, hazard_id: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="OPRP Number" value={oprpForm.oprp_number} onChange={(e) => setOprpForm({ ...oprpForm, oprp_number: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="OPRP Name" value={oprpForm.oprp_name} onChange={(e) => setOprpForm({ ...oprpForm, oprp_name: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth multiline rows={3} label="Description" value={oprpForm.description} onChange={(e) => setOprpForm({ ...oprpForm, description: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Operational Min" value={oprpForm.operational_limit_min} onChange={(e) => setOprpForm({ ...oprpForm, operational_limit_min: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Operational Max" value={oprpForm.operational_limit_max} onChange={(e) => setOprpForm({ ...oprpForm, operational_limit_max: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="Unit" value={oprpForm.operational_limit_unit} onChange={(e) => setOprpForm({ ...oprpForm, operational_limit_unit: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Monitoring Frequency" value={oprpForm.monitoring_frequency} onChange={(e) => setOprpForm({ ...oprpForm, monitoring_frequency: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Monitoring Method" value={oprpForm.monitoring_method} onChange={(e) => setOprpForm({ ...oprpForm, monitoring_method: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                options={userOptions}
+                getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                value={monitoringUserValue}
+                onChange={(_, val) => {
+                  setMonitoringUserValue(val);
+                  setOprpForm({ ...oprpForm, monitoring_responsible: val ? String(val.id) : '' });
+                }}
+                onInputChange={(_, val) => setUserSearch(val)}
+                onOpen={() => setUserOpen(true)}
+                onClose={() => setUserOpen(false)}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => <TextField {...params} label="Monitoring Responsible" placeholder="Search user..." fullWidth />}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Monitoring Equipment" value={oprpForm.monitoring_equipment} onChange={(e) => setOprpForm({ ...oprpForm, monitoring_equipment: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth label="Corrective Actions" value={oprpForm.corrective_actions} onChange={(e) => setOprpForm({ ...oprpForm, corrective_actions: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Verification Frequency" value={oprpForm.verification_frequency} onChange={(e) => setOprpForm({ ...oprpForm, verification_frequency: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField fullWidth label="Verification Method" value={oprpForm.verification_method} onChange={(e) => setOprpForm({ ...oprpForm, verification_method: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <Autocomplete
+                options={userOptions}
+                getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                value={verificationUserValue}
+                onChange={(_, val) => {
+                  setVerificationUserValue(val);
+                  setOprpForm({ ...oprpForm, verification_responsible: val ? String(val.id) : '' });
+                }}
+                onInputChange={(_, val) => setUserSearch(val)}
+                onOpen={() => setUserOpen(true)}
+                onClose={() => setUserOpen(false)}
+                isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                renderInput={(params) => <TextField {...params} label="Verification Responsible" placeholder="Search user..." fullWidth />}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth label="Justification" multiline rows={2} value={oprpForm.justification} onChange={(e) => setOprpForm({ ...oprpForm, justification: e.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth label="Effectiveness Validation" multiline rows={2} value={oprpForm.effectiveness_validation} onChange={(e) => setOprpForm({ ...oprpForm, effectiveness_validation: e.target.value })} />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOprpDialogOpen(false); setSelectedOprpItem(null); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveOPRP}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Hazard View Dialog - For Viewing Existing Hazards */}
+      <HazardViewDialog
+        open={hazardViewDialogOpen}
+        onClose={() => {
+          setHazardViewDialogOpen(false);
+          setSelectedHazardItem(null);
+        }}
+        hazardData={selectedHazardItem}
+        processFlows={processFlows}
+      />
 
       {/* Simple edit dialogs could be implemented similarly for process flows, hazards, and CCPs. */}
       

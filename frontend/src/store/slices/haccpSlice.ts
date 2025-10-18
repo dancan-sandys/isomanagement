@@ -59,6 +59,9 @@ export interface Hazard {
   control_measures?: string;
   is_controlled: boolean;
   control_effectiveness?: number;
+  risk_strategy?: 'ccp' | 'opprp' | 'use_existing_prps' | 'further_analysis' | 'not_determined';
+  risk_strategy_justification?: string;
+  subsequent_step?: string;
   is_ccp: boolean;
   ccp_justification?: string;
   created_at: string;
@@ -118,11 +121,40 @@ export interface VerificationLog {
   created_at: string;
 }
 
+export interface OPRP {
+  id: number;
+  product_id: number;
+  hazard_id: number;
+  oprp_number: string;
+  oprp_name: string;
+  description?: string;
+  status: 'active' | 'inactive' | 'under_review' | 'suspended';
+  operational_limit_min?: number;
+  operational_limit_max?: number;
+  operational_limit_unit?: string;
+  operational_limit_description?: string;
+  monitoring_frequency?: string;
+  monitoring_method?: string;
+  monitoring_responsible?: number;
+  monitoring_equipment?: string;
+  corrective_actions?: string;
+  verification_frequency?: string;
+  verification_method?: string;
+  verification_responsible?: number;
+  justification?: string;
+  effectiveness_validation?: string;
+  created_at: string;
+  updated_at?: string;
+  created_by: number;
+}
+
 export interface HACCPDashboardStats {
   total_products: number;
   approved_plans: number;
   total_ccps: number;
   active_ccps: number;
+  total_oprps?: number;
+  active_oprps?: number;
   out_of_spec_count: number;
   recent_logs: Array<Record<string, any>>;
   out_of_spec_ccps?: Array<{ id: number; ccp_number?: string; ccp_name?: string; process_step?: string; measured_value?: number; unit?: string; limit_min?: number | null; limit_max?: number | null; measured_at?: string }>;
@@ -134,6 +166,7 @@ export interface HACCPState {
   processFlows: ProcessFlow[];
   hazards: Hazard[];
   ccps: CCP[];
+  oprps: OPRP[];
   monitoringLogs: MonitoringLog[];
   verificationLogs: VerificationLog[];
   dashboardStats: HACCPDashboardStats | null;
@@ -149,6 +182,7 @@ const initialState: HACCPState = {
   processFlows: [],
   hazards: [],
   ccps: [],
+  oprps: [],
   monitoringLogs: [],
   verificationLogs: [],
   dashboardStats: null,
@@ -375,6 +409,55 @@ export const runDecisionTree = createAsyncThunk(
   }
 );
 
+// OPRP async thunks
+export const fetchOPRPs = createAsyncThunk(
+  'haccp/fetchOPRPs',
+  async (productId: number, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.getOPRPs(productId);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch OPRPs');
+    }
+  }
+);
+
+export const createOPRP = createAsyncThunk(
+  'haccp/createOPRP',
+  async ({ productId, oprpData }: { productId: number; oprpData: any }, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.createOPRP(productId, oprpData);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to create OPRP');
+    }
+  }
+);
+
+export const updateOPRP = createAsyncThunk(
+  'haccp/updateOPRP',
+  async ({ oprpId, oprpData }: { oprpId: number; oprpData: any }, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.updateOPRP(oprpId, oprpData);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update OPRP');
+    }
+  }
+);
+
+export const deleteOPRP = createAsyncThunk(
+  'haccp/deleteOPRP',
+  async (oprpId: number, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.deleteOPRP(oprpId);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to delete OPRP');
+    }
+  }
+);
+
 // Slice
 const haccpSlice = createSlice({
   name: 'haccp',
@@ -422,6 +505,7 @@ const haccpSlice = createSlice({
         state.processFlows = action.payload.data.process_flows || [];
         state.hazards = action.payload.data.hazards || [];
         state.ccps = action.payload.data.ccps || [];
+        state.oprps = action.payload.data.oprps || [];
         state.error = null;
       })
       .addCase(fetchProduct.rejected, (state, action) => {
@@ -698,6 +782,69 @@ const haccpSlice = createSlice({
         state.error = null;
       })
       .addCase(runDecisionTree.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // fetchOPRPs
+    builder
+      .addCase(fetchOPRPs.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOPRPs.fulfilled, (state, action) => {
+        state.loading = false;
+        state.oprps = action.payload.data || [];
+        state.error = null;
+      })
+      .addCase(fetchOPRPs.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // createOPRP
+    builder
+      .addCase(createOPRP.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createOPRP.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(createOPRP.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // updateOPRP
+    builder
+      .addCase(updateOPRP.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateOPRP.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(updateOPRP.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // deleteOPRP
+    builder
+      .addCase(deleteOPRP.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteOPRP.fulfilled, (state, action) => {
+        state.loading = false;
+        const id = action.payload.id;
+        state.oprps = state.oprps.filter(o => o.id !== id);
+        state.error = null;
+      })
+      .addCase(deleteOPRP.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });

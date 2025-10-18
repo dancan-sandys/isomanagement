@@ -10,8 +10,9 @@ from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
-    HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig
+    HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig, DecisionTree
 )
+from app.models.oprp import OPRP, OPRPMonitoringLog, OPRPVerificationLog
 from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
     ProductCreate, ProductUpdate, ProductResponse, ProcessFlowCreate, ProcessFlowUpdate, ProcessFlowResponse,
@@ -137,7 +138,8 @@ async def get_product(
                     SELECT id, process_step_id, hazard_type, hazard_name, description,
                            rationale, prp_reference_ids, "references",
                            likelihood, severity, risk_score, risk_level, control_measures,
-                           is_controlled, control_effectiveness, is_ccp, ccp_justification
+                           is_controlled, control_effectiveness, is_ccp, ccp_justification,
+                           risk_strategy, risk_strategy_justification, subsequent_step
                     FROM hazards
                     WHERE product_id = :pid
                     """
@@ -168,6 +170,28 @@ async def get_product(
             print(f"DEBUG: Error in CCPs query: {e}")
             ccp_rows = []
         
+        # Get OPRPs (raw SQL to avoid enum coercion issues)
+        try:
+            oprp_rows = db.execute(
+                text(
+                    """
+                    SELECT id, product_id, hazard_id, oprp_number, oprp_name, description, status,
+                           operational_limits, operational_limit_min, operational_limit_max,
+                           operational_limit_unit, operational_limit_description,
+                           monitoring_frequency, monitoring_method, monitoring_responsible,
+                           monitoring_equipment, corrective_actions,
+                           verification_frequency, verification_method, verification_responsible,
+                           justification
+                    FROM oprps
+                    WHERE product_id = :pid
+                    """
+                ),
+                {"pid": product_id}
+            ).fetchall()
+        except Exception as e:
+            print(f"DEBUG: Error in OPRPs query: {e}")
+            oprp_rows = []
+        
         # Process hazards with safe mapping
         try:
             hazards_data = []
@@ -191,6 +215,9 @@ async def get_product(
                     "control_effectiveness": mapping.get("control_effectiveness"),
                     "is_ccp": mapping.get("is_ccp"),
                     "ccp_justification": mapping.get("ccp_justification"),
+                    "risk_strategy": mapping.get("risk_strategy"),
+                    "risk_strategy_justification": mapping.get("risk_strategy_justification"),
+                    "subsequent_step": mapping.get("subsequent_step"),
                 }
                 hazards_data.append(hazard_data)
         except Exception as e:
@@ -225,6 +252,39 @@ async def get_product(
         except Exception as e:
             print(f"DEBUG: Error processing CCPs data: {e}")
             ccps_data = []
+        
+        # Process OPRPs with safe mapping
+        try:
+            oprps_data = []
+            for row in oprp_rows:
+                mapping = getattr(row, "_mapping", {})
+                oprp_data = {
+                    "id": mapping.get("id"),
+                    "product_id": mapping.get("product_id"),
+                    "hazard_id": mapping.get("hazard_id"),
+                    "oprp_number": mapping.get("oprp_number"),
+                    "oprp_name": mapping.get("oprp_name"),
+                    "description": mapping.get("description"),
+                    "status": mapping.get("status"),
+                    "operational_limits": mapping.get("operational_limits"),
+                    "operational_limit_min": mapping.get("operational_limit_min"),
+                    "operational_limit_max": mapping.get("operational_limit_max"),
+                    "operational_limit_unit": mapping.get("operational_limit_unit"),
+                    "operational_limit_description": mapping.get("operational_limit_description"),
+                    "monitoring_frequency": mapping.get("monitoring_frequency"),
+                    "monitoring_method": mapping.get("monitoring_method"),
+                    "monitoring_responsible": mapping.get("monitoring_responsible"),
+                    "monitoring_equipment": mapping.get("monitoring_equipment"),
+                    "corrective_actions": mapping.get("corrective_actions"),
+                    "verification_frequency": mapping.get("verification_frequency"),
+                    "verification_method": mapping.get("verification_method"),
+                    "verification_responsible": mapping.get("verification_responsible"),
+                    "justification": mapping.get("justification"),
+                }
+                oprps_data.append(oprp_data)
+        except Exception as e:
+            print(f"DEBUG: Error processing OPRPs data: {e}")
+            oprps_data = []
         
         return ResponseModel(
             success=True,
@@ -268,7 +328,8 @@ async def get_product(
                     } for flow in process_flows
                 ],
                 "hazards": hazards_data,
-                "ccps": ccps_data
+                "ccps": ccps_data,
+                "oprps": oprps_data
             }
         )
         
@@ -743,14 +804,25 @@ async def create_hazard(
                 detail="Invalid process_step_id for this product"
             )
 
-        # Use the service layer for business logic
+        # Use the service layer for business logic (now handles CCP/OPRP creation)
         haccp_service = HACCPService(db)
         hazard = haccp_service.create_hazard(product_id, hazard_data, current_user.id)
         
+        # Check if CCP or OPRP was created
+        message = "Hazard created successfully"
+        if hazard.risk_strategy == "ccp":
+            ccp = db.query(CCP).filter(CCP.hazard_id == hazard.id).first()
+            if ccp:
+                message += f" and CCP ({ccp.ccp_number}) created"
+        elif hazard.risk_strategy == "opprp":
+            oprp = db.query(OPRP).filter(OPRP.hazard_id == hazard.id).first()
+            if oprp:
+                message += f" and OPRP ({oprp.oprp_number}) created"
+        
         resp = ResponseModel(
             success=True,
-            message="Hazard created successfully",
-            data={"id": hazard.id}
+            message=message,
+            data={"id": hazard.id, "risk_strategy": hazard.risk_strategy}
         )
         try:
             audit_event(db, current_user.id, "haccp_hazard_created", "haccp", str(hazard.id), {"product_id": product_id})
@@ -852,13 +924,33 @@ async def delete_hazard(
     current_user: User = Depends(require_permission_dependency("haccp:delete")),
     db: Session = Depends(get_db)
 ):
-    """Delete a hazard"""
+    """Delete a hazard and all related records"""
     try:
         hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
         if not hazard:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hazard not found")
+        
+        # Delete related OPRPs first (to avoid foreign key constraint violation)
+        oprps = db.query(OPRP).filter(OPRP.hazard_id == hazard_id).all()
+        for oprp in oprps:
+            # Delete OPRP monitoring and verification logs
+            db.query(OPRPMonitoringLog).filter(OPRPMonitoringLog.oprp_id == oprp.id).delete(synchronize_session=False)
+            db.query(OPRPVerificationLog).filter(OPRPVerificationLog.oprp_id == oprp.id).delete(synchronize_session=False)
+            db.delete(oprp)
+        
+        # Delete decision tree records
+        db.query(DecisionTree).filter(DecisionTree.hazard_id == hazard_id).delete(synchronize_session=False)
+        
+        # Delete hazard reviews if they exist
+        try:
+            db.query(HazardReview).filter(HazardReview.hazard_id == hazard_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+        
+        # Finally delete the hazard
         db.delete(hazard)
         db.commit()
+        
         try:
             audit_event(db, current_user.id, "haccp_hazard_deleted", "haccp", str(hazard_id))
         except Exception:
@@ -867,6 +959,7 @@ async def delete_hazard(
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete hazard: {str(e)}")
 
 
@@ -1807,9 +1900,9 @@ async def delete_process_flow(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete process flow: {str(e)}")
 
 
-# Hazard Management
+# Hazard Management (Duplicate route - using service layer with CCP/OPRP creation)
 @router.post("/products/{product_id}/hazards")
-async def create_hazard(
+async def create_hazard_alt(
     product_id: int,
     hazard_data: HazardCreate,
     current_user: User = Depends(get_current_user),
@@ -1836,14 +1929,25 @@ async def create_hazard(
                 detail="Invalid process_step_id for this product"
             )
 
-        # Use the service layer for business logic
+        # Use the service layer for business logic (now handles CCP/OPRP creation)
         haccp_service = HACCPService(db)
         hazard = haccp_service.create_hazard(product_id, hazard_data, current_user.id)
         
+        # Check if CCP or OPRP was created
+        message = "Hazard created successfully"
+        if hazard.risk_strategy == "ccp":
+            ccp = db.query(CCP).filter(CCP.hazard_id == hazard.id).first()
+            if ccp:
+                message += f" and CCP ({ccp.ccp_number}) created"
+        elif hazard.risk_strategy == "opprp":
+            oprp = db.query(OPRP).filter(OPRP.hazard_id == hazard.id).first()
+            if oprp:
+                message += f" and OPRP ({oprp.oprp_number}) created"
+        
         resp = ResponseModel(
             success=True,
-            message="Hazard created successfully",
-            data={"id": hazard.id}
+            message=message,
+            data={"id": hazard.id, "risk_strategy": hazard.risk_strategy}
         )
         try:
             audit_event(db, current_user.id, "haccp_hazard_created", "haccp", str(hazard.id), {"product_id": product_id})
@@ -1927,31 +2031,7 @@ async def update_hazard(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update hazard: {str(e)}")
 
 
-@router.delete("/hazards/{hazard_id}")
-async def delete_hazard(
-    hazard_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Delete a hazard"""
-    try:
-        hazard = db.query(Hazard).filter(Hazard.id == hazard_id).first()
-        if not hazard:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hazard not found")
-        db.delete(hazard)
-        db.commit()
-        try:
-            audit_event(db, current_user.id, "haccp_hazard_deleted", "haccp", str(hazard_id))
-        except Exception:
-            pass
-        return ResponseModel(success=True, message="Hazard deleted successfully", data={"id": hazard_id})
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete hazard: {str(e)}")
-
-
-# CCP Management
+# CCP Management (duplicate delete_hazard endpoint removed)
 @router.post("/products/{product_id}/ccps")
 async def create_ccp(
     product_id: int,
@@ -3597,4 +3677,394 @@ async def delete_evidence_attachment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete evidence attachment: {str(e)}"
+        )
+
+
+# ============================================================================
+# OPRP MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.post("/products/{product_id}/oprps", response_model=ResponseModel)
+async def create_oprp(
+    product_id: int,
+    oprp_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create an OPRP for a product"""
+    try:
+        # Verify product exists
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found"
+            )
+        
+        # Verify hazard exists
+        hazard = db.query(Hazard).filter(Hazard.id == oprp_data.get("hazard_id")).first()
+        if not hazard:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Hazard not found"
+            )
+        
+        # Create OPRP
+        oprp = OPRP(
+            product_id=product_id,
+            hazard_id=oprp_data["hazard_id"],
+            oprp_number=oprp_data["oprp_number"],
+            oprp_name=oprp_data["oprp_name"],
+            description=oprp_data.get("description"),
+            status=oprp_data.get("status", "active"),
+            operational_limit_min=oprp_data.get("operational_limit_min"),
+            operational_limit_max=oprp_data.get("operational_limit_max"),
+            operational_limit_unit=oprp_data.get("operational_limit_unit"),
+            operational_limit_description=oprp_data.get("operational_limit_description"),
+            monitoring_frequency=oprp_data.get("monitoring_frequency"),
+            monitoring_method=oprp_data.get("monitoring_method"),
+            monitoring_responsible=oprp_data.get("monitoring_responsible"),
+            monitoring_equipment=oprp_data.get("monitoring_equipment"),
+            corrective_actions=oprp_data.get("corrective_actions"),
+            verification_frequency=oprp_data.get("verification_frequency"),
+            verification_method=oprp_data.get("verification_method"),
+            verification_responsible=oprp_data.get("verification_responsible"),
+            justification=oprp_data.get("justification"),
+            effectiveness_validation=oprp_data.get("effectiveness_validation"),
+            created_by=current_user.id
+        )
+        
+        db.add(oprp)
+        db.commit()
+        db.refresh(oprp)
+        
+        try:
+            audit_event(db, current_user.id, "haccp_oprp_created", "haccp", str(oprp.id))
+        except Exception:
+            pass
+        
+        return ResponseModel(
+            success=True,
+            message="OPRP created successfully",
+            data={"id": oprp.id, "name": oprp.oprp_name}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create OPRP: {str(e)}"
+        )
+
+
+@router.get("/products/{product_id}/oprps", response_model=ResponseModel)
+async def get_oprps(
+    product_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all OPRPs for a product"""
+    try:
+        # Verify product exists
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found"
+            )
+        
+        oprps = db.query(OPRP).filter(OPRP.product_id == product_id).all()
+        
+        return ResponseModel(
+            success=True,
+            message="OPRPs retrieved successfully",
+            data=[{
+                "id": oprp.id,
+                "oprp_number": oprp.oprp_number,
+                "oprp_name": oprp.oprp_name,
+                "description": oprp.description,
+                "status": oprp.status,
+                "hazard_id": oprp.hazard_id,
+                "operational_limit_min": oprp.operational_limit_min,
+                "operational_limit_max": oprp.operational_limit_max,
+                "operational_limit_unit": oprp.operational_limit_unit,
+                "monitoring_frequency": oprp.monitoring_frequency,
+                "monitoring_method": oprp.monitoring_method,
+                "corrective_actions": oprp.corrective_actions,
+                "justification": oprp.justification,
+                "created_at": oprp.created_at,
+                "updated_at": oprp.updated_at
+            } for oprp in oprps]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve OPRPs: {str(e)}"
+        )
+
+
+@router.get("/oprps/{oprp_id}", response_model=ResponseModel)
+async def get_oprp(
+    oprp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get a specific OPRP"""
+    try:
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        
+        return ResponseModel(
+            success=True,
+            message="OPRP retrieved successfully",
+            data={
+                "id": oprp.id,
+                "product_id": oprp.product_id,
+                "hazard_id": oprp.hazard_id,
+                "oprp_number": oprp.oprp_number,
+                "oprp_name": oprp.oprp_name,
+                "description": oprp.description,
+                "status": oprp.status,
+                "operational_limit_min": oprp.operational_limit_min,
+                "operational_limit_max": oprp.operational_limit_max,
+                "operational_limit_unit": oprp.operational_limit_unit,
+                "operational_limit_description": oprp.operational_limit_description,
+                "monitoring_frequency": oprp.monitoring_frequency,
+                "monitoring_method": oprp.monitoring_method,
+                "monitoring_responsible": oprp.monitoring_responsible,
+                "monitoring_equipment": oprp.monitoring_equipment,
+                "corrective_actions": oprp.corrective_actions,
+                "verification_frequency": oprp.verification_frequency,
+                "verification_method": oprp.verification_method,
+                "verification_responsible": oprp.verification_responsible,
+                "justification": oprp.justification,
+                "effectiveness_validation": oprp.effectiveness_validation,
+                "created_at": oprp.created_at,
+                "updated_at": oprp.updated_at,
+                "created_by": oprp.created_by
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve OPRP: {str(e)}"
+        )
+
+
+@router.put("/oprps/{oprp_id}", response_model=ResponseModel)
+async def update_oprp(
+    oprp_id: int,
+    oprp_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
+    db: Session = Depends(get_db)
+):
+    """Update an OPRP"""
+    try:
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        
+        # Update fields
+        for field in [
+            "oprp_number",
+            "oprp_name",
+            "description",
+            "status",
+            "operational_limit_min",
+            "operational_limit_max",
+            "operational_limit_unit",
+            "operational_limit_description",
+            "monitoring_frequency",
+            "monitoring_method",
+            "monitoring_responsible",
+            "monitoring_equipment",
+            "corrective_actions",
+            "verification_frequency",
+            "verification_method",
+            "verification_responsible",
+            "justification",
+            "effectiveness_validation"
+        ]:
+            if field in oprp_data:
+                setattr(oprp, field, oprp_data[field])
+        
+        db.commit()
+        db.refresh(oprp)
+        
+        try:
+            audit_event(db, current_user.id, "haccp_oprp_updated", "haccp", str(oprp.id))
+        except Exception:
+            pass
+        
+        return ResponseModel(
+            success=True,
+            message="OPRP updated successfully",
+            data={"id": oprp.id}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update OPRP: {str(e)}"
+        )
+
+
+@router.delete("/oprps/{oprp_id}", response_model=ResponseModel)
+async def delete_oprp(
+    oprp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:delete")),
+    db: Session = Depends(get_db)
+):
+    """Delete an OPRP"""
+    try:
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        
+        db.delete(oprp)
+        db.commit()
+        
+        try:
+            audit_event(db, current_user.id, "haccp_oprp_deleted", "haccp", str(oprp_id))
+        except Exception:
+            pass
+        
+        return ResponseModel(
+            success=True,
+            message="OPRP deleted successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete OPRP: {str(e)}"
+        )
+
+
+@router.post("/oprps/{oprp_id}/monitoring-logs", response_model=ResponseModel)
+async def create_oprp_monitoring_log(
+    oprp_id: int,
+    log_data: dict,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create an OPRP monitoring log"""
+    try:
+        # Verify OPRP exists
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        
+        # Validate measured values against operational limits
+        validation_results = oprp.validate_limits(log_data.get("measured_values", {}))
+        is_within_limits = all(result.get("valid", False) for result in validation_results.values())
+        
+        # Create monitoring log
+        monitoring_log = OPRPMonitoringLog(
+            oprp_id=oprp_id,
+            batch_number=log_data.get("batch_number"),
+            measured_values=log_data.get("measured_values", {}),
+            measured_at=datetime.fromisoformat(log_data["measured_at"]) if isinstance(log_data.get("measured_at"), str) else log_data.get("measured_at", datetime.now()),
+            measured_by=current_user.id,
+            equipment_used=log_data.get("equipment_used"),
+            comments=log_data.get("comments"),
+            validation_results=validation_results,
+            is_within_limits=is_within_limits,
+            corrective_actions_taken=log_data.get("corrective_actions_taken") if not is_within_limits else None
+        )
+        
+        db.add(monitoring_log)
+        db.commit()
+        db.refresh(monitoring_log)
+        
+        try:
+            audit_event(db, current_user.id, "haccp_oprp_monitoring_log_created", "haccp", str(monitoring_log.id))
+        except Exception:
+            pass
+        
+        return ResponseModel(
+            success=True,
+            message="OPRP monitoring log created successfully",
+            data={
+                "id": monitoring_log.id,
+                "is_within_limits": is_within_limits,
+                "validation_results": validation_results
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create OPRP monitoring log: {str(e)}"
+        )
+
+
+@router.get("/oprps/{oprp_id}/monitoring-logs", response_model=ResponseModel)
+async def get_oprp_monitoring_logs(
+    oprp_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get monitoring logs for an OPRP"""
+    try:
+        # Verify OPRP exists
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        
+        logs = db.query(OPRPMonitoringLog).filter(OPRPMonitoringLog.oprp_id == oprp_id).order_by(OPRPMonitoringLog.measured_at.desc()).all()
+        
+        return ResponseModel(
+            success=True,
+            message="OPRP monitoring logs retrieved successfully",
+            data=[{
+                "id": log.id,
+                "batch_number": log.batch_number,
+                "measured_values": log.measured_values,
+                "measured_at": log.measured_at,
+                "measured_by": log.measured_by,
+                "equipment_used": log.equipment_used,
+                "comments": log.comments,
+                "validation_results": log.validation_results,
+                "is_within_limits": log.is_within_limits,
+                "corrective_actions_taken": log.corrective_actions_taken,
+                "created_at": log.created_at
+            } for log in logs]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve OPRP monitoring logs: {str(e)}"
         )

@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem, Card, CardContent, CardActions } from '@mui/material';
-import { Add, Edit, Delete, Help, Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { Add, Edit, Visibility, Delete } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
-import { traceabilityAPI, usersAPI, decisionTreeAPI } from '../services/api';
+import { traceabilityAPI, usersAPI } from '../services/api';
 import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
-import DecisionTreeDialog from '../components/DecisionTreeDialog';
-import HACCPBreadcrumbs from '../components/UI/HACCPBreadcrumbs';
+import HazardDialog from '../components/HACCP/HazardDialog';
+import HazardViewDialog from '../components/HACCP/HazardViewDialog';
 import { AppDispatch, RootState } from '../store';
-import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, deleteCCP, updateProduct } from '../store/slices/haccpSlice';
+import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, createOPRP, updateProduct } from '../store/slices/haccpSlice';
 
 function TabPanel({ children, value, index }: { children?: React.ReactNode; value: number; index: number }) {
   return (
@@ -23,11 +23,12 @@ const HACCPProductDetail: React.FC = () => {
   const { id } = useParams();
   const productId = Number(id);
   const dispatch = useDispatch<AppDispatch>();
-  const { selectedProduct, processFlows, hazards, ccps, loading } = useSelector((s: RootState) => s.haccp);
+  const { selectedProduct, processFlows, hazards, ccps, oprps } = useSelector((s: RootState) => s.haccp);
 
   const [selectedTab, setSelectedTab] = useState(0);
   const [processFlowDialogOpen, setProcessFlowDialogOpen] = useState(false);
   const [hazardDialogOpen, setHazardDialogOpen] = useState(false);
+  const [hazardViewDialogOpen, setHazardViewDialogOpen] = useState(false);
   const [ccpDialogOpen, setCcpDialogOpen] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [selectedHazardItem, setSelectedHazardItem] = useState<any>(null);
@@ -35,26 +36,8 @@ const HACCPProductDetail: React.FC = () => {
   const [flowchartDialogOpen, setFlowchartDialogOpen] = useState(false);
 
   const [flowForm, setFlowForm] = useState({ step_number: '', step_name: '', description: '', equipment: '', temperature: '', time_minutes: '', ph: '', aw: '' });
-  const [hazardForm, setHazardForm] = useState({ 
-    process_step_id: '', 
-    hazard_type: 'biological', 
-    hazard_name: '', 
-    description: '', 
-    rationale: '',  // New field for hazard analysis
-    prp_reference_ids: [] as number[],  // New field for PRP references
-    references: [] as any[],  // New field for references
-    likelihood: '1', 
-    severity: '1', 
-    control_measures: '', 
-    is_controlled: false as boolean, 
-    control_effectiveness: '', 
-    is_ccp: false as boolean, 
-    ccp_justification: '' 
-  });
+  // Hazard form removed - now handled by HazardDialog component
   const [ccpForm, setCcpForm] = useState({ hazard_id: '', ccp_number: '', ccp_name: '', description: '', critical_limit_min: '', critical_limit_max: '', critical_limit_unit: '', monitoring_frequency: '', monitoring_method: '', monitoring_responsible: '', monitoring_equipment: '', corrective_actions: '', verification_frequency: '', verification_method: '', verification_responsible: '' });
-
-  // Reference management state
-  const [referenceForm, setReferenceForm] = useState({ title: '', url: '', description: '', type: 'document' });
 
   const [userSearch, setUserSearch] = useState('');
   const [userOptions, setUserOptions] = useState<Array<{ id: number; username: string; full_name?: string }>>([]);
@@ -64,10 +47,6 @@ const HACCPProductDetail: React.FC = () => {
   const [monitoringUserValue, setMonitoringUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
   const [verificationUserValue, setVerificationUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
   
-  // Decision Tree state
-  const [decisionTreeDialogOpen, setDecisionTreeDialogOpen] = useState(false);
-  const [selectedHazardForDecisionTree, setSelectedHazardForDecisionTree] = useState<any>(null);
-
   useEffect(() => {
     dispatch(fetchProduct(productId));
   }, [dispatch, productId]);
@@ -135,51 +114,7 @@ const HACCPProductDetail: React.FC = () => {
     }
   }, [selectedFlow]);
 
-  useEffect(() => {
-    if (selectedHazardItem) {
-      const rawPrp = (selectedHazardItem as any).prp_reference_ids;
-      const prpIds = Array.isArray(rawPrp)
-        ? rawPrp.map((v: any) => Number(v)).filter((n: number) => !isNaN(n))
-        : typeof rawPrp === 'string'
-          ? rawPrp.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n))
-          : typeof rawPrp === 'number'
-            ? [rawPrp]
-            : [];
-      setHazardForm({ 
-        process_step_id: String(selectedHazardItem.process_step_id ?? ''), 
-        hazard_type: selectedHazardItem.hazard_type || 'biological', 
-        hazard_name: selectedHazardItem.hazard_name || '', 
-        description: selectedHazardItem.description || '', 
-        rationale: selectedHazardItem.rationale || '',
-        prp_reference_ids: prpIds,
-        references: selectedHazardItem.references || [], 
-        likelihood: String(selectedHazardItem.likelihood ?? '1'), 
-        severity: String(selectedHazardItem.severity ?? '1'), 
-        control_measures: selectedHazardItem.control_measures || '', 
-        is_controlled: !!selectedHazardItem.is_controlled, 
-        control_effectiveness: String(selectedHazardItem.control_effectiveness ?? ''), 
-        is_ccp: !!selectedHazardItem.is_ccp, 
-        ccp_justification: selectedHazardItem.ccp_justification || '' 
-      });
-    } else {
-      setHazardForm({ 
-        process_step_id: '', 
-        hazard_type: 'biological', 
-        hazard_name: '', 
-        description: '', 
-        rationale: '',
-        prp_reference_ids: [],
-        references: [], 
-        likelihood: '1', 
-        severity: '1', 
-        control_measures: '', 
-        is_controlled: false, 
-        control_effectiveness: '', 
-        is_ccp: false, 
-        ccp_justification: '' 
-      });
-    }
-  }, [selectedHazardItem]);
+  // Hazard form population removed - now handled by HazardDialog component
 
   useEffect(() => {
     if (selectedCcpItem) {
@@ -219,45 +154,75 @@ const HACCPProductDetail: React.FC = () => {
     } catch {}
   };
 
-  const handleSaveHazard = async () => {
-    // Validate required fields
-    if (!hazardForm.process_step_id || hazardForm.process_step_id === '') {
-      alert('Please select a process step');
-      return;
-    }
-    
-    if (!hazardForm.hazard_name || hazardForm.hazard_name.trim() === '') {
-      alert('Please enter a hazard name');
-      return;
-    }
-    
+  const handleSaveHazard = async (hazardData: any) => {
     const payload: any = { 
-      process_step_id: Number(hazardForm.process_step_id), 
-      hazard_type: hazardForm.hazard_type, 
-      hazard_name: hazardForm.hazard_name.trim(), 
-      description: hazardForm.description, 
-      rationale: hazardForm.rationale,
-      prp_reference_ids: (
-        Array.isArray((hazardForm as any).prp_reference_ids)
-          ? (hazardForm as any).prp_reference_ids
-          : String((hazardForm as any).prp_reference_ids || '').split(',')
-      )
-        .map((v: any) => Number(String(v).trim()))
-        .filter((n: number) => !isNaN(n)),
-      references: hazardForm.references, 
-      likelihood: Number(hazardForm.likelihood), 
-      severity: Number(hazardForm.severity), 
-      control_measures: hazardForm.control_measures, 
-      is_controlled: hazardForm.is_controlled, 
-      control_effectiveness: hazardForm.control_effectiveness === '' ? null : Number(hazardForm.control_effectiveness), 
-      is_ccp: hazardForm.is_ccp, 
-      ccp_justification: hazardForm.ccp_justification 
+      process_step_id: Number(hazardData.process_step_id), 
+      hazard_type: hazardData.hazard_type, 
+      hazard_name: hazardData.hazard_name.trim(), 
+      description: hazardData.description, 
+      consequences: hazardData.consequences,
+      prp_reference_ids: hazardData.prp_reference_ids || [],
+      references: hazardData.references || [], 
+      likelihood: Number(hazardData.likelihood), 
+      severity: Number(hazardData.severity), 
+      control_measures: hazardData.control_measures,
+      risk_strategy: hazardData.risk_strategy || 'opprp',
+      risk_strategy_justification: hazardData.risk_strategy_justification,
+      subsequent_step: hazardData.subsequent_step,
     };
+
+    // Include decision tree answers if provided
+    if (hazardData.decision_tree) {
+      payload.decision_tree = hazardData.decision_tree;
+    }
+
     try {
-      if (selectedHazardItem) await dispatch(updateHazard({ hazardId: selectedHazardItem.id, hazardData: payload })).unwrap();
-      else await dispatch(createHazard({ productId, hazardData: payload })).unwrap();
-      setHazardDialogOpen(false); setSelectedHazardItem(null); dispatch(fetchProduct(productId));
-    } catch {}
+      let createdHazard: any;
+      
+      if (selectedHazardItem) {
+        createdHazard = await dispatch(updateHazard({ hazardId: selectedHazardItem.id, hazardData: payload })).unwrap();
+      } else {
+        createdHazard = await dispatch(createHazard({ productId, hazardData: payload })).unwrap();
+      }
+
+      // Create CCP if strategy is CCP
+      if (hazardData.ccp && hazardData.risk_strategy === 'ccp') {
+        const ccpPayload = {
+          hazard_id: createdHazard.id || createdHazard.data?.id,
+          ccp_number: hazardData.ccp.ccp_number,
+          ccp_name: hazardData.ccp.ccp_name,
+          description: hazardData.ccp.description,
+          critical_limit_min: hazardData.ccp.critical_limit_min ? Number(hazardData.ccp.critical_limit_min) : null,
+          critical_limit_max: hazardData.ccp.critical_limit_max ? Number(hazardData.ccp.critical_limit_max) : null,
+          critical_limit_unit: hazardData.ccp.critical_limit_unit,
+          monitoring_frequency: hazardData.ccp.monitoring_frequency,
+          monitoring_method: hazardData.ccp.monitoring_method,
+          corrective_actions: hazardData.ccp.corrective_actions,
+        };
+        await dispatch(createCCP({ productId, ccpData: ccpPayload })).unwrap();
+      }
+
+      // Create OPRP if strategy is OPRP
+      if (hazardData.oprp && hazardData.risk_strategy === 'opprp') {
+        const oprpPayload = {
+          hazard_id: createdHazard.id || createdHazard.data?.id,
+          oprp_number: hazardData.oprp.oprp_number,
+          oprp_name: hazardData.oprp.oprp_name,
+          description: hazardData.oprp.description,
+          justification: hazardData.risk_strategy_justification,
+          // OPRP-specific fields
+          objective: hazardData.oprp.objective,
+          sop_reference: hazardData.oprp.sop_reference,
+        };
+        await dispatch(createOPRP({ productId, oprpData: oprpPayload })).unwrap();
+      }
+
+      setHazardDialogOpen(false); 
+      setSelectedHazardItem(null); 
+      dispatch(fetchProduct(productId));
+    } catch (error) {
+      console.error('Failed to save hazard:', error);
+    }
   };
 
   const handleSaveCCP = async () => {
@@ -267,40 +232,6 @@ const HACCPProductDetail: React.FC = () => {
       else await dispatch(createCCP({ productId, ccpData: payload })).unwrap();
       setCcpDialogOpen(false); setSelectedCcpItem(null); dispatch(fetchProduct(productId));
     } catch {}
-  };
-
-  // Reference management functions
-  const addReference = () => {
-    if (referenceForm.title.trim() && referenceForm.url.trim()) {
-      const newReference = {
-        id: Date.now(),
-        title: referenceForm.title.trim(),
-        url: referenceForm.url.trim(),
-        description: referenceForm.description.trim(),
-        type: referenceForm.type
-      };
-      setHazardForm(prev => ({
-        ...prev,
-        references: [...prev.references, newReference]
-      }));
-      setReferenceForm({ title: '', url: '', description: '', type: 'document' });
-    }
-  };
-
-  const removeReference = (index: number) => {
-    setHazardForm(prev => ({
-      ...prev,
-      references: prev.references.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateReference = (index: number, field: string, value: string) => {
-    setHazardForm(prev => ({
-      ...prev,
-      references: prev.references.map((ref, i) => 
-        i === index ? { ...ref, [field]: value } : ref
-      )
-    }));
   };
 
   const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string; evidence_files?: string }>({});
@@ -420,8 +351,9 @@ const HACCPProductDetail: React.FC = () => {
           <Typography color="textSecondary">{selectedProduct.product_code}</Typography>
           <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
             <Chip label={selectedProduct.haccp_plan_approved ? 'Plan Approved' : 'Plan Pending'} color={selectedProduct.haccp_plan_approved ? 'success' : 'warning'} />
-            <Chip label={`${ccps.length} CCPs`} color="primary" />
             <Chip label={`${hazards.length} Hazards`} color="secondary" />
+            <Chip label={`${ccps.length} CCPs`} color="error" />
+            <Chip label={`${oprps.length} OPRPs`} color="warning" />
           </Stack>
         </Box>
       )}
@@ -430,6 +362,7 @@ const HACCPProductDetail: React.FC = () => {
         <Tab label="Process Flow" />
         <Tab label="Hazards" />
         <Tab label="CCPs" />
+        <Tab label="OPRPs" />
         <Tab label="Monitoring" />
         <Tab label="Risk Configuration" />
       </Tabs>
@@ -487,24 +420,47 @@ const HACCPProductDetail: React.FC = () => {
                 <Typography variant="h6">{hazard.hazard_name}</Typography>
                 <Typography color="textSecondary">{hazard.hazard_type}</Typography>
                 <Typography variant="body2" paragraph>{hazard.description}</Typography>
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
                   <Chip label={`Risk: ${hazard.risk_level}`} color="warning" size="small" />
                   <Chip label={`Score: ${hazard.risk_score}`} color="primary" size="small" />
-                  {hazard.is_ccp && <Chip label="CCP" color="error" size="small" />}
+                  {hazard.risk_strategy && hazard.risk_strategy !== 'not_determined' && (
+                    <Chip 
+                      label={hazard.risk_strategy === 'ccp' ? 'CCP' : hazard.risk_strategy === 'opprp' ? 'OPRP' : hazard.risk_strategy === 'use_existing_prps' ? 'PRPs' : 'Analysis Needed'} 
+                      color={hazard.risk_strategy === 'ccp' ? 'error' : hazard.risk_strategy === 'opprp' ? 'warning' : 'info'} 
+                      size="small" 
+                    />
+                  )}
+                  {hazard.is_ccp === true && <Chip label="CCP" color="error" size="small" />}
                 </Stack>
                 <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'flex-end' }}>
                   <IconButton 
                     size="small" 
                     onClick={() => { 
-                      setSelectedHazardForDecisionTree(hazard); 
-                      setDecisionTreeDialogOpen(true); 
-                    }}
-                    title="Run Decision Tree"
+                      setSelectedHazardItem(hazard); 
+                      setHazardViewDialogOpen(true); 
+                    }} 
+                    title="View Hazard"
                   >
-                    <Help />
+                    <Visibility />
                   </IconButton>
-                  <IconButton size="small" onClick={() => { setSelectedHazardItem(hazard); setHazardDialogOpen(true); }}><Edit /></IconButton>
-                  <IconButton size="small" onClick={() => { if (window.confirm('Delete this hazard?')) dispatch(deleteHazard(hazard.id)).then(() => dispatch(fetchProduct(productId))); }}><Delete /></IconButton>
+                  <IconButton 
+                    size="small" 
+                    onClick={async () => { 
+                      if (window.confirm('Delete this hazard?')) {
+                        try {
+                          await dispatch(deleteHazard(hazard.id)).unwrap();
+                          await dispatch(fetchProduct(productId));
+                          alert('Hazard deleted successfully!');
+                        } catch (error: any) {
+                          console.error('Failed to delete hazard:', error);
+                          alert(`Failed to delete hazard: ${error}`);
+                        }
+                      }
+                    }}
+                    title="Delete Hazard"
+                  >
+                    <Delete />
+                  </IconButton>
                 </Stack>
               </Paper>
             </Grid>
@@ -528,8 +484,7 @@ const HACCPProductDetail: React.FC = () => {
                   <Typography variant="body2" color="textSecondary">Limits: {ccp.critical_limit_min} - {ccp.critical_limit_max} {ccp.critical_limit_unit}</Typography>
                 )}
                 <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'flex-end' }}>
-                  <IconButton size="small" onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }}><Edit /></IconButton>
-                  <IconButton size="small" onClick={() => { if (window.confirm('Delete this CCP?')) dispatch(deleteCCP(ccp.id)).then(() => dispatch(fetchProduct(productId))); }}><Delete /></IconButton>
+                  <IconButton size="small" onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} title="Edit CCP"><Edit /></IconButton>
                 </Stack>
               </Paper>
             </Grid>
@@ -538,6 +493,58 @@ const HACCPProductDetail: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={selectedTab} index={3}>
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Operational Prerequisite Programs (OPRPs)</Typography>
+        </Box>
+        <Grid container spacing={2}>
+          {oprps.map((oprp: any) => (
+            <Grid item xs={12} sm={6} md={4} key={oprp.id}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="h6">{oprp.oprp_name}</Typography>
+                <Typography color="textSecondary" variant="body2" gutterBottom>
+                  {oprp.oprp_number}
+                </Typography>
+                <Typography variant="body2" paragraph>
+                  {oprp.description}
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
+                  <Chip 
+                    label={oprp.status || 'Active'} 
+                    color={oprp.status === 'active' ? 'success' : 'default'} 
+                    size="small" 
+                  />
+                  {oprp.monitoring_frequency && (
+                    <Chip 
+                      label={`Monitor: ${oprp.monitoring_frequency}`} 
+                      size="small" 
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
+                {oprp.operational_limits && (
+                  <Box sx={{ mt: 1, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+                    <Typography variant="caption" color="textSecondary">
+                      Operational Limits:
+                    </Typography>
+                    <Typography variant="body2">
+                      {oprp.operational_limits}
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+        {oprps.length === 0 && (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="textSecondary">
+              No OPRPs defined yet. OPRPs are created automatically when a hazard is assigned the OPRP risk strategy.
+            </Typography>
+          </Paper>
+        )}
+      </TabPanel>
+
+      <TabPanel value={selectedTab} index={4}>
         <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
         <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
           <Autocomplete options={ccps} getOptionLabel={(ccp: any) => `${ccp.ccp_number || ''} - ${ccp.ccp_name || ''}`.trim()} value={ccps.find((c: any) => String(c.id) === (monitoringForm.ccp_id || '')) || null} onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, ccp_id: val ? String(val.id) : '' })} isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id} renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP for monitoring" />} />
@@ -687,7 +694,7 @@ const HACCPProductDetail: React.FC = () => {
         </Stack>
       </TabPanel>
 
-      <TabPanel value={selectedTab} index={4}>
+      <TabPanel value={selectedTab} index={5}>
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">Risk Configuration</Typography>
           <Button variant="contained" onClick={() => setRiskConfigDialogOpen(true)}>
@@ -758,194 +765,28 @@ const HACCPProductDetail: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={hazardDialogOpen} onClose={() => { setHazardDialogOpen(false); setSelectedHazardItem(null); }} maxWidth="md" fullWidth>
-        <DialogTitle>{selectedHazardItem ? 'Edit Hazard' : 'Add Hazard'}</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Process Step</InputLabel>
-                <Select
-                  value={hazardForm.process_step_id}
-                  label="Process Step"
-                  onChange={(e) => setHazardForm({ ...hazardForm, process_step_id: e.target.value })}
-                >
-                  {processFlows.map((flow) => (
-                    <MenuItem key={flow.id} value={flow.id}>
-                      {flow.step_number}. {flow.step_name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Hazard Type</InputLabel>
-                <Select
-                  value={hazardForm.hazard_type}
-                  label="Hazard Type"
-                  onChange={(e) => setHazardForm({ ...hazardForm, hazard_type: e.target.value })}
-                >
-                  <MenuItem value="biological">Biological</MenuItem>
-                  <MenuItem value="chemical">Chemical</MenuItem>
-                  <MenuItem value="physical">Physical</MenuItem>
-                  <MenuItem value="allergen">Allergen</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Hazard Name" value={hazardForm.hazard_name} onChange={(e) => setHazardForm({ ...hazardForm, hazard_name: e.target.value })} /></Grid>
-            <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={hazardForm.description} onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })} /></Grid>
-            <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Rationale (Hazard Analysis)" value={hazardForm.rationale} onChange={(e) => setHazardForm({ ...hazardForm, rationale: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="PRP Reference IDs (comma-separated)" value={Array.isArray(hazardForm.prp_reference_ids) ? hazardForm.prp_reference_ids.join(', ') : String((hazardForm as any).prp_reference_ids ?? '')} onChange={(e) => setHazardForm({ ...hazardForm, prp_reference_ids: e.target.value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id)) })} /></Grid>
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom>
-                References
-              </Typography>
-              <Box sx={{ mb: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Title"
-                      value={referenceForm.title}
-                      onChange={(e) => setReferenceForm({ ...referenceForm, title: e.target.value })}
-                      placeholder="Reference title"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="URL"
-                      value={referenceForm.url}
-                      onChange={(e) => setReferenceForm({ ...referenceForm, url: e.target.value })}
-                      placeholder="https://..."
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={2}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Type</InputLabel>
-                      <Select
-                        value={referenceForm.type}
-                        onChange={(e) => setReferenceForm({ ...referenceForm, type: e.target.value })}
-                        label="Type"
-                      >
-                        <MenuItem value="document">Document</MenuItem>
-                        <MenuItem value="website">Website</MenuItem>
-                        <MenuItem value="standard">Standard</MenuItem>
-                        <MenuItem value="regulation">Regulation</MenuItem>
-                        <MenuItem value="guideline">Guideline</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Description"
-                      value={referenceForm.description}
-                      onChange={(e) => setReferenceForm({ ...referenceForm, description: e.target.value })}
-                      placeholder="Brief description"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={1}>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={addReference}
-                      disabled={!referenceForm.title.trim() || !referenceForm.url.trim()}
-                      sx={{ height: '40px', minWidth: '40px' }}
-                    >
-                      <AddIcon />
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Box>
-              
-              {/* Display existing references */}
-              {hazardForm.references.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Added References ({hazardForm.references.length})
-                  </Typography>
-                  {hazardForm.references.map((ref, index) => (
-                    <Card key={ref.id || index} sx={{ mb: 1, p: 1 }}>
-                      <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                        <Grid container spacing={1} alignItems="center">
-                          <Grid item xs={12} md={3}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              label="Title"
-                              value={ref.title}
-                              onChange={(e) => updateReference(index, 'title', e.target.value)}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={3}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              label="URL"
-                              value={ref.url}
-                              onChange={(e) => updateReference(index, 'url', e.target.value)}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={2}>
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Type</InputLabel>
-                              <Select
-                                value={ref.type || 'document'}
-                                onChange={(e) => updateReference(index, 'type', e.target.value)}
-                                label="Type"
-                              >
-                                <MenuItem value="document">Document</MenuItem>
-                                <MenuItem value="website">Website</MenuItem>
-                                <MenuItem value="standard">Standard</MenuItem>
-                                <MenuItem value="regulation">Regulation</MenuItem>
-                                <MenuItem value="guideline">Guideline</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={12} md={3}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              label="Description"
-                              value={ref.description || ''}
-                              onChange={(e) => updateReference(index, 'description', e.target.value)}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={1}>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => removeReference(index)}
-                            >
-                              <RemoveIcon />
-                            </IconButton>
-                          </Grid>
-                        </Grid>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Box>
-              )}
-            </Grid>
-            <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Likelihood" value={hazardForm.likelihood} onChange={(e) => setHazardForm({ ...hazardForm, likelihood: e.target.value })} /></Grid>
-            <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Severity" value={hazardForm.severity} onChange={(e) => setHazardForm({ ...hazardForm, severity: e.target.value })} /></Grid>
-            <Grid item xs={12}><TextField fullWidth label="Control Measures" value={hazardForm.control_measures} onChange={(e) => setHazardForm({ ...hazardForm, control_measures: e.target.value })} /></Grid>
-            <Grid item xs={12} md={3}><FormControlLabel control={<Switch checked={hazardForm.is_controlled} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_controlled: c })} />} label="Is Controlled" /></Grid>
-            <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Control Effectiveness" value={hazardForm.control_effectiveness} onChange={(e) => setHazardForm({ ...hazardForm, control_effectiveness: e.target.value })} /></Grid>
-            <Grid item xs={12} md={3}><FormControlLabel control={<Switch checked={hazardForm.is_ccp} onChange={(_e, c) => setHazardForm({ ...hazardForm, is_ccp: c })} />} label="Is CCP" /></Grid>
-            <Grid item xs={12}><TextField fullWidth label="CCP Justification" value={hazardForm.ccp_justification} onChange={(e) => setHazardForm({ ...hazardForm, ccp_justification: e.target.value })} /></Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setHazardDialogOpen(false); setSelectedHazardItem(null); }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveHazard}>Save</Button>
-        </DialogActions>
-      </Dialog>
+      {/* New Hazard Dialog Component - For Creating New Hazards */}
+      <HazardDialog
+        open={hazardDialogOpen}
+        onClose={() => {
+          setHazardDialogOpen(false);
+          setSelectedHazardItem(null);
+        }}
+        onSave={handleSaveHazard}
+        processFlows={processFlows}
+        editData={null}
+      />
+
+      {/* Hazard View Dialog - For Viewing Existing Hazards */}
+      <HazardViewDialog
+        open={hazardViewDialogOpen}
+        onClose={() => {
+          setHazardViewDialogOpen(false);
+          setSelectedHazardItem(null);
+        }}
+        hazardData={selectedHazardItem}
+        processFlows={processFlows}
+      />
 
       <Dialog open={ccpDialogOpen} onClose={() => { setCcpDialogOpen(false); setSelectedCcpItem(null); }} maxWidth="md" fullWidth>
         <DialogTitle>{selectedCcpItem ? 'Edit CCP' : 'Add CCP'}</DialogTitle>
@@ -1082,19 +923,6 @@ const HACCPProductDetail: React.FC = () => {
           <Button variant="contained" onClick={handleSaveRiskConfig}>Save</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Decision Tree Dialog */}
-      <DecisionTreeDialog
-        open={decisionTreeDialogOpen}
-        onClose={() => setDecisionTreeDialogOpen(false)}
-        hazardId={selectedHazardForDecisionTree?.id || 0}
-        hazardName={selectedHazardForDecisionTree?.hazard_name || ''}
-        onDecisionComplete={(isCCP, reasoning) => {
-          console.log('Decision completed:', { isCCP, reasoning });
-          // Optionally refresh the product data to show updated CCP status
-          dispatch(fetchProduct(productId));
-        }}
-      />
     </Box>
   );
 };

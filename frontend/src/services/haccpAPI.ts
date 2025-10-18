@@ -220,6 +220,43 @@ export const haccpAPI = {
     const response: AxiosResponse = await api.get(`/haccp/reports/${reportId}/download`, { responseType: 'blob' });
     return response.data;
   },
+
+  // OPRPs
+  getOPRPs: async (productId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/products/${productId}/oprps`);
+    return response.data;
+  },
+
+  getOPRP: async (oprpId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}`);
+    return response.data;
+  },
+
+  createOPRP: async (productId: number, oprpData: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/oprps`, oprpData);
+    return response.data;
+  },
+
+  updateOPRP: async (oprpId: number, oprpData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/oprps/${oprpId}`, oprpData);
+    return response.data;
+  },
+
+  deleteOPRP: async (oprpId: number) => {
+    const response: AxiosResponse = await api.delete(`/haccp/oprps/${oprpId}`);
+    return response.data;
+  },
+
+  // OPRP Monitoring Logs
+  createOPRPMonitoringLog: async (oprpId: number, logData: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/oprps/${oprpId}/monitoring-logs`, logData);
+    return response.data;
+  },
+
+  getOPRPMonitoringLogs: async (oprpId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}/monitoring-logs`);
+    return response.data;
+  },
 };
 
 export default haccpAPI; 

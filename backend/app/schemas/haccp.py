@@ -18,6 +18,16 @@ class RiskLevel(str, Enum):
     CRITICAL = "critical"
 
 
+class RiskStrategy(str, Enum):
+    """Risk control strategy for hazards"""
+    CCP = "ccp"  # Critical Control Point
+    OPPRP = "opprp"  # Operational Prerequisite Program
+    USE_EXISTING_PRPS = "use_existing_prps"  # Use existing Prerequisite Programs (for low risks)
+    ACCEPT = "accept"  # Risk accepted (typically for low risks)
+    FURTHER_ANALYSIS = "further_analysis"  # Requires decision tree analysis
+    NOT_DETERMINED = "not_determined"  # Not yet determined
+
+
 class CCPStatus(str, Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
@@ -479,7 +489,7 @@ class HazardCreate(BaseModel):
     hazard_type: HazardType
     hazard_name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    rationale: Optional[str] = None  # Reasoning for hazard identification and assessment
+    consequences: Optional[str] = None  # Potential consequences if hazard occurs
     prp_reference_ids: Optional[List[int]] = None  # Array of PRP/SOP document IDs
     references: Optional[List[Dict[str, Any]]] = None  # Array of reference documents
     likelihood: int = Field(..., ge=1, le=5)
@@ -487,15 +497,22 @@ class HazardCreate(BaseModel):
     control_measures: Optional[str] = None
     is_controlled: bool = False
     control_effectiveness: Optional[int] = Field(None, ge=1, le=5)
-    is_ccp: bool = False
+    risk_strategy: Optional[RiskStrategy] = None  # Allow None or valid enum value
+    risk_strategy_justification: Optional[str] = None  # Justification for risk strategy selection
+    subsequent_step: Optional[str] = None  # Name of subsequent step that controls the hazard (from Q2)
+    is_ccp: Optional[bool] = False
     ccp_justification: Optional[str] = None
+    opprp_justification: Optional[str] = None
+    decision_tree: Optional[Dict[str, Any]] = None  # Decision tree answers if further analysis was performed
+    ccp: Optional[Dict[str, Any]] = None  # CCP data to be created with hazard
+    oprp: Optional[Dict[str, Any]] = None  # OPRP data to be created with hazard
 
 
 class HazardUpdate(BaseModel):
     hazard_type: Optional[HazardType] = None
     hazard_name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    rationale: Optional[str] = None  # Reasoning for hazard identification and assessment
+    consequences: Optional[str] = None  # Potential consequences if hazard occurs
     prp_reference_ids: Optional[List[int]] = None  # Array of PRP/SOP document IDs
     references: Optional[List[Dict[str, Any]]] = None  # Array of reference documents
     likelihood: Optional[int] = Field(None, ge=1, le=5)
@@ -503,8 +520,10 @@ class HazardUpdate(BaseModel):
     control_measures: Optional[str] = None
     is_controlled: Optional[bool] = None
     control_effectiveness: Optional[int] = Field(None, ge=1, le=5)
+    risk_strategy: Optional[RiskStrategy] = None
     is_ccp: Optional[bool] = None
     ccp_justification: Optional[str] = None
+    opprp_justification: Optional[str] = None
 
 
 class HazardResponse(BaseModel):
@@ -513,7 +532,7 @@ class HazardResponse(BaseModel):
     hazard_type: HazardType
     hazard_name: str
     description: Optional[str] = None
-    rationale: Optional[str] = None  # Reasoning for hazard identification and assessment
+    consequences: Optional[str] = None  # Potential consequences if hazard occurs
     prp_reference_ids: Optional[List[int]] = None  # Array of PRP/SOP document IDs
     references: Optional[List[Dict[str, Any]]] = None  # Array of reference documents
     likelihood: int
@@ -523,8 +542,12 @@ class HazardResponse(BaseModel):
     control_measures: Optional[str] = None
     is_controlled: bool
     control_effectiveness: Optional[int] = None
+    risk_strategy: Optional[RiskStrategy] = RiskStrategy.NOT_DETERMINED
+    risk_strategy_justification: Optional[str] = None
+    subsequent_step: Optional[str] = None
     is_ccp: bool
     ccp_justification: Optional[str] = None
+    opprp_justification: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -1182,6 +1205,205 @@ class AuditLogResponse(BaseModel):
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     session_id: Optional[str] = None
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+# OPRP Schemas
+class OPRPStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    UNDER_REVIEW = "under_review"
+    SUSPENDED = "suspended"
+
+
+class OperationalLimitParameter(BaseModel):
+    parameter: str = Field(..., description="Parameter name (e.g., temperature, time, pH)")
+    limit_type: Literal["numeric", "qualitative"] = Field("numeric", description="Type of limit")
+    
+    # Numeric limits
+    min_value: Optional[float] = Field(None, description="Minimum value for numeric limits")
+    max_value: Optional[float] = Field(None, description="Maximum value for numeric limits")
+    unit: Optional[str] = Field(None, description="Unit of measurement (UCUM format)")
+    condition: Optional[str] = Field(None, description="Condition under which limit applies")
+    
+    # Qualitative limits
+    value: Optional[str] = Field(None, description="Expected value for qualitative limits")
+    
+    @field_validator('limit_type')
+    @classmethod
+    def validate_limit_type(cls, v, values):
+        if v == "numeric":
+            if not values.get('min_value') and not values.get('max_value'):
+                raise ValueError("Numeric limits must have at least min_value or max_value")
+        elif v == "qualitative":
+            if not values.get('value'):
+                raise ValueError("Qualitative limits must have a value")
+        return v
+
+
+class OPRPCreate(BaseModel):
+    product_id: int
+    hazard_id: int
+    oprp_number: str = Field(..., min_length=1, max_length=20)
+    oprp_name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    status: OPRPStatus = OPRPStatus.ACTIVE
+    
+    # Operational limits
+    operational_limits: Optional[List[OperationalLimitParameter]] = None
+    operational_limit_min: Optional[float] = None
+    operational_limit_max: Optional[float] = None
+    operational_limit_unit: Optional[str] = None
+    operational_limit_description: Optional[str] = None
+    
+    # Monitoring
+    monitoring_frequency: Optional[str] = None
+    monitoring_method: Optional[str] = None
+    monitoring_responsible: Optional[int] = None
+    monitoring_equipment: Optional[str] = None
+    
+    # Corrective actions
+    corrective_actions: Optional[str] = None
+    
+    # Verification
+    verification_frequency: Optional[str] = None
+    verification_method: Optional[str] = None
+    verification_responsible: Optional[int] = None
+    
+    # OPRP-specific
+    justification: Optional[str] = None
+    objective: Optional[str] = None  # OPRP objective
+    sop_reference: Optional[str] = None  # Reference to SOP document
+    effectiveness_validation: Optional[str] = None
+    validation_evidence: Optional[List[Dict[str, Any]]] = None
+
+
+class OPRPUpdate(BaseModel):
+    oprp_number: Optional[str] = Field(None, min_length=1, max_length=20)
+    oprp_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    status: Optional[OPRPStatus] = None
+    
+    # Operational limits
+    operational_limits: Optional[List[OperationalLimitParameter]] = None
+    operational_limit_min: Optional[float] = None
+    operational_limit_max: Optional[float] = None
+    operational_limit_unit: Optional[str] = None
+    operational_limit_description: Optional[str] = None
+    
+    # Monitoring
+    monitoring_frequency: Optional[str] = None
+    monitoring_method: Optional[str] = None
+    monitoring_responsible: Optional[int] = None
+    monitoring_equipment: Optional[str] = None
+    
+    # Corrective actions
+    corrective_actions: Optional[str] = None
+    
+    # Verification
+    verification_frequency: Optional[str] = None
+    verification_method: Optional[str] = None
+    verification_responsible: Optional[int] = None
+    
+    # OPRP-specific
+    justification: Optional[str] = None
+    effectiveness_validation: Optional[str] = None
+    validation_evidence: Optional[List[Dict[str, Any]]] = None
+
+
+class OPRPResponse(BaseModel):
+    id: int
+    product_id: int
+    hazard_id: int
+    oprp_number: str
+    oprp_name: str
+    description: Optional[str] = None
+    status: OPRPStatus
+    
+    # Operational limits
+    operational_limits: Optional[List[Dict[str, Any]]] = None
+    operational_limit_min: Optional[float] = None
+    operational_limit_max: Optional[float] = None
+    operational_limit_unit: Optional[str] = None
+    operational_limit_description: Optional[str] = None
+    
+    # Monitoring
+    monitoring_frequency: Optional[str] = None
+    monitoring_method: Optional[str] = None
+    monitoring_responsible: Optional[int] = None
+    monitoring_equipment: Optional[str] = None
+    
+    # Corrective actions
+    corrective_actions: Optional[str] = None
+    
+    # Verification
+    verification_frequency: Optional[str] = None
+    verification_method: Optional[str] = None
+    verification_responsible: Optional[int] = None
+    
+    # OPRP-specific
+    justification: Optional[str] = None
+    effectiveness_validation: Optional[str] = None
+    validation_evidence: Optional[List[Dict[str, Any]]] = None
+    
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+    created_by: int
+    
+    model_config = {"from_attributes": True}
+
+
+# OPRP Monitoring Log Schemas
+class OPRPMonitoringLogCreate(BaseModel):
+    oprp_id: int
+    batch_number: Optional[str] = None
+    measured_values: Dict[str, Any] = Field(..., description="Parameter: value pairs")
+    measured_at: datetime
+    measured_by: int
+    equipment_used: Optional[str] = None
+    comments: Optional[str] = None
+
+
+class OPRPMonitoringLogResponse(BaseModel):
+    id: int
+    oprp_id: int
+    batch_number: Optional[str] = None
+    measured_values: Dict[str, Any]
+    measured_at: datetime
+    measured_by: int
+    equipment_used: Optional[str] = None
+    comments: Optional[str] = None
+    validation_results: Optional[Dict[str, Any]] = None
+    is_within_limits: bool
+    corrective_actions_taken: Optional[str] = None
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+# OPRP Verification Log Schemas
+class OPRPVerificationLogCreate(BaseModel):
+    oprp_id: int
+    verification_type: str = Field(..., description="Type of verification (calibration, review, audit, etc.)")
+    verification_date: datetime
+    verified_by: int
+    findings: Optional[str] = None
+    corrective_actions: Optional[str] = None
+    next_verification_date: Optional[datetime] = None
+
+
+class OPRPVerificationLogResponse(BaseModel):
+    id: int
+    oprp_id: int
+    verification_type: str
+    verification_date: datetime
+    verified_by: int
+    findings: Optional[str] = None
+    corrective_actions: Optional[str] = None
+    next_verification_date: Optional[datetime] = None
     created_at: datetime
     
     model_config = {"from_attributes": True}

@@ -2,6 +2,45 @@
 """
 Complete Database Setup Script for ISO 22000 FSMS
 This script creates all database tables and populates them with professional demo data
+
+IMPORTANT SCHEMA UPDATES (2025-10-18):
+========================================
+HAZARDS TABLE:
+- 'consequences' field: Detailed description of potential consequences (replaces 'rationale')
+- 'risk_strategy' field: Control strategy (ccp/opprp/use_existing_prps)
+- 'risk_strategy_justification' field: Justification for chosen strategy
+- 'subsequent_step' field: Next process step that controls the hazard (if applicable)
+- 'is_ccp' field: Boolean flag for critical control points
+
+CCPS TABLE:
+- Complete critical control point implementation
+- critical_limit_min/max: Numerical critical limits
+- critical_limit_unit: Unit of measurement
+- monitoring_frequency: Frequency of CCP monitoring
+- monitoring_method: Method used for monitoring
+- corrective_actions: Actions when critical limits exceeded
+- verification_frequency/method: CCP verification procedures
+
+OPRPS TABLE:
+- operational_limits: Description of operational limits
+- operational_limit_min/max: Numerical operational limits
+- operational_limit_unit: Unit of measurement
+- monitoring_frequency: Frequency of OPRP monitoring
+- monitoring_method: Method used for monitoring
+- corrective_actions: Actions when operational limits exceeded
+- verification_frequency/method: OPRP verification procedures
+- objective: OPRP objective
+- sop_reference: Reference to relevant SOP
+- justification: Justification for OPRP designation
+
+ISO 22000:2018 RISK STRATEGY IMPLEMENTATION:
+===========================================
+This setup creates realistic food safety data demonstrating:
+1. CCP (Critical Control Points) - Most critical hazards requiring strict control
+2. OPRP (Operational Prerequisite Programs) - High-risk operational hazards
+3. Use Existing PRPs - Lower risk hazards controlled by prerequisite programs
+
+See: HACCP_RISK_STRATEGY_IMPLEMENTATION.md for full details
 """
 
 import sys
@@ -17,7 +56,11 @@ import random
 # Import all models to ensure they are registered with Base.metadata
 from app.models.user import User, UserSession, PasswordReset
 from app.models.document import Document, DocumentVersion, DocumentApproval, DocumentChangeLog, DocumentTemplate
-from app.models.haccp import Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog, HACCPPlan
+from app.models.haccp import (
+    Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog, HACCPPlan,
+    DecisionTree, HazardReview, RiskStrategy, HazardType, RiskLevel
+)
+from app.models.oprp import OPRP, OPRPMonitoringLog, OPRPVerificationLog
 from app.models.prp import PRPProgram, PRPChecklist, PRPChecklistItem, PRPTemplate, PRPSchedule
 from app.models.supplier import Supplier, SupplierDocument, SupplierEvaluation
 from app.models.traceability import Batch, TraceabilityLink, RecallEntry
@@ -71,6 +114,7 @@ def handle_existing_tables():
 def create_database_tables():
     """Create all database tables"""
     print("🚀 Setting up database tables...")
+    print("📌 Schema includes ISO 22000 Risk Strategy updates (consequences, risk_strategy, OPPRP support)")
     
     try:
         # Check existing tables first
@@ -80,18 +124,19 @@ def create_database_tables():
         if existing_tables:
             print(f"📋 Found {len(existing_tables)} existing tables")
             print("  ⚠️  Using existing database schema.")
+            print("  💡 If you need the new risk strategy fields, run: python migrations/add_risk_strategy_to_hazards.py")
             
             # List existing tables
             print("  📝 Existing tables:")
             for table in sorted(existing_tables):
                 print(f"    - {table}")
         else:
-            print("  📝 No existing tables found. Creating new database schema.")
+            print("  📝 No existing tables found. Creating new database schema with risk strategy support.")
         
         # Try to create tables, but handle the case where they already exist
         try:
             Base.metadata.create_all(bind=engine)
-            print("✅ Database schema is ready!")
+            print("✅ Database schema is ready with latest updates!")
         except Exception as create_error:
             # If create_all fails due to existing tables, that's actually OK
             if "already exists" in str(create_error):
@@ -313,6 +358,7 @@ def clear_existing_data(conn):
     # Note: Excluding RBAC tables (roles, permissions, role_permissions, user_permissions, users)
     # as these are created earlier and should not be cleared
     tables_to_clear = [
+        'oprp_monitoring_logs', 'oprp_verification_logs', 'oprps',
         'ccp_monitoring_logs', 'ccp_verification_logs', 'ccps', 'hazards', 
         'haccp_plans', 'process_flows', 'batches', 'products',
         'supplier_evaluations', 'supplier_documents', 'suppliers',
@@ -852,7 +898,7 @@ def create_professional_batches(conn):
     print(f"  ✓ Created {len(batch_data)} professional production batches")
 
 def create_professional_haccp_data(conn):
-    """Create professional HACCP data"""
+    """Create professional HACCP data with complete process flows, hazards, CCPs, and OPRPs"""
     print("\n🔍 Creating professional HACCP data...")
     
     # Create HACCP Plans
@@ -878,6 +924,266 @@ def create_professional_haccp_data(conn):
         })
     
     print("  ✓ Created HACCP plans")
+    
+    # Create Process Flows for Fresh Milk (Product ID 1)
+    process_flows_milk = [
+        (1, 1, 'Raw Milk Reception', 'Receipt and inspection of raw milk from suppliers', 'Receiving tank', '4', '', '', '', 1),
+        (1, 2, 'Filtration', 'Remove physical contaminants from raw milk', 'Inline filter', '', '', '', '', 1),
+        (1, 3, 'Standardization', 'Adjust milk fat content to 3.25%', 'Separator', '4', '', '', '', 1),
+        (1, 4, 'Pasteurization', 'Heat treatment to destroy pathogens', 'HTST Pasteurizer', '72', '15', '6.6-6.8', '', 1),
+        (1, 5, 'Cooling', 'Rapid cooling to refrigeration temperature', 'Plate cooler', '4', '', '', '', 1),
+        (1, 6, 'Packaging', 'Aseptic filling into clean containers', 'Filling machine', '4', '', '', '', 1),
+        (1, 7, 'Cold Storage', 'Store finished product at refrigeration temperature', 'Cold room', '2-4', '', '', '', 1),
+    ]
+    
+    for product_id, step_number, step_name, description, equipment, temp, time_min, ph, aw, created_by in process_flows_milk:
+        conn.execute(text("""
+            INSERT INTO process_flows (product_id, step_number, step_name, description, equipment,
+                                     temperature, time_minutes, ph, aw, created_at, created_by)
+            VALUES (:product_id, :step_number, :step_name, :description, :equipment,
+                   :temperature, :time_minutes, :ph, :aw, :created_at, :created_by)
+        """), {
+            'product_id': product_id,
+            'step_number': step_number,
+            'step_name': step_name,
+            'description': description,
+            'equipment': equipment,
+            'temperature': temp,
+            'time_minutes': time_min,
+            'ph': ph,
+            'aw': aw,
+            'created_at': datetime.now().isoformat(),
+            'created_by': created_by
+        })
+    
+    print("  ✓ Created process flows for Fresh Milk")
+    
+    # Create Hazards with ISO 22000 Risk Strategy Implementation
+    # Format: (product_id, process_step_id, hazard_type, hazard_name, description, consequences,
+    #          likelihood, severity, risk_score, risk_level, control_measures,
+    #          risk_strategy, risk_strategy_justification, subsequent_step, created_by)
+    
+    hazards_data = [
+        # Fresh Milk - Raw Milk Reception (Step 1)
+        (1, 1, 'biological', 'Pathogenic bacteria in raw milk',
+         'Presence of Listeria, Salmonella, E.coli O157:H7 in raw milk',
+         'Consumer illness, foodborne disease outbreak, product recall',
+         4, 5, 20, 'critical',
+         'Supplier certification, testing program, temperature control',
+         'use_existing_prps', 
+         'Subsequent step (Pasteurization) will effectively control this hazard through validated thermal process',
+         'Pasteurization',
+         1),
+        
+        (1, 1, 'chemical', 'Antibiotic residues',
+         'Antibiotic residues in raw milk from treated cows',
+         'Allergic reactions, antimicrobial resistance, regulatory violation',
+         2, 4, 8, 'medium',
+         'Supplier testing program, certification requirements',
+         'use_existing_prps',
+         'Supplier management program and testing protocols adequately control this hazard',
+         '',
+         1),
+        
+        # Fresh Milk - Pasteurization (Step 4) - THIS IS A CCP
+        (1, 4, 'biological', 'Survival of pathogenic bacteria',
+         'Inadequate pasteurization allowing pathogen survival',
+         'Consumer illness, severe foodborne disease outbreak, fatalities, massive product recall',
+         3, 5, 15, 'high',
+         'Time-temperature monitoring, validated process, calibrated equipment',
+         'ccp',
+         'No subsequent step will control this hazard. Critical limits (72°C for 15 seconds) must be met to ensure pathogen destruction. Monitoring and corrective actions are essential.',
+         '',
+         1),
+        
+        # Fresh Milk - Packaging (Step 6) - THIS IS AN OPRP
+        (1, 6, 'biological', 'Post-pasteurization contamination',
+         'Recontamination during packaging from equipment or environment',
+         'Consumer illness, product spoilage, limited outbreak',
+         3, 4, 12, 'high',
+         'Sanitation program, environmental monitoring, equipment cleaning',
+         'opprp',
+         'While subsequent storage will not eliminate contamination, operational limits on environmental monitoring and sanitation can control this hazard. Requires specific monitoring but less critical than pasteurization.',
+         '',
+         1),
+        
+        (1, 6, 'physical', 'Foreign material in package',
+         'Metal, glass, or plastic fragments in finished product',
+         'Consumer injury (choking, cuts), product recall, liability',
+         2, 3, 6, 'medium',
+         'Metal detector, visual inspection, equipment maintenance',
+         'opprp',
+         'Operational prerequisite with specific limits on metal detector sensitivity and visual inspection frequency can adequately control this physical hazard.',
+         '',
+         1),
+        
+        (1, 6, 'allergen', 'Allergen cross-contact',
+         'Cross-contact with milk allergens on shared equipment',
+         'Allergic reactions in sensitive consumers, product recall',
+         2, 4, 8, 'medium',
+         'Equipment cleaning procedures, allergen control program',
+         'use_existing_prps',
+         'Existing allergen management program and cleaning procedures adequately control this hazard for milk products.',
+         '',
+         1),
+        
+        # Ground Beef Hazards (Product 5)
+        (5, 1, 'biological', 'E.coli O157:H7 contamination',
+         'E.coli O157:H7 present in raw beef trim',
+         'Severe consumer illness (HUS), fatalities, major product recall, regulatory action',
+         4, 5, 20, 'critical',
+         'Supplier certification, testing program, temperature control',
+         'use_existing_prps',
+         'No subsequent step eliminates this hazard as product is sold raw. However, validated Supplier HACCP programs, testing, and proper cooking by consumer controls the risk.',
+         'Consumer cooking',
+         1),
+        
+        (5, 2, 'biological', 'Temperature abuse during processing',
+         'Bacterial growth due to temperature rise during grinding',
+         'Increased pathogen levels, reduced shelf life, potential illness',
+         3, 4, 12, 'high',
+         'Temperature monitoring, batch time limits, equipment chilling',
+         'opprp',
+         'Operational limits on processing temperature (keep below 4°C) and processing time can control bacterial growth. Requires specific monitoring.',
+         '',
+         1),
+    ]
+    
+    hazard_ids = []
+    for (product_id, process_step_id, hazard_type, hazard_name, description, consequences,
+         likelihood, severity, risk_score, risk_level, control_measures,
+         risk_strategy, risk_strategy_justification, subsequent_step, created_by) in hazards_data:
+        
+        result = conn.execute(text("""
+            INSERT INTO hazards (product_id, process_step_id, hazard_type, hazard_name, 
+                               description, consequences, likelihood, severity, risk_score, 
+                               risk_level, control_measures, is_controlled, control_effectiveness,
+                               risk_strategy, risk_strategy_justification, subsequent_step,
+                               is_ccp, created_at, created_by, reference_documents, prp_reference_ids)
+            VALUES (:product_id, :process_step_id, :hazard_type, :hazard_name,
+                   :description, :consequences, :likelihood, :severity, :risk_score,
+                   :risk_level, :control_measures, :is_controlled, :control_effectiveness,
+                   :risk_strategy, :risk_strategy_justification, :subsequent_step,
+                   :is_ccp, :created_at, :created_by, :reference_documents, :prp_reference_ids)
+            RETURNING id
+        """), {
+            'product_id': product_id,
+            'process_step_id': process_step_id,
+            'hazard_type': hazard_type,
+            'hazard_name': hazard_name,
+            'description': description,
+            'consequences': consequences,
+            'likelihood': likelihood,
+            'severity': severity,
+            'risk_score': risk_score,
+            'risk_level': risk_level,
+            'control_measures': control_measures,
+            'is_controlled': 1,
+            'control_effectiveness': 90 if risk_strategy == 'ccp' else 80,
+            'risk_strategy': risk_strategy,
+            'risk_strategy_justification': risk_strategy_justification,
+            'subsequent_step': subsequent_step,
+            'is_ccp': 1 if risk_strategy == 'ccp' else 0,
+            'created_at': datetime.now().isoformat(),
+            'created_by': created_by,
+            'reference_documents': '[]',
+            'prp_reference_ids': '[]'
+        })
+        hazard_id = result.fetchone()[0]
+        hazard_ids.append((hazard_id, risk_strategy, hazard_name, product_id))
+    
+    print(f"  ✓ Created {len(hazards_data)} hazards with ISO 22000 risk strategies")
+    
+    # Create CCPs for hazards with risk_strategy='ccp'
+    ccp_counter = 1
+    for hazard_id, risk_strategy, hazard_name, product_id in hazard_ids:
+        if risk_strategy == 'ccp':
+            conn.execute(text("""
+                INSERT INTO ccps (product_id, hazard_id, ccp_number, ccp_name, description,
+                                status, critical_limit_min, critical_limit_max, critical_limit_unit,
+                                critical_limit_description, monitoring_frequency, monitoring_method,
+                                monitoring_responsible, monitoring_equipment, corrective_actions,
+                                verification_frequency, verification_method, verification_responsible,
+                                created_at, created_by)
+                VALUES (:product_id, :hazard_id, :ccp_number, :ccp_name, :description,
+                       'active', :cl_min, :cl_max, :cl_unit, :cl_desc,
+                       :mon_freq, :mon_method, :mon_resp, :mon_equip, :corr_actions,
+                       :ver_freq, :ver_method, :ver_resp, :created_at, :created_by)
+            """), {
+                'product_id': product_id,
+                'hazard_id': hazard_id,
+                'ccp_number': f'CCP-{ccp_counter}',
+                'ccp_name': f'CCP-{ccp_counter} Pasteurization Temperature',
+                'description': f'Critical control point for {hazard_name}',
+                'cl_min': 72.0,
+                'cl_max': 75.0,
+                'cl_unit': '°C',
+                'cl_desc': 'Minimum 72°C for 15 seconds to ensure pathogen destruction',
+                'mon_freq': 'Continuous',
+                'mon_method': 'Automated temperature recorder with data logging',
+                'mon_resp': 'Production Operator',
+                'mon_equip': 'Calibrated temperature probe and chart recorder',
+                'corr_actions': 'Stop production, re-pasteurize affected product, adjust temperature, investigate cause, document corrective action',
+                'ver_freq': 'Daily',
+                'ver_method': 'Review temperature charts, verify critical limits met, check calibration',
+                'ver_resp': 'QA Supervisor',
+                'created_at': datetime.now().isoformat(),
+                'created_by': 1
+            })
+            ccp_counter += 1
+    
+    print(f"  ✓ Created {ccp_counter - 1} CCPs for critical hazards")
+    
+    # Create OPRPs for hazards with risk_strategy='opprp'
+    oprp_counter = 1
+    for hazard_id, risk_strategy, hazard_name, product_id in hazard_ids:
+        if risk_strategy == 'opprp':
+            conn.execute(text("""
+                INSERT INTO oprps (product_id, hazard_id, oprp_number, oprp_name, description,
+                                 status, operational_limits, operational_limit_min, operational_limit_max,
+                                 operational_limit_unit, operational_limit_description,
+                                 monitoring_frequency, monitoring_method, monitoring_responsible,
+                                 monitoring_equipment, corrective_actions,
+                                 verification_frequency, verification_method, verification_responsible,
+                                 justification, objective, sop_reference,
+                                 created_at, created_by)
+                VALUES (:product_id, :hazard_id, :oprp_number, :oprp_name, :description,
+                       'active', :op_limits, :op_min, :op_max, :op_unit, :op_desc,
+                       :mon_freq, :mon_method, :mon_resp, :mon_equip, :corr_actions,
+                       :ver_freq, :ver_method, :ver_resp, :justification, :objective, :sop_ref,
+                       :created_at, :created_by)
+            """), {
+                'product_id': product_id,
+                'hazard_id': hazard_id,
+                'oprp_number': f'OPRP-{oprp_counter}',
+                'oprp_name': f'OPRP-{oprp_counter} {hazard_name[:50]}',
+                'description': f'Operational prerequisite program for {hazard_name}',
+                'op_limits': 'Environmental monitoring limits, sanitation verification limits' if 'contamination' in hazard_name.lower() else 'Processing temperature and time limits',
+                'op_min': 0.0 if 'contamination' in hazard_name.lower() else 0.0,
+                'op_max': 10.0 if 'contamination' in hazard_name.lower() else 4.0,
+                'op_unit': 'CFU/swab' if 'contamination' in hazard_name.lower() else '°C',
+                'op_desc': 'Maximum acceptable level for environmental monitoring' if 'contamination' in hazard_name.lower() else 'Maximum processing temperature to control bacterial growth',
+                'mon_freq': 'Daily' if 'contamination' in hazard_name.lower() else 'Every batch',
+                'mon_method': 'ATP swab testing and environmental sampling' if 'contamination' in hazard_name.lower() else 'Continuous temperature monitoring with data logging',
+                'mon_resp': 'QA Specialist',
+                'mon_equip': 'ATP meter and environmental swabs' if 'contamination' in hazard_name.lower() else 'Calibrated temperature sensors',
+                'corr_actions': 'Re-clean and sanitize area, investigate source, hold product pending retest' if 'contamination' in hazard_name.lower() else 'Stop processing, cool product, investigate cause, adjust equipment',
+                'ver_freq': 'Weekly',
+                'ver_method': 'Review monitoring records, trend analysis, periodic microbiological testing',
+                'ver_resp': 'QA Manager',
+                'justification': f'OPRP required to control {hazard_name} through operational limits',
+                'objective': 'Maintain hygienic processing environment' if 'contamination' in hazard_name.lower() else 'Control bacterial growth during processing',
+                'sop_reference': 'SOP-003 Cleaning and Sanitization Procedure' if 'contamination' in hazard_name.lower() else 'SOP-002 Temperature Control Procedure',
+                'created_at': datetime.now().isoformat(),
+                'created_by': 1
+            })
+            oprp_counter += 1
+    
+    print(f"  ✓ Created {oprp_counter - 1} OPRPs for operational hazards")
+    print(f"  ✓ ISO 22000 Risk Strategy Implementation Complete:")
+    print(f"    - CCPs: {ccp_counter - 1} (Critical control points)")
+    print(f"    - OPRPs: {oprp_counter - 1} (Operational prerequisite programs)")
+    print(f"    - PRPs: {len([h for h in hazard_ids if h[1] == 'use_existing_prps'])} (Controlled by existing prerequisites)")
 
 def create_professional_equipment_data(conn):
     """Create professional equipment data"""
@@ -975,9 +1281,29 @@ def setup_database_complete():
         print("   - 🚚 15 Food Industry Suppliers")
         print("   - 📋 25 Professional Documents (SOPs, Manuals)")
         print("   - 📦 20 Production Batches")
-        print("   - 🔍 Complete HACCP Plans")
+        print("   - 🔍 Complete HACCP Implementation with ISO 22000:2018 Risk Strategy:")
+        print("     • 4 HACCP Plans (Approved)")
+        print("     • 7 Process Flows (Fresh Milk production steps)")
+        print("     • 8 Hazards with complete risk assessment:")
+        print("       - consequences field (replaces rationale)")
+        print("       - risk_strategy field (ccp/opprp/use_existing_prps)")
+        print("       - risk_strategy_justification field")
+        print("       - subsequent_step field")
+        print("     • CCPs: 1 (Critical Control Point - Pasteurization)")
+        print("       - Complete with critical limits, monitoring, verification")
+        print("     • OPRPs: 3 (Operational Prerequisite Programs)")
+        print("       - Complete with operational limits, monitoring, verification")
+        print("       - objective and sop_reference fields included")
+        print("     • PRPs: 4 (Controlled by existing prerequisites)")
         print("   - 🔧 5 Equipment Records")
         print("\n🎯 Ready for professional demonstrations with full RBAC!")
+        print("\n✨ NEW: ISO 22000:2018 Risk Strategy Implementation:")
+        print("   • Hazards classified into three control strategies:")
+        print("     1. CCP (Critical Control Points) - Most critical hazards")
+        print("     2. OPRP (Operational PRPs) - High-risk operational hazards")
+        print("     3. Use Existing PRPs - Lower risk hazards")
+        print("   • Complete justification and subsequent step tracking")
+        print("   • Automated CCP and OPRP creation based on risk strategy")
         print("\n🔑 Default login credentials:")
         print("   Username: admin")
         print("   Password: admin123")

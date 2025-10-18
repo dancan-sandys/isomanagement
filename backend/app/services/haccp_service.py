@@ -30,6 +30,7 @@ from app.models.equipment import Equipment
 from app.models.haccp import CCPVerificationProgram, CCPValidation
 from app.models.haccp import HACCPAuditLog, HACCPEvidenceAttachment
 from app.models.document import Document
+from app.utils.audit import audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -440,6 +441,56 @@ class HACCPService:
             self.db.rollback()
             raise
     
+    def delete_hazard(self, hazard_id: int, deleted_by: int) -> bool:
+        """Delete a hazard and all dependent records.
+        
+        Args:
+            hazard_id: ID of the hazard to delete
+            deleted_by: ID of the user performing the deletion
+            
+        Returns:
+            True if successful
+            
+        Raises:
+            ValueError: If hazard not found
+        """
+        hazard: Optional[Hazard] = self.db.query(Hazard).filter(Hazard.id == hazard_id).first()
+        if not hazard:
+            raise ValueError("Hazard not found")
+        
+        try:
+            # Delete decision tree records for this hazard
+            self.db.query(DecisionTree).filter(DecisionTree.hazard_id == hazard_id).delete(synchronize_session=False)
+            
+            # Delete hazard reviews if they exist
+            try:
+                self.db.query(HazardReview).filter(HazardReview.hazard_id == hazard_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            
+            # Delete the hazard itself
+            self.db.delete(hazard)
+            self.db.commit()
+            
+            # Log audit event
+            try:
+                audit_event(
+                    self.db,
+                    user_id=deleted_by,
+                    event_type="haccp_hazard_deleted",
+                    record_type="haccp_hazard",
+                    record_id=str(hazard_id),
+                    description=f"Hazard '{hazard.hazard_name}' deleted",
+                )
+            except Exception:
+                pass
+            
+            return True
+            
+        except Exception:
+            self.db.rollback()
+            raise
+    
     def create_hazard(self, product_id: int, hazard_data: HazardCreate, created_by: int) -> Hazard:
         """Create a hazard with product-specific risk assessment (ISO 22000 compliant)"""
         
@@ -481,30 +532,140 @@ class HACCPService:
             else:
                 risk_level = RiskLevel.CRITICAL
         
+        # Auto-determine risk_strategy based on risk_level if not explicitly provided
+        from app.models.haccp import RiskStrategy
+        risk_strategy = hazard_data.risk_strategy
+        
+        # Handle None, NOT_DETERMINED, or empty string
+        if risk_strategy is None or risk_strategy == RiskStrategy.NOT_DETERMINED or (isinstance(risk_strategy, str) and not risk_strategy):
+            if risk_level == RiskLevel.LOW:
+                risk_strategy = RiskStrategy.USE_EXISTING_PRPS  # Low risks use existing PRPs
+            elif risk_level == RiskLevel.MEDIUM:
+                risk_strategy = RiskStrategy.OPPRP
+            elif risk_level == RiskLevel.HIGH:
+                risk_strategy = RiskStrategy.FURTHER_ANALYSIS
+            else:  # CRITICAL
+                risk_strategy = RiskStrategy.FURTHER_ANALYSIS
+        
+        # Convert string to enum if needed
+        if isinstance(risk_strategy, str) and risk_strategy:
+            try:
+                risk_strategy = RiskStrategy(risk_strategy)
+            except ValueError:
+                # Invalid strategy, use auto-determination
+                if risk_level == RiskLevel.LOW:
+                    risk_strategy = RiskStrategy.USE_EXISTING_PRPS
+                elif risk_level == RiskLevel.MEDIUM:
+                    risk_strategy = RiskStrategy.OPPRP
+                else:
+                    risk_strategy = RiskStrategy.FURTHER_ANALYSIS
+        
+        # Set is_ccp based on risk_strategy
+        is_ccp = (risk_strategy == RiskStrategy.CCP)
+        
+        # Prepare justification based on risk strategy
+        final_ccp_justification = hazard_data.ccp_justification
+        final_opprp_justification = hazard_data.opprp_justification
+        
+        if hazard_data.risk_strategy_justification:
+            if risk_strategy == RiskStrategy.CCP:
+                final_ccp_justification = hazard_data.risk_strategy_justification
+            elif risk_strategy == RiskStrategy.OPPRP:
+                final_opprp_justification = hazard_data.risk_strategy_justification
+        
         hazard = Hazard(
             product_id=product_id,
             process_step_id=hazard_data.process_step_id,
             hazard_type=hazard_data.hazard_type,
             hazard_name=hazard_data.hazard_name,
             description=hazard_data.description,
-            rationale=hazard_data.rationale,  # New field for hazard analysis
-            prp_reference_ids=hazard_data.prp_reference_ids,  # New field for PRP references
-            reference_documents=hazard_data.references,  # New field for reference documents
+            consequences=hazard_data.consequences,  # Potential consequences of hazard
+            prp_reference_ids=hazard_data.prp_reference_ids,  # PRP references
+            reference_documents=hazard_data.references,  # Reference documents
             likelihood=likelihood,
             severity=severity,
             risk_score=risk_score,
             risk_level=risk_level,
             control_measures=hazard_data.control_measures,
-            is_controlled=hazard_data.is_controlled,
+            is_controlled=hazard_data.is_controlled if hazard_data.is_controlled is not None else False,
             control_effectiveness=hazard_data.control_effectiveness,
-            is_ccp=hazard_data.is_ccp,
-            ccp_justification=hazard_data.ccp_justification,
+            risk_strategy=risk_strategy,  # Auto-determined or user-provided risk control strategy
+            risk_strategy_justification=hazard_data.risk_strategy_justification,
+            subsequent_step=hazard_data.subsequent_step,
+            is_ccp=is_ccp,
+            ccp_justification=final_ccp_justification,
+            opprp_justification=final_opprp_justification,
             created_by=created_by
         )
         
         self.db.add(hazard)
         self.db.commit()
         self.db.refresh(hazard)
+        
+        # Store decision tree answers if provided
+        if hazard_data.decision_tree:
+            try:
+                import json
+                hazard.decision_tree_steps = json.dumps(hazard_data.decision_tree)
+                hazard.decision_tree_run_at = datetime.utcnow()
+                hazard.decision_tree_by = created_by
+                self.db.commit()
+            except Exception as e:
+                logger.warning(f"Failed to store decision tree data: {str(e)}")
+        
+        # Create CCP if CCP data provided
+        if hazard_data.ccp and hazard.risk_strategy == RiskStrategy.CCP:
+            try:
+                ccp_data = hazard_data.ccp
+                ccp = CCP(
+                    product_id=product_id,
+                    hazard_id=hazard.id,
+                    ccp_number=ccp_data.get('ccp_number', f"CCP-{product_id}-{hazard.id}"),
+                    ccp_name=ccp_data.get('ccp_name', hazard.hazard_name),
+                    description=ccp_data.get('description', f"CCP for {hazard.hazard_name}"),
+                    status=CCPStatus.ACTIVE,
+                    critical_limit_min=float(ccp_data['critical_limit_min']) if ccp_data.get('critical_limit_min') else None,
+                    critical_limit_max=float(ccp_data['critical_limit_max']) if ccp_data.get('critical_limit_max') else None,
+                    critical_limit_unit=ccp_data.get('critical_limit_unit'),
+                    monitoring_frequency=ccp_data.get('monitoring_frequency'),
+                    monitoring_method=ccp_data.get('monitoring_method'),
+                    corrective_actions=ccp_data.get('corrective_actions'),
+                    created_by=created_by
+                )
+                self.db.add(ccp)
+                self.db.commit()
+                logger.info(f"Auto-created CCP {ccp.ccp_number} for hazard {hazard.id}")
+            except Exception as e:
+                logger.warning(f"Failed to create CCP: {str(e)}")
+        
+        # Create OPRP if OPRP data provided
+        if hazard_data.oprp and hazard.risk_strategy == RiskStrategy.OPPRP:
+            try:
+                from app.models.oprp import OPRP
+                oprp_data = hazard_data.oprp
+                
+                # Build description with objective and SOP reference
+                description = oprp_data.get('description', f"OPRP for {hazard.hazard_name}")
+                if oprp_data.get('objective'):
+                    description += f"\n\nObjective: {oprp_data['objective']}"
+                if oprp_data.get('sop_reference'):
+                    description += f"\n\nSOP Reference: {oprp_data['sop_reference']}"
+                
+                oprp = OPRP(
+                    product_id=product_id,
+                    hazard_id=hazard.id,
+                    oprp_number=oprp_data.get('oprp_number', f"OPRP-{product_id}-{hazard.id}"),
+                    oprp_name=oprp_data.get('oprp_name', hazard.hazard_name),
+                    description=description,
+                    justification=hazard.opprp_justification or hazard.risk_strategy_justification,
+                    status="active",
+                    created_by=created_by
+                )
+                self.db.add(oprp)
+                self.db.commit()
+                logger.info(f"Auto-created OPRP {oprp.oprp_number} for hazard {hazard.id}")
+            except Exception as e:
+                logger.warning(f"Failed to create OPRP: {str(e)}")
         
         return hazard
     
