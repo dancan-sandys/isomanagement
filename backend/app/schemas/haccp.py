@@ -612,6 +612,7 @@ class CCPUpdate(BaseModel):
 
 class CCPResponse(BaseModel):
     id: int
+    hazard_id: int
     ccp_number: str
     ccp_name: str
     description: Optional[str] = None

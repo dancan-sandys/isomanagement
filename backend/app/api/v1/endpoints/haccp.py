@@ -157,7 +157,7 @@ async def get_product(
             ccp_rows = db.execute(
                 text(
                     """
-                    SELECT id, ccp_number, ccp_name, description, status,
+                    SELECT id, hazard_id, ccp_number, ccp_name, description, status,
                            critical_limit_min, critical_limit_max, critical_limit_unit,
                            critical_limit_description, monitoring_frequency, monitoring_method,
                            monitoring_responsible, monitoring_equipment, corrective_actions,
@@ -246,6 +246,7 @@ async def get_product(
                 mapping = getattr(row, "_mapping", {})
                 ccp_data = {
                     "id": mapping.get("id"),
+                    "hazard_id": mapping.get("hazard_id"),
                     "ccp_number": mapping.get("ccp_number"),
                     "ccp_name": mapping.get("ccp_name"),
                     "description": mapping.get("description"),

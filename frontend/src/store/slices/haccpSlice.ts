@@ -70,6 +70,7 @@ export interface Hazard {
 
 export interface CCP {
   id: number;
+  hazard_id: number;
   ccp_number: string;
   ccp_name: string;
   description?: string;

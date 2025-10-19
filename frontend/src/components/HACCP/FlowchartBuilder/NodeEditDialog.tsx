@@ -29,6 +29,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Alert,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -59,6 +60,7 @@ interface HazardForm {
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
   controlMeasures: string;
   isCCP: boolean;
+  risk_strategy?: 'ccp' | 'opprp' | 'use_existing_prps';
 }
 
 interface CCPForm {
@@ -97,9 +99,25 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
 
   useEffect(() => {
     if (node) {
+      console.log('[NodeEditDialog] ========== NODE EDIT DIALOG OPENED ==========');
+      console.log('[NodeEditDialog] Full node:', node);
+      console.log('[NodeEditDialog] Node ID:', node.id);
+      console.log('[NodeEditDialog] Node type:', node.type);
+      console.log('[NodeEditDialog] Node data:', node.data);
+      console.log('[NodeEditDialog] Hazards count:', node.data.hazards?.length || 0);
+      console.log('[NodeEditDialog] Hazards detail:', node.data.hazards);
+      console.log('[NodeEditDialog] Has CCP?', !!node.data.ccp);
+      console.log('[NodeEditDialog] CCP data received:', node.data.ccp);
+      
+      if (node.data.hazards) {
+        const ccpHazards = node.data.hazards.filter((h: any) => h.isCCP);
+        console.log('[NodeEditDialog] Hazards marked as CCP:', ccpHazards);
+      }
+      
       setFormData(node.data);
       setHazards(node.data.hazards || []);
-      setCcpData(node.data.ccp || {
+      
+      const ccpDataToSet = node.data.ccp || {
         number: '',
         criticalLimits: [],
         monitoringFrequency: '',
@@ -107,7 +125,11 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
         responsiblePerson: '',
         correctiveActions: '',
         verificationMethod: '',
-      });
+      };
+      
+      console.log('[NodeEditDialog] Setting ccpData to:', ccpDataToSet);
+      setCcpData(ccpDataToSet);
+      console.log('[NodeEditDialog] ================================================');
     }
   }, [node]);
 
@@ -139,74 +161,18 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
     }));
   };
 
-  const addHazard = () => {
-    const newHazard: HazardForm = {
-      id: `hazard_${Date.now()}`,
-      type: 'biological',
-      description: '',
-      likelihood: 1,
-      severity: 1,
-      riskLevel: 'low',
-      controlMeasures: '',
-      isCCP: false,
-    };
-    setHazards(prev => [...prev, newHazard]);
-  };
-
-  const updateHazard = (index: number, field: keyof HazardForm, value: any) => {
-    setHazards(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      
-      // Auto-calculate risk level when likelihood or severity changes
-      if (field === 'likelihood' || field === 'severity') {
-        updated[index].riskLevel = calculateRiskLevel(
-          updated[index].likelihood,
-          updated[index].severity
-        );
-      }
-      
-      return updated;
-    });
-  };
-
-  const removeHazard = (index: number) => {
-    setHazards(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const addCriticalLimit = () => {
-    setCcpData(prev => ({
-      ...prev,
-      criticalLimits: [
-        ...prev.criticalLimits,
-        { parameter: '', min: undefined, max: undefined, unit: '' },
-      ],
-    }));
-  };
-
-  const updateCriticalLimit = (index: number, field: string, value: any) => {
-    setCcpData(prev => ({
-      ...prev,
-      criticalLimits: prev.criticalLimits.map((limit, i) =>
-        i === index ? { ...limit, [field]: value } : limit
-      ),
-    }));
-  };
-
-  const removeCriticalLimit = (index: number) => {
-    setCcpData(prev => ({
-      ...prev,
-      criticalLimits: prev.criticalLimits.filter((_, i) => i !== index),
-    }));
-  };
 
   const handleSave = () => {
-    const hasCCP = hazards.some(h => h.isCCP) || ccpData.number;
-    
+    // Only save editable fields (Basic Information and Process Parameters)
+    // Hazards and CCP data are read-only and managed elsewhere
     const updatedData: Partial<HACCPNodeData> = {
-      ...formData,
-      hazards: hazards.length > 0 ? hazards : undefined,
-      ccp: hasCCP ? ccpData : undefined,
+      stepNumber: formData.stepNumber,
+      description: formData.description,
+      equipment: formData.equipment,
+      temperature: formData.temperature,
+      time: formData.time,
+      ph: formData.ph,
+      waterActivity: formData.waterActivity,
     };
 
     onSave(node.id, updatedData);
@@ -434,22 +400,12 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
             <AccordionSummary expandIcon={<ExpandMore />}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 2 }}>
                 <Typography variant="h6">Hazard Analysis</Typography>
-                {!readOnly && (
-                  <Button
-                    size="small"
-                    startIcon={<Add />}
-                    onClick={addHazard}
-                    variant="outlined"
-                  >
-                    Add Hazard
-                  </Button>
-                )}
               </Box>
             </AccordionSummary>
             <AccordionDetails>
               {hazards.length === 0 ? (
                 <Typography color="text.secondary" align="center" sx={{ py: 2 }}>
-                  No hazards identified for this step
+                  No hazards attached to this step
                 </Typography>
               ) : (
                 <TableContainer component={Paper} variant="outlined">
@@ -462,8 +418,7 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
                         <TableCell>Severity (1-5)</TableCell>
                         <TableCell>Risk Level</TableCell>
                         <TableCell>Control Measures</TableCell>
-                        <TableCell>CCP</TableCell>
-                        {!readOnly && <TableCell>Actions</TableCell>}
+                        <TableCell>Strategy</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -472,51 +427,25 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               {getHazardIcon(hazard.type)}
-                              <FormControl size="small" sx={{ minWidth: 100 }}>
-                                <Select
-                                  value={hazard.type}
-                                  onChange={(e) => updateHazard(index, 'type', e.target.value)}
-                                  disabled={readOnly}
-                                >
-                                  <MenuItem value="biological">Biological</MenuItem>
-                                  <MenuItem value="chemical">Chemical</MenuItem>
-                                  <MenuItem value="physical">Physical</MenuItem>
-                                  <MenuItem value="allergen">Allergen</MenuItem>
-                                </Select>
-                              </FormControl>
+                              <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                                {hazard.type}
+                              </Typography>
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <TextField
-                              size="small"
-                              multiline
-                              value={hazard.description}
-                              onChange={(e) => updateHazard(index, 'description', e.target.value)}
-                              disabled={readOnly}
-                              sx={{ minWidth: 200 }}
-                            />
+                            <Typography variant="body2">
+                              {hazard.description}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            <TextField
-                              size="small"
-                              type="number"
-                              inputProps={{ min: 1, max: 5 }}
-                              value={hazard.likelihood}
-                              onChange={(e) => updateHazard(index, 'likelihood', parseInt(e.target.value))}
-                              disabled={readOnly}
-                              sx={{ width: 80 }}
-                            />
+                            <Typography variant="body2">
+                              {hazard.likelihood}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            <TextField
-                              size="small"
-                              type="number"
-                              inputProps={{ min: 1, max: 5 }}
-                              value={hazard.severity}
-                              onChange={(e) => updateHazard(index, 'severity', parseInt(e.target.value))}
-                              disabled={readOnly}
-                              sx={{ width: 80 }}
-                            />
+                            <Typography variant="body2">
+                              {hazard.severity}
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -527,39 +456,28 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
                             />
                           </TableCell>
                           <TableCell>
-                            <TextField
-                              size="small"
-                              multiline
-                              value={hazard.controlMeasures}
-                              onChange={(e) => updateHazard(index, 'controlMeasures', e.target.value)}
-                              disabled={readOnly}
-                              sx={{ minWidth: 200 }}
-                            />
+                            <Typography variant="body2">
+                              {hazard.controlMeasures}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            <FormControlLabel
-                              control={
-                                <Switch
-                                  size="small"
-                                  checked={hazard.isCCP}
-                                  onChange={(e) => updateHazard(index, 'isCCP', e.target.checked)}
-                                  disabled={readOnly}
-                                />
+                            <Chip
+                              size="small"
+                              label={
+                                hazard.risk_strategy === 'ccp' ? 'CCP' :
+                                hazard.risk_strategy === 'opprp' ? 'OPRP' :
+                                hazard.risk_strategy === 'use_existing_prps' ? 'PRP' :
+                                'N/A'
                               }
-                              label=""
+                              color={
+                                hazard.risk_strategy === 'ccp' ? 'error' :
+                                hazard.risk_strategy === 'opprp' ? 'warning' :
+                                hazard.risk_strategy === 'use_existing_prps' ? 'info' :
+                                'default'
+                              }
+                              variant="filled"
                             />
                           </TableCell>
-                          {!readOnly && (
-                            <TableCell>
-                              <IconButton
-                                size="small"
-                                onClick={() => removeHazard(index)}
-                                color="error"
-                              >
-                                <Delete />
-                              </IconButton>
-                            </TableCell>
-                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -569,6 +487,207 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
             </AccordionDetails>
           </Accordion>
 
+          {/* PRP Details */}
+          {hazards.some(h => h.risk_strategy === 'use_existing_prps') && (
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="info.main">Prerequisite Programs (PRPs)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      The following hazards at this step are managed by existing Prerequisite Programs:
+                    </Typography>
+                  </Grid>
+                  
+                  {hazards
+                    .filter(h => h.risk_strategy === 'use_existing_prps')
+                    .map((hazard, index) => (
+                      <Grid item xs={12} key={hazard.id}>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            {getHazardIcon(hazard.type)}
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {hazard.description}
+                            </Typography>
+                            <Chip 
+                              label="PRP" 
+                              color="info" 
+                              size="small"
+                              variant="filled"
+                            />
+                          </Box>
+                          
+                          <Grid container spacing={2} sx={{ mt: 1 }}>
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Hazard Type
+                              </Typography>
+                              <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                                {hazard.type}
+                              </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Likelihood
+                              </Typography>
+                              <Typography variant="body2">
+                                {hazard.likelihood}/5
+                              </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Severity
+                              </Typography>
+                              <Typography variant="body2">
+                                {hazard.severity}/5
+                              </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Risk Level
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={hazard.riskLevel.toUpperCase()}
+                                color={getRiskColor(hazard.riskLevel) as any}
+                                variant={hazard.riskLevel === 'low' ? 'outlined' : 'filled'}
+                              />
+                            </Grid>
+                            
+                            {hazard.controlMeasures && (
+                              <Grid item xs={12}>
+                                <Typography variant="caption" color="text.secondary">
+                                  Control Measures
+                                </Typography>
+                                <Typography variant="body2">
+                                  {hazard.controlMeasures}
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  
+                  <Grid item xs={12}>
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        These hazards are controlled by general Prerequisite Programs (Good Manufacturing Practices, 
+                        Good Hygiene Practices, etc.) and do not require specific CCPs or OPRPs.
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          )}
+
+          {/* OPRP Details */}
+          {hazards.some(h => h.risk_strategy === 'opprp') && (
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="warning.main">Operational Prerequisite Programs (OPRPs)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      The following hazards at this step require Operational Prerequisite Programs:
+                    </Typography>
+                  </Grid>
+                  
+                  {hazards
+                    .filter(h => h.risk_strategy === 'opprp')
+                    .map((hazard, index) => (
+                      <Grid item xs={12} key={hazard.id}>
+                        <Paper variant="outlined" sx={{ p: 2, borderColor: 'warning.main' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            {getHazardIcon(hazard.type)}
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {hazard.description}
+                            </Typography>
+                            <Chip 
+                              label="OPRP" 
+                              color="warning" 
+                              size="small"
+                              variant="filled"
+                            />
+                          </Box>
+                          
+                          <Grid container spacing={2} sx={{ mt: 1 }}>
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Hazard Type
+                              </Typography>
+                              <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                                {hazard.type}
+                              </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Likelihood
+                              </Typography>
+                              <Typography variant="body2">
+                                {hazard.likelihood}/5
+                              </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Severity
+                              </Typography>
+                              <Typography variant="body2">
+                                {hazard.severity}/5
+                              </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">
+                                Risk Level
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={hazard.riskLevel.toUpperCase()}
+                                color={getRiskColor(hazard.riskLevel) as any}
+                                variant={hazard.riskLevel === 'low' ? 'outlined' : 'filled'}
+                              />
+                            </Grid>
+                            
+                            {hazard.controlMeasures && (
+                              <Grid item xs={12}>
+                                <Typography variant="caption" color="text.secondary">
+                                  Control Measures
+                                </Typography>
+                                <Typography variant="body2">
+                                  {hazard.controlMeasures}
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  
+                  <Grid item xs={12}>
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        OPRPs are control measures applied to prevent or reduce significant food safety hazards 
+                        to acceptable levels. Unlike CCPs, critical limits cannot be established for these controls, 
+                        but operational limits are defined.
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          )}
+
           {/* CCP Details */}
           {(hazards.some(h => h.isCCP) || ccpData.number) && (
             <Accordion>
@@ -576,124 +695,141 @@ const NodeEditDialog: React.FC<NodeEditDialogProps> = ({
                 <Typography variant="h6" color="error">Critical Control Point (CCP)</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="CCP Number"
-                      value={ccpData.number}
-                      onChange={(e) => setCcpData(prev => ({ ...prev, number: e.target.value }))}
-                      disabled={readOnly}
-                      placeholder="e.g., CCP-1"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" gutterBottom>Critical Limits</Typography>
-                    {!readOnly && (
-                      <Button
-                        size="small"
-                        startIcon={<Add />}
-                        onClick={addCriticalLimit}
-                        sx={{ mb: 1 }}
-                      >
-                        Add Critical Limit
-                      </Button>
-                    )}
-                    {ccpData.criticalLimits.map((limit, index) => (
-                      <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-                        <TextField
-                          size="small"
-                          label="Parameter"
-                          value={limit.parameter}
-                          onChange={(e) => updateCriticalLimit(index, 'parameter', e.target.value)}
-                          disabled={readOnly}
-                          sx={{ flex: 1 }}
+                <Grid container spacing={3}>
+                  {ccpData.number && (
+                    <Grid item xs={12}>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          CCP Number
+                        </Typography>
+                        <Chip 
+                          label={ccpData.number} 
+                          color="error" 
+                          variant="filled"
+                          sx={{ fontWeight: 'bold' }}
                         />
-                        <TextField
-                          size="small"
-                          label="Min"
-                          type="number"
-                          value={limit.min || ''}
-                          onChange={(e) => updateCriticalLimit(index, 'min', parseFloat(e.target.value))}
-                          disabled={readOnly}
-                          sx={{ width: 100 }}
-                        />
-                        <TextField
-                          size="small"
-                          label="Max"
-                          type="number"
-                          value={limit.max || ''}
-                          onChange={(e) => updateCriticalLimit(index, 'max', parseFloat(e.target.value))}
-                          disabled={readOnly}
-                          sx={{ width: 100 }}
-                        />
-                        <TextField
-                          size="small"
-                          label="Unit"
-                          value={limit.unit}
-                          onChange={(e) => updateCriticalLimit(index, 'unit', e.target.value)}
-                          disabled={readOnly}
-                          sx={{ width: 80 }}
-                        />
-                        {!readOnly && (
-                          <IconButton
-                            size="small"
-                            onClick={() => removeCriticalLimit(index)}
-                            color="error"
-                          >
-                            <Delete />
-                          </IconButton>
-                        )}
                       </Box>
-                    ))}
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Monitoring Frequency"
-                      value={ccpData.monitoringFrequency}
-                      onChange={(e) => setCcpData(prev => ({ ...prev, monitoringFrequency: e.target.value }))}
-                      disabled={readOnly}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Monitoring Method"
-                      value={ccpData.monitoringMethod}
-                      onChange={(e) => setCcpData(prev => ({ ...prev, monitoringMethod: e.target.value }))}
-                      disabled={readOnly}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Responsible Person"
-                      value={ccpData.responsiblePerson}
-                      onChange={(e) => setCcpData(prev => ({ ...prev, responsiblePerson: e.target.value }))}
-                      disabled={readOnly}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Verification Method"
-                      value={ccpData.verificationMethod}
-                      onChange={(e) => setCcpData(prev => ({ ...prev, verificationMethod: e.target.value }))}
-                      disabled={readOnly}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Corrective Actions"
-                      multiline
-                      rows={3}
-                      value={ccpData.correctiveActions}
-                      onChange={(e) => setCcpData(prev => ({ ...prev, correctiveActions: e.target.value }))}
-                      disabled={readOnly}
-                    />
-                  </Grid>
+                    </Grid>
+                  )}
+
+                  {ccpData.criticalLimits && ccpData.criticalLimits.length > 0 && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Critical Limits
+                      </Typography>
+                      <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Parameter</TableCell>
+                              <TableCell>Minimum</TableCell>
+                              <TableCell>Maximum</TableCell>
+                              <TableCell>Unit</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {ccpData.criticalLimits.map((limit, index) => (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight="medium">
+                                    {limit.parameter}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {limit.min !== undefined ? limit.min : '-'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {limit.max !== undefined ? limit.max : '-'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {limit.unit || '-'}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Grid>
+                  )}
+
+                  {ccpData.monitoringFrequency && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Monitoring Frequency
+                      </Typography>
+                      <Typography variant="body2">
+                        {ccpData.monitoringFrequency}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {ccpData.monitoringMethod && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Monitoring Method
+                      </Typography>
+                      <Typography variant="body2">
+                        {ccpData.monitoringMethod}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {ccpData.responsiblePerson && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Responsible Person
+                      </Typography>
+                      <Typography variant="body2">
+                        {ccpData.responsiblePerson}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {ccpData.verificationMethod && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Verification Method
+                      </Typography>
+                      <Typography variant="body2">
+                        {ccpData.verificationMethod}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {ccpData.correctiveActions && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Corrective Actions
+                      </Typography>
+                      <Typography variant="body2">
+                        {ccpData.correctiveActions}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {!ccpData.number && (!ccpData.criticalLimits || ccpData.criticalLimits.length === 0) && (
+                    <Grid item xs={12}>
+                      <Alert severity="info" sx={{ my: 2 }}>
+                        <Typography variant="body2">
+                          No CCP details available for this step
+                        </Typography>
+                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
+                          Debug info: {JSON.stringify({
+                            hasCcpData: !!node.data.ccp,
+                            ccpNumber: ccpData.number || 'none',
+                            criticalLimitsCount: ccpData.criticalLimits?.length || 0,
+                            hasMonitoring: !!ccpData.monitoringMethod,
+                          })}
+                        </Typography>
+                      </Alert>
+                    </Grid>
+                  )}
                 </Grid>
               </AccordionDetails>
             </Accordion>

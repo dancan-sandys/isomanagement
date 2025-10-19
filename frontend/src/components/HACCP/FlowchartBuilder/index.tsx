@@ -122,6 +122,26 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
       const serverEdges = payload?.edges || [];
 
       // Build hazard and CCP lookups
+      console.log('[Flowchart] Total hazards:', hazards.length, hazards);
+      console.log('[Flowchart] Total CCPs:', ccps.length, ccps);
+      
+      // DETAILED CCP INSPECTION
+      if (ccps.length > 0) {
+        console.log('[Flowchart] ========== INSPECTING CCPs ==========');
+        ccps.forEach((c, index) => {
+          console.log(`[Flowchart] CCP ${index}:`, {
+            id: c.id,
+            ccp_number: c.ccp_number,
+            ccp_name: (c as any).ccp_name,
+            hazard_id: (c as any).hazard_id,
+            has_hazard_id: 'hazard_id' in c,
+            all_keys: Object.keys(c),
+            full_object: c
+          });
+        });
+        console.log('[Flowchart] ======================================');
+      }
+      
       const hazardsByStepId = new Map<number, StoreHazard[]>();
       hazards.forEach((h) => {
         const stepId = Number((h as any).process_step_id);
@@ -135,8 +155,23 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
       const ccpByHazardId = new Map<number, StoreCCP>();
       ccps.forEach((c) => {
         const hid = Number((c as any).hazard_id);
-        if (!isNaN(hid)) ccpByHazardId.set(hid, c);
+        console.log(`[Flowchart] Processing CCP ${c.ccp_number}:`, {
+          hazard_id_raw: (c as any).hazard_id,
+          hazard_id_type: typeof (c as any).hazard_id,
+          hazard_id_parsed: hid,
+          is_valid: !isNaN(hid)
+        });
+        
+        if (!isNaN(hid)) {
+          ccpByHazardId.set(hid, c);
+          console.log('[Flowchart] ✓ Mapped CCP', c.ccp_number, 'to hazard', hid);
+        } else {
+          console.error('[Flowchart] ✗ CCP has no valid hazard_id:', c);
+        }
       });
+      
+      console.log('[Flowchart] hazardsByStepId map:', Array.from(hazardsByStepId.entries()));
+      console.log('[Flowchart] ccpByHazardId map:', Array.from(ccpByHazardId.entries()));
 
       const mappedNodes = serverNodes.map((n: any) => {
         // Map backend types to builder node types
@@ -164,14 +199,17 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
           riskLevel: h.risk_level as any,
           controlMeasures: h.control_measures || '',
           isCCP: !!h.is_ccp,
+          risk_strategy: (h as any).risk_strategy,
         }));
 
         // Map CCP if tied to a hazard at this step
         let ccpData: any = undefined;
         if (stepHazards.length > 0) {
+          console.log(`[Flowchart] Node ${n.id} (step ${processStepId}): Found ${stepHazards.length} hazards`, stepHazards.map(h => h.id));
           const matched = stepHazards.find((h) => ccpByHazardId.has(h.id));
           if (matched) {
             const c = ccpByHazardId.get(matched.id)!;
+            console.log(`[Flowchart] Node ${n.id}: Found CCP for hazard ${matched.id}:`, c);
             ccpData = {
               number: c.ccp_number,
               criticalLimits: [
@@ -188,6 +226,9 @@ const HACCPFlowchartBuilderContainer: React.FC<HACCPFlowchartBuilderProps> = ({
               correctiveActions: c.corrective_actions || '',
               verificationMethod: c.verification_method || '',
             };
+            console.log(`[Flowchart] Node ${n.id}: Mapped CCP data:`, ccpData);
+          } else {
+            console.log(`[Flowchart] Node ${n.id}: No CCP found for any hazard at this step`);
           }
         }
 

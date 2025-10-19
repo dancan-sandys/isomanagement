@@ -107,6 +107,7 @@ export interface HACCPNodeData {
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
     controlMeasures?: string;
     isCCP?: boolean;
+    risk_strategy?: 'ccp' | 'opprp' | 'use_existing_prps' | 'accept' | 'further_analysis' | 'not_determined';
   }>;
   
   // CCP information (if applicable)
