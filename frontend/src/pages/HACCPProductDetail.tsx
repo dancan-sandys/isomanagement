@@ -791,7 +791,17 @@ const HACCPProductDetail: React.FC = () => {
         <DialogTitle>{selectedCcpItem ? 'Edit CCP' : 'Add CCP'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Hazard ID" value={ccpForm.hazard_id} onChange={(e) => setCcpForm({ ...ccpForm, hazard_id: e.target.value })} /></Grid>
+            <Grid item xs={12} md={4}>
+              <TextField 
+                fullWidth 
+                type="number" 
+                label="Hazard ID" 
+                value={ccpForm.hazard_id} 
+                onChange={(e) => setCcpForm({ ...ccpForm, hazard_id: e.target.value })} 
+                disabled
+                helperText="Hazard ID cannot be changed"
+              />
+            </Grid>
             <Grid item xs={12} md={4}><TextField fullWidth label="CCP Number" value={ccpForm.ccp_number} onChange={(e) => setCcpForm({ ...ccpForm, ccp_number: e.target.value })} /></Grid>
             <Grid item xs={12} md={4}><TextField fullWidth label="CCP Name" value={ccpForm.ccp_name} onChange={(e) => setCcpForm({ ...ccpForm, ccp_name: e.target.value })} /></Grid>
             <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={ccpForm.description} onChange={(e) => setCcpForm({ ...ccpForm, description: e.target.value })} /></Grid>

@@ -1422,7 +1422,15 @@ const HACCP: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={4}>
-              <TextField fullWidth type="number" label="Hazard ID" value={ccpForm.hazard_id} onChange={(e) => setCcpForm({ ...ccpForm, hazard_id: e.target.value })} />
+              <TextField 
+                fullWidth 
+                type="number" 
+                label="Hazard ID" 
+                value={ccpForm.hazard_id} 
+                onChange={(e) => setCcpForm({ ...ccpForm, hazard_id: e.target.value })} 
+                disabled
+                helperText="Hazard ID cannot be changed after creation"
+              />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField fullWidth label="CCP Number" value={ccpForm.ccp_number} onChange={(e) => setCcpForm({ ...ccpForm, ccp_number: e.target.value })} />
