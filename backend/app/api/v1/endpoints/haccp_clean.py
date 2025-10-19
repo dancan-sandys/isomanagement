@@ -347,10 +347,37 @@ async def create_hazard(
             created_by=current_user.id
         )
         
+        # Serialize the full hazard object for frontend display
+        hazard_dict = {
+            "id": hazard.id,
+            "process_step_id": hazard.process_step_id,
+            "hazard_type": hazard.hazard_type.value if hazard.hazard_type else None,
+            "hazard_name": hazard.hazard_name,
+            "description": hazard.description,
+            "consequences": hazard.consequences,
+            "prp_reference_ids": hazard.prp_reference_ids or [],
+            "reference_documents": hazard.reference_documents or [],
+            "likelihood": hazard.likelihood,
+            "severity": hazard.severity,
+            "risk_score": hazard.risk_score,
+            "risk_level": hazard.risk_level.value if hazard.risk_level else None,
+            "control_measures": hazard.control_measures,
+            "is_controlled": hazard.is_controlled,
+            "control_effectiveness": hazard.control_effectiveness,
+            "risk_strategy": hazard.risk_strategy.value if hazard.risk_strategy else None,
+            "risk_strategy_justification": hazard.risk_strategy_justification,
+            "subsequent_step": hazard.subsequent_step,
+            "is_ccp": hazard.is_ccp,
+            "ccp_justification": hazard.ccp_justification,
+            "opprp_justification": hazard.opprp_justification,
+            "created_at": hazard.created_at.isoformat() if hazard.created_at else None,
+            "updated_at": hazard.updated_at.isoformat() if hazard.updated_at else None,
+        }
+        
         return ResponseModel(
             success=True,
             message="Hazard created successfully",
-            data={"id": hazard.id, "name": hazard.name}
+            data=hazard_dict
         )
         
     except HACCPValidationError as e:

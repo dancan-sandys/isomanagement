@@ -136,10 +136,12 @@ async def get_product(
                 text(
                     """
                     SELECT id, process_step_id, hazard_type, hazard_name, description,
-                           rationale, prp_reference_ids, "references",
+                           consequences,
+                           prp_reference_ids, reference_documents,
                            likelihood, severity, risk_score, risk_level, control_measures,
                            is_controlled, control_effectiveness, is_ccp, ccp_justification,
-                           risk_strategy, risk_strategy_justification, subsequent_step
+                           risk_strategy, risk_strategy_justification, subsequent_step,
+                           created_at, updated_at
                     FROM hazards
                     WHERE product_id = :pid
                     """
@@ -197,15 +199,25 @@ async def get_product(
             hazards_data = []
             for row in hazard_rows:
                 mapping = getattr(row, "_mapping", {})
+                
+                # Handle datetime serialization safely
+                created_at = mapping.get("created_at")
+                if created_at and hasattr(created_at, 'isoformat'):
+                    created_at = created_at.isoformat()
+                
+                updated_at = mapping.get("updated_at")
+                if updated_at and hasattr(updated_at, 'isoformat'):
+                    updated_at = updated_at.isoformat()
+                
                 hazard_data = {
                     "id": mapping.get("id"),
                     "process_step_id": mapping.get("process_step_id"),
                     "hazard_type": mapping.get("hazard_type"),
                     "hazard_name": mapping.get("hazard_name"),
                     "description": mapping.get("description"),
-                    "rationale": mapping.get("rationale"),
+                    "consequences": mapping.get("consequences"),  # Already uses COALESCE in SQL
                     "prp_reference_ids": mapping.get("prp_reference_ids") if mapping.get("prp_reference_ids") is not None else [],
-                    "references": mapping.get("references") if mapping.get("references") is not None else [],
+                    "reference_documents": mapping.get("reference_documents") if mapping.get("reference_documents") is not None else [],
                     "likelihood": mapping.get("likelihood"),
                     "severity": mapping.get("severity"),
                     "risk_score": mapping.get("risk_score"),
@@ -215,9 +227,12 @@ async def get_product(
                     "control_effectiveness": mapping.get("control_effectiveness"),
                     "is_ccp": mapping.get("is_ccp"),
                     "ccp_justification": mapping.get("ccp_justification"),
+                    "opprp_justification": None,  # Column doesn't exist yet in database
                     "risk_strategy": mapping.get("risk_strategy"),
                     "risk_strategy_justification": mapping.get("risk_strategy_justification"),
                     "subsequent_step": mapping.get("subsequent_step"),
+                    "created_at": created_at,
+                    "updated_at": updated_at,
                 }
                 hazards_data.append(hazard_data)
         except Exception as e:

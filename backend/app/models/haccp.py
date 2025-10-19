@@ -192,7 +192,7 @@ class Hazard(Base):
     description = Column(Text)
     
     # Hazard analysis data capture (Principle 1)
-    consequences = Column(Text)  # Potential consequences if hazard occurs (replaces rationale)
+    consequences = Column(Text)  # Potential consequences if hazard occurs
     prp_reference_ids = Column(JSON)  # Array of PRP/SOP document IDs that control this hazard
     reference_documents = Column(JSON)  # Array of reference documents (studies, regulations, etc.)
     
