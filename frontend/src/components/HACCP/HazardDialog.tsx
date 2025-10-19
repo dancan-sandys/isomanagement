@@ -82,15 +82,10 @@ interface OPRPFormData {
 
 interface DecisionTreeAnswers {
   q1_answer?: boolean;
-  q1_justification?: string;
   q2_answer?: boolean;
-  q2_justification?: string;
   q3_answer?: boolean;
-  q3_justification?: string;
   q4_answer?: boolean;
-  q4_justification?: string;
   q5_answer?: boolean;
-  q5_justification?: string;
 }
 
 interface HazardDialogProps {
@@ -169,7 +164,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
   const [decisionTreeOpen, setDecisionTreeOpen] = useState(false);
   const [decisionTreeAnswers, setDecisionTreeAnswers] = useState<DecisionTreeAnswers>({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [currentQuestionJustification, setCurrentQuestionJustification] = useState('');
   const [subsequentStepName, setSubsequentStepName] = useState('');
   const [riskScore, setRiskScore] = useState(0);
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high' | 'critical'>('low');
@@ -336,7 +330,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
       // Open decision tree dialog
       setDecisionTreeOpen(true);
       setCurrentQuestion(0);
-      setCurrentQuestionJustification('');
       setSubsequentStepName('');
       setDecisionTreeAnswers({});
     } else {
@@ -391,12 +384,10 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
 
   const handleDecisionTreeAnswer = (answer: boolean) => {
     const questionKey = `q${currentQuestion + 1}_answer` as keyof DecisionTreeAnswers;
-    const justificationKey = `q${currentQuestion + 1}_justification` as keyof DecisionTreeAnswers;
 
     const newAnswers = {
       ...decisionTreeAnswers,
       [questionKey]: answer,
-      [justificationKey]: currentQuestionJustification,
     };
 
     setDecisionTreeAnswers(newAnswers);
@@ -411,7 +402,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
       }));
       setStrategyLocked(true);
       setDecisionTreeOpen(false);
-      setCurrentQuestionJustification('');
       return;
     }
 
@@ -425,10 +415,9 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
           subsequent_step: subsequentStepName
         }));
         setStrategyLocked(true);
-        setDecisionTreeOpen(false);
-        setCurrentQuestionJustification('');
-        setSubsequentStepName('');
-        return;
+      setDecisionTreeOpen(false);
+      setSubsequentStepName('');
+      return;
       }
       // Q2: No - Move to Q3
     }
@@ -437,7 +426,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
       // Q3: No - Need to modify process
       alert('Control measures are not adequate. Please modify the process or product and reassess.');
       setDecisionTreeOpen(false);
-      setCurrentQuestionJustification('');
       return;
     }
 
@@ -450,7 +438,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
       }));
       setStrategyLocked(true);
       setDecisionTreeOpen(false);
-      setCurrentQuestionJustification('');
       return;
     }
 
@@ -473,13 +460,11 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
       }
       setStrategyLocked(true);
       setDecisionTreeOpen(false);
-      setCurrentQuestionJustification('');
       return;
     }
 
     // Move to next question
     setCurrentQuestion(prev => prev + 1);
-    setCurrentQuestionJustification('');
   };
 
   const handleSave = () => {
@@ -582,7 +567,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
     });
     setDecisionTreeAnswers({});
     setCurrentQuestion(0);
-    setCurrentQuestionJustification('');
     setSubsequentStepName('');
     setStrategyLocked(false);
     onClose();
@@ -1318,17 +1302,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
                         />
                       )}
                       
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        label="Justification"
-                        placeholder="Provide justification for your answer..."
-                        value={currentQuestionJustification}
-                        onChange={(e) => setCurrentQuestionJustification(e.target.value)}
-                        sx={{ mb: 2 }}
-                      />
-                      
                       <Box sx={{ display: 'flex', gap: 2 }}>
                         <Button
                           variant="contained"
@@ -1363,7 +1336,6 @@ const HazardDialog: React.FC<HazardDialogProps> = ({
         <DialogActions>
           <Button onClick={() => {
             setDecisionTreeOpen(false);
-            setCurrentQuestionJustification('');
             setSubsequentStepName('');
           }}>Cancel</Button>
         </DialogActions>

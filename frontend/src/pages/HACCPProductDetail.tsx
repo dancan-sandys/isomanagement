@@ -469,9 +469,8 @@ const HACCPProductDetail: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={selectedTab} index={2}>
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ mb: 2 }}>
           <Typography variant="h6">Critical Control Points</Typography>
-          <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedCcpItem(null); setCcpDialogOpen(true); }}>Add CCP</Button>
         </Box>
         <Grid container spacing={2}>
           {ccps.map((ccp) => (
