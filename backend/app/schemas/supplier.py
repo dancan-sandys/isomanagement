@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, validator
 from pydantic import EmailStr
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
 
@@ -15,6 +15,8 @@ class SupplierStatus(str, Enum):
 
 class SupplierCategory(str, Enum):
     RAW_MILK = "raw_milk"
+    RAW_MATERIALS = "raw_materials"
+    INGREDIENTS = "ingredients"
     ADDITIVES = "additives"
     CULTURES = "cultures"
     PACKAGING = "packaging"
@@ -123,7 +125,7 @@ class MaterialBase(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     supplier_material_code: Optional[str] = None
-    specifications: Optional[Dict[str, Any]] = None
+    specifications: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
     quality_parameters: Optional[List[str]] = None
     acceptable_limits: Optional[Dict[str, Any]] = None
     allergens: Optional[List[str]] = None
@@ -131,6 +133,28 @@ class MaterialBase(BaseModel):
     storage_conditions: Optional[str] = None
     shelf_life_days: Optional[int] = None
     handling_instructions: Optional[str] = None
+    
+    @validator('specifications', pre=True)
+    def normalize_specifications(cls, v):
+        """Convert specifications array to dict if needed"""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            # Convert array of specification objects to a dict
+            specs_dict = {}
+            for spec in v:
+                if isinstance(spec, dict):
+                    # Use parameter_name as key if available, otherwise use index
+                    key = spec.get("parameter_name")
+                    if not key:
+                        key = f"param_{len(specs_dict)}"
+                    specs_dict[key] = spec
+            return specs_dict if specs_dict else None
+        # If it's already a dict, return as is
+        if isinstance(v, dict):
+            return v
+        # For any other type, return None
+        return None
 
 
 class MaterialCreate(MaterialBase):
@@ -163,6 +187,42 @@ class MaterialResponse(MaterialBase):
     created_at: datetime
     updated_at: Optional[datetime] = None  # Made optional
     created_by: int
+
+    @validator('allergens', pre=True)
+    def normalize_allergens(cls, v):
+        """Convert allergens from JSON string to list if needed"""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                import json
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                return [v] if v else None
+            except (json.JSONDecodeError, TypeError):
+                return [v] if v else None
+        return None
+
+    @validator('quality_parameters', pre=True)
+    def normalize_quality_parameters(cls, v):
+        """Convert quality_parameters from JSON string to list if needed"""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                import json
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                return [v] if v else None
+            except (json.JSONDecodeError, TypeError):
+                return [v] if v else None
+        return None
 
     class Config:
         from_attributes = True

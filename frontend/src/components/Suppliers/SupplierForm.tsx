@@ -460,6 +460,8 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
             disabled={mode === 'view'}
           >
             <MenuItem value="raw_milk">Raw Milk</MenuItem>
+            <MenuItem value="raw_materials">Raw Materials</MenuItem>
+            <MenuItem value="ingredients">Ingredients</MenuItem>
             <MenuItem value="additives">Additives</MenuItem>
             <MenuItem value="cultures">Cultures</MenuItem>
             <MenuItem value="packaging">Packaging</MenuItem>

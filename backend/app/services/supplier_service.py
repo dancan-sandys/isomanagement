@@ -217,32 +217,98 @@ class SupplierService:
     # Material operations
     def create_material(self, material_data: MaterialCreate, created_by: int) -> Material:
         """Create a new material"""
+        import json as _json
+        
+        # Get the validated data
+        material_dict = material_data.dict()
+        
         # Normalize list-like fields destined for Text columns by JSON-encoding them
-        material_payload = material_data.dict()
+        allergens = material_dict.get("allergens")
+        if allergens is not None:
+            if isinstance(allergens, list):
+                material_dict["allergens"] = _json.dumps(allergens) if allergens else None
+            elif not isinstance(allergens, str):
+                material_dict["allergens"] = None
+        
+        quality_params = material_dict.get("quality_parameters")
+        if quality_params is not None:
+            if isinstance(quality_params, list):
+                material_dict["quality_parameters"] = _json.dumps(quality_params) if quality_params else None
+            elif not isinstance(quality_params, str):
+                material_dict["quality_parameters"] = None
+        
+        # Specifications should already be converted to dict by the validator
+        # Ensure it's a dict or None
+        specs = material_dict.get("specifications")
+        if specs is not None and isinstance(specs, list):
+            specs_dict = {}
+            for spec in specs:
+                if isinstance(spec, dict) and "parameter_name" in spec:
+                    specs_dict[spec["parameter_name"]] = spec
+            material_dict["specifications"] = specs_dict if specs_dict else None
+        
+        # Create Material with only valid fields
         try:
-            import json as _json
-            if isinstance(material_payload.get("allergens"), list):
-                material_payload["allergens"] = _json.dumps(material_payload["allergens"])  # Text column
-            if isinstance(material_payload.get("quality_parameters"), list):
-                material_payload["quality_parameters"] = _json.dumps(material_payload["quality_parameters"])  # Text column
-            # Handle specifications field - convert array to dict if needed
-            if isinstance(material_payload.get("specifications"), list):
-                # Convert array of specification objects to a dict
-                specs_dict = {}
-                for spec in material_payload["specifications"]:
-                    if isinstance(spec, dict) and "parameter_name" in spec:
-                        specs_dict[spec["parameter_name"]] = spec
-                material_payload["specifications"] = specs_dict
-        except Exception:
-            pass
-        material = Material(
-            **material_payload,
-            created_by=created_by
-        )
-        self.db.add(material)
-        self.db.commit()
-        self.db.refresh(material)
-        return material
+            material = Material(
+                material_code=material_dict["material_code"],
+                name=material_dict["name"],
+                description=material_dict.get("description"),
+                category=material_dict.get("category"),
+                supplier_id=material_dict["supplier_id"],
+                supplier_material_code=material_dict.get("supplier_material_code"),
+                specifications=material_dict.get("specifications"),
+                quality_parameters=material_dict.get("quality_parameters"),
+                acceptable_limits=material_dict.get("acceptable_limits"),
+                allergens=material_dict.get("allergens"),
+                allergen_statement=material_dict.get("allergen_statement"),
+                storage_conditions=material_dict.get("storage_conditions"),
+                shelf_life_days=material_dict.get("shelf_life_days"),
+                handling_instructions=material_dict.get("handling_instructions"),
+                created_by=created_by
+            )
+            self.db.add(material)
+            try:
+                self.db.commit()
+            except Exception as commit_error:
+                self.db.rollback()
+                raise commit_error
+            self.db.refresh(material)
+            # Return the material - MaterialResponse validators will handle JSON string to list conversion
+            return material
+        except Exception as e:
+            self.db.rollback()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating material: {type(e).__name__}: {str(e)}", exc_info=True)
+            
+            # Check for SQLAlchemy IntegrityError
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(e, IntegrityError):
+                error_str = str(e.orig).lower() if hasattr(e, 'orig') else str(e).lower()
+                if "unique constraint" in error_str or "duplicate" in error_str or "UNIQUE constraint failed" in error_str:
+                    if "material_code" in error_str or "materials.material_code" in error_str:
+                        raise ValueError(f"Material code '{material_dict['material_code']}' already exists. Material codes must be globally unique.")
+                    else:
+                        raise ValueError(f"Database constraint violation: {error_str}")
+                elif "foreign key" in error_str or "FOREIGN KEY constraint failed" in error_str:
+                    if "supplier" in error_str or "suppliers.id" in error_str:
+                        raise ValueError(f"Supplier with ID {material_dict['supplier_id']} does not exist.")
+                    else:
+                        raise ValueError(f"Foreign key constraint violation: {error_str}")
+                else:
+                    raise ValueError(f"Database integrity error: {str(e.orig) if hasattr(e, 'orig') else str(e)}")
+            
+            # Check for other database errors
+            error_str = str(e).lower()
+            if "unique constraint" in error_str or "duplicate" in error_str:
+                if "material_code" in error_str:
+                    raise ValueError(f"Material code '{material_dict['material_code']}' already exists. Material codes must be globally unique.")
+            elif "foreign key" in error_str:
+                if "supplier" in error_str:
+                    raise ValueError(f"Supplier with ID {material_dict['supplier_id']} does not exist.")
+            
+            # Re-raise with original message if it's a different error
+            raise ValueError(f"Failed to create material: {type(e).__name__}: {str(e)}")
 
     def get_materials(self, filter_params: MaterialFilter) -> Dict[str, Any]:
         """Get materials with filtering and pagination"""
@@ -898,9 +964,19 @@ class SupplierService:
     # Material approval utilities
     def approve_material(self, material_id: int, approved_by: int) -> Optional[Material]:
         """Approve a material and return updated record."""
-        material = self.get_material(material_id)
+        import json as _json
+        
+        # Get material directly from database without conversion
+        material = self.db.query(Material).filter(Material.id == material_id).first()
         if not material:
             return None
+        
+        # Ensure list fields are JSON strings before saving
+        if hasattr(material, 'allergens') and isinstance(material.allergens, list):
+            material.allergens = _json.dumps(material.allergens) if material.allergens else None
+        if hasattr(material, 'quality_parameters') and isinstance(material.quality_parameters, list):
+            material.quality_parameters = _json.dumps(material.quality_parameters) if material.quality_parameters else None
+        
         material.approval_status = "approved"
         # Touch updated_at via commit; optionally track approver via specifications meta
         self.db.commit()
@@ -909,9 +985,19 @@ class SupplierService:
 
     def reject_material(self, material_id: int, reason: str, rejected_by: int) -> Optional[Material]:
         """Reject a material with reason and return updated record."""
-        material = self.get_material(material_id)
+        import json as _json
+        
+        # Get material directly from database without conversion
+        material = self.db.query(Material).filter(Material.id == material_id).first()
         if not material:
             return None
+        
+        # Ensure list fields are JSON strings before saving
+        if hasattr(material, 'allergens') and isinstance(material.allergens, list):
+            material.allergens = _json.dumps(material.allergens) if material.allergens else None
+        if hasattr(material, 'quality_parameters') and isinstance(material.quality_parameters, list):
+            material.quality_parameters = _json.dumps(material.quality_parameters) if material.quality_parameters else None
+        
         material.approval_status = "rejected"
         # Persist reason into acceptable_limits metadata if possible
         try:

@@ -116,7 +116,8 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | null | undefined) => {
+    if (!status) return 'default';
     switch (status.toLowerCase()) {
       case 'in_production': return 'primary';
       case 'completed': return 'success';
@@ -128,7 +129,8 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
     }
   };
 
-  const getBatchTypeColor = (type: string) => {
+  const getBatchTypeColor = (type: string | null | undefined) => {
+    if (!type) return 'default';
     switch (type.toLowerCase()) {
       case 'raw_milk': return 'primary';
       case 'additive': return 'secondary';
@@ -140,7 +142,8 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
     }
   };
 
-  const getQualityStatusColor = (status: string) => {
+  const getQualityStatusColor = (status: string | null | undefined) => {
+    if (!status) return 'default';
     switch (status.toLowerCase()) {
       case 'passed': return 'success';
       case 'failed': return 'error';
@@ -199,8 +202,8 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
                       Batch Type
                     </Typography>
                     <Chip 
-                      label={batch.batch_type.replace('_', ' ').toUpperCase()} 
-                      color={getBatchTypeColor(batch.batch_type)}
+                      label={batch.batch_type ? batch.batch_type.replace('_', ' ').toUpperCase() : 'NOT SPECIFIED'} 
+                      color={batch.batch_type ? getBatchTypeColor(batch.batch_type) : 'default'}
                       size="small"
                     />
                   </Grid>
@@ -209,8 +212,8 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
                       Status
                     </Typography>
                     <Chip 
-                      label={batch.status.replace('_', ' ').toUpperCase()} 
-                      color={getStatusColor(batch.status)}
+                      label={batch.status ? batch.status.replace('_', ' ').toUpperCase() : 'UNKNOWN'} 
+                      color={batch.status ? getStatusColor(batch.status) : 'default'}
                       size="small"
                     />
                   </Grid>
@@ -219,7 +222,7 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
                       Quantity
                     </Typography>
                     <Typography variant="body1">
-                      {batch.quantity} {batch.unit}
+                      {batch.quantity} {batch.unit || ''}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -227,8 +230,8 @@ const BatchDetail: React.FC<BatchDetailProps> = ({
                       Quality Status
                     </Typography>
                     <Chip 
-                      label={batch.quality_status.toUpperCase()} 
-                      color={getQualityStatusColor(batch.quality_status)}
+                      label={batch.quality_status ? batch.quality_status.toUpperCase() : 'PENDING'} 
+                      color={batch.quality_status ? getQualityStatusColor(batch.quality_status) : 'default'}
                       size="small"
                     />
                   </Grid>

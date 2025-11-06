@@ -105,6 +105,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
   const [bulkAction, setBulkAction] = useState('');
   const [approvalDialog, setApprovalDialog] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject' | null>(null);
   const [approvalComments, setApprovalComments] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [notification, setNotification] = useState<{
@@ -249,19 +250,25 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
   const handleApproveMaterial = async (material: Material) => {
     setSelectedMaterial(material);
+    setApprovalAction('approve');
+    setApprovalComments('');
+    setRejectionReason('');
     setApprovalDialog(true);
   };
 
   const handleRejectMaterial = async (material: Material) => {
     setSelectedMaterial(material);
+    setApprovalAction('reject');
+    setApprovalComments('');
+    setRejectionReason('');
     setApprovalDialog(true);
   };
 
   const handleApprovalSubmit = async () => {
-    if (!selectedMaterial) return;
+    if (!selectedMaterial || !approvalAction) return;
 
     try {
-      if (approvalComments) {
+      if (approvalAction === 'approve') {
         await dispatch(approveMaterial({
           materialId: selectedMaterial.id,
           comments: approvalComments,
@@ -272,7 +279,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
           message: 'Material approved successfully',
           severity: 'success',
         });
-      } else if (rejectionReason) {
+      } else if (approvalAction === 'reject') {
         await dispatch(rejectMaterial({
           materialId: selectedMaterial.id,
           rejectionReason,
@@ -287,6 +294,7 @@ const MaterialList: React.FC<MaterialListProps> = ({
 
       setApprovalDialog(false);
       setSelectedMaterial(null);
+      setApprovalAction(null);
       setApprovalComments('');
       setRejectionReason('');
       loadMaterials();
@@ -938,9 +946,14 @@ const MaterialList: React.FC<MaterialListProps> = ({
       </Dialog>
 
       {/* Approval Dialog */}
-      <Dialog open={approvalDialog} onClose={() => setApprovalDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={approvalDialog} onClose={() => {
+        setApprovalDialog(false);
+        setApprovalAction(null);
+        setApprovalComments('');
+        setRejectionReason('');
+      }} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {approvalComments ? 'Approve Material' : rejectionReason ? 'Reject Material' : 'Material Action'}
+          {approvalAction === 'approve' ? 'Approve Material' : approvalAction === 'reject' ? 'Reject Material' : 'Material Action'}
         </DialogTitle>
         <DialogContent>
           {selectedMaterial && (
@@ -955,23 +968,28 @@ const MaterialList: React.FC<MaterialListProps> = ({
           )}
           <TextField
             fullWidth
-            label={approvalComments ? "Approval Comments" : "Rejection Reason"}
+            label={approvalAction === 'approve' ? "Approval Comments" : "Rejection Reason"}
             multiline
             rows={4}
-            value={approvalComments || rejectionReason}
+            value={approvalAction === 'approve' ? approvalComments : rejectionReason}
             onChange={(e) => {
-              if (approvalComments !== undefined) {
+              if (approvalAction === 'approve') {
                 setApprovalComments(e.target.value);
-              } else {
+              } else if (approvalAction === 'reject') {
                 setRejectionReason(e.target.value);
               }
             }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setApprovalDialog(false)}>Cancel</Button>
-          <Button onClick={handleApprovalSubmit} variant="contained">
-            {approvalComments ? 'Approve' : 'Reject'}
+          <Button onClick={() => {
+            setApprovalDialog(false);
+            setApprovalAction(null);
+            setApprovalComments('');
+            setRejectionReason('');
+          }}>Cancel</Button>
+          <Button onClick={handleApprovalSubmit} variant="contained" color={approvalAction === 'approve' ? 'success' : 'error'}>
+            {approvalAction === 'approve' ? 'Approve' : 'Reject'}
           </Button>
         </DialogActions>
       </Dialog>

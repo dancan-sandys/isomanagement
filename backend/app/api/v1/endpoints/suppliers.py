@@ -9,6 +9,8 @@ import shutil
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 from app.services.supplier_service import SupplierService
 from app.models.supplier import Supplier, Material, SupplierEvaluation, EvaluationStatus, SupplierStatus
 from app.schemas.supplier import (
@@ -219,33 +221,155 @@ async def get_material(
 @router.post("/materials", response_model=ResponseModel[MaterialResponse])
 async def create_material(
     material_data: MaterialCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new material"""
-    service = SupplierService(db)
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Check if material code already exists for this supplier
-    existing_material = service.db.query(Material).filter(
-        Material.material_code == material_data.material_code,
-        Material.supplier_id == material_data.supplier_id
-    ).first()
+    # Log the incoming request data for debugging
+    try:
+        logger.info(f"Creating material request received: supplier_id={material_data.supplier_id}, material_code={material_data.material_code}, name={material_data.name}")
+    except Exception as log_err:
+        logger.warning(f"Could not log request data: {str(log_err)}")
     
-    if existing_material:
+    try:
+        service = SupplierService(db)
+        
+        # Validate supplier exists
+        # First, try a simple existence check to avoid JSON deserialization issues
+        supplier_exists = False
+        try:
+            from sqlalchemy import text
+            result = service.db.execute(
+                text("SELECT id FROM suppliers WHERE id = :supplier_id"),
+                {"supplier_id": material_data.supplier_id}
+            ).first()
+            supplier_exists = result is not None
+        except Exception as simple_check_error:
+            logger.warning(f"Simple supplier existence check failed: {str(simple_check_error)}")
+        
+        # If simple check passed, try to load the full supplier object
+        supplier = None
+        if supplier_exists:
+            try:
+                supplier = service.db.query(Supplier).filter(Supplier.id == material_data.supplier_id).first()
+            except LookupError as enum_error:
+                # Handle enum mismatch errors (e.g., supplier category not in enum)
+                logger.error(f"Enum mismatch error when querying supplier: {str(enum_error)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database data inconsistency: {str(enum_error)}. Please contact system administrator."
+                )
+            except Exception as query_error:
+                # Handle JSON decode errors and other database query errors
+                error_type = type(query_error).__name__
+                error_msg = str(query_error)
+                
+                # Check if it's a JSON decode error
+                if "JSONDecodeError" in error_type or "json" in error_msg.lower() or "Extra data" in error_msg:
+                    logger.error(f"Malformed JSON data in supplier record (ID: {material_data.supplier_id}): {error_msg}")
+                    # Even though JSON is malformed, supplier exists, so we can proceed
+                    # But log a warning and continue with material creation
+                    logger.warning(f"Supplier ID {material_data.supplier_id} exists but has malformed JSON. Proceeding with material creation.")
+                    supplier = None  # Set to None so we skip the full object check
+                else:
+                    # Re-raise other errors
+                    logger.error(f"Unexpected error querying supplier: {error_type}: {error_msg}", exc_info=True)
+                    raise
+        
+        if not supplier_exists:
+            error_msg = f"Supplier with ID {material_data.supplier_id} does not exist"
+            logger.warning(f"Material creation failed: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        # Note: If supplier object couldn't be loaded due to JSON issues, we still proceed
+        # because we verified the supplier exists via the simple query.
+        # The material creation doesn't require the full supplier object, just the ID.
+        
+        # Check if material code already exists (globally unique constraint)
+        try:
+            existing_material = service.db.query(Material).filter(
+                Material.material_code == material_data.material_code
+            ).first()
+        except Exception as query_error:
+            logger.error(f"Error querying for existing material: {type(query_error).__name__}: {str(query_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error while checking material code: {str(query_error)}"
+            )
+        
+        if existing_material:
+            error_msg = f"Material code '{material_data.material_code}' already exists. Material codes must be globally unique. (Existing material ID: {existing_material.id}, Supplier ID: {existing_material.supplier_id})"
+            logger.warning(f"Material creation failed: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        logger.info(f"Creating material: code={material_data.material_code}, name={material_data.name}, supplier_id={material_data.supplier_id}")
+        try:
+            material = service.create_material(material_data, current_user.id)
+            logger.info(f"Material created successfully with ID: {material.id}")
+        except Exception as create_error:
+            logger.error(f"Error in create_material service: {type(create_error).__name__}: {str(create_error)}", exc_info=True)
+            raise
+        
+        # Ensure material has all required fields for response
+        if not hasattr(material, 'approval_status') or material.approval_status is None:
+            material.approval_status = "pending"
+        if not hasattr(material, 'is_active'):
+            material.is_active = True
+        
+        try:
+            audit_event(db, current_user.id, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
+        except Exception as audit_err:
+            logger.warning(f"Audit event failed (non-critical): {str(audit_err)}")
+        
+        # Test if material can be converted to MaterialResponse (for debugging)
+        try:
+            from app.schemas.supplier import MaterialResponse
+            # Try to validate conversion - use model_validate for Pydantic v2 or from_orm for v1
+            try:
+                test_response = MaterialResponse.model_validate(material)
+            except AttributeError:
+                # Fallback to from_orm for Pydantic v1
+                test_response = MaterialResponse.from_orm(material)
+            logger.debug(f"MaterialResponse conversion successful for material ID: {material.id}")
+        except Exception as conversion_error:
+            logger.error(f"MaterialResponse conversion failed: {type(conversion_error).__name__}: {str(conversion_error)}", exc_info=True)
+            # Don't fail the request, but log the error - FastAPI will handle the conversion
+        
+        return ResponseModel(
+            success=True,
+            message="Material created successfully",
+            data=material
+        )
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions as-is (they already have proper status codes)
+        logger.warning(f"HTTPException raised: {http_exc.status_code} - {http_exc.detail}")
+        raise
+    except ValueError as e:
+        db.rollback()
+        error_msg = f"Validation error: {str(e)}"
+        logger.error(f"Validation error creating material: {error_msg}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Material code already exists for this supplier"
+            detail=error_msg
         )
-    
-    material = service.create_material(material_data, 1)
-    try:
-        audit_event(db, 1, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
-    except Exception:
-        pass
-    return ResponseModel(
-        success=True,
-        message="Material created successfully",
-        data=material
-    )
+    except Exception as e:
+        db.rollback()
+        import traceback
+        logger.error(f"Unexpected error creating material: {type(e).__name__}: {str(e)}", exc_info=True)
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create material: {type(e).__name__}: {str(e)}"
+        )
 
 
 @router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])

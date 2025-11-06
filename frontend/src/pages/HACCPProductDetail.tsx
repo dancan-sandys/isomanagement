@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { Add, Edit, Visibility, Delete } from '@mui/icons-material';
+import { Add, Edit, Visibility, Delete, Security } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI } from '../services/api';
 import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
@@ -473,21 +473,54 @@ const HACCPProductDetail: React.FC = () => {
           <Typography variant="h6">Critical Control Points</Typography>
         </Box>
         <Grid container spacing={2}>
-          {ccps.map((ccp) => (
-            <Grid item xs={12} sm={6} md={4} key={ccp.id}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6">{ccp.ccp_name}</Typography>
-                <Typography color="textSecondary">{ccp.ccp_number}</Typography>
-                <Typography variant="body2" paragraph>{ccp.description}</Typography>
-                {ccp.critical_limit_min && ccp.critical_limit_max && (
-                  <Typography variant="body2" color="textSecondary">Limits: {ccp.critical_limit_min} - {ccp.critical_limit_max} {ccp.critical_limit_unit}</Typography>
-                )}
-                <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'flex-end' }}>
-                  <IconButton size="small" onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} title="Edit CCP"><Edit /></IconButton>
-                </Stack>
-              </Paper>
-            </Grid>
-          ))}
+          {ccps.map((ccp) => {
+            // Check if CCP has incomplete fields
+            const hasEmptyFields = !ccp.ccp_number || !ccp.ccp_name || !ccp.description || 
+                                  !ccp.critical_limit_min || !ccp.critical_limit_max || 
+                                  !ccp.critical_limit_unit || !ccp.monitoring_frequency || 
+                                  !ccp.monitoring_method || !ccp.corrective_actions ||
+                                  !ccp.monitoring_responsible || !ccp.verification_responsible;
+            
+            return (
+              <Grid item xs={12} sm={6} md={4} key={ccp.id}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h6">{ccp.ccp_name}</Typography>
+                  <Typography color="textSecondary">{ccp.ccp_number}</Typography>
+                  <Typography variant="body2" paragraph>{ccp.description}</Typography>
+                  {ccp.critical_limit_min && ccp.critical_limit_max && (
+                    <Typography variant="body2" color="textSecondary">Limits: {ccp.critical_limit_min} - {ccp.critical_limit_max} {ccp.critical_limit_unit}</Typography>
+                  )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {hasEmptyFields ? (
+                        <>
+                          <Typography variant="body2" color="error.main">
+                            This ccp needs a complete haccp plan
+                          </Typography>
+                          <Chip 
+                            icon={<Security />} 
+                            label="" 
+                            size="small" 
+                            sx={{ bgcolor: 'error.main', cursor: 'pointer', '& .MuiChip-icon': { color: 'white' } }} 
+                            onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} 
+                          />
+                        </>
+                      ) : (
+                        <Chip 
+                          icon={<Security />} 
+                          label="" 
+                          size="small" 
+                          color="primary" 
+                          sx={{ cursor: 'pointer' }} 
+                          onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} 
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                </Paper>
+              </Grid>
+            );
+          })}
         </Grid>
       </TabPanel>
 
@@ -802,14 +835,14 @@ const HACCPProductDetail: React.FC = () => {
                 helperText="Hazard ID cannot be changed"
               />
             </Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth label="CCP Number" value={ccpForm.ccp_number} onChange={(e) => setCcpForm({ ...ccpForm, ccp_number: e.target.value })} /></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth label="CCP Name" value={ccpForm.ccp_name} onChange={(e) => setCcpForm({ ...ccpForm, ccp_name: e.target.value })} /></Grid>
-            <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={ccpForm.description} onChange={(e) => setCcpForm({ ...ccpForm, description: e.target.value })} /></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Critical Min" value={ccpForm.critical_limit_min} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_min: e.target.value })} /></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Critical Max" value={ccpForm.critical_limit_max} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_max: e.target.value })} /></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth label="Unit" value={ccpForm.critical_limit_unit} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_unit: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Frequency" value={ccpForm.monitoring_frequency} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_frequency: e.target.value })} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Method" value={ccpForm.monitoring_method} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_method: e.target.value })} /></Grid>
+            <Grid item xs={12} md={4}><TextField fullWidth label="CCP Number" value={ccpForm.ccp_number} onChange={(e) => setCcpForm({ ...ccpForm, ccp_number: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12} md={4}><TextField fullWidth label="CCP Name" value={ccpForm.ccp_name} onChange={(e) => setCcpForm({ ...ccpForm, ccp_name: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12}><TextField fullWidth multiline rows={3} label="Description" value={ccpForm.description} onChange={(e) => setCcpForm({ ...ccpForm, description: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Critical Min" value={ccpForm.critical_limit_min} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_min: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Critical Max" value={ccpForm.critical_limit_max} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_max: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12} md={4}><TextField fullWidth label="Unit" value={ccpForm.critical_limit_unit} onChange={(e) => setCcpForm({ ...ccpForm, critical_limit_unit: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Frequency" value={ccpForm.monitoring_frequency} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_frequency: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
+            <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Method" value={ccpForm.monitoring_method} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_method: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
             <Grid item xs={12} md={6}>
               <Autocomplete 
                 options={userOptions}
@@ -824,7 +857,7 @@ const HACCPProductDetail: React.FC = () => {
                 renderInput={(params) => <TextField {...params} label="Monitoring Responsible" placeholder="Search user..." fullWidth />} />
             </Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Monitoring Equipment" value={ccpForm.monitoring_equipment} onChange={(e) => setCcpForm({ ...ccpForm, monitoring_equipment: e.target.value })} /></Grid>
-            <Grid item xs={12}><TextField fullWidth label="Corrective Actions" value={ccpForm.corrective_actions} onChange={(e) => setCcpForm({ ...ccpForm, corrective_actions: e.target.value })} /></Grid>
+            <Grid item xs={12}><TextField fullWidth label="Corrective Actions" value={ccpForm.corrective_actions} onChange={(e) => setCcpForm({ ...ccpForm, corrective_actions: e.target.value })} disabled={!!selectedCcpItem} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Verification Frequency" value={ccpForm.verification_frequency} onChange={(e) => setCcpForm({ ...ccpForm, verification_frequency: e.target.value })} /></Grid>
             <Grid item xs={12} md={6}><TextField fullWidth label="Verification Method" value={ccpForm.verification_method} onChange={(e) => setCcpForm({ ...ccpForm, verification_method: e.target.value })} /></Grid>
             <Grid item xs={12}>

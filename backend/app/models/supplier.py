@@ -15,6 +15,8 @@ class SupplierStatus(str, enum.Enum):
 
 class SupplierCategory(str, enum.Enum):
     RAW_MILK = "raw_milk"
+    RAW_MATERIALS = "raw_materials"
+    INGREDIENTS = "ingredients"
     ADDITIVES = "additives"
     CULTURES = "cultures"
     PACKAGING = "packaging"
