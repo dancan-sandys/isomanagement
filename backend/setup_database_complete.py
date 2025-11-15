@@ -45,6 +45,8 @@ See: HACCP_RISK_STRATEGY_IMPLEMENTATION.md for full details
 
 import sys
 import os
+import json
+from typing import List, Dict, Any, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from datetime import datetime, timedelta
@@ -360,7 +362,9 @@ def clear_existing_data(conn):
     tables_to_clear = [
         'oprp_monitoring_logs', 'oprp_verification_logs', 'oprps',
         'ccp_monitoring_logs', 'ccp_verification_logs', 'ccps', 'hazards', 
-        'haccp_plans', 'process_flows', 'batches', 'products',
+        'haccp_plans', 'process_flows', 'batches',
+        'product_contact_surfaces',
+        'products', 'contact_surfaces',
         'supplier_evaluations', 'supplier_documents', 'suppliers',
         'document_approvals', 'document_versions', 'documents',
         'training_attendance', 'training_sessions', 'training_programs',
@@ -392,6 +396,45 @@ def clear_existing_data(conn):
                 print(f"  ✓ Cleared {table}")
             except Exception as e:
                 print(f"  ⚠️  Could not clear {table}: {e}")
+
+def get_user_id(conn, username: str) -> Optional[int]:
+    """Helper to fetch a user ID by username."""
+    try:
+        result = conn.execute(text("SELECT id FROM users WHERE username = :username"), {"username": username})
+        row = result.fetchone()
+        if row:
+            return row[0]
+        print(f"  ⚠️  User '{username}' not found. Seed data will omit assignments dependent on this user.")
+    except Exception as exc:
+        print(f"  ⚠️  Could not fetch user '{username}': {exc}")
+    return None
+
+
+def get_product_id(conn, product_code: str) -> Optional[int]:
+    """Helper to fetch a product ID by product code."""
+    try:
+        result = conn.execute(text("SELECT id FROM products WHERE product_code = :code"), {"code": product_code})
+        row = result.fetchone()
+        if row:
+            return row[0]
+        print(f"  ⚠️  Product '{product_code}' not found.")
+    except Exception as exc:
+        print(f"  ⚠️  Could not fetch product '{product_code}': {exc}")
+    return None
+
+
+def get_contact_surface_id(conn, name: str) -> Optional[int]:
+    """Helper to fetch a contact surface ID by name."""
+    try:
+        result = conn.execute(text("SELECT id FROM contact_surfaces WHERE name = :name"), {"name": name})
+        row = result.fetchone()
+        if row:
+            return row[0]
+        print(f"  ⚠️  Contact surface '{name}' not found.")
+    except Exception as exc:
+        print(f"  ⚠️  Could not fetch contact surface '{name}': {exc}")
+    return None
+
 
 def create_professional_users(conn):
     """Create professional food safety users with correct role assignments"""
@@ -510,168 +553,6 @@ def create_user_permissions(conn):
     except Exception as e:
         print(f"  ⚠️  Could not create user permissions: {e}")
 
-def create_professional_products(conn):
-    """Create professional food products"""
-    print("\n🥛 Creating professional food products...")
-    
-    products_data = [
-        # Dairy Products
-        ('DAI-001', 'Fresh Whole Milk', 'Pasteurized whole milk, 3.25% fat', 
-         'Whole milk, 3.25% fat, pasteurized, fortified with vitamin D', 
-         'Raw milk', 
-         'Liquid, white, homogeneous, pH 6.6-6.8, fat globules suspended in water phase',
-         'Raw milk reception, filtration, standardization, pasteurization (72°C/15s), cooling, packaging',
-         'Refrigerated transport in temperature-controlled vehicles',
-         'Stainless steel tanks, pipes, pasteurizer, packaging equipment',
-         'General population, children over 12 months',
-         'Refrigerated 2-4°C', 14, 'HDPE Bottle',
-         'Bacterial contamination (Listeria, Salmonella, E.coli), physical contaminants',
-         'Total plate count <10,000 CFU/ml, Coliforms <10 CFU/ml, Pathogens absent',
-         'FDA 21 CFR Part 131, Grade A Pasteurized Milk Ordinance',
-         1),
-        
-        ('DAI-002', 'Greek Yogurt', 'Creamy Greek yogurt, 2% fat',
-         'Greek yogurt made from milk, live cultures, 2% fat content',
-         'Raw milk, live yogurt cultures',
-         'Thick, creamy texture, white color, pH 4.0-4.5, protein-rich',
-         'Milk pasteurization, inoculation with cultures, fermentation (42°C/4-6h), straining, packaging',
-         'Refrigerated transport, cold chain maintenance',
-         'Stainless steel fermentation tanks, straining equipment, packaging lines',
-         'General population, health-conscious consumers',
-         'Refrigerated 2-4°C', 21, 'Plastic Cup',
-         'Bacterial contamination, yeast/mold growth, chemical contamination',
-         'Total plate count <100,000 CFU/g, Yeast <100 CFU/g, Mold <10 CFU/g',
-         'FDA 21 CFR Part 131, Grade A standards',
-         1),
-        
-        ('DAI-003', 'Cheddar Cheese', 'Aged cheddar cheese, 6 months',
-         'Cheddar cheese aged for 6 months, made from pasteurized milk',
-         'Pasteurized milk, rennet, cheese cultures, salt',
-         'Firm texture, orange color, pH 5.1-5.3, protein and fat rich',
-         'Milk pasteurization, acidification, rennet addition, cutting, cooking, pressing, salting, aging',
-         'Refrigerated transport, temperature-controlled storage',
-         'Cheese vats, presses, aging rooms, packaging equipment',
-         'General population, cheese lovers',
-         'Refrigerated 2-4°C', 90, 'Vacuum Pack',
-         'Bacterial contamination, mold growth, chemical residues',
-         'Total plate count <1,000,000 CFU/g, Listeria absent, mold <100 CFU/g',
-         'FDA 21 CFR Part 133, Grade A standards',
-         1),
-        
-        ('DAI-004', 'Butter', 'Sweet cream butter, 80% fat',
-         'Sweet cream butter with 80% milk fat content',
-         'Fresh cream, salt (optional)',
-         'Solid at room temperature, yellow color, smooth texture',
-         'Cream separation, pasteurization, churning, working, packaging',
-         'Refrigerated transport, cold chain maintenance',
-         'Churning equipment, working machines, packaging lines',
-         'General population, cooking enthusiasts',
-         'Refrigerated 2-4°C', 60, 'Wax Paper',
-         'Bacterial contamination, rancidity, chemical residues',
-         'Total plate count <100,000 CFU/g, Coliforms <10 CFU/g',
-         'FDA 21 CFR Part 133, Grade A standards',
-         1),
-        
-        # Meat Products
-        ('MEA-001', 'Ground Beef', 'Fresh ground beef, 80/20 lean',
-         'Fresh ground beef with 80% lean meat, 20% fat',
-         'Fresh beef cuts',
-         'Red color, meaty texture, pH 5.4-6.0, protein-rich',
-         'Beef receiving, inspection, grinding, packaging',
-         'Refrigerated transport in temperature-controlled vehicles',
-         'Grinding equipment, packaging machines, stainless steel surfaces',
-         'General population, adults and children over 2 years',
-         'Refrigerated 0-2°C', 3, 'Vacuum Pack',
-         'Bacterial contamination (E.coli O157:H7, Salmonella), physical contaminants',
-         'E.coli O157:H7 absent, Salmonella absent, Total plate count <1,000,000 CFU/g',
-         'USDA FSIS regulations, HACCP requirements',
-         1),
-        
-        ('MEA-002', 'Chicken Breast', 'Boneless skinless chicken breast',
-         'Fresh boneless, skinless chicken breast fillets',
-         'Fresh chicken breast',
-         'Pink color, firm texture, pH 5.8-6.2, lean protein',
-         'Chicken receiving, inspection, deboning, trimming, packaging',
-         'Refrigerated transport, cold chain maintenance',
-         'Cutting equipment, packaging machines, stainless steel surfaces',
-         'General population, health-conscious consumers',
-         'Refrigerated 0-2°C', 5, 'Vacuum Pack',
-         'Bacterial contamination (Salmonella, Campylobacter), chemical residues',
-         'Salmonella absent, Campylobacter absent, Total plate count <1,000,000 CFU/g',
-         'USDA FSIS regulations, HACCP requirements',
-         1),
-        
-        # Bakery Products
-        ('BAK-001', 'Whole Wheat Bread', 'Artisan whole wheat bread',
-         'Artisan whole wheat bread made with whole wheat flour',
-         'Whole wheat flour, water, yeast, salt, seeds (optional)',
-         'Brown color, dense texture, pH 5.2-5.8, fiber-rich',
-         'Mixing, kneading, proofing, baking, cooling, packaging',
-         'Ambient transport, temperature-controlled storage',
-         'Mixers, ovens, cooling racks, packaging equipment',
-         'General population, health-conscious consumers',
-         'Room temperature', 7, 'Paper Bag',
-         'Mold growth, bacterial contamination, physical contaminants',
-         'Total plate count <100,000 CFU/g, Mold absent, Yeast <1000 CFU/g',
-         'FDA 21 CFR Part 110, Good Manufacturing Practices',
-         1),
-        
-        ('BAK-002', 'Chocolate Chip Cookies', 'Soft chocolate chip cookies',
-         'Soft chocolate chip cookies with real chocolate chips',
-         'Flour, sugar, butter, eggs, chocolate chips, vanilla',
-         'Brown color, soft texture, sweet taste, pH 6.0-7.0',
-         'Mixing, portioning, baking, cooling, packaging',
-         'Ambient transport, moisture-controlled storage',
-         'Mixers, ovens, cooling conveyors, packaging equipment',
-         'General population, children, dessert lovers',
-         'Room temperature', 14, 'Plastic Bag',
-         'Mold growth, bacterial contamination, chemical residues',
-         'Total plate count <100,000 CFU/g, Mold absent, Yeast <1000 CFU/g',
-         'FDA 21 CFR Part 110, Good Manufacturing Practices',
-         1)
-    ]
-    
-    for (product_code, name, description, composition, high_risk_ingredients, 
-         physical_chemical_biological_description, main_processing_steps, 
-         distribution_serving_methods, product_contact_surfaces, consumer_groups,
-         storage_conditions, shelf_life_days, packaging_type, inherent_hazards,
-         fs_acceptance_criteria, law_regulation_requirement, created_by) in products_data:
-        conn.execute(text("""
-            INSERT INTO products (product_code, name, description, composition, high_risk_ingredients,
-                                physical_chemical_biological_description, main_processing_steps,
-                                distribution_serving_methods, product_contact_surfaces, consumer_groups,
-                                storage_conditions, shelf_life_days, packaging_type, inherent_hazards,
-                                fs_acceptance_criteria, law_regulation_requirement, haccp_plan_approved,
-                                created_at, created_by, risk_assessment_required)
-            VALUES (:product_code, :name, :description, :composition, :high_risk_ingredients,
-                   :physical_chemical_biological_description, :main_processing_steps,
-                   :distribution_serving_methods, :product_contact_surfaces, :consumer_groups,
-                   :storage_conditions, :shelf_life_days, :packaging_type, :inherent_hazards,
-                   :fs_acceptance_criteria, :law_regulation_requirement, 1,
-                   :created_at, :created_by, 1)
-        """), {
-            'product_code': product_code,
-            'name': name,
-            'description': description,
-            'composition': composition,
-            'high_risk_ingredients': high_risk_ingredients,
-            'physical_chemical_biological_description': physical_chemical_biological_description,
-            'main_processing_steps': main_processing_steps,
-            'distribution_serving_methods': distribution_serving_methods,
-            'product_contact_surfaces': product_contact_surfaces,
-            'consumer_groups': consumer_groups,
-            'storage_conditions': storage_conditions,
-            'shelf_life_days': shelf_life_days,
-            'packaging_type': packaging_type,
-            'inherent_hazards': inherent_hazards,
-            'fs_acceptance_criteria': fs_acceptance_criteria,
-            'law_regulation_requirement': law_regulation_requirement,
-            'created_at': datetime.now().isoformat(),
-            'created_by': created_by
-        })
-    
-    print(f"  ✓ Created {len(products_data)} professional food products")
-
 def create_professional_suppliers(conn):
     """Create professional food industry suppliers"""
     print("\n🚚 Creating professional food suppliers...")
@@ -681,6 +562,7 @@ def create_professional_suppliers(conn):
         ('SUP-001', 'Green Valley Dairy Farm', 'active', 'raw_materials', 'John Smith', 'john@greenvalleydairy.com', '+1-555-1001', 'www.greenvalleydairy.com', '1234 Farm Road', 'Dairy Valley', 'CA', '90210', 'USA', 'CA123456789', '12-3456789', 'Partnership', 1985, '["Organic", "Non-GMO"]', '2025-12-31', 95, '2025-01-15', '2025-07-15', 'low', '[]', 'Certified organic dairy farm with excellent quality standards', 1),
         ('SUP-002', 'Premium Beef Ranch', 'active', 'raw_materials', 'Mary Johnson', 'mary@premiumbeef.com', '+1-555-1002', 'www.premiumbeef.com', '5678 Ranch Way', 'Beef City', 'TX', '75001', 'USA', 'TX987654321', '98-7654321', 'Corporation', 1990, '["USDA Prime", "Grass-Fed"]', '2025-11-30', 92, '2025-01-10', '2025-07-10', 'low', '[]', 'Premium beef supplier with HACCP certification', 1),
         ('SUP-003', 'Golden Grain Mills', 'active', 'raw_materials', 'Robert Brown', 'robert@goldengrain.com', '+1-555-1003', 'www.goldengrain.com', '9012 Mill Street', 'Grain Town', 'KS', '66001', 'USA', 'KS456789123', '45-6789123', 'Corporation', 1975, '["Non-GMO", "Kosher"]', '2025-10-15', 88, '2025-01-05', '2025-07-05', 'medium', '[]', 'Premium flour and grain supplier', 1),
+        ('SUP-016', 'FarmFresh Poultry', 'active', 'raw_materials', 'Angela Martin', 'angela@farmfreshpoultry.com', '+1-555-1016', 'www.farmfreshpoultry.com', '2468 Poultry Road', 'Chicken Town', 'AR', '72201', 'USA', 'AR654321987', '65-4321987', 'Corporation', 2005, '["USDA Certified"]', '2025-10-01', 90, '2025-02-20', '2025-08-20', 'medium', '[]', 'Premium poultry supplier with HACCP certification', 1),
         
         # Packaging
         ('SUP-004', 'EcoPack Solutions', 'active', 'packaging', 'Lisa Davis', 'lisa@ecopack.com', '+1-555-1004', 'www.ecopack.com', '3456 Industrial Blvd', 'Pack City', 'IL', '60601', 'USA', 'IL789123456', '78-9123456', 'Corporation', 2000, '["FDA Approved", "Recyclable"]', '2025-09-30', 90, '2025-01-20', '2025-07-20', 'low', '[]', 'Sustainable packaging solutions for food industry', 1),
@@ -900,6 +782,19 @@ def create_professional_batches(conn):
 def create_professional_haccp_data(conn):
     """Create professional HACCP data with complete process flows, hazards, CCPs, and OPRPs"""
     print("\n🔍 Creating professional HACCP data...")
+    
+    monitoring_user_id = get_user_id(conn, "line_operator")
+    verification_user_id = get_user_id(conn, "qa_supervisor")
+    haccp_coordinator_id = get_user_id(conn, "haccp_coordinator")
+    
+    # Fall back to coordinator if QA supervisor missing
+    if verification_user_id is None:
+        verification_user_id = haccp_coordinator_id
+    
+    if monitoring_user_id is None:
+        print("  ⚠️  Monitoring responsible user not assigned; monitoring records will be created without ownership.")
+    if verification_user_id is None:
+        print("  ⚠️  Verification responsible user not assigned; verification records will be created without ownership.")
     
     # Create HACCP Plans
     haccp_plans = [
@@ -1121,12 +1016,12 @@ def create_professional_haccp_data(conn):
                 'cl_desc': 'Minimum 72°C for 15 seconds to ensure pathogen destruction',
                 'mon_freq': 'Continuous',
                 'mon_method': 'Automated temperature recorder with data logging',
-                'mon_resp': 'Production Operator',
+                'mon_resp': monitoring_user_id,
                 'mon_equip': 'Calibrated temperature probe and chart recorder',
                 'corr_actions': 'Stop production, re-pasteurize affected product, adjust temperature, investigate cause, document corrective action',
                 'ver_freq': 'Daily',
                 'ver_method': 'Review temperature charts, verify critical limits met, check calibration',
-                'ver_resp': 'QA Supervisor',
+                'ver_resp': verification_user_id,
                 'created_at': datetime.now().isoformat(),
                 'created_by': 1
             })
@@ -1185,6 +1080,148 @@ def create_professional_haccp_data(conn):
     print(f"    - OPRPs: {oprp_counter - 1} (Operational prerequisite programs)")
     print(f"    - PRPs: {len([h for h in hazard_ids if h[1] == 'use_existing_prps'])} (Controlled by existing prerequisites)")
 
+
+def create_monitoring_and_verification_logs(conn):
+    """Seed CCP monitoring logs that include verification details."""
+    print("\n🧪 Creating CCP monitoring and verification logs...")
+    
+    try:
+        ccps = conn.execute(text("""
+            SELECT c.id, c.product_id, c.ccp_number, c.ccp_name,
+                   c.monitoring_responsible, c.verification_responsible,
+                   p.name as product_name
+            FROM ccps c
+            JOIN products p ON p.id = c.product_id
+        """)).fetchall()
+    except Exception as exc:
+        print(f"  ⚠️  Could not load CCPs for monitoring logs: {exc}")
+        return
+    
+    if not ccps:
+        print("  ⏭️  No CCPs found; skipping monitoring log creation.")
+        return
+    
+    batch_rows = conn.execute(text("SELECT id, batch_number, product_id FROM batches")).fetchall()
+    batches_by_product: Dict[int, List[Dict[str, Any]]] = {}
+    for row in batch_rows:
+        batches_by_product.setdefault(row[2], []).append({
+            "id": row[0],
+            "batch_number": row[1]
+        })
+    
+    inserted_count = 0
+    unverified_count = 0
+    now = datetime.now()
+    
+    for ccp in ccps:
+        ccp_id, product_id, ccp_number, ccp_name, monitoring_id, verification_id, product_name = ccp
+        batches = batches_by_product.get(product_id) or [{"id": None, "batch_number": None}]
+        
+        for idx in range(3):
+            batch = batches[idx % len(batches)]
+            monitoring_time = now - timedelta(days=(idx + 1))
+            measured_value = random.uniform(72.5, 74.5)
+            is_within_limits = True
+            corrective_action_taken = False
+            
+            if idx == 2:
+                # Create an out-of-spec record to demonstrate corrective actions and pending verification
+                measured_value = random.uniform(70.0, 71.4)
+                is_within_limits = False
+                corrective_action_taken = True
+            
+            additional_parameters = json.dumps({
+                "temperature_reading": round(measured_value, 2),
+                "ccp_number": ccp_number
+            })
+            evidence_files = json.dumps([])
+            observations = f"Automated seed log for {ccp_name} ({product_name})"
+            corrective_action_description = "Product placed on hold pending verification" if corrective_action_taken else None
+            corrective_action_by = monitoring_id if corrective_action_taken else None
+            
+            is_verified = idx != 2 and verification_id is not None
+            verified_at = (monitoring_time + timedelta(hours=2)) if is_verified else None
+            verification_is_compliant = is_within_limits if is_verified else (False if corrective_action_taken else None)
+            
+            if is_verified:
+                verification_method = "Record review and calibration check"
+                verification_result = f"Measurement of {round(measured_value, 2)}°C confirmed within limits."
+                verification_notes = f"Verified by seeded data process for batch {batch['batch_number']}."
+                verification_evidence_files = json.dumps([
+                    f"/evidence/{ccp_number.lower().replace(' ', '_')}_verification_{idx + 1}.pdf"
+                ])
+            else:
+                verification_method = None
+                verification_result = "Verification pending - investigate corrective action." if corrective_action_taken else None
+                verification_notes = None
+                verification_evidence_files = None
+                if not is_within_limits:
+                    unverified_count += 1
+            
+            created_by = monitoring_id or verification_id or 1
+            
+            try:
+                conn.execute(text("""
+                    INSERT INTO ccp_monitoring_logs (
+                        ccp_id, batch_id, batch_number, monitoring_time, measured_value, unit,
+                        is_within_limits, additional_parameters, observations, evidence_files,
+                        corrective_action_taken, corrective_action_description, corrective_action_by,
+                        equipment_id, action_log_id, is_verified, verified_by, verified_at,
+                        verification_method, verification_result, verification_is_compliant,
+                        verification_notes, verification_evidence_files,
+                        created_by, created_at, log_metadata
+                    ) VALUES (
+                        :ccp_id, :batch_id, :batch_number, :monitoring_time, :measured_value, :unit,
+                        :is_within_limits, :additional_parameters, :observations, :evidence_files,
+                        :corrective_action_taken, :corrective_action_description, :corrective_action_by,
+                        :equipment_id, :action_log_id, :is_verified, :verified_by, :verified_at,
+                        :verification_method, :verification_result, :verification_is_compliant,
+                        :verification_notes, :verification_evidence_files,
+                        :created_by, :created_at, :log_metadata
+                    )
+                """), {
+                    "ccp_id": ccp_id,
+                    "batch_id": batch["id"],
+                    "batch_number": batch["batch_number"],
+                    "monitoring_time": monitoring_time,
+                    "measured_value": round(measured_value, 2),
+                    "unit": "°C",
+                    "is_within_limits": is_within_limits,
+                    "additional_parameters": additional_parameters,
+                    "observations": observations,
+                    "evidence_files": evidence_files,
+                    "corrective_action_taken": corrective_action_taken,
+                    "corrective_action_description": corrective_action_description,
+                    "corrective_action_by": corrective_action_by,
+                    "equipment_id": None,
+                    "action_log_id": None,
+                    "is_verified": is_verified,
+                    "verified_by": verification_id if is_verified else None,
+                    "verified_at": verified_at,
+                    "verification_method": verification_method,
+                    "verification_result": verification_result,
+                    "verification_is_compliant": verification_is_compliant,
+                    "verification_notes": verification_notes,
+                    "verification_evidence_files": verification_evidence_files,
+                    "created_by": created_by,
+                    "created_at": monitoring_time,
+                    "log_metadata": json.dumps({
+                        "seed_source": "setup_database_complete",
+                        "product_name": product_name
+                    })
+                })
+                inserted_count += 1
+            except Exception as exc:
+                print(f"  ⚠️  Failed to insert monitoring log for CCP {ccp_number}: {exc}")
+    
+    if inserted_count:
+        print(f"  ✓ Created {inserted_count} monitoring logs with verification details")
+        if unverified_count:
+            print(f"    • {unverified_count} log(s) left unverified to demonstrate pending workflow")
+    else:
+        print("  ⏭️  No monitoring logs were created.")
+
+
 def create_professional_equipment_data(conn):
     """Create professional equipment data"""
     print("\n🔧 Creating professional equipment data...")
@@ -1214,6 +1251,601 @@ def create_professional_equipment_data(conn):
         })
     
     print("  ✓ Created equipment records")
+
+def create_professional_materials(conn):
+    """Create professional raw materials to support HACCP product compositions."""
+    print("\n🧾 Creating professional materials...")
+
+    try:
+        supplier_rows = conn.execute(text("SELECT id, supplier_code, name FROM suppliers")).fetchall()
+    except Exception as e:
+        print(f"  ⚠️  Could not load suppliers to create materials: {e}")
+        return
+
+    supplier_lookup = {
+        row[1]: {"id": row[0], "name": row[2]}
+        for row in supplier_rows
+    }
+
+    materials_data = [
+        {
+            "material_code": "RM-MILK-001",
+            "name": "Raw Whole Milk",
+            "category": "raw_materials",
+            "supplier_code": "SUP-001",
+            "description": "Fresh raw whole milk sourced daily from dairy herd.",
+            "allergens": ["milk"],
+            "storage_conditions": "Keep refrigerated between 0-4°C",
+            "shelf_life_days": 3,
+            "handling_instructions": "Maintain cold chain; agitate gently before standardization.",
+            "specifications": {
+                "butterfat": {
+                    "parameter_name": "butterfat",
+                    "parameter_value": "3.4",
+                    "unit": "%"
+                },
+                "protein": {
+                    "parameter_name": "protein",
+                    "parameter_value": "3.2",
+                    "unit": "%"
+                }
+            },
+            "allergen_statement": "Contains milk"
+        },
+        {
+            "material_code": "RM-CREAM-001",
+            "name": "Pasteurized Sweet Cream",
+            "category": "raw_materials",
+            "supplier_code": "SUP-001",
+            "description": "High quality sweet cream for butter production.",
+            "allergens": ["milk"],
+            "storage_conditions": "Keep refrigerated between 0-4°C",
+            "shelf_life_days": 5,
+            "handling_instructions": "Store in stainless vessels; mix before churning.",
+            "specifications": {
+                "fat_content": {
+                    "parameter_name": "fat_content",
+                    "parameter_value": "40",
+                    "unit": "%"
+                }
+            },
+            "allergen_statement": "Contains milk"
+        },
+        {
+            "material_code": "RM-CULTURE-001",
+            "name": "Thermophilic Yogurt Culture",
+            "category": "ingredients",
+            "supplier_code": "SUP-006",
+            "description": "Thermophilic starter culture blend for yogurt fermentation.",
+            "allergens": [],
+            "storage_conditions": "Store frozen at -18°C",
+            "shelf_life_days": 365,
+            "handling_instructions": "Thaw under controlled temperature; avoid moisture exposure.",
+            "specifications": {
+                "cell_count": {
+                    "parameter_name": "cell_count",
+                    "parameter_value": "1.0E11",
+                    "unit": "CFU/g"
+                }
+            }
+        },
+        {
+            "material_code": "RM-REN-001",
+            "name": "Microbial Rennet",
+            "category": "ingredients",
+            "supplier_code": "SUP-006",
+            "description": "High strength microbial rennet for cheese coagulation.",
+            "allergens": [],
+            "storage_conditions": "Keep refrigerated between 2-6°C",
+            "shelf_life_days": 180,
+            "handling_instructions": "Store upright; protect from light.",
+            "specifications": {
+                "activity": {
+                    "parameter_name": "activity",
+                    "parameter_value": "200",
+                    "unit": "IMCU/ml"
+                }
+            }
+        },
+        {
+            "material_code": "RM-SALT-001",
+            "name": "Food Grade Sea Salt",
+            "category": "ingredients",
+            "supplier_code": "SUP-007",
+            "description": "Fine sea salt for dairy and bakery applications.",
+            "allergens": [],
+            "storage_conditions": "Store in dry area",
+            "shelf_life_days": 720,
+            "handling_instructions": "Keep sealed to prevent moisture uptake.",
+            "specifications": {
+                "sodium_chloride": {
+                    "parameter_name": "sodium_chloride",
+                    "parameter_value": "99.5",
+                    "unit": "%"
+                }
+            }
+        },
+        {
+            "material_code": "RM-SUGAR-001",
+            "name": "Granulated Cane Sugar",
+            "category": "ingredients",
+            "supplier_code": "SUP-007",
+            "description": "Refined cane sugar for confectionery and dairy products.",
+            "allergens": [],
+            "storage_conditions": "Store in dry ambient conditions",
+            "shelf_life_days": 720,
+            "handling_instructions": "Avoid humid storage conditions.",
+            "specifications": {}
+        },
+        {
+            "material_code": "RM-CHOC-001",
+            "name": "Semi-sweet Chocolate Chips",
+            "category": "ingredients",
+            "supplier_code": "SUP-007",
+            "description": "Semi-sweet chocolate chips for bakery applications.",
+            "allergens": ["soy"],
+            "storage_conditions": "Store at 15-20°C, low humidity",
+            "shelf_life_days": 365,
+            "handling_instructions": "Keep sealed to prevent bloom.",
+            "specifications": {}
+        },
+        {
+            "material_code": "RM-FLOUR-001",
+            "name": "Whole Wheat Flour",
+            "category": "raw_materials",
+            "supplier_code": "SUP-003",
+            "description": "Stone ground whole wheat flour for artisan bread.",
+            "allergens": ["wheat"],
+            "storage_conditions": "Store cool and dry",
+            "shelf_life_days": 180,
+            "handling_instructions": "Rotate stock; protect from pests.",
+            "specifications": {
+                "ash": {
+                    "parameter_name": "ash",
+                    "parameter_value": "1.6",
+                    "unit": "%"
+                }
+            },
+            "allergen_statement": "Contains wheat"
+        },
+        {
+            "material_code": "RM-FLOUR-002",
+            "name": "All-Purpose Flour",
+            "category": "raw_materials",
+            "supplier_code": "SUP-003",
+            "description": "Bleached all-purpose flour for confectionery.",
+            "allergens": ["wheat"],
+            "storage_conditions": "Store cool and dry",
+            "shelf_life_days": 365,
+            "handling_instructions": "Rotate stock; keep sealed.",
+            "specifications": {
+                "protein": {
+                    "parameter_name": "protein",
+                    "parameter_value": "11",
+                    "unit": "%"
+                }
+            },
+            "allergen_statement": "Contains wheat"
+        },
+        {
+            "material_code": "RM-YEAST-001",
+            "name": "Instant Dry Yeast",
+            "category": "ingredients",
+            "supplier_code": "SUP-006",
+            "description": "Instant dry yeast for bakery fermentation.",
+            "allergens": [],
+            "storage_conditions": "Store in cool, dry place",
+            "shelf_life_days": 540,
+            "handling_instructions": "Reseal after opening; avoid moisture.",
+            "specifications": {}
+        },
+        {
+            "material_code": "RM-BEEF-TRIM",
+            "name": "Beef Trim 80/20",
+            "category": "raw_materials",
+            "supplier_code": "SUP-002",
+            "description": "Chilled beef trim with 80% lean, 20% fat for grinding.",
+            "allergens": [],
+            "storage_conditions": "Keep refrigerated between 0-2°C",
+            "shelf_life_days": 5,
+            "handling_instructions": "Maintain hygienic handling; process promptly.",
+            "specifications": {
+                "fat_content": {
+                    "parameter_name": "fat_content",
+                    "parameter_value": "20",
+                    "unit": "%"
+                }
+            }
+        },
+        {
+            "material_code": "RM-CHICKEN-001",
+            "name": "Boneless Skinless Chicken Breast",
+            "category": "raw_materials",
+            "supplier_code": "SUP-016",
+            "description": "Chilled boneless skinless chicken breast fillets.",
+            "allergens": [],
+            "storage_conditions": "Keep refrigerated between 0-2°C",
+            "shelf_life_days": 5,
+            "handling_instructions": "Maintain cold chain; avoid cross-contamination.",
+            "specifications": {}
+        },
+        {
+            "material_code": "RM-BUTTER-001",
+            "name": "Unsalted Sweet Cream Butter",
+            "category": "ingredients",
+            "supplier_code": "SUP-001",
+            "description": "Unsalted butter for bakery and culinary use.",
+            "allergens": ["milk"],
+            "storage_conditions": "Keep refrigerated between 2-4°C",
+            "shelf_life_days": 120,
+            "handling_instructions": "Keep wrapped; avoid temperature abuse.",
+            "specifications": {},
+            "allergen_statement": "Contains milk"
+        }
+    ]
+
+    created_count = 0
+    for material in materials_data:
+        supplier = supplier_lookup.get(material["supplier_code"])
+        if not supplier:
+            print(f"  ⚠️  Supplier {material['supplier_code']} not found; skipping material {material['material_code']}")
+            continue
+
+        payload = {
+            "material_code": material["material_code"],
+            "name": material["name"],
+            "description": material.get("description"),
+            "category": material.get("category"),
+            "supplier_id": supplier["id"],
+            "supplier_material_code": material.get("supplier_material_code"),
+            "allergens": json.dumps(material.get("allergens", [])),
+            "storage_conditions": material.get("storage_conditions"),
+            "shelf_life_days": material.get("shelf_life_days"),
+            "handling_instructions": material.get("handling_instructions"),
+            "specifications": json.dumps(material.get("specifications", {})),
+            "quality_parameters": json.dumps(material.get("quality_parameters", [])),
+            "acceptable_limits": json.dumps(material.get("acceptable_limits", {})),
+            "allergen_statement": material.get("allergen_statement"),
+            "is_active": 1,
+            "approval_status": "approved",
+            "created_at": datetime.now().isoformat(),
+            "created_by": material.get("created_by", 1),
+        }
+
+        conn.execute(text("""
+            INSERT INTO materials (
+                material_code, name, description, category, supplier_id, supplier_material_code,
+                allergens, storage_conditions, shelf_life_days, handling_instructions,
+                specifications, quality_parameters, acceptable_limits, allergen_statement,
+                is_active, approval_status, created_at, created_by
+            ) VALUES (
+                :material_code, :name, :description, :category, :supplier_id, :supplier_material_code,
+                :allergens, :storage_conditions, :shelf_life_days, :handling_instructions,
+                :specifications, :quality_parameters, :acceptable_limits, :allergen_statement,
+                :is_active, :approval_status, :created_at, :created_by
+            )
+        """), payload)
+        created_count += 1
+
+    print(f"  ✓ Created {created_count} professional materials")
+
+
+def create_professional_contact_surfaces(conn):
+    """Create reusable contact surface entries for HACCP products."""
+    print("\n🧼 Creating contact surface library...")
+
+    surfaces_data = [
+        {
+            "name": "Raw Milk Receiving Line",
+            "composition": "304 stainless steel piping with sanitary welds",
+            "description": "Cold-side surface exposed to inbound raw milk; cleaned-in-place after each tanker.",
+            "source": "Facility fabrication",
+            "provenance": "Installed 2022, CIP validation file HVAC-22-014",
+            "point_of_contact": "Receiving bay through balance tank inlet",
+            "material": "Stainless steel",
+            "main_processing_steps": "Receiving, filtration, pre-cooling",
+            "packaging_material": "N/A",
+            "storage_conditions": "Remains wet post-CIP, positive pressure room",
+            "shelf_life": "5-year inspection interval",
+            "possible_inherent_hazards": "Biofilm harborage, allergen carryover",
+            "fs_acceptance_criteria": "ATP < 50 RLU post sanitation, weekly Listeria swab negative",
+        },
+        {
+            "name": "Pasteurizer Holding Tube",
+            "composition": "316 stainless steel tubing with thermal insulation",
+            "description": "High-heat zone maintaining ≥72°C for 15 seconds.",
+            "source": "HTST skid supplier (DairyTech)",
+            "provenance": "Commissioned 2021, thermal validation report HTST-VAL-21-03",
+            "point_of_contact": "Between regenerator outlet and flow diversion valve",
+            "material": "Stainless steel",
+            "main_processing_steps": "Pasteurization critical control step",
+            "packaging_material": "N/A",
+            "storage_conditions": "Hot during production, dry during idle",
+            "shelf_life": "Annual integrity inspection",
+            "possible_inherent_hazards": "Under-processing if fouled, burn-on residues",
+            "fs_acceptance_criteria": "Differential pressure >10 psi, no leak detection alarms",
+        },
+        {
+            "name": "Fermentation & Blending Tanks",
+            "composition": "Stainless tank interior with food-grade agitator seals",
+            "description": "Used for yogurt culture fermentation and fruit blending.",
+            "source": "Process equipment supplier (FermaMix)",
+            "provenance": "Separate agitators, CIP recipe FMX-YG-04",
+            "point_of_contact": "Post-pasteurization fermentation, fruit addition",
+            "material": "Stainless steel with elastomer seals",
+            "main_processing_steps": "Fermentation, ingredient blending",
+            "packaging_material": "N/A",
+            "storage_conditions": "Closed, nitrogen blanketed, 4°C hold",
+            "shelf_life": "Seal replacement every 12 months",
+            "possible_inherent_hazards": "Post-process contamination, allergen carryover",
+            "fs_acceptance_criteria": "CIP conductivity profile achieved, environmental swabs <10 CFU/cm²",
+        },
+        {
+            "name": "Cheese Vat & Press Surfaces",
+            "composition": "Stainless vats, perforated molds, food-grade press cloth",
+            "description": "Direct contact during curd cooking, molding, pressing, and brining.",
+            "source": "Cheese equipment line",
+            "provenance": "Cloths replaced weekly, vat polished monthly",
+            "point_of_contact": "Cheddar production steps",
+            "material": "Stainless steel, woven cloth",
+            "main_processing_steps": "Curd cooking, whey drainage, pressing, brining",
+            "packaging_material": "Cheesecloth",
+            "storage_conditions": "Drip-dry racks, humidity-controlled aging room",
+            "shelf_life": "Cloths 1 week, vats indefinite",
+            "possible_inherent_hazards": "Biofilm, salt crystallization harboring pathogens",
+            "fs_acceptance_criteria": "Cloth launder validation log, vat ATP swabs <25 RLU",
+        },
+        {
+            "name": "Butter Churn & Wrapper Table",
+            "composition": "Polished stainless churn, HDPE cutting boards, wax paper contact",
+            "description": "Surfaces used post-cream ripening through packaging.",
+            "source": "Legacy equipment refurbished 2020",
+            "provenance": "Gasket replacements documented quarterly",
+            "point_of_contact": "Butter churning, working, portioning",
+            "material": "Stainless steel, HDPE, wax paper",
+            "main_processing_steps": "Churning, moisture working, portion cutting",
+            "packaging_material": "Wax paper sheets",
+            "storage_conditions": "Churn stored dry, wrapper table sanitized between lots",
+            "shelf_life": "HDPE boards rotated every 6 months",
+            "possible_inherent_hazards": "Physical chips from boards, allergen smears",
+            "fs_acceptance_criteria": "Visual inspection before start-up, no gouges >1 mm",
+        },
+        {
+            "name": "Grinding & Stuffing Line",
+            "composition": "Stainless augers, grinder plates, vacuum stuffer hoses",
+            "description": "Direct contact for ground beef and chicken products.",
+            "source": "Meat processing suite",
+            "provenance": "Plates sharpened monthly, hoses replaced annually",
+            "point_of_contact": "Meat grinding, blending, filling",
+            "material": "Stainless steel, food-grade polymer hoses",
+            "main_processing_steps": "Grinding, mixing, stuffing",
+            "packaging_material": "Vacuum bags",
+            "storage_conditions": "Disassembled, air-dried overnight",
+            "shelf_life": "Hoses 12 months, grinder plates as needed",
+            "possible_inherent_hazards": "Metal shavings, pathogen harborage in crevices",
+            "fs_acceptance_criteria": "Metal detector verification, zero visual residue post-CIP",
+        },
+        {
+            "name": "Bakery Conveyor & Cooling Racks",
+            "composition": "Food-grade mesh belt, anodized aluminum racks",
+            "description": "Post-bake surfaces for breads and cookies.",
+            "source": "Bakery line OEM",
+            "provenance": "Belts deep-cleaned weekly, racks monthly",
+            "point_of_contact": "Product cooling and staging before packaging",
+            "material": "Stainless mesh, aluminum frames",
+            "main_processing_steps": "Conveying, cooling, pre-pack inspection",
+            "packaging_material": "Paper bags, poly pouches",
+            "storage_conditions": "Dry storage, ambient temp",
+            "shelf_life": "Belts inspected quarterly",
+            "possible_inherent_hazards": "Foreign material (wire strands), allergen residues",
+            "fs_acceptance_criteria": "Pre-op inspection checklist, lint-free wipe test",
+        },
+    ]
+
+    created_count = 0
+    for surface in surfaces_data:
+        payload = {
+            **surface,
+            "created_at": datetime.now().isoformat(),
+            "created_by": 1,
+        }
+        conn.execute(text("""
+            INSERT INTO contact_surfaces (
+                name, composition, description, source, provenance,
+                point_of_contact, material, main_processing_steps,
+                packaging_material, storage_conditions, shelf_life,
+                possible_inherent_hazards, fs_acceptance_criteria,
+                created_at, created_by
+            ) VALUES (
+                :name, :composition, :description, :source, :provenance,
+                :point_of_contact, :material, :main_processing_steps,
+                :packaging_material, :storage_conditions, :shelf_life,
+                :possible_inherent_hazards, :fs_acceptance_criteria,
+                :created_at, :created_by
+            )
+        """), payload)
+        created_count += 1
+
+    print(f"  ✓ Created {created_count} contact surfaces")
+
+def create_professional_products(conn):
+    """Create professional food products used throughout HACCP, batch, and traceability data."""
+    print("\n🥛 Creating professional food products...")
+
+    products_data = [
+        {
+            "product_code": "DAI-001",
+            "name": "Fresh Whole Milk",
+            "description": "Pasteurized whole milk, 3.25% fat for retail distribution.",
+            "composition": {"milk": "100%", "vitamin_d": "400 IU/L"},
+            "high_risk_ingredients": ["milk"],
+            "storage_conditions": "Refrigerated 2-4°C",
+            "shelf_life_days": 14,
+            "packaging_type": "HDPE Bottle",
+            "inherent_hazards": "Survival of pathogens if pasteurization fails; post-fill contamination.",
+            "fs_acceptance_criteria": "Meets pasteurization requirements (≥72°C for 15s) and APC < 20,000 CFU/mL.",
+        },
+        {
+            "product_code": "DAI-002",
+            "name": "Greek Yogurt",
+            "description": "Creamy strained yogurt, 2% fat with live cultures.",
+            "composition": {"milk": "95%", "live_cultures": "5 strains"},
+            "high_risk_ingredients": ["milk"],
+            "storage_conditions": "Refrigerated 2-4°C",
+            "shelf_life_days": 21,
+            "packaging_type": "Plastic Cup",
+            "inherent_hazards": "Fermentation deviation, post-fermentation contamination.",
+            "fs_acceptance_criteria": "pH 4.4 ± 0.1, live culture count ≥ 10^7 CFU/g.",
+        },
+        {
+            "product_code": "DAI-003",
+            "name": "Cheddar Cheese",
+            "description": "Aged cheddar cheese (6 months) vacuum packed.",
+            "composition": {"milk": "100%", "salt": "1.5%", "enzymes": "rennet"},
+            "high_risk_ingredients": ["milk"],
+            "storage_conditions": "Refrigerated 2-4°C",
+            "shelf_life_days": 180,
+            "packaging_type": "Vacuum Pack",
+            "inherent_hazards": "Pathogen growth during aging if temperature not controlled.",
+            "fs_acceptance_criteria": "Moisture < 39%, salt-in-moisture 4%, no pathogen detection.",
+        },
+        {
+            "product_code": "DAI-004",
+            "name": "Sweet Cream Butter",
+            "description": "Unsalted sweet cream butter, 80% fat.",
+            "composition": {"cream": "100%"},
+            "high_risk_ingredients": ["milk"],
+            "storage_conditions": "Refrigerated 2-4°C",
+            "shelf_life_days": 120,
+            "packaging_type": "Wax Paper",
+            "inherent_hazards": "Spoilage due to temperature abuse; allergen mislabeling.",
+            "fs_acceptance_criteria": "Moisture < 16%, free fat acidity < 1.5% oleic.",
+        },
+        {
+            "product_code": "MEA-001",
+            "name": "Ground Beef 80/20",
+            "description": "Fresh ground beef trim with 80% lean, 20% fat.",
+            "composition": {"beef": "100%"},
+            "high_risk_ingredients": ["beef"],
+            "storage_conditions": "Refrigerated 0-2°C",
+            "shelf_life_days": 5,
+            "packaging_type": "Vacuum Pack",
+            "inherent_hazards": "E.coli O157:H7 contamination, temperature abuse.",
+            "fs_acceptance_criteria": "Temp ≤4°C at pack-out, negative pathogen screen.",
+        },
+        {
+            "product_code": "MEA-002",
+            "name": "Boneless Chicken Breast",
+            "description": "Boneless skinless chicken breast fillets.",
+            "composition": {"chicken": "100%"},
+            "high_risk_ingredients": ["chicken"],
+            "storage_conditions": "Refrigerated 0-2°C",
+            "shelf_life_days": 5,
+            "packaging_type": "Vacuum Pack",
+            "inherent_hazards": "Salmonella, Campylobacter contamination.",
+            "fs_acceptance_criteria": "Temp ≤2°C, intact packaging, negative pathogen screen.",
+        },
+        {
+            "product_code": "BAK-001",
+            "name": "Whole Wheat Bread",
+            "description": "Artisan whole wheat loaf for retail sale.",
+            "composition": {"flour": "60%", "water": "35%", "yeast": "2%", "salt": "1%"},
+            "high_risk_ingredients": ["wheat", "gluten"],
+            "storage_conditions": "Room temperature (≤25°C), dry",
+            "shelf_life_days": 7,
+            "packaging_type": "Paper Bag",
+            "inherent_hazards": "Mold growth due to moisture, allergen mislabeling.",
+            "fs_acceptance_criteria": "Water activity < 0.93, no visible mold.",
+        },
+        {
+            "product_code": "BAK-002",
+            "name": "Chocolate Chip Cookies",
+            "description": "Soft chocolate chip cookies packed in pouches.",
+            "composition": {"flour": "45%", "sugar": "25%", "butter": "20%", "chocolate": "10%"},
+            "high_risk_ingredients": ["wheat", "gluten", "milk", "eggs", "soy"],
+            "storage_conditions": "Room temperature (≤25°C), dry",
+            "shelf_life_days": 14,
+            "packaging_type": "Plastic Bag",
+            "inherent_hazards": "Allergen cross-contact, foreign material.",
+            "fs_acceptance_criteria": "Moisture < 6%, packaging integrity confirmed.",
+        },
+    ]
+
+    for product in products_data:
+        payload = {
+            "product_code": product["product_code"],
+            "name": product["name"],
+            "description": product["description"],
+            "composition": json.dumps(product["composition"]),
+            "high_risk_ingredients": json.dumps(product["high_risk_ingredients"]),
+            "storage_conditions": product["storage_conditions"],
+            "shelf_life_days": product["shelf_life_days"],
+            "packaging_type": product["packaging_type"],
+            "inherent_hazards": product["inherent_hazards"],
+            "fs_acceptance_criteria": product["fs_acceptance_criteria"],
+            "haccp_plan_approved": True,
+            "created_at": datetime.now().isoformat(),
+            "created_by": 1,
+            "risk_assessment_required": True,
+        }
+
+        conn.execute(text("""
+            INSERT INTO products (
+                product_code, name, description, composition, high_risk_ingredients,
+                inherent_hazards, fs_acceptance_criteria, storage_conditions,
+                shelf_life_days, packaging_type,
+                haccp_plan_approved, created_at, created_by, risk_assessment_required
+            ) VALUES (
+                :product_code, :name, :description, :composition, :high_risk_ingredients,
+                :inherent_hazards, :fs_acceptance_criteria, :storage_conditions,
+                :shelf_life_days, :packaging_type,
+                :haccp_plan_approved, :created_at, :created_by, :risk_assessment_required
+            )
+        """), payload)
+
+    print(f"  ✓ Created {len(products_data)} professional food products")
+
+
+def assign_contact_surfaces_to_products(conn):
+    """Link seeded contact surfaces to demo products."""
+    print("\n🔗 Linking contact surfaces to products...")
+
+    assignments = {
+        "DAI-001": ["Raw Milk Receiving Line", "Pasteurizer Holding Tube"],
+        "DAI-002": ["Pasteurizer Holding Tube", "Fermentation & Blending Tanks"],
+        "DAI-003": ["Raw Milk Receiving Line", "Cheese Vat & Press Surfaces"],
+        "DAI-004": ["Butter Churn & Wrapper Table"],
+        "MEA-001": ["Grinding & Stuffing Line"],
+        "MEA-002": ["Grinding & Stuffing Line"],
+        "BAK-001": ["Bakery Conveyor & Cooling Racks"],
+        "BAK-002": ["Bakery Conveyor & Cooling Racks"],
+    }
+
+    link_count = 0
+    for product_code, surface_names in assignments.items():
+        product_id = get_product_id(conn, product_code)
+        if not product_id:
+            continue
+        for surface_name in surface_names:
+            surface_id = get_contact_surface_id(conn, surface_name)
+            if not surface_id:
+                continue
+            conn.execute(
+                text(
+                    """
+                    INSERT OR IGNORE INTO product_contact_surfaces (product_id, contact_surface_id, created_at)
+                    VALUES (:product_id, :surface_id, :created_at)
+                    """
+                ),
+                {
+                    "product_id": product_id,
+                    "surface_id": surface_id,
+                    "created_at": datetime.now().isoformat(),
+                },
+            )
+            link_count += 1
+
+    print(f"  ✓ Linked contact surfaces across {len(assignments)} products ({link_count} records)")
 
 def setup_database_complete():
     """Complete database setup with tables and professional data"""
@@ -1250,11 +1882,15 @@ def setup_database_complete():
             # Create professional data
             create_professional_users(conn)
             create_user_permissions(conn)
-            create_professional_products(conn)
             create_professional_suppliers(conn)
+            create_professional_materials(conn)
+            create_professional_contact_surfaces(conn)
+            create_professional_products(conn)
+            assign_contact_surfaces_to_products(conn)
             create_professional_documents(conn)
             create_professional_batches(conn)
             create_professional_haccp_data(conn)
+            create_monitoring_and_verification_logs(conn)
             create_professional_equipment_data(conn)
             
             conn.commit()
@@ -1295,6 +1931,8 @@ def setup_database_complete():
         print("       - Complete with operational limits, monitoring, verification")
         print("       - objective and sop_reference fields included")
         print("     • PRPs: 4 (Controlled by existing prerequisites)")
+        print("   - 📝 CCP monitoring logs pre-populated with verification metadata")
+        print("       • Includes verified compliant records and pending corrective-action cases")
         print("   - 🔧 5 Equipment Records")
         print("\n🎯 Ready for professional demonstrations with full RBAC!")
         print("\n✨ NEW: ISO 22000:2018 Risk Strategy Implementation:")

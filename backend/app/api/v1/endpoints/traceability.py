@@ -45,7 +45,8 @@ async def get_batches(
     batch_type: Optional[BatchType] = None,
     status: Optional[BatchStatus] = None,
     product_name: Optional[str] = None,
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    product_id: Optional[int] = Query(None, description="Filter batches by associated product ID")
 ):
     """Get batches with filtering and pagination (robust to enum mismatches)."""
     from sqlalchemy import cast, String, func as sa_func
@@ -79,6 +80,8 @@ async def get_batches(
         query = query.filter(Batch.status == status)
     if product_name:
         query = query.filter(Batch.product_name.ilike(f"%{product_name}%"))
+    if product_id is not None:
+        query = query.filter(Batch.product_id == product_id)
     if search:
         query = query.filter(
             (Batch.batch_number.ilike(f"%{search}%")) |

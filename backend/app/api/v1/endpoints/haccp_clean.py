@@ -629,15 +629,21 @@ async def create_monitoring_log(
     ccp_id: int,
     log_data: MonitoringLogCreate,
     current_user: User = Depends(require_permission_dependency("haccp:create")),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    allow_override: bool = Query(False, description="Allow supervisor override of monitoring_responsible requirement")
 ):
-    """Create a monitoring log for a CCP"""
+    """Create a monitoring log for a CCP
+    
+    Only the designated monitoring_responsible person can create logs unless allow_override=true
+    and the user has supervisor permissions (haccp:update or haccp:admin).
+    """
     try:
         service = HACCPService(db)
-        log = service.create_monitoring_log(
+        log, alert_created, nc_created = service.create_monitoring_log(
             ccp_id=ccp_id,
             log_data=log_data,
-            created_by=current_user.id
+            created_by=current_user.id,
+            allow_override=allow_override
         )
         
         return ResponseModel(
@@ -714,21 +720,30 @@ async def create_verification_log(
     ccp_id: int,
     log_data: VerificationLogCreate,
     current_user: User = Depends(require_permission_dependency("haccp:create")),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    allow_override: bool = Query(False, description="Allow supervisor override of verification_responsible requirement")
 ):
-    """Create a verification log for a CCP"""
+    """Create a verification log for a CCP
+    
+    Only the designated verification_responsible person can create verification logs unless allow_override=true
+    and the user has supervisor permissions (haccp:update or haccp:admin).
+    Role segregation is enforced: verification_responsible must be different from monitoring_responsible.
+    """
     try:
         service = HACCPService(db)
-        log = service.create_verification_log(
+        # Convert VerificationLogCreate to dict for the method
+        log_data_dict = log_data.dict() if hasattr(log_data, 'dict') else log_data
+        log = service.create_verification_log_with_role_check(
             ccp_id=ccp_id,
-            log_data=log_data,
-            created_by=current_user.id
+            log_data=log_data_dict,
+            created_by=current_user.id,
+            allow_override=allow_override
         )
         
         return ResponseModel(
             success=True,
             message="Verification log created successfully",
-            data={"id": log.id, "timestamp": log.verification_timestamp.isoformat()}
+            data={"id": log.id, "timestamp": log.verification_date.isoformat() if hasattr(log.verification_date, 'isoformat') else str(log.verification_date)}
         )
         
     except HACCPValidationError as e:

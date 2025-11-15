@@ -1,5 +1,6 @@
+import json
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from enum import Enum
 
@@ -374,16 +375,78 @@ class HazardReviewResponse(BaseModel):
 
 
 # Product Management Schemas
+class ProductCompositionItem(BaseModel):
+    """Represents a single raw material entry used in product composition."""
+    material_id: int = Field(..., description="Unique identifier of the raw material")
+    material_code: Optional[str] = Field(None, description="Material code from supplier record")
+    material_name: Optional[str] = Field(None, description="Material name from supplier record")
+    supplier_id: Optional[int] = Field(None, description="Supplier identifier for traceability")
+    supplier_name: Optional[str] = Field(None, description="Supplier display name")
+    category: Optional[str] = Field(None, description="Material category (e.g., ingredient type)")
+    percentage: Optional[float] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Percentage contribution of the material to the formulation"
+    )
+    unit: Optional[str] = Field(None, description="Measurement unit associated with quantity/percentage")
+    notes: Optional[str] = Field(None, description="Additional notes or handling requirements")
+    is_high_risk: Optional[bool] = Field(
+        False,
+        description="Indicates whether the material is considered high risk within the composition"
+    )
+
+    model_config = {"extra": "allow"}
+
+    @field_validator('material_id')
+    @classmethod
+    def validate_material_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("material_id must be a positive integer")
+        return value
+
+
+class ContactSurfaceBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=150, description="Name or label of the contact surface")
+    composition: Optional[str] = Field(None, description="Material composition details")
+    description: Optional[str] = Field(None, description="Physical, chemical, and biological characteristics")
+    source: Optional[str] = Field(None, description="Where the surface originates, e.g., supplier or equipment")
+    provenance: Optional[str] = Field(None, description="History or background information for traceability")
+    point_of_contact: Optional[str] = Field(None, description="Where in the process the contact occurs")
+    material: Optional[str] = Field(None, description="Surface material (e.g., stainless steel, plastic)")
+    main_processing_steps: Optional[str] = Field(None, description="Processing steps where the surface is involved")
+    packaging_material: Optional[str] = Field(None, description="Associated packaging material or container")
+    storage_conditions: Optional[str] = Field(None, description="Storage requirements for the surface/container")
+    shelf_life: Optional[str] = Field(None, description="Shelf life or replacement interval")
+    possible_inherent_hazards: Optional[str] = Field(None, description="Potential inherent hazards")
+    fs_acceptance_criteria: Optional[str] = Field(None, description="Food safety acceptance criteria")
+
+
+class ContactSurfaceCreate(ContactSurfaceBase):
+    pass
+
+
+class ContactSurfaceResponse(ContactSurfaceBase):
+    id: int
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
 class ProductCreate(BaseModel):
     product_code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    composition: Optional[str] = None
-    high_risk_ingredients: Optional[str] = None
+    composition: List[ProductCompositionItem] = Field(default_factory=list, description="List of raw materials composing the product")
+    high_risk_ingredients: Optional[ProductCompositionItem] = Field(
+        None,
+        description="High-risk ingredient selected from the composition list"
+    )
     physical_chemical_biological_description: Optional[str] = None
     main_processing_steps: Optional[str] = None
     distribution_serving_methods: Optional[str] = None
-    product_contact_surfaces: Optional[str] = None
     consumer_groups: Optional[str] = None
     storage_conditions: Optional[str] = None
     shelf_life_days: Optional[int] = Field(None, ge=1)
@@ -391,17 +454,71 @@ class ProductCreate(BaseModel):
     inherent_hazards: Optional[str] = None
     fs_acceptance_criteria: Optional[str] = None
     law_regulation_requirement: Optional[str] = None
+    contact_surface_ids: List[int] = Field(default_factory=list, description="List of contact surface IDs assigned to this product")
+
+    @field_validator('composition', mode='before')
+    @classmethod
+    def parse_composition(cls, v):
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError as exc:
+                raise ValueError("composition must be valid JSON") from exc
+            if not isinstance(parsed, list):
+                raise ValueError("composition must be a list")
+            return parsed
+        return v
+
+    @field_validator('high_risk_ingredients', mode='before')
+    @classmethod
+    def parse_high_risk(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError as exc:
+                raise ValueError("high_risk_ingredients must be valid JSON") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError("high_risk_ingredients must be an object")
+            return parsed
+        return v
+
+    @model_validator(mode='after')
+    def validate_composition(self):
+        if not self.composition:
+            raise ValueError("composition must include at least one raw material")
+        material_ids = [item.material_id for item in self.composition]
+        if len(material_ids) != len(set(material_ids)):
+            raise ValueError("composition contains duplicate materials")
+        if not self.high_risk_ingredients:
+            raise ValueError("A high-risk ingredient must be selected from the composition")
+        if self.high_risk_ingredients.material_id not in material_ids:
+            raise ValueError("High-risk ingredient must be one of the composition materials")
+        return self
+
+    @field_validator('contact_surface_ids')
+    @classmethod
+    def validate_contact_surface_ids(cls, value: List[int]) -> List[int]:
+        for surface_id in value:
+            if surface_id <= 0:
+                raise ValueError("contact_surface_ids must contain positive integers")
+        return value
 
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
-    composition: Optional[str] = None
-    high_risk_ingredients: Optional[str] = None
+    composition: Optional[List[ProductCompositionItem]] = Field(None, description="Updated composition list")
+    high_risk_ingredients: Optional[ProductCompositionItem] = Field(
+        None,
+        description="Updated high-risk ingredient reference"
+    )
     physical_chemical_biological_description: Optional[str] = None
     main_processing_steps: Optional[str] = None
     distribution_serving_methods: Optional[str] = None
-    product_contact_surfaces: Optional[str] = None
     consumer_groups: Optional[str] = None
     storage_conditions: Optional[str] = None
     shelf_life_days: Optional[int] = Field(None, ge=1)
@@ -413,6 +530,57 @@ class ProductUpdate(BaseModel):
     haccp_plan_version: Optional[str] = None
     # Optional embedded risk configuration payload
     risk_config: Optional[Dict[str, Any]] = None
+    contact_surface_ids: Optional[List[int]] = Field(None, description="Updated list of contact surface IDs")
+
+    @field_validator('composition', mode='before')
+    @classmethod
+    def parse_update_composition(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError as exc:
+                raise ValueError("composition must be valid JSON") from exc
+            if not isinstance(parsed, list):
+                raise ValueError("composition must be a list")
+            return parsed
+        return v
+
+    @field_validator('high_risk_ingredients', mode='before')
+    @classmethod
+    def parse_update_high_risk(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError as exc:
+                raise ValueError("high_risk_ingredients must be valid JSON") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError("high_risk_ingredients must be an object")
+            return parsed
+        return v
+
+    @model_validator(mode='after')
+    def validate_update_composition(self):
+        if self.composition:
+            material_ids = [item.material_id for item in self.composition]
+            if len(material_ids) != len(set(material_ids)):
+                raise ValueError("composition contains duplicate materials")
+            if self.high_risk_ingredients and self.high_risk_ingredients.material_id not in material_ids:
+                raise ValueError("High-risk ingredient must be one of the composition materials")
+        return self
+
+    @field_validator('contact_surface_ids')
+    @classmethod
+    def validate_update_contact_surface_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return value
+        for surface_id in value:
+            if surface_id <= 0:
+                raise ValueError("contact_surface_ids must contain positive integers")
+        return value
 
 
 class ProductResponse(BaseModel):
@@ -420,12 +588,11 @@ class ProductResponse(BaseModel):
     product_code: str
     name: str
     description: Optional[str] = None
-    composition: Optional[str] = None
-    high_risk_ingredients: Optional[str] = None
+    composition: List[ProductCompositionItem] = Field(default_factory=list)
+    high_risk_ingredients: Optional[ProductCompositionItem] = None
     physical_chemical_biological_description: Optional[str] = None
     main_processing_steps: Optional[str] = None
     distribution_serving_methods: Optional[str] = None
-    product_contact_surfaces: Optional[str] = None
     consumer_groups: Optional[str] = None
     storage_conditions: Optional[str] = None
     shelf_life_days: Optional[int] = None
@@ -438,6 +605,7 @@ class ProductResponse(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: Optional[datetime] = None
+    contact_surfaces: List[ContactSurfaceResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -658,6 +826,14 @@ class MonitoringLogCreate(BaseModel):
     equipment_id: Optional[int] = None
 
 
+class MonitoringLogVerificationUpdate(BaseModel):
+    verification_method: Optional[str] = None
+    verification_result: Optional[str] = None
+    verification_is_compliant: Optional[bool] = True
+    verification_notes: Optional[str] = None
+    verification_evidence_files: Optional[str] = None
+
+
 class MonitoringLogResponse(BaseModel):
     id: int
     batch_number: Optional[str] = None
@@ -673,6 +849,14 @@ class MonitoringLogResponse(BaseModel):
     corrective_action_description: Optional[str] = None
     created_by: str
     created_at: datetime
+    is_verified: bool
+    verified_by: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    verification_method: Optional[str] = None
+    verification_result: Optional[str] = None
+    verification_is_compliant: Optional[bool] = None
+    verification_notes: Optional[str] = None
+    verification_evidence_files: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

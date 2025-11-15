@@ -83,13 +83,16 @@ class RBACService:
         
         return False
 
-    def get_user_modules(self, user_id: int) -> List[str]:
+    def get_user_modules(self, user_id: int) -> List[Module]:
         """Get all modules user has access to"""
         permissions = self.get_user_permissions(user_id)
-        modules = set()
+        modules: set[Module] = set()
         
         for permission in permissions:
-            modules.add(permission.module)
+            try:
+                modules.add(Module(permission.module))
+            except ValueError:
+                continue
         
         return list(modules)
 

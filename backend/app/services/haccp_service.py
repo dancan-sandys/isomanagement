@@ -3,7 +3,7 @@ import json
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc, and_, or_
 import uuid
 from enum import Enum
@@ -12,13 +12,13 @@ from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
     HazardType, RiskLevel, CCPStatus,
     HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus,
-    ProductRiskConfig, DecisionTree, HazardReview
+    ProductRiskConfig, DecisionTree, HazardReview, ContactSurface
 )
 from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationCategory
 from app.models.user import User
 from app.schemas.haccp import (
-    ProductCreate, ProductUpdate, ProcessFlowCreate, HazardCreate, CCPCreate,
-    MonitoringLogCreate, VerificationLogCreate, DecisionTreeResult, DecisionTreeStep,
+    ProductCreate, ProductUpdate, ProductCompositionItem, ProcessFlowCreate, HazardCreate, CCPCreate,
+    MonitoringLogCreate, MonitoringLogVerificationUpdate, VerificationLogCreate, DecisionTreeResult, DecisionTreeStep,
     DecisionTreeQuestion, FlowchartData, FlowchartNode, FlowchartEdge
 )
 from app.models.training import RoleRequiredTraining, TrainingAttendance, TrainingSession, TrainingCertificate, HACCPRequiredTraining, TrainingAction
@@ -31,6 +31,7 @@ from app.models.haccp import CCPVerificationProgram, CCPValidation
 from app.models.haccp import HACCPAuditLog, HACCPEvidenceAttachment
 from app.models.document import Document
 from app.utils.audit import audit_event
+from app.models.supplier import Material
 
 logger = logging.getLogger(__name__)
 
@@ -303,33 +304,46 @@ class HACCPService:
             return False
     
     def create_product(self, product_data: ProductCreate, created_by: int) -> Product:
-        """Create a new product"""
-        
+        """Create a new product with validated composition and high-risk ingredient."""
+
         # Check if product code already exists
         existing_product = self.db.query(Product).filter(
             Product.product_code == product_data.product_code
         ).first()
-        
+
         if existing_product:
             raise ValueError("Product code already exists")
-        
+
+        normalized_composition = self._normalize_product_composition(product_data.composition)
+        normalized_high_risk = self._normalize_high_risk_ingredient(product_data.high_risk_ingredients, normalized_composition)
+        self._apply_high_risk_flag(normalized_composition, normalized_high_risk)
+
         product = Product(
             product_code=product_data.product_code,
             name=product_data.name,
             description=product_data.description,
-            category=product_data.category,
-            formulation=product_data.formulation,
-            allergens=product_data.allergens,
-            shelf_life_days=product_data.shelf_life_days,
+            composition=normalized_composition,
+            high_risk_ingredients=normalized_high_risk,
+            physical_chemical_biological_description=product_data.physical_chemical_biological_description,
+            main_processing_steps=product_data.main_processing_steps,
+            distribution_serving_methods=product_data.distribution_serving_methods,
+            consumer_groups=product_data.consumer_groups,
             storage_conditions=product_data.storage_conditions,
+            shelf_life_days=product_data.shelf_life_days,
             packaging_type=product_data.packaging_type,
+            inherent_hazards=product_data.inherent_hazards,
+            fs_acceptance_criteria=product_data.fs_acceptance_criteria,
+            law_regulation_requirement=product_data.law_regulation_requirement,
             created_by=created_by
         )
-        
+
+        if product_data.contact_surface_ids:
+            product.contact_surfaces = self._get_contact_surfaces_by_ids(product_data.contact_surface_ids)
+
         self.db.add(product)
         self.db.commit()
         self.db.refresh(product)
-        
+
         return product
     
     def create_process_flow(self, product_id: int, flow_data: ProcessFlowCreate, created_by: int) -> ProcessFlow:
@@ -1038,6 +1052,14 @@ class HACCPService:
         if not product:
             raise ValueError("Product not found")
         
+        # Validate role segregation: monitoring_responsible and verification_responsible must be different
+        if (ccp_data.monitoring_responsible and ccp_data.verification_responsible and 
+            ccp_data.monitoring_responsible == ccp_data.verification_responsible):
+            raise ValueError(
+                "Role segregation violation: The monitoring_responsible and verification_responsible "
+                "must be different users. This is required for proper HACCP compliance."
+            )
+        
         ccp = CCP(
             product_id=product_id,
             hazard_id=ccp_data.hazard_id,
@@ -1068,15 +1090,54 @@ class HACCPService:
         
         return ccp
     
-    def create_monitoring_log(self, ccp_id: int, log_data: MonitoringLogCreate, created_by: int) -> Tuple[CCPMonitoringLog, bool]:
-        """Create a monitoring log and check for alerts"""
+    def create_monitoring_log(self, ccp_id: int, log_data: MonitoringLogCreate, created_by: int, allow_override: bool = False) -> Tuple[CCPMonitoringLog, bool, bool]:
+        """Create a monitoring log and check for alerts
+        
+        Args:
+            ccp_id: The CCP ID
+            log_data: Monitoring log data
+            created_by: User ID creating the log
+            allow_override: If True, allows supervisors to override monitoring_responsible requirement
+        
+        Raises:
+            ValueError: If user is not authorized to create monitoring logs
+        """
         
         # Verify CCP exists
         ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
         if not ccp:
             raise ValueError("CCP not found")
         
-        # Competency check removed - any user with HACCP access can log monitoring
+        # Check if monitoring_responsible is assigned
+        if not ccp.monitoring_responsible:
+            raise ValueError("CCP does not have a monitoring_responsible person assigned. Please assign one before logging.")
+        
+        # Check if user is the monitoring_responsible person
+        is_monitoring_responsible = ccp.monitoring_responsible == created_by
+        
+        # Check if user is a supervisor/manager (has haccp:update or haccp:admin permission)
+        is_supervisor = False
+        if allow_override:
+            from app.services.rbac_service import RBACService
+            rbac_service = RBACService(self.db)
+            is_supervisor = (
+                rbac_service.has_permission(created_by, "haccp", "update") or
+                rbac_service.has_permission(created_by, "haccp", "admin")
+            )
+        
+        # Only monitoring_responsible or authorized supervisors can create logs
+        if not is_monitoring_responsible and not is_supervisor:
+            monitoring_user = self.db.query(User).filter(User.id == ccp.monitoring_responsible).first()
+            monitoring_name = monitoring_user.full_name if monitoring_user else f"User ID {ccp.monitoring_responsible}"
+            raise ValueError(
+                f"Only the designated monitoring responsible person ({monitoring_name}) "
+                f"or authorized supervisors can create monitoring logs for this CCP."
+            )
+        
+        # Log override if supervisor created the log
+        override_note = None
+        if is_supervisor and not is_monitoring_responsible:
+            override_note = f"Log created by supervisor (User ID: {created_by}) instead of monitoring_responsible (User ID: {ccp.monitoring_responsible})"
         
         # Validate equipment if provided
         if log_data.equipment_id:
@@ -1110,6 +1171,15 @@ class HACCPService:
                 raise ValueError("Batch not found")
             resolved_batch_number = batch.batch_number
 
+        # Prepare log metadata including override information
+        log_metadata = log_data.additional_parameters or {}
+        if override_note:
+            if not isinstance(log_metadata, dict):
+                log_metadata = {}
+            log_metadata["override_note"] = override_note
+            log_metadata["override_by"] = created_by
+            log_metadata["designated_monitor"] = ccp.monitoring_responsible
+        
         monitoring_log = CCPMonitoringLog(
             ccp_id=ccp_id,
             batch_id=resolved_batch_id,
@@ -1118,14 +1188,15 @@ class HACCPService:
             measured_value=measured_value,
             unit=log_data.unit,
             is_within_limits=is_within_limits,
-            additional_parameters=log_data.additional_parameters,
+            additional_parameters=log_metadata if isinstance(log_metadata, dict) else log_data.additional_parameters,
             observations=log_data.observations,
             evidence_files=log_data.evidence_files,
             corrective_action_taken=log_data.corrective_action_taken,
             corrective_action_description=log_data.corrective_action_description,
             corrective_action_by=log_data.corrective_action_by,
             equipment_id=log_data.equipment_id,
-            created_by=created_by
+            created_by=created_by,
+            log_metadata={"override": override_note} if override_note else None
         )
         
         self.db.add(monitoring_log)
@@ -1143,6 +1214,80 @@ class HACCPService:
             nc_created = self._create_mandatory_nc_for_out_of_spec(ccp, monitoring_log, created_by)
 
         return monitoring_log, alert_created, nc_created
+    
+    def verify_monitoring_log(
+        self,
+        ccp_id: int,
+        monitoring_log_id: int,
+        verification_data: MonitoringLogVerificationUpdate,
+        verified_by: int,
+        allow_override: bool = False
+    ) -> CCPMonitoringLog:
+        """Verify a monitoring log entry and capture verification details."""
+        
+        monitoring_log = self.db.query(CCPMonitoringLog).filter(
+            CCPMonitoringLog.id == monitoring_log_id,
+            CCPMonitoringLog.ccp_id == ccp_id
+        ).first()
+        
+        if not monitoring_log:
+            raise ValueError("Monitoring log not found")
+        
+        ccp = monitoring_log.ccp or self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        
+        if not ccp.verification_responsible:
+            raise ValueError("Verification responsible user is not assigned to this CCP.")
+        
+        is_verification_responsible = ccp.verification_responsible == verified_by
+        
+        is_supervisor = False
+        if allow_override:
+            from app.services.rbac_service import RBACService
+            rbac_service = RBACService(self.db)
+            is_supervisor = (
+                rbac_service.has_permission(verified_by, "haccp", "update") or
+                rbac_service.has_permission(verified_by, "haccp", "admin")
+            )
+        
+        if not is_verification_responsible and not is_supervisor:
+            verifier = self.db.query(User).filter(User.id == ccp.verification_responsible).first()
+            verifier_name = verifier.full_name if verifier else f"User ID {ccp.verification_responsible}"
+            raise ValueError(
+                f"Only the designated verification responsible person ({verifier_name}) "
+                f"or authorized supervisors can verify this monitoring log."
+            )
+        
+        if monitoring_log.created_by == verified_by and not is_supervisor:
+            raise ValueError("Users cannot verify monitoring logs they created. Supervisor override is required.")
+        
+        if monitoring_log.is_verified and not is_supervisor:
+            raise ValueError("Monitoring log has already been verified. Supervisor override is required to re-verify.")
+        
+        monitoring_log.is_verified = True
+        monitoring_log.verified_by = verified_by
+        monitoring_log.verified_at = datetime.utcnow()
+        monitoring_log.verification_method = verification_data.verification_method
+        monitoring_log.verification_result = verification_data.verification_result
+        
+        if verification_data.verification_is_compliant is not None:
+            monitoring_log.verification_is_compliant = verification_data.verification_is_compliant
+        
+        notes = verification_data.verification_notes or ""
+        if is_supervisor and not is_verification_responsible:
+            supervisor_note = (
+                f"[SUPERVISOR OVERRIDE] Verification performed by supervisor (User ID: {verified_by}) "
+                f"in place of designated verifier (User ID: {ccp.verification_responsible})."
+            )
+            notes = f"{notes}\n\n{supervisor_note}".strip()
+        monitoring_log.verification_notes = notes or None
+        monitoring_log.verification_evidence_files = verification_data.verification_evidence_files
+        
+        self.db.commit()
+        self.db.refresh(monitoring_log)
+        
+        return monitoring_log
     
     def _create_out_of_spec_alert(self, ccp: CCP, monitoring_log: CCPMonitoringLog) -> bool:
         """Create an alert for out-of-spec readings"""
@@ -1977,17 +2122,65 @@ class HACCPService:
         
         return due_programs
     
-    def create_verification_log_with_role_check(self, ccp_id: int, log_data: dict, created_by: int) -> CCPVerificationLog:
-        """Create a verification log with role segregation enforcement"""
+    def create_verification_log_with_role_check(self, ccp_id: int, log_data: dict, created_by: int, allow_override: bool = False) -> CCPVerificationLog:
+        """Create a verification log with role segregation enforcement
+        
+        Args:
+            ccp_id: The CCP ID
+            log_data: Verification log data
+            created_by: User ID creating the verification log
+            allow_override: If True, allows supervisors to override verification_responsible requirement
+        
+        Raises:
+            ValueError: If user is not authorized or role segregation is violated
+        """
         
         # Get the CCP and its verification programs
         ccp = self.db.query(CCP).filter(CCP.id == ccp_id).first()
         if not ccp:
             raise ValueError("CCP not found")
         
-        # Check if user is trying to verify their own monitoring logs
-        if ccp.monitoring_responsible == created_by:
+        # Check if verification_responsible is assigned
+        if not ccp.verification_responsible:
+            raise ValueError("CCP does not have a verification_responsible person assigned. Please assign one before verification.")
+        
+        # Check if user is the verification_responsible person
+        is_verification_responsible = ccp.verification_responsible == created_by
+        
+        # Check if user is a supervisor/manager (has haccp:update or haccp:admin permission)
+        is_supervisor = False
+        if allow_override:
+            from app.services.rbac_service import RBACService
+            rbac_service = RBACService(self.db)
+            is_supervisor = (
+                rbac_service.has_permission(created_by, "haccp", "update") or
+                rbac_service.has_permission(created_by, "haccp", "admin")
+            )
+        
+        # Only verification_responsible or authorized supervisors can create verification logs
+        if not is_verification_responsible and not is_supervisor:
+            verification_user = self.db.query(User).filter(User.id == ccp.verification_responsible).first()
+            verification_name = verification_user.full_name if verification_user else f"User ID {ccp.verification_responsible}"
+            raise ValueError(
+                f"Only the designated verification responsible person ({verification_name}) "
+                f"or authorized supervisors can create verification logs for this CCP."
+            )
+        
+        # Check role segregation: verification_responsible must be different from monitoring_responsible
+        if ccp.monitoring_responsible == ccp.verification_responsible:
+            raise ValueError(
+                "Role segregation violation: The verification_responsible person cannot be the same "
+                "as the monitoring_responsible person. Please assign different users."
+            )
+        
+        # Check if user is trying to verify their own monitoring logs (additional check)
+        if ccp.monitoring_responsible == created_by and not is_supervisor:
             raise ValueError("User cannot verify their own monitoring logs. Role segregation is required.")
+        
+        # Log override if supervisor created the verification
+        override_note = None
+        if is_supervisor and not is_verification_responsible:
+            override_note = f"Verification created by supervisor (User ID: {created_by}) instead of verification_responsible (User ID: {ccp.verification_responsible})"
         
         # Check if user has required role for verification
         verification_program_id = log_data.get("verification_program_id")
@@ -2002,6 +2195,11 @@ class HACCPService:
                 if not user or not user.role or user.role.name != program.required_verifier_role:
                     raise ValueError(f"User must have role '{program.required_verifier_role}' to perform this verification")
         
+        # Prepare verification metadata including override information
+        verification_notes = log_data.get("verification_notes") or ""
+        if override_note:
+            verification_notes = f"{verification_notes}\n\n[OVERRIDE]: {override_note}".strip()
+        
         # Create verification log
         verification_log = CCPVerificationLog(
             ccp_id=ccp_id,
@@ -2015,7 +2213,7 @@ class HACCPService:
             equipment_calibration=log_data.get("equipment_calibration"),
             calibration_date=log_data.get("calibration_date"),
             verifier_role=log_data.get("verifier_role"),
-            verification_notes=log_data.get("verification_notes"),
+            verification_notes=verification_notes,
             evidence_files=log_data.get("evidence_files"),
             created_by=created_by
         )
@@ -2417,3 +2615,183 @@ class HACCPService:
         self.db.refresh(audit_log)
         
         return audit_log
+
+    # ------------------------------------------------------------------
+    # Product composition helpers
+    # ------------------------------------------------------------------
+    def _normalize_product_composition(self, composition: List[ProductCompositionItem]) -> List[Dict[str, Any]]:
+        """Validate and enrich product composition with material metadata."""
+        if not composition:
+            raise HACCPValidationError("Product composition cannot be empty")
+
+        order_map = {item.material_id: index for index, item in enumerate(composition)}
+        material_ids = list(order_map.keys())
+
+        materials = (
+            self.db.query(Material)
+            .options(joinedload(Material.supplier))
+            .filter(Material.id.in_(material_ids))
+            .all()
+        )
+
+        found_ids = {material.id for material in materials}
+        missing_ids = set(material_ids) - found_ids
+        if missing_ids:
+            missing_str = ", ".join(str(mid) for mid in sorted(missing_ids))
+            raise HACCPValidationError(f"The following material IDs could not be found: {missing_str}")
+
+        material_lookup = {material.id: material for material in materials}
+        normalized: List[Dict[str, Any]] = []
+        for item in composition:
+            material = material_lookup[item.material_id]
+            item_data = item.model_dump(exclude_none=True)
+
+            normalized_item: Dict[str, Any] = {
+                "material_id": material.id,
+                "material_code": material.material_code,
+                "material_name": material.name,
+                "supplier_id": material.supplier_id,
+                "supplier_name": material.supplier.name if material.supplier else None,
+                "category": material.category,
+            }
+
+            # Preserve optional quantitative fields supplied by the request
+            for key in ("percentage", "unit", "notes"):
+                if key in item_data:
+                    normalized_item[key] = item_data[key]
+
+            # Merge any additional custom fields while keeping DB sourced keys authoritative
+            for key, value in item_data.items():
+                if key not in normalized_item and key != "material_id":
+                    normalized_item[key] = value
+
+            normalized.append(normalized_item)
+
+        normalized.sort(key=lambda record: order_map[record["material_id"]])
+        return normalized
+
+    def _normalize_high_risk_ingredient(
+        self,
+        high_risk_item: Optional[ProductCompositionItem],
+        composition: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Validate and normalize the high-risk ingredient against composition."""
+        if high_risk_item is None:
+            return None
+
+        composition_lookup = {item["material_id"]: item for item in composition}
+        base_item = composition_lookup.get(high_risk_item.material_id)
+        if base_item is None:
+            raise HACCPValidationError("High-risk ingredient must be included in the composition list")
+
+        high_risk_data = base_item.copy()
+        high_risk_payload = high_risk_item.model_dump(exclude_none=True)
+        for key, value in high_risk_payload.items():
+            if key == "material_id":
+                continue
+            high_risk_data[key] = value
+        high_risk_data["is_high_risk"] = True
+        return high_risk_data
+
+    def _apply_high_risk_flag(
+        self,
+        composition: List[Dict[str, Any]],
+        high_risk: Optional[Dict[str, Any]]
+    ) -> None:
+        """Annotate composition entries to indicate which item is high-risk."""
+        high_risk_id = high_risk.get("material_id") if high_risk else None
+        for entry in composition:
+            entry["is_high_risk"] = entry.get("material_id") == high_risk_id
+
+    def _get_contact_surfaces_by_ids(self, surface_ids: List[int]) -> List[ContactSurface]:
+        """Fetch contact surfaces by IDs, ensuring all requested IDs exist."""
+        if not surface_ids:
+            return []
+
+        unique_ids = list(dict.fromkeys(surface_ids))  # preserve order, remove duplicates
+        surfaces = (
+            self.db.query(ContactSurface)
+            .filter(ContactSurface.id.in_(unique_ids))
+            .all()
+        )
+
+        if len(surfaces) != len(unique_ids):
+            existing_ids = {surface.id for surface in surfaces}
+            missing = [sid for sid in unique_ids if sid not in existing_ids]
+            raise ValueError(f"Contact surface(s) not found: {missing}")
+
+        # Preserve order as provided by caller
+        surface_lookup = {surface.id: surface for surface in surfaces}
+        return [surface_lookup[sid] for sid in unique_ids]
+
+    def update_product(self, product_id: int, product_data: ProductUpdate, updated_by: int) -> Product:
+        """Update product details, including composition and high-risk ingredient."""
+
+        product: Optional[Product] = self.db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise ValueError("Product not found")
+
+        update_payload = product_data.model_dump(exclude_unset=True)
+        composition_input: Optional[List[ProductCompositionItem]] = update_payload.get("composition")
+        high_risk_present = "high_risk_ingredients" in update_payload
+        high_risk_input: Optional[ProductCompositionItem] = update_payload.get("high_risk_ingredients")
+
+        current_composition: List[Dict[str, Any]] = product.composition or []
+        if composition_input is not None:
+            normalized_composition = self._normalize_product_composition(composition_input)
+        else:
+            normalized_composition = [dict(item) for item in current_composition]
+
+        if high_risk_present:
+            if high_risk_input is None:
+                raise HACCPValidationError("High-risk ingredient cannot be removed. Select a replacement instead.")
+            normalized_high_risk = self._normalize_high_risk_ingredient(high_risk_input, normalized_composition)
+        else:
+            existing_high_risk = product.high_risk_ingredients
+            if composition_input is not None and existing_high_risk:
+                allowed_ids = {item["material_id"] for item in normalized_composition}
+                if existing_high_risk.get("material_id") not in allowed_ids:
+                    raise HACCPValidationError(
+                        "Existing high-risk ingredient is not part of the updated composition. "
+                        "Please select a new high-risk ingredient."
+                    )
+            normalized_high_risk = existing_high_risk
+
+        self._apply_high_risk_flag(normalized_composition, normalized_high_risk)
+
+        # Apply updates to the product record
+        simple_fields = [
+            "name",
+            "description",
+            "physical_chemical_biological_description",
+            "main_processing_steps",
+            "distribution_serving_methods",
+            "consumer_groups",
+            "storage_conditions",
+            "shelf_life_days",
+            "packaging_type",
+            "inherent_hazards",
+            "fs_acceptance_criteria",
+            "law_regulation_requirement",
+            "haccp_plan_approved",
+            "haccp_plan_version",
+        ]
+        for field in simple_fields:
+            if field in update_payload:
+                setattr(product, field, update_payload[field])
+
+        if composition_input is not None or high_risk_present:
+            product.composition = normalized_composition
+        elif normalized_composition and composition_input is None and not current_composition:
+            product.composition = normalized_composition
+
+        if high_risk_present or composition_input is not None:
+            product.high_risk_ingredients = normalized_high_risk
+
+        if "contact_surface_ids" in update_payload:
+            new_surface_ids = update_payload.get("contact_surface_ids") or []
+            product.contact_surfaces = self._get_contact_surfaces_by_ids(new_surface_ids)
+
+        self.db.commit()
+        self.db.refresh(product)
+        return product

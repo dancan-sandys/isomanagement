@@ -1,7 +1,10 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import json
+from json import JSONDecodeError
+from typing import List, Optional, Set
+from collections import defaultdict
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, and_, text
+from sqlalchemy import desc, func, and_, or_, text
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
@@ -10,77 +13,479 @@ from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
-    HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig, DecisionTree
+    HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig, DecisionTree,
+    ContactSurface, product_contact_surface_association
 )
 from app.models.oprp import OPRP, OPRPMonitoringLog, OPRPVerificationLog
+from app.models.rbac import Module, PermissionType
+from app.services.rbac_service import RBACService
+from app.services.haccp_access import (
+    get_user_haccp_assignments,
+    is_ccp_monitoring_responsible,
+    is_ccp_verification_responsible,
+)
 from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
     ProductCreate, ProductUpdate, ProductResponse, ProcessFlowCreate, ProcessFlowUpdate, ProcessFlowResponse,
     HazardCreate, HazardUpdate, HazardResponse, CCPCreate, CCPUpdate, CCPResponse,
-    MonitoringLogCreate, MonitoringLogResponse, VerificationLogCreate, VerificationLogResponse,
+    MonitoringLogCreate, MonitoringLogVerificationUpdate, MonitoringLogResponse,
+    VerificationLogCreate, VerificationLogResponse,
     HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanResponse, HACCPPlanVersionCreate, HACCPPlanVersionResponse,
     HACCPPlanApprovalCreate, HACCPPlanApprovalResponse, ProductRiskConfigCreate, ProductRiskConfigUpdate, ProductRiskConfigResponse,
     DecisionTreeCreate, DecisionTreeUpdate, DecisionTreeResponse, DecisionTreeQuestionResponse,
     RiskThresholdCreate, RiskThresholdUpdate, RiskThresholdResponse,
     HazardReviewCreate, HazardReviewUpdate, HazardReviewResponse,
-    HACCPReportRequest, ValidationEvidence
+    HACCPReportRequest, ValidationEvidence,
+    ContactSurfaceCreate, ContactSurfaceResponse
 )
-from app.services.haccp_service import HACCPService
+from app.services.haccp_service import HACCPService, HACCPValidationError
+from sqlalchemy.exc import StatementError
 from app.services.storage_service import StorageService
 from app.utils.audit import audit_event
 
 router = APIRouter()
 
+PRIVILEGED_HACCP_ROLES = {
+    "System Administrator",
+    "QA Manager",
+    "QA Specialist",
+    "Production Manager",
+    "Compliance Officer",
+}
+
+
+def get_user_role_name(user: Optional[User]) -> Optional[str]:
+    if not user:
+        return None
+    try:
+        if getattr(user, "role", None):
+            if getattr(user.role, "display_name", None):
+                return user.role.display_name
+            if getattr(user.role, "name", None):
+                return user.role.name
+    except Exception:
+        pass
+    return None
+
+
+def is_privileged_haccp_user(user: Optional[User]) -> bool:
+    role_name = get_user_role_name(user)
+    if not role_name:
+        return False
+    return role_name in PRIVILEGED_HACCP_ROLES
+
+
+def serialize_contact_surface(surface: ContactSurface) -> dict:
+    if not surface:
+        return {}
+    return {
+        "id": surface.id,
+        "name": surface.name,
+        "composition": surface.composition,
+        "description": surface.description,
+        "source": surface.source,
+        "provenance": surface.provenance,
+        "point_of_contact": surface.point_of_contact,
+        "material": surface.material,
+        "main_processing_steps": surface.main_processing_steps,
+        "packaging_material": surface.packaging_material,
+        "storage_conditions": surface.storage_conditions,
+        "shelf_life": surface.shelf_life,
+        "possible_inherent_hazards": surface.possible_inherent_hazards,
+        "fs_acceptance_criteria": surface.fs_acceptance_criteria,
+        "created_by": surface.created_by,
+        "created_at": surface.created_at.isoformat() if surface.created_at else None,
+        "updated_at": surface.updated_at.isoformat() if surface.updated_at else None,
+    }
+
+
+def get_assigned_product_ids(db: Session, user_id: int) -> Set[int]:
+    if not user_id:
+        return set()
+    try:
+        results = (
+            db.query(CCP.product_id)
+            .filter(
+                or_(
+                    CCP.monitoring_responsible == user_id,
+                    CCP.verification_responsible == user_id,
+                )
+            )
+            .distinct()
+            .all()
+        )
+        return {row[0] for row in results if row[0] is not None}
+    except Exception:
+        return set()
+
+
+def require_haccp_view_dependency(allow_assignment: bool = False):
+    """
+    FastAPI dependency that allows users with HACCP view permission or
+    (optionally) users who are assigned to CCPs to access product-level data.
+    """
+
+    def dependency(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        rbac_service = RBACService(db)
+        if rbac_service.has_permission(current_user.id, Module.HACCP, PermissionType.VIEW):
+            return current_user
+
+        if allow_assignment:
+            assignments = get_user_haccp_assignments(db, current_user.id)
+            if assignments["product_ids"]:
+                return current_user
+
+        error_detail = {
+            "error": "Insufficient permissions",
+            "required_permission": "haccp:view",
+            "user_id": current_user.id,
+            "user_username": current_user.username,
+            "allow_assignment": allow_assignment,
+        }
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_detail,
+        )
+
+    return dependency
+
+
+def require_haccp_monitoring_dependency(
+    ccp_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Dependency that allows HACCP create/update permissions or the assigned
+    monitoring responsible user to record monitoring logs.
+    """
+    rbac_service = RBACService(db)
+    if any(
+        rbac_service.has_permission(current_user.id, Module.HACCP, action)
+        for action in (PermissionType.CREATE, PermissionType.UPDATE)
+    ):
+        return current_user
+
+    if is_ccp_monitoring_responsible(db, current_user.id, ccp_id):
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "Insufficient permissions",
+            "required": "haccp:create or haccp:update or CCP monitoring assignment",
+            "ccp_id": ccp_id,
+            "user_id": current_user.id,
+        },
+    )
+
+
+def require_haccp_verification_dependency(
+    ccp_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Dependency that allows HACCP update permission or the assigned
+    verification responsible user to verify monitoring logs.
+    """
+    rbac_service = RBACService(db)
+    if rbac_service.has_permission(current_user.id, Module.HACCP, PermissionType.UPDATE):
+        return current_user
+
+    if is_ccp_verification_responsible(db, current_user.id, ccp_id):
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "Insufficient permissions",
+            "required": "haccp:update or CCP verification assignment",
+            "ccp_id": ccp_id,
+            "user_id": current_user.id,
+        },
+    )
+
+
+def require_haccp_view_or_assignment(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    module = Module.HACCP
+    action = PermissionType.VIEW
+    rbac_service = RBACService(db)
+
+    if rbac_service.has_permission(current_user.id, module, action):
+        return current_user
+
+    assigned_product_ids = get_assigned_product_ids(db, current_user.id)
+    if assigned_product_ids:
+        return current_user
+
+    user_permissions = rbac_service.get_user_permissions(current_user.id)
+    user_modules = rbac_service.get_user_modules(current_user.id)
+
+    error_detail = {
+        "error": "Insufficient permissions",
+        "required_permission": f"{module.value}:{action.value}",
+        "required_module": module.value,
+        "required_action": action.value,
+        "user_id": current_user.id,
+        "user_username": current_user.username,
+        "user_has_module_access": module in user_modules,
+        "user_permissions_count": len(user_permissions),
+        "available_modules": [m.value for m in user_modules],
+        "available_permissions": [f"{p.module}:{p.action}" for p in user_permissions[:10]],
+    }
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=error_detail
+    )
+
+
+# Contact Surface Endpoints
+@router.get("/contact-surfaces")
+async def list_contact_surfaces(
+    q: Optional[str] = Query(None, description="Search term for contact surface name or material"),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
+    db: Session = Depends(get_db)
+):
+    """List stored contact surfaces for reuse in product records."""
+    query = db.query(ContactSurface)
+    if q:
+        like_query = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                ContactSurface.name.ilike(like_query),
+                ContactSurface.material.ilike(like_query),
+                ContactSurface.point_of_contact.ilike(like_query),
+            )
+        )
+    surfaces = query.order_by(ContactSurface.name.asc()).all()
+
+    return ResponseModel(
+        success=True,
+        message="Contact surfaces retrieved successfully",
+        data={
+            "items": [serialize_contact_surface(surface) for surface in surfaces],
+            "count": len(surfaces),
+        },
+    )
+
+
+@router.post("/contact-surfaces")
+async def create_contact_surface(
+    surface_data: ContactSurfaceCreate,
+    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    db: Session = Depends(get_db)
+):
+    """Create a new reusable contact surface definition."""
+    try:
+        surface = ContactSurface(
+            name=surface_data.name,
+            composition=surface_data.composition,
+            description=surface_data.description,
+            source=surface_data.source,
+            provenance=surface_data.provenance,
+            point_of_contact=surface_data.point_of_contact,
+            material=surface_data.material,
+            main_processing_steps=surface_data.main_processing_steps,
+            packaging_material=surface_data.packaging_material,
+            storage_conditions=surface_data.storage_conditions,
+            shelf_life=surface_data.shelf_life,
+            possible_inherent_hazards=surface_data.possible_inherent_hazards,
+            fs_acceptance_criteria=surface_data.fs_acceptance_criteria,
+            created_by=current_user.id,
+        )
+        db.add(surface)
+        db.commit()
+        db.refresh(surface)
+
+        return ResponseModel(
+            success=True,
+            message="Contact surface created successfully",
+            data=serialize_contact_surface(surface),
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create contact surface: {str(e)}",
+        )
+
 
 # Product Management Endpoints
 @router.get("/products")
 async def get_products(
-    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
     db: Session = Depends(get_db)
 ):
     """Get all products with HACCP plans"""
     try:
-        products = db.query(Product).order_by(desc(Product.updated_at)).all()
-        
+        is_privileged_user = is_privileged_haccp_user(current_user)
+        assigned_product_ids = get_assigned_product_ids(db, current_user.id) if current_user else set()
+
+        product_rows = db.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    product_code,
+                    name,
+                    description,
+                    composition,
+                    high_risk_ingredients,
+                    physical_chemical_biological_description,
+                    main_processing_steps,
+                    distribution_serving_methods,
+                    consumer_groups,
+                    storage_conditions,
+                    shelf_life_days,
+                    packaging_type,
+                    inherent_hazards,
+                    fs_acceptance_criteria,
+                    law_regulation_requirement,
+                    haccp_plan_approved,
+                    haccp_plan_version,
+                    created_by,
+                    created_at,
+                    updated_at
+                FROM products
+                ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+                """
+            )
+        ).mappings().all()
+
+        assigned_only = False
+        if not is_privileged_user:
+            if assigned_product_ids:
+                product_rows = [row for row in product_rows if row["id"] in assigned_product_ids]
+                assigned_only = True
+            else:
+                product_rows = []
+                assigned_only = True
+
+        contact_surface_map = defaultdict(list)
+        product_ids = [row["id"] for row in product_rows]
+        if product_ids:
+            surface_rows = (
+                db.query(
+                    product_contact_surface_association.c.product_id,
+                    ContactSurface
+                )
+                .join(
+                    ContactSurface,
+                    ContactSurface.id == product_contact_surface_association.c.contact_surface_id,
+                )
+                .filter(product_contact_surface_association.c.product_id.in_(product_ids))
+                .order_by(product_contact_surface_association.c.product_id, ContactSurface.name)
+                .all()
+            )
+            for product_id, surface in surface_rows:
+                contact_surface_map[product_id].append(serialize_contact_surface(surface))
+
         items = []
-        for product in products:
+        for product in product_rows:
+            product_id = product["id"]
+            try:
+                composition_data = product["composition"]
+            except (StatementError, JSONDecodeError, ValueError, TypeError) as exc:
+                print(f"DEBUG: Failed to decode product composition for product_id={product_id}: {exc}")
+                composition_data = None
+            if isinstance(composition_data, (bytes, bytearray)):
+                composition_data = composition_data.decode("utf-8", errors="ignore").strip()
+            if isinstance(composition_data, str):
+                composition_data = composition_data.strip()
+                if composition_data:
+                    try:
+                        composition_data = json.loads(composition_data)
+                    except (JSONDecodeError, ValueError) as exc:
+                        print(f"DEBUG: Invalid JSON string in product composition for product_id={product_id}: {exc}")
+                        composition_data = None
+            composition = composition_data or []
+
+            try:
+                high_risk_data = product["high_risk_ingredients"]
+            except (StatementError, JSONDecodeError, ValueError, TypeError) as exc:
+                print(f"DEBUG: Failed to decode high-risk ingredient for product_id={product_id}: {exc}")
+                high_risk_data = None
+            if isinstance(high_risk_data, (bytes, bytearray)):
+                high_risk_data = high_risk_data.decode("utf-8", errors="ignore").strip()
+            if isinstance(high_risk_data, str):
+                high_risk_str = high_risk_data.strip()
+                if high_risk_str:
+                    try:
+                        high_risk_data = json.loads(high_risk_str)
+                    except (JSONDecodeError, ValueError) as exc:
+                        print(f"DEBUG: Invalid JSON string in high-risk ingredient for product_id={product_id}: {exc}")
+                        high_risk_data = None
+
             # Get creator name
-            creator = db.query(User).filter(User.id == product.created_by).first()
+            created_by = product["created_by"]
+            if isinstance(created_by, str) and created_by.isdigit():
+                created_by_lookup = int(created_by)
+            else:
+                created_by_lookup = created_by
+
+            creator = db.query(User).filter(User.id == created_by_lookup).first()
             creator_name = creator.full_name if creator else "Unknown"
             
             # Get CCP count
-            ccp_count = db.query(CCP).filter(CCP.product_id == product.id).count()
+            ccp_count = db.query(CCP).filter(CCP.product_id == product_id).count()
+
+            created_at_value = product["created_at"]
+            if isinstance(created_at_value, datetime):
+                created_at_str = created_at_value.isoformat()
+            elif created_at_value:
+                created_at_str = str(created_at_value)
+            else:
+                created_at_str = None
+
+            updated_at_value = product["updated_at"]
+            if isinstance(updated_at_value, datetime):
+                updated_at_str = updated_at_value.isoformat()
+            elif updated_at_value:
+                updated_at_str = str(updated_at_value)
+            else:
+                updated_at_str = None
             
             items.append({
-                "id": product.id,
-                "product_code": product.product_code,
-                "name": product.name,
-                "description": product.description,
-                "composition": product.composition,
-                "high_risk_ingredients": product.high_risk_ingredients,
-                "physical_chemical_biological_description": product.physical_chemical_biological_description,
-                "main_processing_steps": product.main_processing_steps,
-                "distribution_serving_methods": product.distribution_serving_methods,
-                "product_contact_surfaces": product.product_contact_surfaces,
-                "consumer_groups": product.consumer_groups,
-                "storage_conditions": product.storage_conditions,
-                "shelf_life_days": product.shelf_life_days,
-                "packaging_type": product.packaging_type,
-                "inherent_hazards": product.inherent_hazards,
-                "fs_acceptance_criteria": product.fs_acceptance_criteria,
-                "law_regulation_requirement": product.law_regulation_requirement,
-                "haccp_plan_approved": product.haccp_plan_approved,
-                "haccp_plan_version": product.haccp_plan_version,
+                "id": product_id,
+                "product_code": product["product_code"],
+                "name": product["name"],
+                "description": product["description"],
+                "composition": composition,
+                "high_risk_ingredients": high_risk_data,
+                "physical_chemical_biological_description": product["physical_chemical_biological_description"],
+                "main_processing_steps": product["main_processing_steps"],
+                "distribution_serving_methods": product["distribution_serving_methods"],
+                "contact_surfaces": contact_surface_map.get(product_id, []),
+                "consumer_groups": product["consumer_groups"],
+                "storage_conditions": product["storage_conditions"],
+                "shelf_life_days": product["shelf_life_days"],
+                "packaging_type": product["packaging_type"],
+                "inherent_hazards": product["inherent_hazards"],
+                "fs_acceptance_criteria": product["fs_acceptance_criteria"],
+                "law_regulation_requirement": product["law_regulation_requirement"],
+                "haccp_plan_approved": product["haccp_plan_approved"],
+                "haccp_plan_version": product["haccp_plan_version"],
                 "ccp_count": ccp_count,
                 "created_by": creator_name,
-                "created_at": product.created_at.isoformat() if product.created_at else None,
-                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+                "created_at": created_at_str,
+                "updated_at": updated_at_str,
             })
         
         return ResponseModel(
             success=True,
             message="Products retrieved successfully",
-            data={"items": items}
+            data={
+                "items": items,
+                "assigned_only": assigned_only
+            }
         )
         
     except Exception as e:
@@ -93,21 +498,97 @@ async def get_products(
 @router.get("/products/{product_id}")
 async def get_product(
     product_id: int,
-    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
     db: Session = Depends(get_db)
 ):
     """Get a product with its process flows, hazards, and CCPs"""
     try:
-        # Get product
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
+        is_privileged_user = is_privileged_haccp_user(current_user)
+        if not is_privileged_user:
+            assigned_product_ids = get_assigned_product_ids(db, current_user.id)
+            if product_id not in assigned_product_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to access this product."
+                )
+
+        def safe_json_load(value):
+            if value is None:
+                return None
+            if isinstance(value, (bytes, bytearray)):
+                value = value.decode("utf-8", errors="ignore")
+            if isinstance(value, str):
+                stripped = value.strip()
+                if not stripped:
+                    return None
+                try:
+                    return json.loads(stripped)
+                except json.JSONDecodeError:
+                    print(f"DEBUG: Malformed JSON encountered: {stripped}")
+                    return None
+            return value
+
+        # Fetch product using raw SQL to avoid json deserializer being strict
+        product_row = db.execute(
+            text(
+                """
+                SELECT *
+                FROM products
+                WHERE id = :pid
+                """
+            ),
+            {"pid": product_id}
+        ).mappings().first()
+
+        if not product_row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Product not found"
             )
+
+        composition_data = safe_json_load(product_row.get("composition")) or []
+        if not isinstance(composition_data, list):
+            composition_data = []
+        high_risk_data = safe_json_load(product_row.get("high_risk_ingredients"))
+        if high_risk_data is not None and not isinstance(high_risk_data, dict):
+            high_risk_data = None
+
+        created_at_value = product_row.get("created_at")
+        updated_at_value = product_row.get("updated_at")
+        product_code = product_row.get("product_code")
+        product_name = product_row.get("name")
+        product_description = product_row.get("description")
+        physical_chemical_bio = product_row.get("physical_chemical_biological_description")
+        main_processing_steps = product_row.get("main_processing_steps")
+        distribution_serving_methods = product_row.get("distribution_serving_methods")
+        consumer_groups = product_row.get("consumer_groups")
+        storage_conditions = product_row.get("storage_conditions")
+        shelf_life_days = product_row.get("shelf_life_days")
+        packaging_type = product_row.get("packaging_type")
+        inherent_hazards = product_row.get("inherent_hazards")
+        fs_acceptance_criteria = product_row.get("fs_acceptance_criteria")
+        law_regulation_requirement = product_row.get("law_regulation_requirement")
+        haccp_plan_approved = product_row.get("haccp_plan_approved")
+        haccp_plan_version = product_row.get("haccp_plan_version")
+
+        contact_surfaces = (
+            db.query(ContactSurface)
+            .join(
+                product_contact_surface_association,
+                ContactSurface.id == product_contact_surface_association.c.contact_surface_id,
+            )
+            .filter(product_contact_surface_association.c.product_id == product_id)
+            .order_by(ContactSurface.name)
+            .all()
+        )
+        contact_surfaces_data = [serialize_contact_surface(surface) for surface in contact_surfaces]
         
-        # Get creator name
-        creator = db.query(User).filter(User.id == product.created_by).first()
+        created_by_value = product_row.get("created_by")
+        if isinstance(created_by_value, str) and created_by_value.isdigit():
+            created_by_lookup = int(created_by_value)
+        else:
+            created_by_lookup = created_by_value
+        creator = db.query(User).filter(User.id == created_by_lookup).first()
         creator_name = creator.full_name if creator else "Unknown"
         
         # Get risk configuration
@@ -302,33 +783,51 @@ async def get_product(
             print(f"DEBUG: Error processing OPRPs data: {e}")
             oprps_data = []
         
+        def serialize_dt(value):
+            if value is None:
+                return None
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            return str(value)
+
+        def to_bool(value):
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return value != 0
+            if isinstance(value, str):
+                return value.strip().lower() in {"true", "1", "yes", "y"}
+            return bool(value)
+
         return ResponseModel(
             success=True,
             message="Product retrieved successfully",
             data={
-                "id": product.id,
-                "product_code": product.product_code,
-                "name": product.name,
-                "description": product.description,
-                "composition": product.composition,
-                "high_risk_ingredients": product.high_risk_ingredients,
-                "physical_chemical_biological_description": product.physical_chemical_biological_description,
-                "main_processing_steps": product.main_processing_steps,
-                "distribution_serving_methods": product.distribution_serving_methods,
-                "product_contact_surfaces": product.product_contact_surfaces,
-                "consumer_groups": product.consumer_groups,
-                "storage_conditions": product.storage_conditions,
-                "shelf_life_days": product.shelf_life_days,
-                "packaging_type": product.packaging_type,
-                "inherent_hazards": product.inherent_hazards,
-                "fs_acceptance_criteria": product.fs_acceptance_criteria,
-                "law_regulation_requirement": product.law_regulation_requirement,
-                "haccp_plan_approved": product.haccp_plan_approved,
-                "haccp_plan_version": product.haccp_plan_version,
+                "id": product_row.get("id"),
+                "product_code": product_code,
+                "name": product_name,
+                "description": product_description,
+                "composition": composition_data,
+                "high_risk_ingredients": high_risk_data,
+                "physical_chemical_biological_description": physical_chemical_bio,
+                "main_processing_steps": main_processing_steps,
+                "distribution_serving_methods": distribution_serving_methods,
+                "contact_surfaces": contact_surfaces_data,
+                "consumer_groups": consumer_groups,
+                "storage_conditions": storage_conditions,
+                "shelf_life_days": shelf_life_days,
+                "packaging_type": packaging_type,
+                "inherent_hazards": inherent_hazards,
+                "fs_acceptance_criteria": fs_acceptance_criteria,
+                "law_regulation_requirement": law_regulation_requirement,
+                "haccp_plan_approved": to_bool(haccp_plan_approved),
+                "haccp_plan_version": haccp_plan_version,
                 "risk_config": risk_config_data,
                 "created_by": creator_name,
-                "created_at": product.created_at.isoformat() if product.created_at else None,
-                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+                "created_at": serialize_dt(created_at_value),
+                "updated_at": serialize_dt(updated_at_value),
                 "process_flows": [
                     {
                         "id": flow.id,
@@ -369,45 +868,16 @@ async def create_product(
 ):
     """Create a new product"""
     try:
-        # Check if product code already exists
-        existing_product = db.query(Product).filter(
-            Product.product_code == product_data.product_code
-        ).first()
-        
-        if existing_product:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Product code already exists"
-            )
-        
-        product = Product(
-            product_code=product_data.product_code,
-            name=product_data.name,
-            description=product_data.description,
-            composition=product_data.composition,
-            high_risk_ingredients=product_data.high_risk_ingredients,
-            physical_chemical_biological_description=product_data.physical_chemical_biological_description,
-            main_processing_steps=product_data.main_processing_steps,
-            distribution_serving_methods=product_data.distribution_serving_methods,
-            product_contact_surfaces=product_data.product_contact_surfaces,
-            consumer_groups=product_data.consumer_groups,
-            storage_conditions=product_data.storage_conditions,
-            shelf_life_days=product_data.shelf_life_days,
-            packaging_type=product_data.packaging_type,
-            inherent_hazards=product_data.inherent_hazards,
-            fs_acceptance_criteria=product_data.fs_acceptance_criteria,
-            law_regulation_requirement=product_data.law_regulation_requirement,
+        service = HACCPService(db)
+        product = service.create_product(
+            product_data=product_data,
             created_by=current_user.id
         )
-        
-        db.add(product)
-        db.commit()
-        db.refresh(product)
-        
-        # Get creator name
+
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
-        
+        contact_surfaces_data = [serialize_contact_surface(surface) for surface in product.contact_surfaces]
+
         resp = ResponseModel(
             success=True,
             message="Product created successfully",
@@ -416,12 +886,12 @@ async def create_product(
                 "product_code": product.product_code,
                 "name": product.name,
                 "description": product.description,
-                "composition": product.composition,
+                "composition": product.composition or [],
                 "high_risk_ingredients": product.high_risk_ingredients,
                 "physical_chemical_biological_description": product.physical_chemical_biological_description,
                 "main_processing_steps": product.main_processing_steps,
                 "distribution_serving_methods": product.distribution_serving_methods,
-                "product_contact_surfaces": product.product_contact_surfaces,
+                "contact_surfaces": contact_surfaces_data,
                 "consumer_groups": product.consumer_groups,
                 "storage_conditions": product.storage_conditions,
                 "shelf_life_days": product.shelf_life_days,
@@ -441,9 +911,17 @@ async def create_product(
         except Exception:
             pass
         return resp
-        
-    except HTTPException:
-        raise
+
+    except HACCPValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -458,127 +936,19 @@ async def update_product(
     current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
-    """Update an existing product"""
+    """Update a product"""
     try:
-        # Check if product exists
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-        
-        # Update fields
-        if product_data.name is not None:
-            product.name = product_data.name
-        if product_data.description is not None:
-            product.description = product_data.description
-        if product_data.composition is not None:
-            product.composition = product_data.composition
-        if product_data.high_risk_ingredients is not None:
-            product.high_risk_ingredients = product_data.high_risk_ingredients
-        if product_data.physical_chemical_biological_description is not None:
-            product.physical_chemical_biological_description = product_data.physical_chemical_biological_description
-        if product_data.main_processing_steps is not None:
-            product.main_processing_steps = product_data.main_processing_steps
-        if product_data.distribution_serving_methods is not None:
-            product.distribution_serving_methods = product_data.distribution_serving_methods
-        if product_data.product_contact_surfaces is not None:
-            product.product_contact_surfaces = product_data.product_contact_surfaces
-        if product_data.consumer_groups is not None:
-            product.consumer_groups = product_data.consumer_groups
-        if product_data.storage_conditions is not None:
-            product.storage_conditions = product_data.storage_conditions
-        if product_data.shelf_life_days is not None:
-            product.shelf_life_days = product_data.shelf_life_days
-        if product_data.packaging_type is not None:
-            product.packaging_type = product_data.packaging_type
-        if product_data.inherent_hazards is not None:
-            product.inherent_hazards = product_data.inherent_hazards
-        if product_data.fs_acceptance_criteria is not None:
-            product.fs_acceptance_criteria = product_data.fs_acceptance_criteria
-        if product_data.law_regulation_requirement is not None:
-            product.law_regulation_requirement = product_data.law_regulation_requirement
-        if product_data.haccp_plan_approved is not None:
-            product.haccp_plan_approved = product_data.haccp_plan_approved
-        if product_data.haccp_plan_version is not None:
-            product.haccp_plan_version = product_data.haccp_plan_version
-        
-        # Handle optional embedded risk configuration
-        if product_data.risk_config is not None:
-            try:
-                rc = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
-                payload = product_data.risk_config or {}
-                print(f"DEBUG: Processing risk config payload: {payload}")
-                
-                if not rc:
-                    print(f"DEBUG: Creating new risk config for product {product_id}")
-                    rc = ProductRiskConfig(
-                        product_id=product_id,
-                        calculation_method=payload.get("calculation_method", "multiplication"),
-                        likelihood_scale=payload.get("likelihood_scale", 5),
-                        severity_scale=payload.get("severity_scale", 5),
-                        low_threshold=payload.get("risk_thresholds", {}).get("low_threshold", payload.get("low_threshold", 4)),
-                        medium_threshold=payload.get("risk_thresholds", {}).get("medium_threshold", payload.get("medium_threshold", 8)),
-                        high_threshold=payload.get("risk_thresholds", {}).get("high_threshold", payload.get("high_threshold", 15)),
-                        created_by=current_user.id,
-                    )
-                    db.add(rc)
-                    print(f"DEBUG: Added new risk config: {rc}")
-                else:
-                    print(f"DEBUG: Updating existing risk config: {rc.id}")
-                    if "calculation_method" in payload: rc.calculation_method = payload["calculation_method"]
-                    if "likelihood_scale" in payload: rc.likelihood_scale = int(payload["likelihood_scale"])
-                    if "severity_scale" in payload: rc.severity_scale = int(payload["severity_scale"])
-                    if "risk_thresholds" in payload and isinstance(payload["risk_thresholds"], dict):
-                        rt = payload["risk_thresholds"]
-                        if "low_threshold" in rt: rc.low_threshold = int(rt["low_threshold"])
-                        if "medium_threshold" in rt: rc.medium_threshold = int(rt["medium_threshold"])
-                        if "high_threshold" in rt: rc.high_threshold = int(rt["high_threshold"])
-                    else:
-                        if "low_threshold" in payload: rc.low_threshold = int(payload["low_threshold"])
-                        if "medium_threshold" in payload: rc.medium_threshold = int(payload["medium_threshold"])
-                        if "high_threshold" in payload: rc.high_threshold = int(payload["high_threshold"])
-                    print(f"DEBUG: Updated risk config: {rc}")
-            except Exception as e:
-                print(f"DEBUG: Error processing risk config: {e}")
-                import traceback
-                print(f"DEBUG: Traceback: {traceback.format_exc()}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to process risk configuration: {str(e)}"
-                )
-        
-        try:
-            db.commit()
-            db.refresh(product)
-        except Exception as e:
-            print(f"DEBUG: Database commit error: {e}")
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database error: {str(e)}"
-            )
-        
-        # Get creator name
+        service = HACCPService(db)
+        product = service.update_product(
+            product_id=product_id,
+            product_data=product_data,
+            updated_by=current_user.id
+        )
+
         creator = db.query(User).filter(User.id == product.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
-        
-        # Get updated risk configuration for response
-        risk_config = db.query(ProductRiskConfig).filter(ProductRiskConfig.product_id == product_id).first()
-        risk_config_data = None
-        if risk_config:
-            risk_config_data = {
-                "calculation_method": risk_config.calculation_method,
-                "likelihood_scale": risk_config.likelihood_scale,
-                "severity_scale": risk_config.severity_scale,
-                "risk_thresholds": {
-                    "low_threshold": risk_config.low_threshold,
-                    "medium_threshold": risk_config.medium_threshold,
-                    "high_threshold": risk_config.high_threshold,
-                }
-            }
-        
+        contact_surfaces_data = [serialize_contact_surface(surface) for surface in product.contact_surfaces]
+
         resp = ResponseModel(
             success=True,
             message="Product updated successfully",
@@ -587,12 +957,12 @@ async def update_product(
                 "product_code": product.product_code,
                 "name": product.name,
                 "description": product.description,
-                "composition": product.composition,
+                "composition": product.composition or [],
                 "high_risk_ingredients": product.high_risk_ingredients,
                 "physical_chemical_biological_description": product.physical_chemical_biological_description,
                 "main_processing_steps": product.main_processing_steps,
                 "distribution_serving_methods": product.distribution_serving_methods,
-                "product_contact_surfaces": product.product_contact_surfaces,
+                "contact_surfaces": contact_surfaces_data,
                 "consumer_groups": product.consumer_groups,
                 "storage_conditions": product.storage_conditions,
                 "shelf_life_days": product.shelf_life_days,
@@ -602,7 +972,6 @@ async def update_product(
                 "law_regulation_requirement": product.law_regulation_requirement,
                 "haccp_plan_approved": product.haccp_plan_approved,
                 "haccp_plan_version": product.haccp_plan_version,
-                "risk_config": risk_config_data,
                 "created_by": creator_name,
                 "created_at": product.created_at.isoformat() if product.created_at else None,
                 "updated_at": product.updated_at.isoformat() if product.updated_at else None,
@@ -613,10 +982,22 @@ async def update_product(
         except Exception:
             pass
         return resp
-    except HTTPException:
-        raise
+
+    except HACCPValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update product: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update product: {str(e)}"
+        )
 
 
 @router.delete("/products/{product_id}")
@@ -1010,6 +1391,17 @@ async def create_ccp(
                     detail="No hazards found for this product. Please create a hazard first or specify hazard_id."
                 )
         
+        # Validate role segregation: monitoring_responsible and verification_responsible must be different
+        monitoring_responsible = ccp_data.get("monitoring_responsible")
+        verification_responsible = ccp_data.get("verification_responsible")
+        if (monitoring_responsible and verification_responsible and 
+            monitoring_responsible == verification_responsible):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Role segregation violation: The monitoring_responsible and verification_responsible "
+                       "must be different users. This is required for proper HACCP compliance."
+            )
+        
         ccp = CCP(
             product_id=product_id,
             hazard_id=hazard_id,
@@ -1023,12 +1415,12 @@ async def create_ccp(
             critical_limit_description=ccp_data.get("critical_limit_description"),
             monitoring_frequency=ccp_data.get("monitoring_frequency"),
             monitoring_method=ccp_data.get("monitoring_method"),
-            monitoring_responsible=ccp_data.get("monitoring_responsible"),
+            monitoring_responsible=monitoring_responsible,
             monitoring_equipment=ccp_data.get("monitoring_equipment"),
             corrective_actions=ccp_data.get("corrective_actions"),
             verification_frequency=ccp_data.get("verification_frequency"),
             verification_method=ccp_data.get("verification_method"),
-            verification_responsible=ccp_data.get("verification_responsible"),
+            verification_responsible=verification_responsible,
             monitoring_records=ccp_data.get("monitoring_records"),
             verification_records=ccp_data.get("verification_records"),
             created_by=current_user.id
@@ -1071,6 +1463,17 @@ async def update_ccp(
         if not ccp:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CCP not found")
 
+        # Validate role segregation before updating
+        monitoring_responsible = ccp_data.get("monitoring_responsible", ccp.monitoring_responsible)
+        verification_responsible = ccp_data.get("verification_responsible", ccp.verification_responsible)
+        
+        if monitoring_responsible and verification_responsible and monitoring_responsible == verification_responsible:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Role segregation violation: The monitoring_responsible and verification_responsible "
+                       "must be different users. This is required for proper HACCP compliance."
+            )
+        
         for field in [
             "hazard_id",
             "ccp_number",
@@ -1142,70 +1545,47 @@ async def delete_ccp(
 async def create_monitoring_log(
     ccp_id: int,
     log_data: MonitoringLogCreate,
-    current_user: User = Depends(require_permission_dependency("haccp:create")),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(require_haccp_monitoring_dependency),
+    db: Session = Depends(get_db),
+    allow_override: bool = Query(False, description="Allow supervisor override of monitoring_responsible requirement")
 ):
-    """Create a monitoring log for a CCP"""
+    """Create a monitoring log for a CCP
+    
+    Only the designated monitoring_responsible person can create logs unless allow_override=true
+    and the user has supervisor permissions (haccp:update or haccp:admin).
+    """
     try:
-        # Verify CCP exists
-        ccp = db.query(CCP).filter(CCP.id == ccp_id).first()
-        if not ccp:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="CCP not found"
-            )
-        
-        # Check if within limits
-        measured_value = log_data.measured_value
-        is_within_limits = True
-        
-        if ccp.critical_limit_min is not None and measured_value < ccp.critical_limit_min:
-            is_within_limits = False
-        if ccp.critical_limit_max is not None and measured_value > ccp.critical_limit_max:
-            is_within_limits = False
-        
-        # Competency check removed - any user with HACCP access can log monitoring
-
-        # Resolve batch info
-        resolved_batch_number = log_data.batch_number
-        resolved_batch_id = getattr(log_data, "batch_id", None)
-        if resolved_batch_id is not None:
-            from app.models.traceability import Batch
-            batch = db.query(Batch).filter(Batch.id == resolved_batch_id).first()
-            if not batch:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid batch_id")
-            resolved_batch_number = batch.batch_number
-        
-        monitoring_log = CCPMonitoringLog(
+        from app.services.haccp_service import HACCPService
+        service = HACCPService(db)
+        monitoring_log, alert_created, nc_created = service.create_monitoring_log(
             ccp_id=ccp_id,
-            batch_id=resolved_batch_id,
-            batch_number=resolved_batch_number or "",
-            monitoring_time=datetime.utcnow(),
-            measured_value=measured_value,
-            unit=log_data.unit,
-            is_within_limits=is_within_limits,
-            additional_parameters=log_data.additional_parameters,
-            observations=log_data.observations,
-            evidence_files=log_data.evidence_files,
-            corrective_action_taken=bool(getattr(log_data, "corrective_action_taken", False)),
-            corrective_action_description=log_data.corrective_action_description,
-            corrective_action_by=getattr(log_data, "corrective_action_by", None),
-            created_by=current_user.id
+            log_data=log_data,
+            created_by=current_user.id,
+            allow_override=allow_override
         )
         
-        db.add(monitoring_log)
-        db.commit()
-        db.refresh(monitoring_log)
+        response_data = {
+            "id": monitoring_log.id,
+            "timestamp": monitoring_log.monitoring_time.isoformat() if monitoring_log.monitoring_time else None,
+            "is_within_limits": monitoring_log.is_within_limits,
+            "alert_created": alert_created,
+            "nc_created": nc_created
+        }
+        
+        if alert_created:
+            response_data["alert_message"] = "Out-of-spec alert has been generated"
+        if nc_created:
+            response_data["nc_message"] = "Non-Conformance has been automatically created"
         
         resp = ResponseModel(
             success=True,
             message="Monitoring log created successfully",
-            data={"id": monitoring_log.id, "is_within_limits": is_within_limits, "batch_id": monitoring_log.batch_id, "batch_number": monitoring_log.batch_number}
+            data=response_data
         )
         try:
             audit_event(db, current_user.id, "haccp_monitoring_log_created", "haccp", str(monitoring_log.id), {
                 "ccp_id": ccp_id,
-                "is_within_limits": is_within_limits
+                "is_within_limits": monitoring_log.is_within_limits
             })
         except Exception:
             pass
@@ -1213,6 +1593,12 @@ async def create_monitoring_log(
         
     except HTTPException:
         raise
+    except ValueError as e:
+        # Handle validation errors (e.g., unauthorized user, missing responsible person)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1223,7 +1609,7 @@ async def create_monitoring_log(
 @router.get("/ccps/{ccp_id}/monitoring-logs")
 async def get_monitoring_logs(
     ccp_id: int,
-    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
     db: Session = Depends(get_db)
 ):
     """Get monitoring logs for a CCP"""
@@ -1245,10 +1631,15 @@ async def get_monitoring_logs(
             # Get creator name
             creator = db.query(User).filter(User.id == log.created_by).first()
             creator_name = creator.full_name if creator else "Unknown"
+            verifier = log.verifier if hasattr(log, "verifier") else None
+            if verifier is None and log.verified_by:
+                verifier = db.query(User).filter(User.id == log.verified_by).first()
+            verifier_name = verifier.full_name if verifier else None
             
             items.append({
                 "id": log.id,
                 "batch_number": log.batch_number,
+                "batch_id": log.batch_id,
                 "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
                 "measured_value": log.measured_value,
                 "unit": log.unit,
@@ -1260,6 +1651,14 @@ async def get_monitoring_logs(
                 "corrective_action_description": log.corrective_action_description,
                 "created_by": creator_name,
                 "created_at": log.created_at.isoformat() if log.created_at else None,
+                "is_verified": bool(log.is_verified),
+                "verified_by": verifier_name,
+                "verified_at": log.verified_at.isoformat() if log.verified_at else None,
+                "verification_method": log.verification_method,
+                "verification_result": log.verification_result,
+                "verification_is_compliant": log.verification_is_compliant,
+                "verification_notes": log.verification_notes,
+                "verification_evidence_files": log.verification_evidence_files,
             })
         
         return ResponseModel(
@@ -1274,6 +1673,73 @@ async def get_monitoring_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve monitoring logs: {str(e)}"
+        )
+
+
+@router.post("/ccps/{ccp_id}/monitoring-logs/{log_id}/verify")
+async def verify_monitoring_log(
+    ccp_id: int,
+    log_id: int,
+    verification_data: MonitoringLogVerificationUpdate,
+    allow_override: bool = Query(False, description="Allow supervisor override of verification_responsible requirement"),
+    current_user: User = Depends(require_haccp_verification_dependency),
+    db: Session = Depends(get_db)
+):
+    """Verify an existing monitoring log and capture verification details"""
+    try:
+        service = HACCPService(db)
+        verified_log = service.verify_monitoring_log(
+            ccp_id=ccp_id,
+            monitoring_log_id=log_id,
+            verification_data=verification_data,
+            verified_by=current_user.id,
+            allow_override=allow_override
+        )
+        
+        creator = db.query(User).filter(User.id == verified_log.created_by).first()
+        creator_name = creator.full_name if creator else "Unknown"
+        verifier = db.query(User).filter(User.id == verified_log.verified_by).first() if verified_log.verified_by else None
+        verifier_name = verifier.full_name if verifier else None
+        
+        response_payload = {
+            "id": verified_log.id,
+            "batch_number": verified_log.batch_number,
+            "batch_id": verified_log.batch_id,
+            "monitoring_time": verified_log.monitoring_time.isoformat() if verified_log.monitoring_time else None,
+            "measured_value": verified_log.measured_value,
+            "unit": verified_log.unit,
+            "is_within_limits": verified_log.is_within_limits,
+            "additional_parameters": verified_log.additional_parameters,
+            "observations": verified_log.observations,
+            "evidence_files": verified_log.evidence_files,
+            "corrective_action_taken": verified_log.corrective_action_taken,
+            "corrective_action_description": verified_log.corrective_action_description,
+            "created_by": creator_name,
+            "created_at": verified_log.created_at.isoformat() if verified_log.created_at else None,
+            "is_verified": bool(verified_log.is_verified),
+            "verified_by": verifier_name,
+            "verified_at": verified_log.verified_at.isoformat() if verified_log.verified_at else None,
+            "verification_method": verified_log.verification_method,
+            "verification_result": verified_log.verification_result,
+            "verification_is_compliant": verified_log.verification_is_compliant,
+            "verification_notes": verified_log.verification_notes,
+            "verification_evidence_files": verified_log.verification_evidence_files,
+        }
+        
+        return ResponseModel(
+            success=True,
+            message="Monitoring log verified successfully",
+            data=response_payload
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify monitoring log: {str(e)}"
         )
 
 
@@ -1441,7 +1907,7 @@ async def run_decision_tree(
 @router.get("/products/{product_id}/flowchart")
 async def get_flowchart_data(
     product_id: int,
-    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
     db: Session = Depends(get_db)
 ):
     """Get flowchart data for a product"""
@@ -1592,7 +2058,7 @@ async def reject_haccp_plan_step(
 async def create_enhanced_monitoring_log(
     ccp_id: int,
     log_data: dict,  # Change to dict to handle raw data first
-    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    current_user: User = Depends(require_haccp_monitoring_dependency),
     db: Session = Depends(get_db)
 ):
     """Create a monitoring log with automatic alert generation"""
@@ -1648,7 +2114,11 @@ async def create_enhanced_monitoring_log(
         print(f"DEBUG: HACCPService created")
         
         print(f"DEBUG: About to call haccp_service.create_monitoring_log")
-        monitoring_log, alert_created, nc_created = haccp_service.create_monitoring_log(ccp_id, clean_log_data, current_user.id)
+        # Allow override for enhanced endpoint (can be made configurable via query param if needed)
+        allow_override = log_data.get("allow_override", False)
+        monitoring_log, alert_created, nc_created = haccp_service.create_monitoring_log(
+            ccp_id, clean_log_data, current_user.id, allow_override=allow_override
+        )
         print(f"DEBUG: haccp_service.create_monitoring_log completed successfully")
         
         response_data = {
@@ -1694,7 +2164,7 @@ async def create_enhanced_monitoring_log(
 async def upload_monitoring_evidence(
     ccp_id: int,
     file: UploadFile = File(...),
-    current_user: User = Depends(require_permission_dependency("haccp:create")),
+    current_user: User = Depends(require_haccp_monitoring_dependency),
     db: Session = Depends(get_db)
 ):
     """Upload evidence file (photo, document, CSV) for HACCP monitoring logs.
@@ -1732,7 +2202,7 @@ async def upload_monitoring_evidence(
 async def generate_haccp_report(
     product_id: int,
     report_request: HACCPReportRequest,
-    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
     db: Session = Depends(get_db)
 ):
     """Generate HACCP report"""
@@ -3418,24 +3888,59 @@ async def get_verification_logs(
     ccp_id: int,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    current_user: User = Depends(require_haccp_view_dependency(allow_assignment=True)),
     db: Session = Depends(get_db)
 ):
     """Get verification logs for a CCP with pagination"""
     try:
-        logs = db.query(CCPVerificationLog).filter(
-            CCPVerificationLog.ccp_id == ccp_id
+        base_query = db.query(CCPMonitoringLog).filter(
+            CCPMonitoringLog.ccp_id == ccp_id,
+            CCPMonitoringLog.is_verified == True
+        )
+        
+        total = base_query.count()
+        logs = base_query.order_by(
+            desc(CCPMonitoringLog.verified_at),
+            desc(CCPMonitoringLog.monitoring_time)
         ).offset(skip).limit(limit).all()
         
-        total = db.query(CCPVerificationLog).filter(
-            CCPVerificationLog.ccp_id == ccp_id
-        ).count()
+        items = []
+        for log in logs:
+            creator = db.query(User).filter(User.id == log.created_by).first()
+            creator_name = creator.full_name if creator else "Unknown"
+            verifier = db.query(User).filter(User.id == log.verified_by).first() if log.verified_by else None
+            verifier_name = verifier.full_name if verifier else None
+            
+            items.append({
+                "id": log.id,
+                "batch_number": log.batch_number,
+                "batch_id": log.batch_id,
+                "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
+                "measured_value": log.measured_value,
+                "unit": log.unit,
+                "is_within_limits": log.is_within_limits,
+                "additional_parameters": log.additional_parameters,
+                "observations": log.observations,
+                "evidence_files": log.evidence_files,
+                "corrective_action_taken": log.corrective_action_taken,
+                "corrective_action_description": log.corrective_action_description,
+                "created_by": creator_name,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "is_verified": bool(log.is_verified),
+                "verified_by": verifier_name,
+                "verified_at": log.verified_at.isoformat() if log.verified_at else None,
+                "verification_method": log.verification_method,
+                "verification_result": log.verification_result,
+                "verification_is_compliant": log.verification_is_compliant,
+                "verification_notes": log.verification_notes,
+                "verification_evidence_files": log.verification_evidence_files,
+            })
         
         return ResponseModel(
             success=True,
             message="Verification logs retrieved successfully",
             data={
-                "items": logs,
+                "items": items,
                 "total": total,
                 "skip": skip,
                 "limit": limit

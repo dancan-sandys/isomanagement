@@ -78,6 +78,9 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime] = None
     created_at: Optional[datetime] = None # Made optional
     updated_at: Optional[datetime] = None # Made optional
+    has_haccp_assignment: bool = False
+    haccp_assigned_product_ids: Optional[List[int]] = None
+    haccp_assignment_roles: Optional[List[str]] = None
 
     model_config = {"from_attributes": True}
 

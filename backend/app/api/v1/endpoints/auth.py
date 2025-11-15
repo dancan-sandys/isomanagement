@@ -18,6 +18,7 @@ from app.services import log_audit_event
 from app.services.notification_service import NotificationService
 from app.core.config import settings
 from datetime import timedelta as _timedelta
+from app.services.haccp_access import get_user_haccp_assignments
 
 router = APIRouter()
 
@@ -94,6 +95,13 @@ async def login(
     role = db.query(Role).filter(Role.id == user.role_id).first()
     role_name = role.name if role else None
     
+    assignments = get_user_haccp_assignments(db, user.id)
+    assignment_roles = []
+    if assignments["monitoring_ccp_ids"]:
+        assignment_roles.append("monitoring")
+    if assignments["verification_ccp_ids"]:
+        assignment_roles.append("verification")
+
     # Create user response with role name
     user_response = UserResponse(
         id=user.id,
@@ -111,7 +119,10 @@ async def login(
         is_verified=user.is_verified,
         last_login=user.last_login,
         created_at=user.created_at,
-        updated_at=user.updated_at
+        updated_at=user.updated_at,
+        has_haccp_assignment=bool(assignments["product_ids"]),
+        haccp_assigned_product_ids=list(assignments["product_ids"]) if assignments["product_ids"] else None,
+        haccp_assignment_roles=assignment_roles or None,
     )
     
     response = ResponseModel(
@@ -474,6 +485,13 @@ async def get_current_user_info(
     role = db.query(Role).filter(Role.id == current_user.role_id).first()
     role_name = role.name if role else None
     
+    assignments = get_user_haccp_assignments(db, current_user.id)
+    assignment_roles = []
+    if assignments["monitoring_ccp_ids"]:
+        assignment_roles.append("monitoring")
+    if assignments["verification_ccp_ids"]:
+        assignment_roles.append("verification")
+
     # Create user response with role name
     user_response = UserResponse(
         id=current_user.id,
@@ -491,7 +509,10 @@ async def get_current_user_info(
         is_verified=current_user.is_verified,
         last_login=current_user.last_login,
         created_at=current_user.created_at,
-        updated_at=current_user.updated_at
+        updated_at=current_user.updated_at,
+        has_haccp_assignment=bool(assignments["product_ids"]),
+        haccp_assigned_product_ids=list(assignments["product_ids"]) if assignments["product_ids"] else None,
+        haccp_assignment_roles=assignment_roles or None,
     )
     
     return ResponseModel(

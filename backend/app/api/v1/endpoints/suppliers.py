@@ -164,7 +164,7 @@ async def get_materials(
     supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
     approval_status: Optional[str] = Query(None, description="Filter by approval status"),
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Page size"),
+    size: int = Query(20, ge=1, le=500, description="Page size"),
     db: Session = Depends(get_db)
 ):
     """Get materials with filtering and pagination"""

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float, JSON, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -28,6 +28,15 @@ class RiskStrategy(str, enum.Enum):
     ACCEPT = "accept"  # Risk accepted (typically for low risks)
     FURTHER_ANALYSIS = "further_analysis"  # Requires decision tree analysis
     NOT_DETERMINED = "not_determined"  # Not yet determined
+
+
+product_contact_surface_association = Table(
+    "product_contact_surfaces",
+    Base.metadata,
+    Column("product_id", Integer, ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
+    Column("contact_surface_id", Integer, ForeignKey("contact_surfaces.id", ondelete="CASCADE"), primary_key=True),
+    Column("created_at", DateTime(timezone=True), server_default=func.now()),
+)
 
 
 class RiskThreshold(Base):
@@ -98,12 +107,11 @@ class Product(Base):
     product_code = Column(String(50), unique=True, index=True, nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    composition = Column(Text)
-    high_risk_ingredients = Column(Text)
+    composition = Column(JSON)
+    high_risk_ingredients = Column(JSON)
     physical_chemical_biological_description = Column(Text)
     main_processing_steps = Column(Text)
     distribution_serving_methods = Column(Text)
-    product_contact_surfaces = Column(Text)
     consumer_groups = Column(Text)
     storage_conditions = Column(Text)
     shelf_life_days = Column(Integer)
@@ -136,6 +144,11 @@ class Product(Base):
     ccps = relationship("CCP", back_populates="product")
     oprps = relationship("OPRP", back_populates="product")
     risk_config = relationship("ProductRiskConfig", back_populates="product", uselist=False)
+    contact_surfaces = relationship(
+        "ContactSurface",
+        secondary=product_contact_surface_association,
+        back_populates="products",
+    )
     
     def __repr__(self):
         return f"<Product(id={self.id}, product_code='{self.product_code}', name='{self.name}')>"
@@ -501,6 +514,16 @@ class CCPMonitoringLog(Base):
     # Action log integration for HACCP corrective actions
     action_log_id = Column(Integer, ForeignKey("action_logs.id"), nullable=True, index=True)
     
+    # Verification fields populated once a monitoring record has been verified
+    is_verified = Column(Boolean, default=False)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    verification_method = Column(Text, nullable=True)
+    verification_result = Column(Text, nullable=True)
+    verification_is_compliant = Column(Boolean, default=True)
+    verification_notes = Column(Text, nullable=True)
+    verification_evidence_files = Column(Text, nullable=True)
+    
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     log_metadata = Column(JSON)  # Additional metadata like device calibration status, etc.
@@ -511,6 +534,7 @@ class CCPMonitoringLog(Base):
     creator = relationship("User", foreign_keys=[created_by])
     corrective_action_user = relationship("User", foreign_keys=[corrective_action_by])
     equipment = relationship("Equipment")
+    verifier = relationship("User", foreign_keys=[verified_by])
     action_log = relationship("ActionLog", foreign_keys=[action_log_id])
 
     def __repr__(self):
@@ -1086,6 +1110,38 @@ class HACCPAuditLog(Base):
     
     def __repr__(self):
         return f"<HACCPAuditLog(id={self.id}, event_type='{self.event_type}', record_type='{self.record_type}')>"
+
+
+class ContactSurface(Base):
+    __tablename__ = "contact_surfaces"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False, index=True)
+    composition = Column(Text)
+    description = Column(Text)
+    source = Column(String(200))
+    provenance = Column(String(200))
+    point_of_contact = Column(String(200))
+    material = Column(String(200))
+    main_processing_steps = Column(Text)
+    packaging_material = Column(String(200))
+    storage_conditions = Column(String(200))
+    shelf_life = Column(String(100))
+    possible_inherent_hazards = Column(Text)
+    fs_acceptance_criteria = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    products = relationship(
+        "Product",
+        secondary=product_contact_surface_association,
+        back_populates="contact_surfaces",
+    )
+
+    def __repr__(self):
+        return f"<ContactSurface(id={self.id}, name='{self.name}')>"
+
 
 # Backwards-compatibility aliases expected by tests
 HACCPProcessFlow = ProcessFlow
