@@ -1,0 +1,49 @@
+{
+  "name": "yoghurt_mala_workflow",
+  "version": 1,
+  "params": {
+    "ferment_temp_yoghurt_c": 45,
+    "ferment_time_yoghurt_hr": 3,
+    "ferment_temp_mala_c": 30,
+    "ferment_time_mala_hr": 14
+  },
+  "stages": [
+    {"key": "intake", "on_pass": "preheat_50c"},
+    {
+      "key": "preheat_50c",
+      "conditions": [{"key": "reach_50c", "type": "min_value", "metric": "TEMP", "min": 50}],
+      "on_pass": "add_ingredients"
+    },
+    {"key": "add_ingredients", "gates": [{"key": "op_confirm_additions", "type": "operator_gate", "esign": true}], "on_pass": "pasteurize_90c_30m"},
+    {
+      "key": "pasteurize_90c_30m",
+      "conditions": [
+        {"key": "temp_threshold", "type": "min_value", "metric": "TEMP", "min": 90},
+        {"key": "hold_time", "type": "min_hold_minutes", "metric": "HOLD_TIME_MIN", "min": 30}
+      ],
+      "on_pass": "cool_to_ferment_temp"
+    },
+    {"key": "cool_to_ferment_temp", "on_pass": "add_culture"},
+    {
+      "key": "add_culture",
+      "gates": [{"key": "op_culture_added", "type": "operator_gate", "esign": true}],
+      "on_pass": "ferment"
+    },
+    {
+      "key": "ferment",
+      "conditions": [
+        {"key": "target_temp", "type": "range_value", "metric": "TEMP", "min": 28, "max": 46},
+        {"key": "time_elapsed", "type": "min_hold_hours", "metric": "HOLD_TIME_HR", "min_from_param": "ferment_time"}
+      ],
+      "branch": [
+        {"if": {"param": "product_variant", "eq": "YOGHURT"}, "set_param": {"ferment_temp": "ferment_temp_yoghurt_c", "ferment_time": "ferment_time_yoghurt_hr"}},
+        {"if": {"param": "product_variant", "eq": "MALA"}, "set_param": {"ferment_temp": "ferment_temp_mala_c", "ferment_time": "ferment_time_mala_hr"}}
+      ],
+      "on_pass": "cool_4c_pack"
+    },
+    {"key": "cool_4c_pack", "conditions": [{"key": "cool_to_4c", "type": "max_value", "metric": "TEMP", "max": 4}], "on_pass": "cold_room"},
+    {"key": "cold_room", "conditions": [{"key": "record_cold_room_qty", "type": "capture_metric", "metric": "VOLUME_OUT_KG"}], "on_pass": "complete"},
+    {"key": "complete"}
+  ]
+}
+

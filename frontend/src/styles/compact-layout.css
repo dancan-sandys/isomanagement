@@ -1,0 +1,228 @@
+/* Compact Layout Styles - Reduces overall UI element sizes for better space utilization */
+
+/* Global spacing reductions */
+.MuiContainer-root {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.MuiGrid-container {
+  margin: 0 !important;
+}
+
+.MuiCard-root {
+  margin-bottom: 4px !important;
+}
+
+/* Reduced padding for main content areas */
+.MuiBox-root[role="main"] {
+  padding: 16px !important;
+}
+
+/* Compact navigation items */
+.MuiListItemButton-root {
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+}
+
+.MuiListItemIcon-root {
+  min-width: 32px !important;
+  font-size: 1.125rem !important;
+}
+
+.MuiListItemText-root .MuiTypography-root {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+/* Compact buttons */
+.MuiButton-root {
+  padding: 8px 16px !important;
+  min-height: 36px !important;
+  font-size: 0.8125rem !important;
+}
+
+.MuiButton-root .MuiSvgIcon-root {
+  font-size: 1.125rem !important;
+}
+
+/* Compact form elements */
+.MuiTextField-root {
+  margin-bottom: 8px !important;
+}
+
+.MuiOutlinedInput-root {
+  padding: 8px 12px !important;
+}
+
+/* Compact cards */
+.MuiCardContent-root {
+  padding: 16px !important;
+}
+
+.MuiCardActions-root {
+  padding: 12px !important;
+}
+
+/* Compact tables */
+.MuiTableCell-root {
+  padding: 12px 16px !important;
+}
+
+.MuiTableHead-root .MuiTableCell-root {
+  font-size: 0.8125rem !important;
+}
+
+/* Compact chips */
+.MuiChip-root {
+  padding: 4px 12px !important;
+  font-size: 0.6875rem !important;
+  border-radius: 16px !important;
+}
+
+/* Compact app bar */
+.MuiAppBar-root {
+  min-height: 56px !important;
+}
+
+.MuiToolbar-root {
+  min-height: 56px !important;
+  padding: 0 16px !important;
+}
+
+/* Compact icons */
+.MuiIconButton-root {
+  padding: 6px !important;
+}
+
+.MuiIconButton-root .MuiSvgIcon-root {
+  font-size: 1.25rem !important;
+}
+
+/* Compact dialogs */
+.MuiDialog-paper {
+  border-radius: 8px !important;
+}
+
+.MuiDialogTitle-root {
+  padding: 16px 24px 8px 24px !important;
+}
+
+.MuiDialogContent-root {
+  padding: 16px 24px !important;
+}
+
+.MuiDialogActions-root {
+  padding: 8px 24px 16px 24px !important;
+}
+
+/* Compact menus */
+.MuiMenu-paper {
+  border-radius: 8px !important;
+  margin-top: 4px !important;
+}
+
+.MuiMenuItem-root {
+  min-height: 36px !important;
+  padding: 8px 16px !important;
+  font-size: 0.875rem !important;
+}
+
+/* Compact tabs */
+.MuiTab-root {
+  min-height: 40px !important;
+  padding: 8px 16px !important;
+  font-size: 0.875rem !important;
+}
+
+/* Compact tooltips */
+.MuiTooltip-tooltip {
+  font-size: 0.75rem !important;
+  padding: 4px 8px !important;
+}
+
+/* Compact alerts */
+.MuiAlert-root {
+  padding: 8px 12px !important;
+  font-size: 0.875rem !important;
+}
+
+/* Compact progress bars */
+.MuiLinearProgress-root {
+  height: 6px !important;
+  border-radius: 3px !important;
+}
+
+/* Compact dividers */
+.MuiDivider-root {
+  margin: 8px 0 !important;
+}
+
+/* Compact spacing for common components */
+.MuiStack-root {
+  gap: 8px !important;
+}
+
+.MuiBox-root[class*="MuiBox-root"] {
+  gap: 8px !important;
+}
+
+/* Compact drawer */
+.MuiDrawer-paper {
+  width: 240px !important;
+}
+
+/* Compact navigation sections */
+.navigation-section {
+  margin-bottom: 8px !important;
+}
+
+.navigation-section-title {
+  padding: 8px 16px 4px 16px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+}
+
+/* Compact dashboard cards */
+.dashboard-card {
+  padding: 16px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Compact data tables */
+.data-table-container {
+  margin-top: 8px !important;
+}
+
+/* Compact form sections */
+.form-section {
+  margin-bottom: 16px !important;
+}
+
+/* Compact action buttons */
+.action-buttons {
+  gap: 8px !important;
+  margin-top: 8px !important;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 600px) {
+  .MuiContainer-root {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+  
+  .MuiBox-root[role="main"] {
+    padding: 12px !important;
+  }
+  
+  .MuiCardContent-root {
+    padding: 12px !important;
+  }
+  
+  .MuiButton-root {
+    padding: 6px 12px !important;
+    min-height: 32px !important;
+  }
+}
+

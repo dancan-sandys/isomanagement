@@ -1,0 +1,105 @@
+from typing import List, Optional
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
+import os
+
+
+class Settings(BaseSettings):
+    # Database Configuration
+    DATABASE_URL: str = "sqlite:///./iso22000_fsms.db"  # Default to SQLite for development
+    DATABASE_TYPE: str = "sqlite"  # sqlite or postgresql
+    
+    # Security Configuration
+    SECRET_KEY: str = "your-super-secret-key-change-this-in-production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Password policy & lockout
+    PASSWORD_MIN_LENGTH: int = 8
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_NUMBER: bool = True
+    PASSWORD_REQUIRE_SPECIAL: bool = True
+    PASSWORD_MAX_AGE_DAYS: int = 180
+    ACCOUNT_LOCKOUT_THRESHOLD: int = 5
+    ACCOUNT_LOCKOUT_WINDOW_MINUTES: int = 15
+    ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
+    
+    # Application Configuration
+    APP_NAME: str = "ISO 22000 FSMS"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = True
+    ENVIRONMENT: str = "development"
+    
+    # CORS Configuration
+    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_CREDENTIALS: bool = False
+    
+    # File Storage Configuration (AWS S3)
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_BUCKET_NAME: str = "iso22000-fsms-files"
+    AWS_REGION: str = "us-east-1"
+    AWS_ENDPOINT_URL: Optional[str] = None
+    
+    # Email Configuration
+    EMAIL_ENABLED: bool = False  # Set to True to enable email notifications
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    FROM_EMAIL: str = "noreply@iso-system.com"
+    FROM_NAME: str = "ISO Management System"
+    
+    # Legacy email settings (for backward compatibility)
+    SMTP_USER: Optional[str] = None
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
+    
+    # File Upload Configuration
+    MAX_FILE_SIZE: int = 10485760  # 10MB in bytes
+    ALLOWED_FILE_TYPES: str = "pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,gif"
+    
+    # Notification Configuration
+    ENABLE_EMAIL_NOTIFICATIONS: bool = True
+    ENABLE_SMS_NOTIFICATIONS: bool = False
+    
+    # Logging Configuration
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"
+    
+    # Backup Configuration
+    BACKUP_ENABLED: bool = True
+    BACKUP_RETENTION_DAYS: int = 30
+    
+    # API Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = 100
+    
+    # Feature Flags
+    FEATURE_DEPARTMENTS_ENABLED: bool = True
+    FEATURE_DEPT_SCOPED_RBAC: bool = True
+    
+    @field_validator("ALLOWED_FILE_TYPES")
+    @classmethod
+    def parse_allowed_file_types(cls, v):
+        return [file_type.strip() for file_type in v.split(",")]
+    
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def set_database_url(cls, v, info):
+        """Set database URL based on environment"""
+        if info.data and info.data.get("ENVIRONMENT") == "production":
+            # Use PostgreSQL in production
+            return v or "postgresql://user:password@localhost/iso22000_fsms"
+        else:
+            # Use SQLite in development
+            return v or "sqlite:///./iso22000_fsms.db"
+    
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True
+    }
+
+
+# Create settings instance
+settings = Settings() 

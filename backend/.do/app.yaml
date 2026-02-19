@@ -1,0 +1,90 @@
+name: isomanagement-backend
+region: nyc
+services:
+  # Backend API Service
+  - name: backend
+    github:
+      repo: dancan-sandys/isomanagement
+      branch: master
+      source_dir: /backend
+    build_command: pip install -r requirements.txt
+    run_command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 120
+      period_seconds: 60
+      timeout_seconds: 30
+      failure_threshold: 5
+      success_threshold: 1
+    envs:
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        type: SECRET
+      - key: DATABASE_TYPE
+        value: postgresql
+      - key: SECRET_KEY
+        value: ${SECRET_KEY}
+        type: SECRET
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: APP_NAME
+        value: "ISO 22000 FSMS"
+      - key: APP_VERSION
+        value: "1.0.0"
+      - key: DEBUG
+        value: "False"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: ALLOWED_ORIGINS
+        value: '["*"]'
+      - key: ALLOWED_CREDENTIALS
+        value: "True"
+      - key: MAX_FILE_SIZE
+        value: "10485760"
+      - key: ALLOWED_FILE_TYPES
+        value: "pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,gif"
+      - key: ENABLE_EMAIL_NOTIFICATIONS
+        value: "False"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: isocreatesoftwares@gmail.com
+      - key: SMTP_PASSWORD
+        value: olmq engf ouun ionj
+      - key: SMTP_TLS
+        value: "True"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: LOG_FORMAT
+        value: "json"
+      - key: BACKUP_ENABLED
+        value: "False"
+      - key: BACKUP_RETENTION_DAYS
+        value: "30"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "100"
+
+databases:
+  # PostgreSQL Database
+  - name: db
+    engine: PG
+    version: "15"
+    production: true
+    cluster_name: iso22000-fsms-db
+    db_name: iso22000_fsms
+    db_user: iso22000_user
+
+# Environment Variables (global)
+envs:
+  - key: SECRET_KEY
+    value: your-super-secret-key-change-this-in-production-123456789
+    type: SECRET

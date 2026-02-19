@@ -1,0 +1,1768 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import Form
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_
+from typing import List, Optional, Dict, Any
+import os
+import shutil
+from datetime import datetime
+
+from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
+from app.services.supplier_service import SupplierService
+from app.models.supplier import Supplier, Material, SupplierEvaluation, EvaluationStatus, SupplierStatus
+from app.schemas.supplier import (
+    SupplierCreate, SupplierUpdate, SupplierResponse, SupplierListResponse,
+    MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
+    SupplierEvaluationCreate, SupplierEvaluationUpdate, SupplierEvaluationResponse, EvaluationListResponse,
+    IncomingDeliveryCreate, IncomingDeliveryUpdate, IncomingDeliveryResponse, DeliveryListResponse,
+    SupplierDocumentCreate, SupplierDocumentUpdate, SupplierDocumentResponse, DocumentListResponse,
+    SupplierFilter, MaterialFilter, EvaluationFilter, DeliveryFilter,
+    BulkSupplierAction, BulkMaterialAction, SupplierDashboardStats,
+    InspectionChecklistResponse, InspectionChecklistCreate, InspectionChecklistUpdate,
+    InspectionChecklistItemResponse, InspectionChecklistItemCreate, InspectionChecklistItemUpdate
+)
+from app.schemas.common import ResponseModel
+from app.utils.audit import audit_event
+
+# Payload classes for API endpoints
+class InspectPayload(BaseModel):
+    status: str
+    comments: Optional[str] = None
+
+
+class RejectMaterialPayload(BaseModel):
+    rejection_reason: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class BulkApproveMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    comments: Optional[str] = None
+
+
+class BulkRejectMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    rejection_reason: str
+
+
+router = APIRouter()
+
+# Material endpoints - specific routes MUST come before parameterized routes
+@router.get("/materials/stats", response_model=ResponseModel[dict])
+async def get_material_stats(
+    db: Session = Depends(get_db)
+):
+    """Get material statistics"""
+    service = SupplierService(db)
+    stats = service.get_material_stats()
+    
+    return ResponseModel(
+        success=True,
+        message="Material statistics retrieved successfully",
+        data=stats
+    )
+
+
+@router.get("/materials/export", response_model=ResponseModel[dict])
+async def export_materials(
+    format: str = Query("excel", description="Export format (excel, csv)"),
+    search: Optional[str] = Query(None, description="Search by name or code"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
+    db: Session = Depends(get_db)
+):
+    """Export materials to file"""
+    filter_params = MaterialFilter(
+        search=search,
+        category=category,
+        supplier_id=supplier_id,
+        approval_status=approval_status,
+        page=1,
+        size=10000  # Large size for export
+    )
+    
+    service = SupplierService(db)
+    result = service.get_materials(filter_params)
+    
+    # Generate export file (simplified for now)
+    export_data = {
+        "export_format": format,
+        "generated_at": datetime.now().isoformat(),
+        "record_count": result["total"],
+        "download_url": f"/api/v1/suppliers/materials/export/download?format={format}"
+    }
+    
+    return ResponseModel(
+        success=True,
+        message=f"Materials exported to {format} format",
+        data=export_data
+    )
+
+
+@router.get("/materials/search", response_model=ResponseModel[dict])
+async def search_materials(
+    q: str = Query(..., description="Search query"),
+    limit: int = Query(10, ge=1, le=50, description="Number of results"),
+    db: Session = Depends(get_db)
+):
+    """Search materials by name, code, or description"""
+    service = SupplierService(db)
+    results = service.search_materials(q, limit)
+    
+    return ResponseModel(
+        success=True,
+        message="Search completed successfully",
+        data={
+            "query": q,
+            "results": results,
+            "count": len(results)
+        }
+    )
+
+
+@router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
+async def bulk_approve_materials(
+    payload: BulkApproveMaterialsPayload,
+    db: Session = Depends(get_db)
+):
+    """Bulk approve materials"""
+    service = SupplierService(db)
+    results = service.bulk_approve_materials(payload.material_ids, 1)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk approval completed for {len(payload.material_ids)} materials",
+        data=results
+    )
+
+
+@router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
+async def bulk_reject_materials(
+    payload: BulkRejectMaterialsPayload,
+    db: Session = Depends(get_db)
+):
+    """Bulk reject materials"""
+    service = SupplierService(db)
+    results = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, 1)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk rejection completed for {len(payload.material_ids)} materials",
+        data=results
+    )
+
+
+@router.get("/materials/", response_model=ResponseModel)
+@router.get("/materials", response_model=ResponseModel)
+async def get_materials(
+    search: Optional[str] = Query(None, description="Search by name or code"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    approval_status: Optional[str] = Query(None, description="Filter by approval status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=500, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get materials with filtering and pagination"""
+    filter_params = MaterialFilter(
+        search=search,
+        category=category,
+        supplier_id=supplier_id,
+        approval_status=approval_status,
+        page=page,
+        size=size
+    )
+    
+    service = SupplierService(db)
+    result = service.get_materials(filter_params)
+    
+    response_data = MaterialListResponse(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        size=result["size"],
+        pages=result["pages"]
+    )
+
+    return ResponseModel(
+        success=True,
+        message="Materials retrieved successfully",
+        data=response_data
+    )
+
+
+@router.get("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
+async def get_material(
+    material_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get material by ID"""
+    service = SupplierService(db)
+    material = service.get_material(material_id)
+    
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Material retrieved successfully",
+        data=material
+    )
+
+
+@router.post("/materials/", response_model=ResponseModel[MaterialResponse])
+@router.post("/materials", response_model=ResponseModel[MaterialResponse])
+async def create_material(
+    material_data: MaterialCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new material"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Log the incoming request data for debugging
+    try:
+        logger.info(f"Creating material request received: supplier_id={material_data.supplier_id}, material_code={material_data.material_code}, name={material_data.name}")
+    except Exception as log_err:
+        logger.warning(f"Could not log request data: {str(log_err)}")
+    
+    try:
+        service = SupplierService(db)
+        
+        # Validate supplier exists
+        # First, try a simple existence check to avoid JSON deserialization issues
+        supplier_exists = False
+        try:
+            from sqlalchemy import text
+            result = service.db.execute(
+                text("SELECT id FROM suppliers WHERE id = :supplier_id"),
+                {"supplier_id": material_data.supplier_id}
+            ).first()
+            supplier_exists = result is not None
+        except Exception as simple_check_error:
+            logger.warning(f"Simple supplier existence check failed: {str(simple_check_error)}")
+        
+        # If simple check passed, try to load the full supplier object
+        supplier = None
+        if supplier_exists:
+            try:
+                supplier = service.db.query(Supplier).filter(Supplier.id == material_data.supplier_id).first()
+            except LookupError as enum_error:
+                # Handle enum mismatch errors (e.g., supplier category not in enum)
+                logger.error(f"Enum mismatch error when querying supplier: {str(enum_error)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database data inconsistency: {str(enum_error)}. Please contact system administrator."
+                )
+            except Exception as query_error:
+                # Handle JSON decode errors and other database query errors
+                error_type = type(query_error).__name__
+                error_msg = str(query_error)
+                
+                # Check if it's a JSON decode error
+                if "JSONDecodeError" in error_type or "json" in error_msg.lower() or "Extra data" in error_msg:
+                    logger.error(f"Malformed JSON data in supplier record (ID: {material_data.supplier_id}): {error_msg}")
+                    # Even though JSON is malformed, supplier exists, so we can proceed
+                    # But log a warning and continue with material creation
+                    logger.warning(f"Supplier ID {material_data.supplier_id} exists but has malformed JSON. Proceeding with material creation.")
+                    supplier = None  # Set to None so we skip the full object check
+                else:
+                    # Re-raise other errors
+                    logger.error(f"Unexpected error querying supplier: {error_type}: {error_msg}", exc_info=True)
+                    raise
+        
+        if not supplier_exists:
+            error_msg = f"Supplier with ID {material_data.supplier_id} does not exist"
+            logger.warning(f"Material creation failed: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        # Note: If supplier object couldn't be loaded due to JSON issues, we still proceed
+        # because we verified the supplier exists via the simple query.
+        # The material creation doesn't require the full supplier object, just the ID.
+        
+        # Check if material code already exists (globally unique constraint)
+        try:
+            existing_material = service.db.query(Material).filter(
+                Material.material_code == material_data.material_code
+            ).first()
+        except Exception as query_error:
+            logger.error(f"Error querying for existing material: {type(query_error).__name__}: {str(query_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error while checking material code: {str(query_error)}"
+            )
+        
+        if existing_material:
+            error_msg = f"Material code '{material_data.material_code}' already exists. Material codes must be globally unique. (Existing material ID: {existing_material.id}, Supplier ID: {existing_material.supplier_id})"
+            logger.warning(f"Material creation failed: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        logger.info(f"Creating material: code={material_data.material_code}, name={material_data.name}, supplier_id={material_data.supplier_id}")
+        try:
+            material = service.create_material(material_data, current_user.id)
+            logger.info(f"Material created successfully with ID: {material.id}")
+        except Exception as create_error:
+            logger.error(f"Error in create_material service: {type(create_error).__name__}: {str(create_error)}", exc_info=True)
+            raise
+        
+        # Ensure material has all required fields for response
+        if not hasattr(material, 'approval_status') or material.approval_status is None:
+            material.approval_status = "pending"
+        if not hasattr(material, 'is_active'):
+            material.is_active = True
+        
+        try:
+            audit_event(db, current_user.id, "material_created", "suppliers", str(material.id), {"supplier_id": material_data.supplier_id})
+        except Exception as audit_err:
+            logger.warning(f"Audit event failed (non-critical): {str(audit_err)}")
+        
+        # Test if material can be converted to MaterialResponse (for debugging)
+        try:
+            from app.schemas.supplier import MaterialResponse
+            # Try to validate conversion - use model_validate for Pydantic v2 or from_orm for v1
+            try:
+                test_response = MaterialResponse.model_validate(material)
+            except AttributeError:
+                # Fallback to from_orm for Pydantic v1
+                test_response = MaterialResponse.from_orm(material)
+            logger.debug(f"MaterialResponse conversion successful for material ID: {material.id}")
+        except Exception as conversion_error:
+            logger.error(f"MaterialResponse conversion failed: {type(conversion_error).__name__}: {str(conversion_error)}", exc_info=True)
+            # Don't fail the request, but log the error - FastAPI will handle the conversion
+        
+        return ResponseModel(
+            success=True,
+            message="Material created successfully",
+            data=material
+        )
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions as-is (they already have proper status codes)
+        logger.warning(f"HTTPException raised: {http_exc.status_code} - {http_exc.detail}")
+        raise
+    except ValueError as e:
+        db.rollback()
+        error_msg = f"Validation error: {str(e)}"
+        logger.error(f"Validation error creating material: {error_msg}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg
+        )
+    except Exception as e:
+        db.rollback()
+        import traceback
+        logger.error(f"Unexpected error creating material: {type(e).__name__}: {str(e)}", exc_info=True)
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create material: {type(e).__name__}: {str(e)}"
+        )
+
+
+@router.put("/materials/{material_id}", response_model=ResponseModel[MaterialResponse])
+async def update_material(
+    material_id: int,
+    material_data: MaterialUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update material"""
+    service = SupplierService(db)
+    material = service.update_material(material_id, material_data)
+    
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    try:
+        audit_event(db, 1, "material_updated", "suppliers", str(material.id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material updated successfully",
+        data=material
+    )
+
+
+@router.delete("/materials/{material_id}", response_model=ResponseModel[dict])
+async def delete_material(
+    material_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete material"""
+    service = SupplierService(db)
+    success = service.delete_material(material_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+    
+    try:
+        audit_event(db, 1, "material_deleted", "suppliers", str(material_id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material deleted successfully",
+        data={"id": material_id}
+    )
+
+
+@router.post("/materials/{material_id}/approve", response_model=ResponseModel[MaterialResponse])
+async def approve_material(
+    material_id: int,
+    db: Session = Depends(get_db)
+):
+    """Approve material"""
+    service = SupplierService(db)
+    material = service.approve_material(material_id, 1)
+
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+
+    try:
+        audit_event(db, 1, "material_approved", "suppliers", str(material_id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material approved successfully",
+        data=material
+    )
+
+
+@router.post("/materials/{material_id}/reject", response_model=ResponseModel[MaterialResponse])
+async def reject_material(
+    material_id: int,
+    payload: RejectMaterialPayload,
+    db: Session = Depends(get_db)
+):
+    """Reject material"""
+    service = SupplierService(db)
+    reason = payload.rejection_reason or payload.reason or ""
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="rejection_reason is required")
+    material = service.reject_material(material_id, reason, 1)
+
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
+
+    try:
+        audit_event(db, 1, "material_rejected", "suppliers", str(material_id), {"reason": reason})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Material rejected successfully",
+        data=material
+    )
+
+
+@router.post("/materials/bulk/approve", response_model=ResponseModel[dict])
+async def bulk_approve_materials(
+    payload: BulkApproveMaterialsPayload,
+    db: Session = Depends(get_db)
+):
+    """Bulk approve materials"""
+    service = SupplierService(db)
+    approved_count = service.bulk_approve_materials(payload.material_ids, 1)
+
+    try:
+        audit_event(db, 1, "materials_bulk_approved", "suppliers", str(payload.material_ids), {"count": approved_count})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message=f"{approved_count} materials approved successfully",
+        data={"approved_count": approved_count, "total_requested": len(payload.material_ids)}
+    )
+
+
+@router.post("/materials/bulk/reject", response_model=ResponseModel[dict])
+async def bulk_reject_materials(
+    payload: BulkRejectMaterialsPayload,
+    db: Session = Depends(get_db)
+):
+    """Bulk reject materials"""
+    service = SupplierService(db)
+    rejected_count = service.bulk_reject_materials(payload.material_ids, payload.rejection_reason, 1)
+
+    try:
+        audit_event(db, 1, "materials_bulk_rejected", "suppliers", str(payload.material_ids), {"reason": payload.rejection_reason, "count": rejected_count})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message=f"{rejected_count} materials rejected successfully",
+        data={"rejected_count": rejected_count, "total_requested": len(payload.material_ids), "reason": payload.rejection_reason}
+    )
+
+
+
+
+
+
+
+
+
+
+@router.get("/search", response_model=ResponseModel[dict])
+async def search_suppliers(
+    query: str = Query(..., description="Search by name, code or contact"),
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db)
+):
+    q = f"%{query}%"
+    rows = (
+        db.query(Supplier.id, Supplier.name, Supplier.supplier_code, Supplier.contact_person)
+        .filter(or_(Supplier.name.ilike(q), Supplier.supplier_code.ilike(q), Supplier.contact_person.ilike(q)))
+        .order_by(Supplier.name.asc())
+        .limit(limit)
+        .all()
+    )
+    items = [
+        {"id": r.id, "name": r.name, "supplier_code": r.supplier_code, "contact_person": r.contact_person}
+        for r in rows
+    ]
+    return ResponseModel(success=True, message="Suppliers search completed successfully", data={"items": items})
+
+# Analytics endpoints (must come before path parameter endpoints)
+@router.get("/analytics/performance", response_model=ResponseModel[dict])
+async def get_performance_analytics(
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
+    db: Session = Depends(get_db)
+):
+    """Get performance analytics"""
+    # Reuse the later implementation but wrap in ResponseModel for consistency
+    q = db.query(SupplierEvaluation)
+    if supplier_id:
+        q = q.filter(SupplierEvaluation.supplier_id == supplier_id)
+    if date_from:
+        q = q.filter(SupplierEvaluation.evaluation_date >= date_from)
+    if date_to:
+        q = q.filter(SupplierEvaluation.evaluation_date <= date_to)
+
+    evals = q.all()
+    from collections import defaultdict
+    bucket: Dict[str, List[float]] = defaultdict(list)
+    for e in evals:
+        try:
+            d = e.evaluation_date.date().isoformat()
+        except Exception:
+            continue
+        bucket[d].append(e.overall_score or 0.0)
+    trends = [
+        {"date": d, "average_score": round(sum(scores) / max(1, len(scores)), 2)}
+        for d, scores in sorted(bucket.items())
+    ]
+    cat_rows = db.query(Supplier.category, func.avg(Supplier.overall_score)).group_by(Supplier.category).all()
+    category_performance = [
+        {"category": (cat.value if hasattr(cat, 'value') else str(cat) or 'unknown'), "average_score": float(avg or 0.0)}
+        for cat, avg in cat_rows
+    ]
+    risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
+    risk_distribution = [
+        {"risk_level": str(risk or 'unknown'), "count": int(count)} for risk, count in risk_rows
+    ]
+    data = {"trends": trends, "category_performance": category_performance, "risk_distribution": risk_distribution}
+    return ResponseModel(success=True, message="Performance analytics retrieved successfully", data=data)
+
+@router.get("/analytics/risk-assessment", response_model=ResponseModel[dict])
+async def get_risk_assessment(
+    db: Session = Depends(get_db)
+):
+    risk_rows = db.query(Supplier.risk_level, func.count(Supplier.id)).group_by(Supplier.risk_level).all()
+    total = sum(int(c) for _, c in risk_rows) or 1
+    risk_matrix = [
+        {"risk_level": str(r or 'unknown'), "count": int(c), "percentage": round(100.0 * int(c) / total, 2)}
+        for r, c in risk_rows
+    ]
+    high_risk = db.query(Supplier).filter(Supplier.risk_level == "high").limit(10).all()
+    from collections import Counter
+    cnt = Counter()
+    for s in db.query(Supplier).filter(Supplier.risk_level == "high").all():
+        try:
+            key = s.created_at.strftime('%Y-%m')
+            cnt[key] += 1
+        except Exception:
+            continue
+    risk_trends = [{"date": k, "high_risk_count": v} for k, v in sorted(cnt.items())]
+    data = {
+        "risk_matrix": risk_matrix,
+        "high_risk_suppliers": [
+            {"id": s.id, "name": s.name, "risk_level": s.risk_level} for s in high_risk
+        ],
+        "risk_trends": risk_trends,
+    }
+    return ResponseModel(success=True, message="Risk assessment retrieved successfully", data=data)
+
+# Alerts endpoints (must come before path parameter endpoints)
+@router.get("/alerts", response_model=ResponseModel[dict])
+async def get_alerts(
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    type: Optional[str] = Query(None, description="Filter by alert type"),
+    resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get alerts with filtering and pagination"""
+    service = SupplierService(db)
+    delivery_alerts = service.get_noncompliant_delivery_alerts()
+    overdue = service.get_overdue_evaluations()
+
+    items: List[Dict[str, Any]] = []
+    for a in delivery_alerts:
+        created_at = a.get("alert_date") or datetime.utcnow()
+        title = (f"Noncompliant delivery {a.get('delivery_number', '')}").strip() or "Noncompliant delivery"
+        description = f"{a.get('supplier_name', '')} - {a.get('material_name', '')} ({a.get('inspection_status', 'n/a')})"
+        items.append({
+            "id": f"delivery-{a.get('delivery_id')}",
+            "type": "quality_alert",
+            "severity": "high" if a.get("days_since_delivery", 0) > 7 else "medium",
+            "title": title,
+            "description": description,
+            "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
+            "resolved": False,
+        })
+    for o in overdue:
+        created_at = o.get("next_evaluation_date") or datetime.utcnow()
+        title = (f"Overdue evaluation: {o.get('supplier_name', '')}").strip() or "Overdue evaluation"
+        description = f"Due {o.get('next_evaluation_date')}"
+        items.append({
+            "id": f"overdue-{o.get('supplier_id')}",
+            "type": "overdue_evaluation",
+            "severity": "medium",
+            "title": title,
+            "description": description,
+            "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
+            "resolved": False,
+        })
+
+    if severity:
+        items = [i for i in items if i.get("severity") == severity]
+    if type:
+        items = [i for i in items if i.get("type") == type]
+    if resolved is not None:
+        items = [i for i in items if i.get("resolved") == resolved]
+
+    total = len(items)
+    start = (page - 1) * size
+    end = start + size
+    data = {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": (total + size - 1) // size,
+    }
+    return ResponseModel(success=True, message="Alerts retrieved successfully", data=data)
+
+@router.post("/alerts/{alert_id}/resolve", response_model=ResponseModel[dict])
+async def resolve_alert(
+    alert_id: int,
+    db: Session = Depends(get_db)
+):
+    """Resolve an alert"""
+    # Mock resolution for now
+    return ResponseModel(
+        success=True,
+        message="Alert resolved successfully",
+        data={"message": "Alert resolved successfully"}
+    )
+
+# Statistics endpoints (must come before path parameter endpoints)
+@router.get("/stats", response_model=ResponseModel[dict])
+async def get_supplier_stats(
+    db: Session = Depends(get_db)
+):
+    """Get supplier statistics"""
+    service = SupplierService(db)
+    dash = service.get_dashboard_stats()
+    data = {
+        "total_suppliers": dash.get("total_suppliers", 0),
+        "active_suppliers": dash.get("active_suppliers", 0),
+        "pending_approval": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.PENDING_APPROVAL).count()),
+        "suspended_suppliers": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.SUSPENDED).count()),
+        "blacklisted_suppliers": int(db.query(Supplier).filter(Supplier.status == SupplierStatus.BLACKLISTED).count()),
+        "overdue_evaluations": dash.get("overdue_evaluations", 0),
+        "upcoming_evaluations": 0,
+        "recent_deliveries": len(dash.get("recent_deliveries", [])),
+        "quality_alerts": len(service.get_noncompliant_delivery_alerts()),
+    }
+    return ResponseModel(success=True, message="Supplier statistics retrieved successfully", data=data)
+
+
+
+@router.get("/evaluations/stats", response_model=Dict[str, Any])
+async def get_evaluation_stats(
+    db: Session = Depends(get_db)
+):
+    total = int(db.query(SupplierEvaluation).count())
+    completed = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.COMPLETED).count())
+    in_progress = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.IN_PROGRESS).count())
+    scheduled = int(db.query(SupplierEvaluation).filter(SupplierEvaluation.status == EvaluationStatus.PENDING).count())
+    overdue = int(db.query(Supplier).filter(and_(Supplier.next_evaluation_date < datetime.now(), Supplier.next_evaluation_date.isnot(None))).count())
+    avg = float(db.query(func.avg(SupplierEvaluation.overall_score)).scalar() or 0.0)
+
+    # Monthly histogram in Python
+    from collections import Counter
+    rows = db.query(SupplierEvaluation).all()
+    c = Counter()
+    for ev in rows:
+        try:
+            key = ev.evaluation_date.strftime('%Y-%m')
+            c[key] += 1
+        except Exception:
+            continue
+    by_month = [{"month": k, "count": v, "average_score": avg} for k, v in sorted(c.items())]
+
+    return {
+        "total_evaluations": total,
+        "completed_evaluations": completed,
+        "in_progress_evaluations": in_progress,
+        "scheduled_evaluations": scheduled,
+        "overdue_evaluations": overdue,
+        "average_score": avg,
+        "evaluations_by_month": by_month,
+    }
+
+# Dashboard endpoints (must come before path parameter endpoints)
+@router.get("/dashboard/stats", response_model=ResponseModel)
+async def get_dashboard_stats(
+    db: Session = Depends(get_db)
+):
+    """Get supplier dashboard statistics"""
+    service = SupplierService(db)
+    stats = service.get_dashboard_stats()
+    
+    return ResponseModel(
+        success=True,
+        message="Dashboard stats retrieved successfully",
+        data=stats
+    )
+
+
+# Supplier endpoints
+@router.get("/", response_model=ResponseModel)
+async def get_suppliers(
+    search: Optional[str] = Query(None, description="Search by name, code, or contact person"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    risk_level: Optional[str] = Query(None, description="Filter by risk level"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get suppliers with filtering and pagination"""
+    filter_params = SupplierFilter(
+        search=search,
+        category=category,
+        status=status,
+        risk_level=risk_level,
+        page=page,
+        size=size
+    )
+    
+    service = SupplierService(db)
+    result = service.get_suppliers(filter_params)
+    return ResponseModel(
+        success=True,
+        message="Suppliers retrieved successfully",
+        data=result
+    )
+
+
+# IMPORTANT: All specific routes must come before parameterized /{supplier_id} routes
+# The /{supplier_id} route has been moved to the end of the file to prevent route conflicts
+
+
+@router.post("/", response_model=ResponseModel[SupplierResponse])
+async def create_supplier(
+    supplier_data: SupplierCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new supplier"""
+    service = SupplierService(db)
+    
+    # Check if supplier code already exists
+    existing_supplier = service.db.query(Supplier).filter(
+        Supplier.supplier_code == supplier_data.supplier_code
+    ).first()
+    
+    if existing_supplier:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Supplier code already exists"
+        )
+    
+    supplier = service.create_supplier(supplier_data, 1)
+    try:
+        audit_event(db, 1, "supplier_created", "suppliers", str(supplier.id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Supplier created successfully",
+        data=supplier
+    )
+
+
+@router.put("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
+async def update_supplier(
+    supplier_id: int,
+    supplier_data: SupplierUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update supplier"""
+    service = SupplierService(db)
+    supplier = service.update_supplier(supplier_id, supplier_data)
+    
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    try:
+        audit_event(db, 1, "supplier_updated", "suppliers", str(supplier.id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Supplier updated successfully",
+        data=supplier
+    )
+
+
+@router.delete("/{supplier_id}", response_model=ResponseModel[dict])
+async def delete_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete supplier"""
+    service = SupplierService(db)
+    success = service.delete_supplier(supplier_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    try:
+        audit_event(db, 1, "supplier_deleted", "suppliers", str(supplier_id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Supplier deleted successfully",
+        data={"message": "Supplier deleted successfully"}
+    )
+
+
+@router.post("/bulk/action", response_model=ResponseModel[dict])
+async def bulk_update_suppliers(
+    action_data: BulkSupplierAction,
+    db: Session = Depends(get_db)
+):
+    """Bulk update suppliers"""
+    service = SupplierService(db)
+    result = service.bulk_update_suppliers(action_data)
+    
+    return ResponseModel(
+        success=True,
+        message=f"Bulk action completed successfully",
+        data=result
+    )
+
+
+
+
+# Evaluation endpoints
+@router.get("/evaluations/", response_model=ResponseModel[EvaluationListResponse])
+@router.get("/evaluations", response_model=ResponseModel[EvaluationListResponse])
+async def get_evaluations(
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    date_from: Optional[datetime] = Query(None, description="Filter from date"),
+    date_to: Optional[datetime] = Query(None, description="Filter to date"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get evaluations with filtering and pagination"""
+    filter_params = EvaluationFilter(
+        supplier_id=supplier_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+        size=size
+    )
+    
+    service = SupplierService(db)
+    result = service.get_evaluations(filter_params)
+    
+    response_data = EvaluationListResponse(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        size=result["size"],
+        pages=result["pages"]
+    )
+
+    return ResponseModel(
+        success=True,
+        message="Evaluations retrieved successfully",
+        data=response_data
+    )
+
+
+@router.get("/evaluations/{evaluation_id}", response_model=ResponseModel[SupplierEvaluationResponse])
+async def get_evaluation(
+    evaluation_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get evaluation by ID"""
+    service = SupplierService(db)
+    evaluation = service.get_evaluation(evaluation_id)
+    
+    if not evaluation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Evaluation retrieved successfully",
+        data=evaluation
+    )
+
+
+@router.post("/evaluations/", response_model=ResponseModel[SupplierEvaluationResponse])
+@router.post("/evaluations", response_model=ResponseModel[SupplierEvaluationResponse])
+async def create_evaluation(
+    evaluation_data: SupplierEvaluationCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new evaluation"""
+    service = SupplierService(db)
+    evaluation = service.create_evaluation(evaluation_data, 1)
+    try:
+        audit_event(db, 1, "supplier_evaluation_created", "suppliers", str(evaluation.id), {"supplier_id": evaluation_data.supplier_id})
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Evaluation created successfully",
+        data=evaluation
+    )
+
+
+@router.put("/evaluations/{evaluation_id}", response_model=ResponseModel[SupplierEvaluationResponse])
+async def update_evaluation(
+    evaluation_id: int,
+    evaluation_data: SupplierEvaluationUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update evaluation"""
+    service = SupplierService(db)
+    evaluation = service.update_evaluation(evaluation_id, evaluation_data)
+    
+    if not evaluation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation not found"
+        )
+    
+    try:
+        audit_event(db, 1, "supplier_evaluation_updated", "suppliers", str(evaluation.id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Evaluation updated successfully",
+        data=evaluation
+    )
+
+
+@router.delete("/evaluations/{evaluation_id}", response_model=ResponseModel[dict])
+async def delete_evaluation(
+    evaluation_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete evaluation"""
+    service = SupplierService(db)
+    success = service.delete_evaluation(evaluation_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation not found"
+        )
+    
+    try:
+        audit_event(db, 1, "supplier_evaluation_deleted", "suppliers", str(evaluation_id))
+    except Exception:
+        pass
+    return ResponseModel(
+        success=True,
+        message="Evaluation deleted successfully",
+        data={"message": "Evaluation deleted successfully"}
+    )
+
+
+# COA upload/download and delivery inspection endpoints
+@router.post("/deliveries/{delivery_id}/coa", response_model=ResponseModel[dict])
+async def upload_delivery_coa(
+    delivery_id: int,
+    coa_file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload Certificate of Analysis (COA) file for a delivery"""
+    service = SupplierService(db)
+    delivery = service.get_delivery(delivery_id)
+    if not delivery:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found")
+
+    upload_dir = "uploads/deliveries/coa"
+    os.makedirs(upload_dir, exist_ok=True)
+    safe_name = f"delivery_{delivery_id}_{int(datetime.utcnow().timestamp())}_{coa_file.filename}"
+    file_path = os.path.join(upload_dir, safe_name)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(coa_file.file, buffer)
+
+    # persist on delivery
+    delivery.coa_file_path = file_path
+    delivery.coa_number = delivery.coa_number or safe_name
+    db.commit()
+    db.refresh(delivery)
+
+    try:
+        audit_event(db, 1, "delivery_coa_uploaded", "suppliers", str(delivery.id))
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="COA uploaded successfully", data={"file_path": file_path})
+
+
+@router.get("/deliveries/{delivery_id}/coa/download")
+async def download_delivery_coa(
+    delivery_id: int,
+    db: Session = Depends(get_db)
+):
+    """Download the COA file for a delivery"""
+    service = SupplierService(db)
+    delivery = service.get_delivery(delivery_id)
+    if not delivery:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found")
+    if not delivery.coa_file_path or not os.path.exists(delivery.coa_file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="COA file not found")
+
+    # Stream file
+    from fastapi.responses import FileResponse
+    return FileResponse(delivery.coa_file_path, filename=os.path.basename(delivery.coa_file_path))
+
+
+
+class RejectMaterialPayload(BaseModel):
+    rejection_reason: Optional[str] = None
+    reason: Optional[str] = None
+
+class BulkApproveMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    comments: Optional[str] = None
+
+class BulkRejectMaterialsPayload(BaseModel):
+    material_ids: List[int]
+    rejection_reason: str
+
+@router.post("/deliveries/{delivery_id}/inspect", response_model=IncomingDeliveryResponse)
+async def inspect_delivery(
+    delivery_id: int,
+    payload: InspectPayload,
+    db: Session = Depends(get_db)
+):
+    """Update inspection status; enforce COA for critical materials (e.g., raw milk, additives, cultures)."""
+    service = SupplierService(db)
+    delivery = service.get_delivery(delivery_id)
+    if not delivery:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found")
+
+    # COA enforcement for critical categories
+    critical_categories = {"raw_milk", "additives", "cultures"}
+    material = service.get_material(delivery.material_id)
+    status_value = (payload.status or "").lower()
+    if status_value in ("passed", "released") and material and material.category and material.category.lower() in critical_categories:
+        if not delivery.coa_file_path:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="COA is required for this material category before passing inspection")
+
+    # Persist inspection
+    # Map 'under_review' to 'pending' for storage
+    normalized_status = status_value if status_value != "under_review" else "pending"
+    update = IncomingDeliveryUpdate(
+        inspection_status=normalized_status,
+        inspection_date=datetime.utcnow(),
+        corrective_actions=payload.comments,
+    )
+    updated = service.update_delivery(delivery_id, update)
+    try:
+        audit_event(db, 1, "delivery_inspected", "suppliers", str(delivery_id), {"status": normalized_status})
+    except Exception:
+        pass
+    return updated
+
+
+# Delivery -> Batch linkage
+@router.post("/deliveries/{delivery_id}/create-batch", response_model=ResponseModel[dict])
+async def create_batch_from_delivery(
+    delivery_id: int,
+    link_to_batch_id: Optional[int] = Query(None, description="If provided, create a traceability link to this target batch"),
+    link_relationship_type: Optional[str] = Query("ingredient"),
+    db: Session = Depends(get_db)
+):
+    """Create a Batch from a delivery and create traceability link to it."""
+    # Load delivery
+    supplier_service = SupplierService(db)
+    delivery = supplier_service.get_delivery(delivery_id)
+    if not delivery:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found")
+
+    # Create batch using traceability service
+    from app.services.traceability_service import TraceabilityService
+    from app.schemas.traceability import BatchCreate, TraceabilityLinkCreate, BatchType
+    trace_service = TraceabilityService(db)
+
+    product_name = f"{delivery.material.name} - Received"
+    batch_create = BatchCreate(
+        batch_type=BatchType.INTERMEDIATE,
+        product_name=product_name,
+        quantity=delivery.quantity_received,
+        unit=delivery.unit or "kg",
+        production_date=delivery.delivery_date,
+        expiry_date=None,
+        lot_number=delivery.lot_number or delivery.batch_number,
+        supplier_id=delivery.supplier_id,
+        supplier_batch_number=delivery.batch_number,
+        coa_number=delivery.coa_number,
+        storage_location=delivery.storage_location,
+        storage_conditions=delivery.storage_conditions,
+    )
+
+    # Map material category -> BatchType if possible
+    try:
+        category = (supplier_service.get_material(delivery.material_id).category or "").lower()
+        category_map = {
+            "raw_milk": BatchType.RAW_MILK,
+            "additives": BatchType.ADDITIVE,
+            "cultures": BatchType.CULTURE,
+            "packaging": BatchType.PACKAGING,
+        }
+        batch_create.batch_type = category_map.get(category, BatchType.INTERMEDIATE)
+    except Exception:
+        pass
+
+    batch = trace_service.create_batch(batch_create, 1)
+
+    link_id: Optional[int] = None
+    if link_to_batch_id:
+        # Create traceability link from ingredient (this batch) to target product batch
+        link = trace_service.create_traceability_link(
+            batch.id,
+            TraceabilityLinkCreate(
+                linked_batch_id=link_to_batch_id,
+                relationship_type=link_relationship_type or "ingredient",
+                quantity_used=delivery.quantity_received,
+                unit=delivery.unit or "kg",
+                usage_date=datetime.utcnow(),
+                process_step="receiving",
+            ),
+            1,
+        )
+        link_id = link.id
+
+    try:
+        audit_event(db, 1, "delivery_batch_created", "suppliers", str(delivery_id), {"batch_id": batch.id, "link_id": link_id})
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Batch created from delivery", data={"batch_id": batch.id, "link_id": link_id})
+
+
+# Delivery endpoints
+@router.get("/deliveries/", response_model=ResponseModel)
+@router.get("/deliveries", response_model=ResponseModel)
+async def get_deliveries(
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier"),
+    material_id: Optional[int] = Query(None, description="Filter by material"),
+    inspection_status: Optional[str] = Query(None, description="Filter by inspection status"),
+    date_from: Optional[datetime] = Query(None, description="Filter from date"),
+    date_to: Optional[datetime] = Query(None, description="Filter to date"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get deliveries with filtering and pagination"""
+    filter_params = DeliveryFilter(
+        supplier_id=supplier_id,
+        material_id=material_id,
+        inspection_status=inspection_status,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+        size=size
+    )
+    
+    service = SupplierService(db)
+    result = service.get_deliveries(filter_params)
+    
+    return ResponseModel(
+        success=True,
+        message="Deliveries retrieved successfully",
+        data={
+            "items": result["items"],
+            "total": result["total"],
+            "page": result["page"],
+            "size": result["size"],
+            "pages": result["pages"],
+        },
+    )
+
+
+@router.get("/deliveries/{delivery_id}", response_model=ResponseModel[IncomingDeliveryResponse])
+async def get_delivery(
+    delivery_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get delivery by ID"""
+    service = SupplierService(db)
+    delivery = service.get_delivery(delivery_id)
+    
+    if not delivery:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Delivery not found"
+        )
+    
+        return ResponseModel(success=True, message="Delivery retrieved successfully", data=delivery)
+ 
+ 
+@router.post("/deliveries/", response_model=ResponseModel[IncomingDeliveryResponse])
+@router.post("/deliveries", response_model=ResponseModel[IncomingDeliveryResponse])
+async def create_delivery(
+    delivery_data: IncomingDeliveryCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new incoming delivery"""
+    service = SupplierService(db)
+    delivery = service.create_delivery(delivery_data, 1)
+    try:
+        audit_event(db, 1, "delivery_created", "suppliers", str(delivery.id), {"supplier_id": delivery.supplier_id})
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Delivery created successfully", data=delivery)
+
+
+@router.put("/deliveries/{delivery_id}", response_model=ResponseModel[IncomingDeliveryResponse])
+async def update_delivery(
+    delivery_id: int,
+    delivery_data: IncomingDeliveryUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update delivery"""
+    service = SupplierService(db)
+    delivery = service.update_delivery(delivery_id, delivery_data)
+    
+    if not delivery:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Delivery not found"
+        )
+    
+    try:
+        audit_event(db, 1, "delivery_updated", "suppliers", str(delivery.id))
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Delivery updated successfully", data=delivery)
+
+
+@router.delete("/deliveries/{delivery_id}", response_model=ResponseModel[dict])
+async def delete_delivery(
+    delivery_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete delivery"""
+    service = SupplierService(db)
+    success = service.delete_delivery(delivery_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Delivery not found"
+        )
+    
+    try:
+        audit_event(db, 1, "delivery_deleted", "suppliers", str(delivery_id))
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Delivery deleted successfully", data={"message": "Delivery deleted successfully"})
+
+
+# Document endpoints
+@router.get("/{supplier_id}/documents/", response_model=ResponseModel[DocumentListResponse])
+@router.get("/{supplier_id}/documents", response_model=ResponseModel[DocumentListResponse])
+async def get_supplier_documents(
+    supplier_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get documents for a supplier"""
+    service = SupplierService(db)
+    documents = service.get_documents(supplier_id)
+    total = len(documents)
+    start = (page - 1) * size
+    end = start + size
+    response = DocumentListResponse(
+        items=documents[start:end],
+        total=total,
+        page=page,
+        size=size,
+        pages=(total + size - 1) // size
+    )
+    return ResponseModel(success=True, message="Supplier documents retrieved successfully", data=response)
+
+
+@router.get("/documents/{document_id}", response_model=ResponseModel[SupplierDocumentResponse])
+async def get_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get document by ID"""
+    service = SupplierService(db)
+    document = service.get_document(document_id)
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    return ResponseModel(success=True, message="Supplier document retrieved successfully", data=document)
+
+
+@router.post("/{supplier_id}/documents/", response_model=ResponseModel[SupplierDocumentResponse])
+@router.post("/{supplier_id}/documents", response_model=ResponseModel[SupplierDocumentResponse])
+async def create_document(
+    supplier_id: int,
+    document_type: str = Form(..., description="Document type"),
+    document_name: str = Form(..., description="Document name"),
+    document_number: Optional[str] = Form(None, description="Document number"),
+    issue_date: Optional[datetime] = Form(None, description="Issue date"),
+    expiry_date: Optional[datetime] = Form(None, description="Expiry date"),
+    issuing_authority: Optional[str] = Form(None, description="Issuing authority"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload a document for a supplier"""
+    service = SupplierService(db)
+    
+    # Check if supplier exists
+    supplier = service.get_supplier(supplier_id)
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    # Create uploads directory if it doesn't exist
+    upload_dir = "uploads/supplier_documents"
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Save file
+    file_path = f"{upload_dir}/{supplier_id}_{file.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    # Compute size after write
+    try:
+        file_size = os.path.getsize(file_path)
+    except Exception:
+        file_size = None
+
+    document_data = SupplierDocumentCreate(
+        supplier_id=supplier_id,
+        document_type=document_type,
+        document_name=document_name,
+        document_number=document_number,
+        issue_date=issue_date,
+        expiry_date=expiry_date,
+        issuing_authority=issuing_authority,
+        file_path=file_path,
+        file_size=file_size,
+        file_type=file.content_type,
+        original_filename=file.filename
+    )
+    
+    document = service.create_document(document_data, 1)
+    try:
+        audit_event(db, 1, "supplier_document_uploaded", "suppliers", str(document.id), {"supplier_id": supplier_id})
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Supplier document uploaded successfully", data=document)
+
+
+@router.put("/documents/{document_id}", response_model=ResponseModel[SupplierDocumentResponse])
+async def update_document(
+    document_id: int,
+    document_data: SupplierDocumentUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update document"""
+    service = SupplierService(db)
+    document = service.update_document(document_id, document_data)
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    try:
+        audit_event(db, 1, "supplier_document_updated", "suppliers", str(document.id))
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Supplier document updated successfully", data=document)
+
+
+@router.delete("/documents/{document_id}", response_model=ResponseModel[dict])
+async def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete document"""
+    service = SupplierService(db)
+    success = service.delete_document(document_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    try:
+        audit_event(db, 1, "supplier_document_deleted", "suppliers", str(document_id))
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Document deleted successfully", data={"message": "Document deleted successfully"})
+
+
+@router.get("/documents/{document_id}/download")
+async def download_supplier_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """Download a supplier document file"""
+    service = SupplierService(db)
+    document = service.get_document(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if not document.file_path or not os.path.exists(document.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    from fastapi.responses import FileResponse
+    return FileResponse(document.file_path, filename=os.path.basename(document.file_path))
+
+
+class VerifyDocumentPayload(BaseModel):
+    verification_status: str
+    verification_comments: Optional[str] = None
+
+
+@router.post("/documents/{document_id}/verify", response_model=ResponseModel[SupplierDocumentResponse])
+async def verify_supplier_document(
+    document_id: int,
+    payload: VerifyDocumentPayload,
+    db: Session = Depends(get_db)
+):
+    """Verify or reject a supplier document"""
+    service = SupplierService(db)
+    document = service.get_document(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    status_val = (payload.verification_status or "").lower()
+    if status_val == "verified":
+        document.is_verified = True
+        document.is_valid = True
+    elif status_val == "rejected":
+        document.is_verified = False
+        document.is_valid = False
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification_status")
+    # Optionally persist comments in issuing_authority or extend schema; skip for now
+    document.verified_by = 1
+    document.verified_at = datetime.utcnow()
+    db.commit()
+    db.refresh(document)
+    try:
+        audit_event(db, 1, "supplier_document_verified", "suppliers", str(document.id), {"verification_status": status_val})
+    except Exception:
+        pass
+    return ResponseModel(success=True, message="Supplier document verification updated", data=document)
+
+
+@router.get("/alerts/expired-certificates")
+async def get_expired_certificates(
+    db: Session = Depends(get_db)
+):
+    """Get expired supplier certificates"""
+    service = SupplierService(db)
+    expired_certs = service.check_expired_certificates()
+    return {"expired_certificates": expired_certs}
+
+
+@router.get("/alerts/overdue-evaluations")
+async def get_overdue_evaluations(
+    db: Session = Depends(get_db)
+):
+    """Get suppliers with overdue evaluations"""
+    service = SupplierService(db)
+    overdue_evaluations = service.get_overdue_evaluations()
+    return {"overdue_evaluations": overdue_evaluations}
+
+
+# Inspection Checklist endpoints
+@router.get("/deliveries/{delivery_id}/checklists/", response_model=List[InspectionChecklistResponse])
+async def get_delivery_checklists(
+    delivery_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get inspection checklists for a delivery"""
+    service = SupplierService(db)
+    checklists = service.get_inspection_checklists(delivery_id)
+    return checklists
+
+
+@router.get("/checklists/{checklist_id}", response_model=InspectionChecklistResponse)
+async def get_inspection_checklist(
+    checklist_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get inspection checklist by ID"""
+    service = SupplierService(db)
+    checklist = service.get_inspection_checklist(checklist_id)
+    
+    if not checklist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inspection checklist not found"
+        )
+    
+    return checklist
+
+
+@router.post("/deliveries/{delivery_id}/checklists/", response_model=InspectionChecklistResponse)
+async def create_inspection_checklist(
+    delivery_id: int,
+    checklist_data: InspectionChecklistCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new inspection checklist"""
+    service = SupplierService(db)
+    
+    # Check if delivery exists
+    delivery = service.get_delivery(delivery_id)
+    if not delivery:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Delivery not found"
+        )
+    
+    checklist_data.delivery_id = delivery_id
+    checklist = service.create_inspection_checklist(checklist_data, 1)
+    try:
+        audit_event(db, 1, "inspection_checklist_created", "suppliers", str(checklist.id), {"delivery_id": delivery_id})
+    except Exception:
+        pass
+    return checklist
+
+
+@router.put("/checklists/{checklist_id}", response_model=InspectionChecklistResponse)
+async def update_inspection_checklist(
+    checklist_id: int,
+    checklist_data: InspectionChecklistUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update inspection checklist"""
+    service = SupplierService(db)
+    checklist = service.update_inspection_checklist(checklist_id, checklist_data)
+    
+    if not checklist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inspection checklist not found"
+        )
+    
+    try:
+        audit_event(db, 1, "inspection_checklist_updated", "suppliers", str(checklist.id))
+    except Exception:
+        pass
+    return checklist
+
+
+@router.delete("/checklists/{checklist_id}")
+async def delete_inspection_checklist(
+    checklist_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete inspection checklist"""
+    service = SupplierService(db)
+    success = service.delete_inspection_checklist(checklist_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inspection checklist not found"
+        )
+    
+    try:
+        audit_event(db, 1, "inspection_checklist_deleted", "suppliers", str(checklist_id))
+    except Exception:
+        pass
+    return {"message": "Inspection checklist deleted successfully"}
+
+
+@router.get("/checklists/{checklist_id}/items/", response_model=List[InspectionChecklistItemResponse])
+async def get_checklist_items(
+    checklist_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get checklist items for a checklist"""
+    service = SupplierService(db)
+    items = service.get_checklist_items(checklist_id)
+    return items
+
+
+@router.post("/checklists/{checklist_id}/items/", response_model=InspectionChecklistItemResponse)
+async def create_checklist_item(
+    checklist_id: int,
+    item_data: InspectionChecklistItemCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new checklist item"""
+    service = SupplierService(db)
+    
+    # Check if checklist exists
+    checklist = service.get_inspection_checklist(checklist_id)
+    if not checklist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inspection checklist not found"
+        )
+    
+    item_data.checklist_id = checklist_id
+    item = service.create_checklist_item(item_data)
+    return item
+
+
+@router.put("/checklist-items/{item_id}", response_model=InspectionChecklistItemResponse)
+async def update_checklist_item(
+    item_id: int,
+    item_data: InspectionChecklistItemUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update checklist item"""
+    service = SupplierService(db)
+    item = service.update_checklist_item(item_id, item_data, 1)
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Checklist item not found"
+        )
+    
+    return item
+
+
+@router.post("/checklists/{checklist_id}/complete", response_model=InspectionChecklistResponse)
+async def complete_inspection_checklist(
+    checklist_id: int,
+    db: Session = Depends(get_db)
+):
+    """Complete an inspection checklist"""
+    service = SupplierService(db)
+    checklist = service.complete_checklist(checklist_id, 1)
+    
+    if not checklist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inspection checklist not found"
+        )
+    
+    return checklist
+
+# end of checklist endpoints
+# Noncompliant delivery alert endpoints
+@router.get("/alerts/noncompliant-deliveries")
+async def get_noncompliant_delivery_alerts(
+    db: Session = Depends(get_db)
+):
+    """Get alerts for noncompliant deliveries"""
+    service = SupplierService(db)
+    alerts = service.get_noncompliant_delivery_alerts()
+    return {"noncompliant_deliveries": alerts}
+
+
+@router.get("/alerts/delivery-summary")
+async def get_delivery_alert_summary(
+    db: Session = Depends(get_db)
+):
+    """Get summary of delivery alerts"""
+    service = SupplierService(db)
+    summary = service.get_delivery_alert_summary()
+    return summary 
+
+
+# MOVED TO END: Parameterized supplier routes that must come after all specific routes
+@router.get("/{supplier_id}", response_model=ResponseModel[SupplierResponse])
+async def get_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get supplier by ID"""
+    service = SupplierService(db)
+    supplier = service.get_supplier(supplier_id)
+    
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    return ResponseModel(
+        success=True,
+        message="Supplier retrieved successfully",
+        data=supplier
+    ) 
