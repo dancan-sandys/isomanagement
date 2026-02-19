@@ -29,6 +29,18 @@ export const haccpAPI = {
     return response.data;
   },
 
+  getContactSurfaces: async (search?: string) => {
+    const response: AxiosResponse = await api.get('/haccp/contact-surfaces', {
+      params: search ? { q: search } : undefined,
+    });
+    return response.data;
+  },
+
+  createContactSurface: async (surfaceData: any) => {
+    const response: AxiosResponse = await api.post('/haccp/contact-surfaces', surfaceData);
+    return response.data;
+  },
+
   // Process Flows
   createProcessFlow: async (productId: number, flowData: any) => {
     const response: AxiosResponse = await api.post(`/haccp/products/${productId}/process-flows`, flowData);
@@ -90,6 +102,27 @@ export const haccpAPI = {
 
   getMonitoringLogs: async (ccpId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
+    return response.data;
+  },
+
+  verifyMonitoringLog: async (
+    ccpId: number,
+    logId: number,
+    verificationData: {
+      verification_method?: string;
+      verification_result?: string;
+      verification_is_compliant?: boolean;
+      verification_notes?: string;
+      verification_evidence_files?: string;
+    },
+    options?: { allowOverride?: boolean }
+  ) => {
+    const params = options?.allowOverride ? { allow_override: options.allowOverride } : undefined;
+    const response: AxiosResponse = await api.post(
+      `/haccp/ccps/${ccpId}/monitoring-logs/${logId}/verify`,
+      verificationData,
+      { params }
+    );
     return response.data;
   },
 

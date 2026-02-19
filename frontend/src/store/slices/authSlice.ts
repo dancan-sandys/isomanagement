@@ -36,6 +36,9 @@ export interface User {
   last_login?: string;
   created_at?: string;
   updated_at?: string;
+  has_haccp_assignment?: boolean;
+  haccp_assigned_product_ids?: number[];
+  haccp_assignment_roles?: string[];
 }
 
 export interface AuthState {

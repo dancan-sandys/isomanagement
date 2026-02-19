@@ -13,6 +13,7 @@ export const traceabilityAPI = {
     date_from?: string;
     date_to?: string;
     product_name?: string;
+    product_id?: number;
   }) => {
     // Clean params: map page/size -> skip/limit and drop empty strings for enums
     const cleaned: any = {};

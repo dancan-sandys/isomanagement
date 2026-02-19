@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Grid,
@@ -42,6 +42,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
 import { fetchProducts, fetchDashboard } from '../../store/slices/haccpSlice';
+import { hasRole } from '../../store/slices/authSlice';
 import { haccpAPI } from '../../services/api';
 import StatusChip from '../UI/StatusChip';
 
@@ -66,15 +67,33 @@ interface DashboardMetrics {
   highRiskHazards: number;
 }
 
+const PRIVILEGED_ROLE_NAMES = [
+  'System Administrator',
+  'QA Manager',
+  'QA Specialist',
+  'Production Manager',
+  'Compliance Officer',
+] as const;
+
 const HACCPWorkspace: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { products, loading, error } = useSelector((state: RootState) => state.haccp);
+  const { products, loading, error, assignedOnly } = useSelector((state: RootState) => state.haccp);
+  const { user } = useSelector((state: RootState) => state.auth);
   
   const [dashboardData, setDashboardData] = useState<DashboardMetrics | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [selectedTab, setSelectedTab] = useState(0);
+
+  const isPrivilegedUser = useMemo(() => {
+    if (!user?.role_name) return false;
+    return PRIVILEGED_ROLE_NAMES.some(
+      (roleName) => hasRole(user, roleName)
+    );
+  }, [user]);
+
+  const canManageProducts = isPrivilegedUser;
 
   useEffect(() => {
     loadWorkspaceData();
@@ -168,15 +187,23 @@ const HACCPWorkspace: React.FC = () => {
           >
             Refresh
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={handleCreateProduct}
-          >
-            New Product
-          </Button>
+          {canManageProducts && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleCreateProduct}
+            >
+              New Product
+            </Button>
+          )}
         </Stack>
       </Box>
+
+      {assignedOnly && !canManageProducts && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          You are viewing the products assigned to you for monitoring or verification responsibilities.
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* Key Metrics */}
@@ -407,9 +434,11 @@ const HACCPWorkspace: React.FC = () => {
                             </Box>
                           }
                         />
-                        <IconButton size="small">
-                          <Edit />
-                        </IconButton>
+                        {canManageProducts && (
+                          <IconButton size="small" onClick={() => handleProductClick(product.id)}>
+                            <Edit />
+                          </IconButton>
+                        )}
                       </ListItem>
                       {index < products.length - 1 && <Divider />}
                     </React.Fragment>

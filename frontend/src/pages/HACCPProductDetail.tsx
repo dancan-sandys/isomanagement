@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Switch, FormControlLabel } from '@mui/material';
 import { Add, Edit, Visibility, Delete, Security } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
-import { traceabilityAPI, usersAPI } from '../services/api';
+import { haccpAPI, traceabilityAPI, usersAPI } from '../services/api';
+import { hasRole } from '../store/slices/authSlice';
 import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
 import HazardDialog from '../components/HACCP/HazardDialog';
 import HazardViewDialog from '../components/HACCP/HazardViewDialog';
@@ -19,11 +20,20 @@ function TabPanel({ children, value, index }: { children?: React.ReactNode; valu
   );
 }
 
+const PRIVILEGED_ROLE_NAMES = [
+  'System Administrator',
+  'QA Manager',
+  'QA Specialist',
+  'Production Manager',
+  'Compliance Officer',
+] as const;
+
 const HACCPProductDetail: React.FC = () => {
   const { id } = useParams();
   const productId = Number(id);
   const dispatch = useDispatch<AppDispatch>();
   const { selectedProduct, processFlows, hazards, ccps, oprps } = useSelector((s: RootState) => s.haccp);
+  const { user } = useSelector((s: RootState) => s.auth);
 
   const [selectedTab, setSelectedTab] = useState(0);
   const [processFlowDialogOpen, setProcessFlowDialogOpen] = useState(false);
@@ -236,45 +246,464 @@ const HACCPProductDetail: React.FC = () => {
 
   const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string; evidence_files?: string }>({});
   const [monitoringLogs, setMonitoringLogs] = useState<any[]>([]);
+  const [monitoringLogsTab, setMonitoringLogsTab] = useState(0);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [selectedMonitoringLog, setSelectedMonitoringLog] = useState<any | null>(null);
+  const [verificationForm, setVerificationForm] = useState<{
+    verification_method: string;
+    verification_result: string;
+    verification_notes: string;
+    verification_is_compliant: boolean;
+    verification_evidence_files: string;
+    allowOverride: boolean;
+  }>({
+    verification_method: '',
+    verification_result: '',
+    verification_notes: '',
+    verification_is_compliant: true,
+    verification_evidence_files: '',
+    allowOverride: false,
+  });
   const [batchOptions, setBatchOptions] = useState<any[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
 
+  const formatDateTime = useCallback((value?: string | null) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  }, []);
+
+  const fetchMonitoringLogs = useCallback(async (ccpId: number) => {
+    try {
+      const resp = await haccpAPI.getMonitoringLogs(ccpId);
+      const items = resp?.data?.items || resp?.items || resp?.data || [];
+      setMonitoringLogs(items);
+    } catch {
+      setMonitoringLogs([]);
+    }
+  }, []);
+
+  const isPrivilegedUser = useMemo(() => {
+    if (!user?.role_name) return false;
+    return PRIVILEGED_ROLE_NAMES.some((role) => hasRole(user, role));
+  }, [user]);
+
+  const isMonitoringResponsibleForProduct = useMemo(
+    () => !!ccps?.some((ccp: any) => ccp?.monitoring_responsible === user?.id),
+    [ccps, user?.id]
+  );
+
+  const isVerificationResponsibleForProduct = useMemo(
+    () => !!ccps?.some((ccp: any) => ccp?.verification_responsible === user?.id),
+    [ccps, user?.id]
+  );
+
+  const hasRestrictedProductAccess =
+    !isPrivilegedUser && (isMonitoringResponsibleForProduct || isVerificationResponsibleForProduct);
+
+  const canRecordMonitoring = isPrivilegedUser || isMonitoringResponsibleForProduct;
+  const canVerifyLogs = isPrivilegedUser || isVerificationResponsibleForProduct;
+
+  useEffect(() => {
+    if (hasRestrictedProductAccess && selectedTab !== 4) {
+      setSelectedTab(4);
+    }
+  }, [hasRestrictedProductAccess, selectedTab]);
+
+  const verifiedLogs = useMemo(
+    () => monitoringLogs.filter((log: any) => log.is_verified),
+    [monitoringLogs]
+  );
+
+  const handleOpenVerificationDialog = (log: any) => {
+    setSelectedMonitoringLog(log);
+    setVerificationForm({
+      verification_method: log.verification_method || '',
+      verification_result: log.verification_result || '',
+      verification_notes: log.verification_notes || '',
+      verification_is_compliant:
+        typeof log.verification_is_compliant === 'boolean'
+          ? log.verification_is_compliant
+          : log.is_within_limits ?? true,
+      verification_evidence_files: log.verification_evidence_files || '',
+      allowOverride: false,
+    });
+    setVerificationDialogOpen(true);
+  };
+
+  const handleCloseVerificationDialog = () => {
+    setVerificationDialogOpen(false);
+    setSelectedMonitoringLog(null);
+  };
+
+  const handleSubmitVerification = async () => {
+    if (!selectedMonitoringLog || !monitoringForm.ccp_id) {
+      alert('Select a monitoring log and CCP before verifying.');
+      return;
+    }
+    try {
+      const ccpId = Number(monitoringForm.ccp_id);
+      const payload: any = {};
+      if (verificationForm.verification_method?.trim()) {
+        payload.verification_method = verificationForm.verification_method.trim();
+      }
+      if (verificationForm.verification_result?.trim()) {
+        payload.verification_result = verificationForm.verification_result.trim();
+      }
+      payload.verification_is_compliant = verificationForm.verification_is_compliant;
+      if (verificationForm.verification_notes?.trim()) {
+        payload.verification_notes = verificationForm.verification_notes.trim();
+      }
+      if (verificationForm.verification_evidence_files?.trim()) {
+        payload.verification_evidence_files = verificationForm.verification_evidence_files.trim();
+      }
+
+      const resp = await haccpAPI.verifyMonitoringLog(
+        ccpId,
+        selectedMonitoringLog.id,
+        payload,
+        { allowOverride: verificationForm.allowOverride }
+      );
+
+      const updatedLog = resp?.data || resp;
+      if (updatedLog?.id) {
+        setMonitoringLogs((prev) =>
+          prev.map((log: any) => (log.id === updatedLog.id ? { ...log, ...updatedLog } : log))
+        );
+      } else {
+        await fetchMonitoringLogs(ccpId);
+      }
+
+      setVerificationDialogOpen(false);
+      setSelectedMonitoringLog(null);
+    } catch (error) {
+      console.error('Failed to verify monitoring log:', error);
+      alert(
+        (error as any)?.response?.data?.detail ||
+          'Failed to verify monitoring log. Please check permissions and try again.'
+      );
+    }
+  };
+
+  const renderMonitoringSection = () => (
+    <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
+      <Autocomplete
+        options={ccps}
+        getOptionLabel={(ccp: any) => `${ccp.ccp_number || ''} - ${ccp.ccp_name || ''}`.trim()}
+        value={ccps.find((c: any) => String(c.id) === (monitoringForm.ccp_id || '')) || null}
+        onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, ccp_id: val ? String(val.id) : '' })}
+        isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id}
+        renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP for monitoring" />}
+      />
+
+      {canRecordMonitoring && (
+        <>
+          <Autocomplete
+            options={batchOptions}
+            open={batchOpen}
+            onOpen={() => setBatchOpen(true)}
+            onClose={() => setBatchOpen(false)}
+            getOptionLabel={(b: any) => b?.batch_number || ''}
+            value={batchOptions.find((b: any) => String(b?.id || '') === (monitoringForm.batch_id || '')) || null}
+            onChange={(_, val: any) =>
+              setMonitoringForm({
+                ...monitoringForm,
+                batch_id: val ? String(val.id) : '',
+                batch: val ? String(val.batch_number) : ''
+              })
+            }
+            inputValue={batchSearch}
+            onInputChange={(_, val) => setBatchSearch(val)}
+            isOptionEqualToValue={(opt: any, val: any) => opt?.id === val?.id}
+            renderInput={(params) => <TextField {...params} label="Batch" placeholder="Search batches..." />}
+          />
+
+          <TextField
+            type="number"
+            label="Measured Value"
+            value={monitoringForm.value || ''}
+            onChange={(e) => setMonitoringForm({ ...monitoringForm, value: e.target.value })}
+          />
+          <TextField
+            label="Unit"
+            value={monitoringForm.unit || ''}
+            onChange={(e) => setMonitoringForm({ ...monitoringForm, unit: e.target.value })}
+          />
+
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              Attach Evidence (photos, files)
+            </Typography>
+            <input
+              type="file"
+              multiple
+              onChange={async (e) => {
+                const files = e.target.files;
+                if (!files || !monitoringForm.ccp_id) return;
+                const api = (await import('../services/api')).api;
+                const ccpId = Number(monitoringForm.ccp_id);
+                const uploaded: string[] = [];
+                for (const file of Array.from(files)) {
+                  const form = new FormData();
+                  form.append('file', file);
+                  try {
+                    const res = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/upload-evidence`, form, {
+                      headers: { 'Content-Type': 'multipart/form-data' },
+                    });
+                    const data = res?.data?.data || res?.data;
+                    if (data?.file_path) uploaded.push(data.file_path);
+                  } catch (err) {
+                    console.error('Evidence upload failed', err);
+                    alert(`Failed to upload ${file.name}`);
+                  }
+                }
+                if (uploaded.length) {
+                  setMonitoringForm({ ...monitoringForm, evidence_files: JSON.stringify(uploaded) });
+                }
+              }}
+            />
+          </Box>
+
+          <Stack direction="row" spacing={2}>
+            <Button
+              variant="contained"
+              disabled={!monitoringForm.ccp_id}
+              onClick={async () => {
+                const ccpId = Number(monitoringForm.ccp_id);
+                try {
+                  const requestBody: any = {};
+
+                  if (monitoringForm.batch_id) {
+                    requestBody.batch_id = Number(monitoringForm.batch_id);
+                  }
+                  if (monitoringForm.batch) {
+                    requestBody.batch_number = monitoringForm.batch;
+                  }
+                  if (monitoringForm.value && !isNaN(Number(monitoringForm.value))) {
+                    requestBody.measured_value = Number(monitoringForm.value);
+                  } else {
+                    alert('Please enter a valid measured value');
+                    return;
+                  }
+                  if (monitoringForm.unit) {
+                    requestBody.unit = monitoringForm.unit;
+                  }
+                  if (monitoringForm.evidence_files) {
+                    requestBody.evidence_files = monitoringForm.evidence_files;
+                  }
+
+                  await haccpAPI.createMonitoringLog(ccpId, requestBody);
+                  await fetchMonitoringLogs(ccpId);
+
+                  if (monitoringForm.batch) {
+                    const ncRes = await haccpAPI.getRecentNonConformance(ccpId, monitoringForm.batch);
+                    const data = ncRes?.data || ncRes;
+                    if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
+                  }
+                } catch (error) {
+                  console.error('Failed to create monitoring log:', error);
+                  alert('Failed to create monitoring log');
+                }
+              }}
+            >
+              Record Monitoring Log
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            After saving, if out-of-spec, a Non-Conformance will be auto-created and opened.
+          </Typography>
+        </>
+      )}
+
+      {monitoringForm.ccp_id && (
+        <Box sx={{ mt: 3, width: '100%' }}>
+          <Tabs value={monitoringLogsTab} onChange={(_, value) => setMonitoringLogsTab(value)}>
+            <Tab label={`Monitoring Logs (${monitoringLogs.length})`} />
+            <Tab label={`Verification Logs (${verifiedLogs.length})`} />
+          </Tabs>
+
+          {monitoringLogsTab === 0 && (
+            <TableContainer component={Paper} sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Date/Time</TableCell>
+                    <TableCell>Batch</TableCell>
+                    <TableCell align="right">Value</TableCell>
+                    <TableCell>Unit</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Verification</TableCell>
+                    <TableCell align="center">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {monitoringLogs.map((log: any) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{formatDateTime(log.monitoring_time || log.created_at)}</TableCell>
+                      <TableCell>{log.batch_number || '-'}</TableCell>
+                      <TableCell align="right">{log.measured_value ?? '-'}</TableCell>
+                      <TableCell>{log.unit || '-'}</TableCell>
+                      <TableCell>
+                        <Chip size="small" color={log.is_within_limits ? 'success' : 'error'} label={log.is_within_limits ? 'In Spec' : 'Out of Spec'} />
+                      </TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <Chip
+                            size="small"
+                            color={log.is_verified ? 'success' : 'warning'}
+                            label={log.is_verified ? 'Verified' : 'Pending'}
+                          />
+                          {log.is_verified && (
+                            <>
+                              <Typography variant="caption" color="text.secondary">
+                                {`By: ${log.verified_by || 'Unknown'}`}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatDateTime(log.verified_at)}
+                              </Typography>
+                            </>
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Stack direction="row" spacing={1} justifyContent="center">
+                          {canVerifyLogs && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleOpenVerificationDialog(log)}
+                            >
+                              {log.is_verified ? 'View' : 'Verify'}
+                            </Button>
+                          )}
+                          <Button
+                            size="small"
+                            onClick={async () => {
+                              try {
+                                const ccpId = Number(monitoringForm.ccp_id);
+                                const res = await haccpAPI.getRecentNonConformance(
+                                  ccpId,
+                                  log.batch_number || ''
+                                );
+                                const data = res?.data || res;
+                                if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
+                                else alert('No NC linked for this reading');
+                              } catch (error) {
+                                console.error('Failed to open NC link:', error);
+                                alert('Unable to retrieve Non-Conformance details');
+                              }
+                            }}
+                          >
+                            Open NC
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {monitoringLogs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          No monitoring logs recorded yet.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {monitoringLogsTab === 1 && (
+            <TableContainer component={Paper} sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Verified At</TableCell>
+                    <TableCell>Verifier</TableCell>
+                    <TableCell>Batch</TableCell>
+                    <TableCell align="right">Value</TableCell>
+                    <TableCell>Method</TableCell>
+                    <TableCell>Result</TableCell>
+                    <TableCell>Compliant</TableCell>
+                    <TableCell>Notes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {verifiedLogs.map((log: any) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{formatDateTime(log.verified_at)}</TableCell>
+                      <TableCell>{log.verified_by || '-'}</TableCell>
+                      <TableCell>{log.batch_number || '-'}</TableCell>
+                      <TableCell align="right">{log.measured_value ?? '-'}</TableCell>
+                      <TableCell>{log.verification_method || '-'}</TableCell>
+                      <TableCell>{log.verification_result || '-'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={log.verification_is_compliant ? 'success' : 'error'}
+                          label={log.verification_is_compliant ? 'Compliant' : 'Non-Compliant'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 240 }}>
+                          {log.verification_notes || '-'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {verifiedLogs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          No verification records are available for this CCP yet.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
+      )}
+    </Stack>
+  );
+
   // Fetch batches when autocomplete opens or search text changes
   useEffect(() => {
     let active = true;
-    if (!batchOpen) return () => { active = false; };
+    if (!batchOpen || !productId) return () => { active = false; };
     const t = setTimeout(async () => {
       try {
-        const resp: any = await traceabilityAPI.getBatches({ search: batchSearch, size: 10 });
+        const resp: any = await traceabilityAPI.getBatches({
+          search: batchSearch,
+          size: 10,
+          product_id: productId,
+        });
         const items = resp?.data?.items || resp?.items || [];
-        if (active) setBatchOptions(items);
+        if (active) {
+          setBatchOptions(items);
+        }
       } catch (e) {
-        if (active) setBatchOptions([]);
+        if (active) {
+          setBatchOptions([]);
+        }
       }
     }, 250);
     return () => { active = false; clearTimeout(t); };
-  }, [batchOpen, batchSearch]);
+  }, [batchOpen, batchSearch, productId]);
 
   // Fetch existing monitoring logs whenever a CCP is selected
   useEffect(() => {
-    let active = true;
-    const fetchLogs = async () => {
-      const ccpIdStr = monitoringForm.ccp_id || '';
-      if (!ccpIdStr) { if (active) setMonitoringLogs([]); return; }
-      try {
-        const api = (await import('../services/api')).api;
-        const resp = await api.get(`/haccp/ccps/${Number(ccpIdStr)}/monitoring-logs`);
-        const logsJson = resp.data;
-        const items = logsJson?.data?.items || logsJson?.items || [];
-        if (active) setMonitoringLogs(items);
-      } catch {
-        if (active) setMonitoringLogs([]);
-      }
-    };
-    fetchLogs();
-    return () => { active = false; };
-  }, [monitoringForm.ccp_id]);
+    const ccpIdStr = monitoringForm.ccp_id || '';
+    if (!ccpIdStr) {
+      setMonitoringLogs([]);
+      return;
+    }
+    fetchMonitoringLogs(Number(ccpIdStr));
+  }, [monitoringForm.ccp_id, fetchMonitoringLogs]);
 
   const [riskConfigDialogOpen, setRiskConfigDialogOpen] = useState(false);
   const [riskConfigForm, setRiskConfigForm] = useState({
@@ -358,415 +787,394 @@ const HACCPProductDetail: React.FC = () => {
         </Box>
       )}
 
-      <Tabs value={selectedTab} onChange={handleTabChange}>
-        <Tab label="Process Flow" />
-        <Tab label="Hazards" />
-        <Tab label="CCPs" />
-        <Tab label="OPRPs" />
-        <Tab label="Monitoring" />
-        <Tab label="Risk Configuration" />
-      </Tabs>
+      {!hasRestrictedProductAccess ? (
+        <>
+          <Tabs value={selectedTab} onChange={handleTabChange}>
+            <Tab label="Process Flow" />
+            <Tab label="Hazards" />
+            <Tab label="CCPs" />
+            <Tab label="OPRPs" />
+            <Tab label="Monitoring" />
+            <Tab label="Risk Configuration" />
+          </Tabs>
 
-      <TabPanel value={selectedTab} index={0}>
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Process Flow</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button variant="outlined" onClick={() => setFlowchartDialogOpen(true)}>Open Flowchart Builder</Button>
-            <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedFlow(null); setProcessFlowDialogOpen(true); }}>Add Step</Button>
-          </Box>
-        </Box>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Step</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Equipment</TableCell>
-                <TableCell>Temperature</TableCell>
-                <TableCell>Time</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {processFlows.map((flow) => (
-                <TableRow key={flow.id}>
-                  <TableCell>{flow.step_number}</TableCell>
-                  <TableCell>{flow.step_name}</TableCell>
-                  <TableCell>{flow.equipment}</TableCell>
-                  <TableCell>{flow.temperature}°C</TableCell>
-                  <TableCell>{flow.time_minutes} min</TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={1}>
-                      <IconButton size="small" onClick={() => { setSelectedFlow(flow); setProcessFlowDialogOpen(true); }}><Edit /></IconButton>
-                      <IconButton size="small" onClick={() => { if (window.confirm('Delete this process step?')) dispatch(deleteProcessFlow(flow.id)).then(() => dispatch(fetchProduct(productId))); }}><Delete /></IconButton>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </TabPanel>
+          <TabPanel value={selectedTab} index={0}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h6">Process Flow</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button variant="outlined" onClick={() => setFlowchartDialogOpen(true)}>Open Flowchart Builder</Button>
+                <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedFlow(null); setProcessFlowDialogOpen(true); }}>Add Step</Button>
+              </Box>
+            </Box>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Step</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Equipment</TableCell>
+                    <TableCell>Temperature</TableCell>
+                    <TableCell>Time</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {processFlows.map((flow) => (
+                    <TableRow key={flow.id}>
+                      <TableCell>{flow.step_number}</TableCell>
+                      <TableCell>{flow.step_name}</TableCell>
+                      <TableCell>{flow.equipment}</TableCell>
+                      <TableCell>{flow.temperature}°C</TableCell>
+                      <TableCell>{flow.time_minutes} min</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1}>
+                          <IconButton size="small" onClick={() => { setSelectedFlow(flow); setProcessFlowDialogOpen(true); }}><Edit /></IconButton>
+                          <IconButton size="small" onClick={() => { if (window.confirm('Delete this process step?')) dispatch(deleteProcessFlow(flow.id)).then(() => dispatch(fetchProduct(productId))); }}><Delete /></IconButton>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </TabPanel>
 
-      <TabPanel value={selectedTab} index={1}>
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Hazards</Typography>
-          <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedHazardItem(null); setHazardDialogOpen(true); }}>Add Hazard</Button>
-        </Box>
-        <Grid container spacing={2}>
-          {hazards.map((hazard) => (
-            <Grid item xs={12} sm={6} md={4} key={hazard.id}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6">{hazard.hazard_name}</Typography>
-                <Typography color="textSecondary">{hazard.hazard_type}</Typography>
-                <Typography variant="body2" paragraph>{hazard.description}</Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
-                  <Chip label={`Risk: ${hazard.risk_level}`} color="warning" size="small" />
-                  <Chip label={`Score: ${hazard.risk_score}`} color="primary" size="small" />
-                  {hazard.risk_strategy && hazard.risk_strategy !== 'not_determined' && (
-                    <Chip 
-                      label={hazard.risk_strategy === 'ccp' ? 'CCP' : hazard.risk_strategy === 'opprp' ? 'OPRP' : hazard.risk_strategy === 'use_existing_prps' ? 'PRPs' : 'Analysis Needed'} 
-                      color={hazard.risk_strategy === 'ccp' ? 'error' : hazard.risk_strategy === 'opprp' ? 'warning' : 'info'} 
-                      size="small" 
-                    />
-                  )}
-                  {hazard.is_ccp === true && <Chip label="CCP" color="error" size="small" />}
-                </Stack>
-                <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'flex-end' }}>
-                  <IconButton 
-                    size="small" 
-                    onClick={() => { 
-                      setSelectedHazardItem(hazard); 
-                      setHazardViewDialogOpen(true); 
-                    }} 
-                    title="View Hazard"
-                  >
-                    <Visibility />
-                  </IconButton>
-                  <IconButton 
-                    size="small" 
-                    onClick={async () => { 
-                      if (window.confirm('Delete this hazard?')) {
-                        try {
-                          await dispatch(deleteHazard(hazard.id)).unwrap();
-                          await dispatch(fetchProduct(productId));
-                          alert('Hazard deleted successfully!');
-                        } catch (error: any) {
-                          console.error('Failed to delete hazard:', error);
-                          alert(`Failed to delete hazard: ${error}`);
-                        }
-                      }
-                    }}
-                    title="Delete Hazard"
-                  >
-                    <Delete />
-                  </IconButton>
-                </Stack>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-      </TabPanel>
-
-      <TabPanel value={selectedTab} index={2}>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h6">Critical Control Points</Typography>
-        </Box>
-        <Grid container spacing={2}>
-          {ccps.map((ccp) => {
-            // Check if CCP has incomplete fields
-            const hasEmptyFields = !ccp.ccp_number || !ccp.ccp_name || !ccp.description || 
-                                  !ccp.critical_limit_min || !ccp.critical_limit_max || 
-                                  !ccp.critical_limit_unit || !ccp.monitoring_frequency || 
-                                  !ccp.monitoring_method || !ccp.corrective_actions ||
-                                  !ccp.monitoring_responsible || !ccp.verification_responsible;
-            
-            return (
-              <Grid item xs={12} sm={6} md={4} key={ccp.id}>
-                <Paper sx={{ p: 2 }}>
-                  <Typography variant="h6">{ccp.ccp_name}</Typography>
-                  <Typography color="textSecondary">{ccp.ccp_number}</Typography>
-                  <Typography variant="body2" paragraph>{ccp.description}</Typography>
-                  {ccp.critical_limit_min && ccp.critical_limit_max && (
-                    <Typography variant="body2" color="textSecondary">Limits: {ccp.critical_limit_min} - {ccp.critical_limit_max} {ccp.critical_limit_unit}</Typography>
-                  )}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {hasEmptyFields ? (
-                        <>
-                          <Typography variant="body2" color="error.main">
-                            This ccp needs a complete haccp plan
-                          </Typography>
-                          <Chip 
-                            icon={<Security />} 
-                            label="" 
-                            size="small" 
-                            sx={{ bgcolor: 'error.main', cursor: 'pointer', '& .MuiChip-icon': { color: 'white' } }} 
-                            onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} 
-                          />
-                        </>
-                      ) : (
+          <TabPanel value={selectedTab} index={1}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h6">Hazards</Typography>
+              <Button variant="contained" startIcon={<Add />} onClick={() => { setSelectedHazardItem(null); setHazardDialogOpen(true); }}>Add Hazard</Button>
+            </Box>
+            <Grid container spacing={2}>
+              {hazards.map((hazard) => (
+                <Grid item xs={12} sm={6} md={4} key={hazard.id}>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="h6">{hazard.hazard_name}</Typography>
+                    <Typography color="textSecondary">{hazard.hazard_type}</Typography>
+                    <Typography variant="body2" paragraph>{hazard.description}</Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
+                      <Chip label={`Risk: ${hazard.risk_level}`} color="warning" size="small" />
+                      <Chip label={`Score: ${hazard.risk_score}`} color="primary" size="small" />
+                      {hazard.risk_strategy && hazard.risk_strategy !== 'not_determined' && (
                         <Chip 
-                          icon={<Security />} 
-                          label="" 
+                          label={hazard.risk_strategy === 'ccp' ? 'CCP' : hazard.risk_strategy === 'opprp' ? 'OPRP' : hazard.risk_strategy === 'use_existing_prps' ? 'PRPs' : 'Analysis Needed'} 
+                          color={hazard.risk_strategy === 'ccp' ? 'error' : hazard.risk_strategy === 'opprp' ? 'warning' : 'info'} 
                           size="small" 
-                          color="primary" 
-                          sx={{ cursor: 'pointer' }} 
-                          onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} 
                         />
                       )}
-                    </Box>
-                  </Box>
-                </Paper>
-              </Grid>
-            );
-          })}
-        </Grid>
-      </TabPanel>
-
-      <TabPanel value={selectedTab} index={3}>
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Operational Prerequisite Programs (OPRPs)</Typography>
-        </Box>
-        <Grid container spacing={2}>
-          {oprps.map((oprp: any) => (
-            <Grid item xs={12} sm={6} md={4} key={oprp.id}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6">{oprp.oprp_name}</Typography>
-                <Typography color="textSecondary" variant="body2" gutterBottom>
-                  {oprp.oprp_number}
-                </Typography>
-                <Typography variant="body2" paragraph>
-                  {oprp.description}
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
-                  <Chip 
-                    label={oprp.status || 'Active'} 
-                    color={oprp.status === 'active' ? 'success' : 'default'} 
-                    size="small" 
-                  />
-                  {oprp.monitoring_frequency && (
-                    <Chip 
-                      label={`Monitor: ${oprp.monitoring_frequency}`} 
-                      size="small" 
-                      variant="outlined"
-                    />
-                  )}
-                </Stack>
-                {oprp.operational_limits && (
-                  <Box sx={{ mt: 1, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
-                    <Typography variant="caption" color="textSecondary">
-                      Operational Limits:
-                    </Typography>
-                    <Typography variant="body2">
-                      {oprp.operational_limits}
-                    </Typography>
-                  </Box>
-                )}
-              </Paper>
+                      {hazard.is_ccp === true && <Chip label="CCP" color="error" size="small" />}
+                    </Stack>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'flex-end' }}>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => { 
+                          setSelectedHazardItem(hazard); 
+                          setHazardViewDialogOpen(true); 
+                        }} 
+                        title="View Hazard"
+                      >
+                        <Visibility />
+                      </IconButton>
+                      <IconButton 
+                        size="small" 
+                        onClick={async () => { 
+                          if (window.confirm('Delete this hazard?')) {
+                            try {
+                              await dispatch(deleteHazard(hazard.id)).unwrap();
+                              await dispatch(fetchProduct(productId));
+                              alert('Hazard deleted successfully!');
+                            } catch (error: any) {
+                              console.error('Failed to delete hazard:', error);
+                              alert(`Failed to delete hazard: ${error}`);
+                            }
+                          }
+                        }}
+                        title="Delete Hazard"
+                      >
+                        <Delete />
+                      </IconButton>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
-        {oprps.length === 0 && (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography color="textSecondary">
-              No OPRPs defined yet. OPRPs are created automatically when a hazard is assigned the OPRP risk strategy.
-            </Typography>
-          </Paper>
-        )}
-      </TabPanel>
+          </TabPanel>
 
-      <TabPanel value={selectedTab} index={4}>
-        <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
-        <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
-          <Autocomplete options={ccps} getOptionLabel={(ccp: any) => `${ccp.ccp_number || ''} - ${ccp.ccp_name || ''}`.trim()} value={ccps.find((c: any) => String(c.id) === (monitoringForm.ccp_id || '')) || null} onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, ccp_id: val ? String(val.id) : '' })} isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id} renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP for monitoring" />} />
-          <Autocomplete
-            options={batchOptions}
-            open={batchOpen}
-            onOpen={() => setBatchOpen(true)}
-            onClose={() => setBatchOpen(false)}
-            getOptionLabel={(b: any) => b?.batch_number || ''}
-            value={batchOptions.find((b: any) => String(b?.id || '') === (monitoringForm.batch_id || '')) || null}
-            onChange={(_, val: any) => setMonitoringForm({ ...monitoringForm, batch_id: val ? String(val.id) : '', batch: val ? String(val.batch_number) : '' })}
-            inputValue={batchSearch}
-            onInputChange={(_, val) => setBatchSearch(val)}
-            isOptionEqualToValue={(opt: any, val: any) => opt?.id === val?.id}
-            renderInput={(params) => <TextField {...params} label="Batch" placeholder="Search batches..." />}
-          />
-          <TextField type="number" label="Measured Value" value={monitoringForm.value || ''} onChange={e => setMonitoringForm({ ...monitoringForm, value: e.target.value })} />
-          <TextField label="Unit" value={monitoringForm.unit || ''} onChange={e => setMonitoringForm({ ...monitoringForm, unit: e.target.value })} />
-          {/* Evidence upload */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>Attach Evidence (photos, files)</Typography>
-            <input
-              type="file"
-              multiple
-              onChange={async (e) => {
-                const files = e.target.files;
-                if (!files || !monitoringForm.ccp_id) return;
-                const api = (await import('../services/api')).api;
-                const ccpId = Number(monitoringForm.ccp_id);
-                const uploaded: string[] = [];
-                for (const file of Array.from(files)) {
-                  const form = new FormData();
-                  form.append('file', file);
-                  try {
-                    const res = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/upload-evidence`, form, {
-                      headers: { 'Content-Type': 'multipart/form-data' },
-                    });
-                    const data = res?.data?.data || res?.data;
-                    if (data?.file_path) uploaded.push(data.file_path);
-                  } catch (err) {
-                    console.error('Evidence upload failed', err);
-                    alert(`Failed to upload ${file.name}`);
-                  }
-                }
-                if (uploaded.length) {
-                  setMonitoringForm({ ...monitoringForm, evidence_files: JSON.stringify(uploaded) });
-                }
-              }}
-            />
-          </Box>
-          <Stack direction="row" spacing={2}>
-            <Button variant="contained" disabled={!monitoringForm.ccp_id} onClick={async () => {
-              const ccpId = Number(monitoringForm.ccp_id);
-              try {
-                // Prepare the request body, filtering out undefined values
-                const requestBody: any = {};
-                
-                if (monitoringForm.batch_id) {
-                  requestBody.batch_id = Number(monitoringForm.batch_id);
-                }
-                if (monitoringForm.batch) {
-                  requestBody.batch_number = monitoringForm.batch;
-                }
-                if (monitoringForm.value && !isNaN(Number(monitoringForm.value))) {
-                  requestBody.measured_value = Number(monitoringForm.value);
-                } else {
-                  alert('Please enter a valid measured value');
-                  return;
-                }
-                if (monitoringForm.unit) {
-                  requestBody.unit = monitoringForm.unit;
-                }
-                if (monitoringForm.evidence_files) {
-                  requestBody.evidence_files = monitoringForm.evidence_files;
-                }
-                
-                console.log('Sending monitoring log request:', requestBody);
-                
-                // Use the API service instead of direct fetch
-                const api = (await import('../services/api')).api;
-                await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/enhanced`, requestBody);
-                
-                // reload logs
-                try {
-                  const resp = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
-                  const logsJson = resp.data;
-                  const items = logsJson?.data?.items || logsJson?.items || [];
-                  setMonitoringLogs(items);
-                } catch {}
-                // open NC if created for this batch
-                if (monitoringForm.batch) {
-                  const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(monitoringForm.batch)}`);
-                  const data = res.data;
-                  if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
-                }
-              } catch (error) {
-                console.error('Failed to create monitoring log:', error);
-                alert('Failed to create monitoring log');
-              }
-            }}>Record Monitoring Log</Button>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">After saving, if out-of-spec, a Non-Conformance will be auto-created and opened.</Typography>
-
-          {/* Logs table */}
-          {monitoringForm.ccp_id && (
-            <Box>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Recent Monitoring Logs</Typography>
-              <TableContainer component={Paper}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date/Time</TableCell>
-                      <TableCell>Batch</TableCell>
-                      <TableCell align="right">Value</TableCell>
-                      <TableCell>Unit</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {monitoringLogs.map((log: any) => (
-                      <TableRow key={log.id}>
-                        <TableCell>{log.monitoring_time || log.created_at}</TableCell>
-                        <TableCell>{log.batch_number}</TableCell>
-                        <TableCell align="right">{log.measured_value}</TableCell>
-                        <TableCell>{log.unit}</TableCell>
-                        <TableCell>
-                          <Chip size="small" color={log.is_within_limits ? 'success' : 'error'} label={log.is_within_limits ? 'In Spec' : 'Out of Spec'} />
-                        </TableCell>
-                        <TableCell>
-                          <Button size="small" onClick={async () => {
-                            const ccpId = Number(monitoringForm.ccp_id);
-                            const api = (await import('../services/api')).api;
-                            const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || '')}`);
-                            const data = res.data;
-                            if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
-                            else alert('No NC linked for this reading');
-                          }}>Open NC</Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+          <TabPanel value={selectedTab} index={2}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6">Critical Control Points</Typography>
             </Box>
-          )}
-        </Stack>
-      </TabPanel>
+            <Grid container spacing={2}>
+              {ccps.map((ccp) => {
+                const hasEmptyFields = !ccp.ccp_number || !ccp.ccp_name || !ccp.description || 
+                  !ccp.critical_limit_min || !ccp.critical_limit_max || 
+                  !ccp.critical_limit_unit || !ccp.monitoring_frequency || 
+                  !ccp.monitoring_method || !ccp.corrective_actions ||
+                  !ccp.monitoring_responsible || !ccp.verification_responsible;
 
-      <TabPanel value={selectedTab} index={5}>
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Risk Configuration</Typography>
-          <Button variant="contained" onClick={() => setRiskConfigDialogOpen(true)}>
-            {selectedProduct?.risk_config ? 'Edit Risk Config' : 'Configure Risk Settings'}
-          </Button>
-        </Box>
-        
-        {selectedProduct?.risk_config ? (
-          <Paper sx={{ p: 3 }}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>Calculation Method</Typography>
-                <Chip label={selectedProduct.risk_config.calculation_method} color="primary" />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>Scales</Typography>
-                <Typography>Likelihood: 1-{selectedProduct.risk_config.likelihood_scale}</Typography>
-                <Typography>Severity: 1-{selectedProduct.risk_config.severity_scale}</Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" gutterBottom>Risk Thresholds</Typography>
-                <Stack direction="row" spacing={2}>
-                  <Chip label={`Low: ≤${selectedProduct.risk_config.risk_thresholds.low_threshold}`} color="success" />
-                  <Chip label={`Medium: ${selectedProduct.risk_config.risk_thresholds.low_threshold + 1}-${selectedProduct.risk_config.risk_thresholds.medium_threshold}`} color="warning" />
-                  <Chip label={`High: ≥${selectedProduct.risk_config.risk_thresholds.medium_threshold + 1}`} color="error" />
-                </Stack>
-              </Grid>
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={ccp.id}>
+                    <Paper sx={{ p: 2 }}>
+                      <Typography variant="h6">{ccp.ccp_name}</Typography>
+                      <Typography color="textSecondary">{ccp.ccp_number}</Typography>
+                      <Typography variant="body2" paragraph>{ccp.description}</Typography>
+                      {ccp.critical_limit_min && ccp.critical_limit_max && (
+                        <Typography variant="body2" color="textSecondary">Limits: {ccp.critical_limit_min} - {ccp.critical_limit_max} {ccp.critical_limit_unit}</Typography>
+                      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {hasEmptyFields ? (
+                            <>
+                              <Typography variant="body2" color="error.main">
+                                This ccp needs a complete haccp plan
+                              </Typography>
+                              <Chip 
+                                icon={<Security />} 
+                                label="" 
+                                size="small" 
+                                sx={{ bgcolor: 'error.main', cursor: 'pointer', '& .MuiChip-icon': { color: 'white' } }} 
+                                onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} 
+                              />
+                            </>
+                          ) : (
+                            <Chip 
+                              icon={<Security />} 
+                              label="" 
+                              size="small" 
+                              color="primary" 
+                              sx={{ cursor: 'pointer' }} 
+                              onClick={() => { setSelectedCcpItem(ccp); setCcpDialogOpen(true); }} 
+                            />
+                          )}
+                        </Box>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                );
+              })}
             </Grid>
-          </Paper>
-        ) : (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography color="textSecondary" gutterBottom>
-              No risk configuration set for this product
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Configure risk calculation parameters to enable proper hazard risk assessment and CCP determination.
-            </Typography>
-          </Paper>
-        )}
-      </TabPanel>
+          </TabPanel>
+
+          <TabPanel value={selectedTab} index={3}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h6">Operational Prerequisite Programs (OPRPs)</Typography>
+            </Box>
+            <Grid container spacing={2}>
+              {oprps.map((oprp: any) => (
+                <Grid item xs={12} sm={6} md={4} key={oprp.id}>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="h6">{oprp.oprp_name}</Typography>
+                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                      {oprp.oprp_number}
+                    </Typography>
+                    <Typography variant="body2" paragraph>
+                      {oprp.description}
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
+                      <Chip 
+                        label={oprp.status || 'Active'} 
+                        color={oprp.status === 'active' ? 'success' : 'default'} 
+                        size="small" 
+                      />
+                      {oprp.monitoring_frequency && (
+                        <Chip 
+                          label={`Monitor: ${oprp.monitoring_frequency}`} 
+                          size="small" 
+                          variant="outlined"
+                        />
+                      )}
+                    </Stack>
+                    {oprp.operational_limits && (
+                      <Box sx={{ mt: 1, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+                        <Typography variant="caption" color="textSecondary">
+                          Operational Limits:
+                        </Typography>
+                        <Typography variant="body2">
+                          {oprp.operational_limits}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+            {oprps.length === 0 && (
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography color="textSecondary">
+                  No OPRPs defined yet. OPRPs are created automatically when a hazard is assigned the OPRP risk strategy.
+                </Typography>
+              </Paper>
+            )}
+          </TabPanel>
+
+          <TabPanel value={selectedTab} index={4}>
+            <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
+            {renderMonitoringSection()}
+          </TabPanel>
+
+          <TabPanel value={selectedTab} index={5}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h6">Risk Configuration</Typography>
+              <Button variant="contained" onClick={() => setRiskConfigDialogOpen(true)}>
+                {selectedProduct?.risk_config ? 'Edit Risk Config' : 'Configure Risk Settings'}
+              </Button>
+            </Box>
+            {selectedProduct?.risk_config ? (
+              <Paper sx={{ p: 3 }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" gutterBottom>Calculation Method</Typography>
+                    <Chip label={selectedProduct.risk_config.calculation_method} color="primary" />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" gutterBottom>Scales</Typography>
+                    <Typography>Likelihood: 1-{selectedProduct.risk_config.likelihood_scale}</Typography>
+                    <Typography>Severity: 1-{selectedProduct.risk_config.severity_scale}</Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" gutterBottom>Risk Thresholds</Typography>
+                    <Stack direction="row" spacing={2}>
+                      <Chip label={`Low: ≤${selectedProduct.risk_config.risk_thresholds.low_threshold}`} color="success" />
+                      <Chip label={`Medium: ${selectedProduct.risk_config.risk_thresholds.low_threshold + 1}-${selectedProduct.risk_config.risk_thresholds.medium_threshold}`} color="warning" />
+                      <Chip label={`High: ≥${selectedProduct.risk_config.risk_thresholds.medium_threshold + 1}`} color="error" />
+                    </Stack>
+                  </Grid>
+                </Grid>
+              </Paper>
+            ) : (
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography color="textSecondary" gutterBottom>
+                  No risk configuration set for this product
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Configure risk calculation parameters to enable proper hazard risk assessment and CCP determination.
+                </Typography>
+              </Paper>
+            )}
+          </TabPanel>
+        </>
+      ) : (
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
+          {renderMonitoringSection()}
+        </Box>
+      )}
+
+      {/* Verification Dialog */}
+      <Dialog open={verificationDialogOpen} onClose={handleCloseVerificationDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {selectedMonitoringLog?.is_verified ? 'Verification Details' : 'Verify Monitoring Log'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">
+                Monitoring Snapshot
+              </Typography>
+              <Typography variant="body2">
+                {`${selectedMonitoringLog?.batch_number || 'Batch N/A'} • ${
+                  selectedMonitoringLog?.measured_value ?? '-'
+                } ${selectedMonitoringLog?.unit || ''}`}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {`Recorded: ${formatDateTime(
+                  selectedMonitoringLog?.monitoring_time || selectedMonitoringLog?.created_at
+                )}`}
+              </Typography>
+              <Chip
+                size="small"
+                color={selectedMonitoringLog?.is_within_limits ? 'success' : 'error'}
+                label={selectedMonitoringLog?.is_within_limits ? 'In Spec' : 'Out of Spec'}
+                sx={{ mt: 1 }}
+              />
+            </Box>
+
+            {selectedMonitoringLog?.is_verified && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={verificationForm.allowOverride}
+                    onChange={(e) =>
+                      setVerificationForm((prev) => ({ ...prev, allowOverride: e.target.checked }))
+                    }
+                  />
+                }
+                label="Override existing verification"
+              />
+            )}
+
+            <TextField
+              label="Verification Method"
+              value={verificationForm.verification_method}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({ ...prev, verification_method: e.target.value }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+            />
+
+            <TextField
+              label="Verification Result"
+              value={verificationForm.verification_result}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({ ...prev, verification_result: e.target.value }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={verificationForm.verification_is_compliant}
+                  onChange={(e) =>
+                    setVerificationForm((prev) => ({
+                      ...prev,
+                      verification_is_compliant: e.target.checked,
+                    }))
+                  }
+                  disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+                />
+              }
+              label="Compliant with verification requirements"
+            />
+
+            <TextField
+              label="Verification Notes"
+              value={verificationForm.verification_notes}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({ ...prev, verification_notes: e.target.value }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Document findings, observations, and follow-up actions..."
+            />
+
+            <TextField
+              label="Evidence (file references or URLs)"
+              value={verificationForm.verification_evidence_files}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({
+                  ...prev,
+                  verification_evidence_files: e.target.value,
+                }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+              placeholder="Enter evidence file paths or URLs separated by commas"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseVerificationDialog}>Close</Button>
+          {(!selectedMonitoringLog?.is_verified || verificationForm.allowOverride) && (
+            <Button variant="contained" onClick={handleSubmitVerification}>
+              Submit Verification
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* Dialogs */}
       <HACCPFlowchartBuilder

@@ -36,6 +36,8 @@ export interface NavigationSection {
   readonly requiredRoles?: string[];
   readonly requiredPermissions?: string[];
   readonly order: number;
+  readonly allowAssignmentAccess?: boolean;
+  readonly assignmentAllowedItems?: readonly string[];
 }
 
 // COMPACT Navigation configuration - Reduced spacing and optimized layout
@@ -63,6 +65,8 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     icon: Security,
     order: 3,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'Production Operator', 'System Administrator'],
+    allowAssignmentAccess: true,
+    assignmentAllowedItems: ['/haccp'],
     items: [
       { text: 'HACCP Plans', path: '/haccp' },
       { text: 'Risk Thresholds', path: '/haccp/risk-thresholds' },
@@ -266,13 +270,30 @@ export const getNavigationForUser = (user: any): NavigationSection[] => {
   if (!user) return [];
 
   return Object.values(NAVIGATION_CONFIG)
-    .filter(section => {
-      // Check if user has required roles
-      if (section.requiredRoles) {
-        return section.requiredRoles.includes(user.role_name);
+    .map((section) => {
+      if (!section.requiredRoles || section.requiredRoles.includes(user.role_name)) {
+        return section;
       }
-      return true;
+
+      if (
+        section.allowAssignmentAccess &&
+        user.has_haccp_assignment &&
+        section.assignmentAllowedItems?.length
+      ) {
+        const filteredItems = section.items.filter((item) =>
+          section.assignmentAllowedItems!.includes(item.path)
+        );
+        if (filteredItems.length) {
+          return {
+            ...section,
+            items: filteredItems,
+          };
+        }
+      }
+
+      return null;
     })
+    .filter((section): section is NavigationSection => Boolean(section))
     .sort((a, b) => a.order - b.order);
 };
 
@@ -283,10 +304,19 @@ export const hasAccessToPath = (user: any, path: string): boolean => {
   for (const section of Object.values(NAVIGATION_CONFIG)) {
     for (const item of section.items) {
       if (item.path === path) {
-        if (section.requiredRoles) {
-          return section.requiredRoles.includes(user.role_name);
+        if (!section.requiredRoles || section.requiredRoles.includes(user.role_name)) {
+          return true;
         }
-        return true;
+
+        if (
+          section.allowAssignmentAccess &&
+          user.has_haccp_assignment &&
+          section.assignmentAllowedItems?.includes(path)
+        ) {
+          return true;
+        }
+
+        return false;
       }
     }
   }

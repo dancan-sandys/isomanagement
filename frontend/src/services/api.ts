@@ -719,6 +719,27 @@ export const haccpAPI = {
     return response.data;
   },
 
+  verifyMonitoringLog: async (
+    ccpId: number,
+    logId: number,
+    verificationData: {
+      verification_method?: string;
+      verification_result?: string;
+      verification_is_compliant?: boolean;
+      verification_notes?: string;
+      verification_evidence_files?: string;
+    },
+    options?: { allowOverride?: boolean }
+  ) => {
+    const params = options?.allowOverride ? { allow_override: options.allowOverride } : undefined;
+    const response: AxiosResponse = await api.post(
+      `/haccp/ccps/${ccpId}/monitoring-logs/${logId}/verify`,
+      verificationData,
+      { params }
+    );
+    return response.data;
+  },
+
   // Verification Logs
   createVerificationLog: async (ccpId: number, logData: any) => {
     const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/verification-logs`, logData);
@@ -784,7 +805,7 @@ export const haccpAPI = {
   // Convenience alias retained for compatibility; delegate to HACCP endpoint
   getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/nonconformance/recent`, { params: { batch_number: batchNumber } });
-    return response.data ? { data: response.data } : { data: { found: false } } as any;
+    return response.data;
   },
 };
 
@@ -1673,7 +1694,7 @@ export const complaintsAPI = {
 
 // Traceability API
 export const traceabilityAPI = {
-  getBatches: async (params?: { page?: number; size?: number; search?: string; batch_type?: string; status?: string }) => {
+  getBatches: async (params?: { page?: number; size?: number; search?: string; batch_type?: string; status?: string; product_id?: number }) => {
     const response: AxiosResponse = await api.get('/traceability/batches', { params });
     return response.data;
   },
