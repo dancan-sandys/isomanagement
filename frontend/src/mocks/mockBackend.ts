@@ -15,6 +15,7 @@ const db = {
     flows: [] as any[],
     hazards: [] as any[],
     ccps: [] as any[],
+    contactSurfaces: [] as any[],
     dashboard: {
       total_products: 3,
       approved_plans: 2,
@@ -120,18 +121,150 @@ function seedOnce() {
   });
 
   // HACCP seed
+  const contactSurfaces = [
+    {
+      id: 1,
+      name: 'Raw Milk Receiving Line',
+      composition: '304 stainless steel piping with sanitary welds',
+      description: 'Cold-side surface exposed to inbound raw milk; CIP after each tanker.',
+      source: 'Facility fabrication',
+      provenance: 'Installed 2022, CIP validation HVAC-22-014',
+      point_of_contact: 'Receiving bay to balance tank',
+      material: 'Stainless steel',
+      main_processing_steps: 'Receiving, filtration',
+      packaging_material: 'N/A',
+      storage_conditions: 'Wet hold post-CIP',
+      shelf_life: '5-year inspection interval',
+      possible_inherent_hazards: 'Biofilm, allergen carryover',
+      fs_acceptance_criteria: 'ATP <50 RLU, weekly Listeria swab negative',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      name: 'Pasteurizer Holding Tube',
+      composition: '316 stainless steel tubing with insulation',
+      description: 'High heat zone maintaining ≥72°C for 15 seconds.',
+      source: 'HTST skid supplier',
+      provenance: 'Commissioned 2021',
+      point_of_contact: 'Between regenerator outlet and FDV',
+      material: 'Stainless steel',
+      main_processing_steps: 'Pasteurization',
+      packaging_material: 'N/A',
+      storage_conditions: 'Hot during production',
+      shelf_life: 'Annual integrity test',
+      possible_inherent_hazards: 'Under-processing if fouled',
+      fs_acceptance_criteria: 'Differential pressure >10 psi',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 3,
+      name: 'Fermentation & Blending Tanks',
+      composition: 'Stainless vessels with food-grade seals',
+      description: 'Used for yogurt culture fermentation and fruit blending.',
+      source: 'FermaMix',
+      provenance: 'Separate agitators, CIP recipe FMX-YG-04',
+      point_of_contact: 'Post-pasteurization fermentation',
+      material: 'Stainless steel',
+      main_processing_steps: 'Fermentation, blending',
+      packaging_material: 'N/A',
+      storage_conditions: 'Closed, 4°C hold',
+      shelf_life: 'Seal replacement every 12 months',
+      possible_inherent_hazards: 'Post-process contamination',
+      fs_acceptance_criteria: 'Environmental swabs <10 CFU/cm²',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 4,
+      name: 'Cheese Vat & Press Surfaces',
+      composition: 'Stainless vats, perforated molds, cheesecloth',
+      description: 'Direct contact during curd cooking and pressing.',
+      source: 'Cheese equipment line',
+      provenance: 'Cloths replaced weekly',
+      point_of_contact: 'Cheddar production',
+      material: 'Stainless steel and cloth',
+      main_processing_steps: 'Curd cooking, pressing, brining',
+      packaging_material: 'Cheesecloth',
+      storage_conditions: 'Humidity-controlled aging room',
+      shelf_life: 'Cloths 1 week',
+      possible_inherent_hazards: 'Biofilm, salt crystallization',
+      fs_acceptance_criteria: 'ATP swabs <25 RLU',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 5,
+      name: 'Butter Churn & Wrapper Table',
+      composition: 'Polished stainless churn, HDPE cutting boards',
+      description: 'Surfaces used for butter churning and packaging.',
+      source: 'Legacy equipment refurbished 2020',
+      provenance: 'Gaskets replaced quarterly',
+      point_of_contact: 'Butter working and portioning',
+      material: 'Stainless steel, HDPE',
+      main_processing_steps: 'Churning, portion cutting',
+      packaging_material: 'Wax paper',
+      storage_conditions: 'Dry between shifts',
+      shelf_life: 'HDPE boards rotated every 6 months',
+      possible_inherent_hazards: 'Physical chips, allergen smears',
+      fs_acceptance_criteria: 'Visual inspection ok, no gouges',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 6,
+      name: 'Grinding & Stuffing Line',
+      composition: 'Stainless augers, grinder plates, vacuum hoses',
+      description: 'Direct contact for ground beef and chicken.',
+      source: 'Meat processing suite',
+      provenance: 'Plates sharpened monthly, hoses replaced annually',
+      point_of_contact: 'Grinding, mixing, stuffing',
+      material: 'Stainless steel, polymer hoses',
+      main_processing_steps: 'Grinding, stuffing',
+      packaging_material: 'Vacuum bags',
+      storage_conditions: 'Disassembled, air-dried',
+      shelf_life: 'Hoses 12 months',
+      possible_inherent_hazards: 'Metal fragments, pathogen harborage',
+      fs_acceptance_criteria: 'Metal detector verification, zero residue',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 7,
+      name: 'Bakery Conveyor & Cooling Racks',
+      composition: 'Food-grade mesh belt, anodized racks',
+      description: 'Post-bake surfaces for breads and cookies.',
+      source: 'Bakery line OEM',
+      provenance: 'Belts deep-cleaned weekly',
+      point_of_contact: 'Conveying, cooling prior to packaging',
+      material: 'Stainless mesh, aluminum',
+      main_processing_steps: 'Cooling, inspection',
+      packaging_material: 'Paper bags, poly pouches',
+      storage_conditions: 'Dry storage',
+      shelf_life: 'Belts inspected quarterly',
+      possible_inherent_hazards: 'Foreign material, allergen residues',
+      fs_acceptance_criteria: 'Pre-op inspection checklist met',
+      created_by: 1,
+      created_at: new Date().toISOString(),
+    },
+  ];
+  db.haccp.contactSurfaces = contactSurfaces;
   db.haccp.products = [
     { 
       id: 1, 
       product_code: 'P-001', 
       name: 'Yogurt', 
       description: 'Strawberry Yogurt', 
-      composition: 'Milk, live cultures, strawberry flavoring',
-      high_risk_ingredients: 'None',
+      composition: [
+        { material_id: 101, material_code: 'RM-MILK-001', material_name: 'Raw Whole Milk', supplier_name: 'Green Valley Dairy Farm', category: 'raw_materials', percentage: 85, unit: '%', is_high_risk: true },
+        { material_id: 102, material_code: 'RM-CULTURE-001', material_name: 'Thermophilic Yogurt Culture', supplier_name: 'Pure Cultures Inc', category: 'ingredients', percentage: 10, unit: '%' },
+        { material_id: 103, material_code: 'RM-SUGAR-001', material_name: 'Granulated Cane Sugar', supplier_name: 'Sweet Sugar Co', category: 'ingredients', percentage: 5, unit: '%' }
+      ],
+      high_risk_ingredients: { material_id: 101, material_code: 'RM-MILK-001', material_name: 'Raw Whole Milk', supplier_name: 'Green Valley Dairy Farm', category: 'raw_materials', is_high_risk: true },
       physical_chemical_biological_description: 'Thick, creamy texture, white with pink tint, pH 4.0-4.5',
       main_processing_steps: 'Milk pasteurization, inoculation, fermentation, straining, flavoring, packaging',
       distribution_serving_methods: 'Refrigerated transport, cold chain maintenance',
-      product_contact_surfaces: 'Stainless steel fermentation tanks, packaging equipment',
       consumer_groups: 'General population, health-conscious consumers',
       storage_conditions: 'Refrigerated 2-4°C',
       shelf_life_days: 21,
@@ -142,19 +275,24 @@ function seedOnce() {
       haccp_plan_approved: true, 
       haccp_plan_version: '1.2', 
       ccp_count: 2, 
-      created_by: 'qa_manager' 
+      created_by: 'qa_manager',
+      contact_surfaces: contactSurfaces.filter((surface) => [1, 2, 3].includes(surface.id)),
     },
     { 
       id: 2, 
       product_code: 'P-002', 
       name: 'Cheddar', 
       description: 'Cheddar Cheese', 
-      composition: 'Pasteurized milk, rennet, cheese cultures, salt',
-      high_risk_ingredients: 'Raw milk (before pasteurization)',
+      composition: [
+        { material_id: 101, material_code: 'RM-MILK-001', material_name: 'Raw Whole Milk', supplier_name: 'Green Valley Dairy Farm', category: 'raw_materials', percentage: 90, unit: '%', is_high_risk: true },
+        { material_id: 102, material_code: 'RM-CULTURE-001', material_name: 'Thermophilic Yogurt Culture', supplier_name: 'Pure Cultures Inc', category: 'ingredients', percentage: 5, unit: '%' },
+        { material_id: 104, material_code: 'RM-REN-001', material_name: 'Microbial Rennet', supplier_name: 'Pure Cultures Inc', category: 'ingredients', percentage: 1, unit: '%' },
+        { material_id: 105, material_code: 'RM-SALT-001', material_name: 'Food Grade Sea Salt', supplier_name: 'Sweet Sugar Co', category: 'ingredients', percentage: 4, unit: '%' }
+      ],
+      high_risk_ingredients: { material_id: 101, material_code: 'RM-MILK-001', material_name: 'Raw Whole Milk', supplier_name: 'Green Valley Dairy Farm', category: 'raw_materials', is_high_risk: true },
       physical_chemical_biological_description: 'Firm texture, orange color, pH 5.1-5.3',
       main_processing_steps: 'Milk pasteurization, acidification, rennet addition, cutting, cooking, pressing, salting, aging',
       distribution_serving_methods: 'Refrigerated transport, temperature-controlled storage',
-      product_contact_surfaces: 'Cheese vats, presses, aging rooms, packaging equipment',
       consumer_groups: 'General population, cheese lovers',
       storage_conditions: 'Refrigerated 2-4°C',
       shelf_life_days: 90,
@@ -165,19 +303,21 @@ function seedOnce() {
       haccp_plan_approved: false, 
       haccp_plan_version: '0.9', 
       ccp_count: 1, 
-      created_by: 'qa_manager' 
+      created_by: 'qa_manager',
+      contact_surfaces: contactSurfaces.filter((surface) => [1, 4].includes(surface.id)),
     },
     { 
       id: 3, 
       product_code: 'P-003', 
       name: 'Milk', 
       description: 'Whole Milk', 
-      composition: 'Whole milk, 3.25% fat, pasteurized, fortified with vitamin D',
-      high_risk_ingredients: 'Raw milk (before pasteurization)',
+      composition: [
+        { material_id: 101, material_code: 'RM-MILK-001', material_name: 'Raw Whole Milk', supplier_name: 'Green Valley Dairy Farm', category: 'raw_materials', percentage: 100, unit: '%', is_high_risk: true }
+      ],
+      high_risk_ingredients: { material_id: 101, material_code: 'RM-MILK-001', material_name: 'Raw Whole Milk', supplier_name: 'Green Valley Dairy Farm', category: 'raw_materials', is_high_risk: true },
       physical_chemical_biological_description: 'Liquid, white, homogeneous, pH 6.6-6.8',
       main_processing_steps: 'Raw milk reception, filtration, standardization, pasteurization (72°C/15s), cooling, packaging',
       distribution_serving_methods: 'Refrigerated transport in temperature-controlled vehicles',
-      product_contact_surfaces: 'Stainless steel tanks, pipes, pasteurizer, packaging equipment',
       consumer_groups: 'General population, children over 12 months',
       storage_conditions: 'Refrigerated 2-4°C',
       shelf_life_days: 14,
@@ -188,7 +328,8 @@ function seedOnce() {
       haccp_plan_approved: true, 
       haccp_plan_version: '1.0', 
       ccp_count: 2, 
-      created_by: 'qa_manager' 
+      created_by: 'qa_manager',
+      contact_surfaces: contactSurfaces.filter((surface) => [1, 2].includes(surface.id)),
     },
   ];
   db.haccp.flows = [
@@ -424,19 +565,38 @@ export async function initMockBackend() {
   mock.onGet(/\/dashboard\/recent-activity$/).reply(() => ok({ activities: db.documents.slice(0, 5).map((d, i) => ({ id: i + 1, action: 'Document Updated', title: d.title, timestamp: new Date(Date.now() - i * 3600 * 1000).toISOString() })) }));
 
   // HACCP
-  mock.onGet(/\/haccp\/products$/).reply(() => ok({ products: db.haccp.products }));
+  mock.onGet(/\/haccp\/products$/).reply(() => ok({ items: db.haccp.products, assigned_only: false }));
   mock.onGet(/\/haccp\/products\/\d+$/).reply((config) => {
     const id = Number((config.url || '').split('/')[3]);
     const product = db.haccp.products.find((p) => p.id === id);
     const flows = db.haccp.flows.filter((f) => f.product_id === id);
     const hazards = db.haccp.hazards.filter((h) => h.product_id === id);
     const ccps = db.haccp.ccps.filter((c) => c.product_id === id);
-    return ok({ ...product, flows, hazards, ccps });
+    return product
+      ? ok({
+          ...product,
+          process_flows: flows,
+          hazards,
+          ccps,
+          oprps: [],
+        })
+      : [404, { detail: 'Not found' }];
   });
   mock.onPost(/\/haccp\/products$/).reply((config) => {
     const body = JSON.parse(config.data || '{}');
     const id = Math.max(0, ...db.haccp.products.map((p) => p.id)) + 1;
-    const product = { id, ccp_count: 0, created_by: 'qa_manager', ...body };
+    const { contact_surface_ids = [], ...rest } = body;
+    const contact_surfaces = db.haccp.contactSurfaces.filter((surface) => contact_surface_ids.includes(surface.id));
+    const product = {
+      id,
+      ccp_count: 0,
+      created_by: 'qa_manager',
+      created_at: new Date().toISOString(),
+      haccp_plan_approved: false,
+      haccp_plan_version: '1.0',
+      contact_surfaces,
+      ...rest,
+    };
     db.haccp.products.unshift(product);
     return ok(product);
   });
@@ -444,7 +604,14 @@ export async function initMockBackend() {
     const id = Number((config.url || '').split('/')[3]);
     const idx = db.haccp.products.findIndex((p) => p.id === id);
     const patch = JSON.parse(config.data || '{}');
-    if (idx >= 0) db.haccp.products[idx] = { ...db.haccp.products[idx], ...patch };
+    if (idx >= 0) {
+      const { contact_surface_ids, ...rest } = patch;
+      let contact_surfaces = db.haccp.products[idx].contact_surfaces || [];
+      if (Array.isArray(contact_surface_ids)) {
+        contact_surfaces = db.haccp.contactSurfaces.filter((surface) => contact_surface_ids.includes(surface.id));
+      }
+      db.haccp.products[idx] = { ...db.haccp.products[idx], ...rest, contact_surfaces };
+    }
     return ok(db.haccp.products[idx]);
   });
   mock.onDelete(/\/haccp\/products\/\d+$/).reply((config) => {
@@ -519,6 +686,22 @@ export async function initMockBackend() {
     return ok({ message: 'deleted' });
   });
   mock.onGet(/\/haccp\/dashboard$/).reply(() => ok(db.haccp.dashboard));
+  mock.onGet(/\/haccp\/contact-surfaces(\?.*)?$/).reply((config) => {
+    const params = parseQuery(config.url || '');
+    let items = [...db.haccp.contactSurfaces];
+    if (params.q) {
+      const term = String(params.q).toLowerCase();
+      items = items.filter((surface) => surface.name.toLowerCase().includes(term));
+    }
+    return ok({ items, count: items.length });
+  });
+  mock.onPost(/\/haccp\/contact-surfaces$/).reply((config) => {
+    const body = JSON.parse(config.data || '{}');
+    const id = Math.max(0, ...db.haccp.contactSurfaces.map((s) => s.id)) + 1;
+    const surface = { id, created_by: 1, created_at: new Date().toISOString(), ...body };
+    db.haccp.contactSurfaces.push(surface);
+    return ok(surface);
+  });
 
   // Suppliers
   mock.onGet(/\/suppliers\/dashboard\/stats$/).reply(() => ok(db.suppliers.dashboard));

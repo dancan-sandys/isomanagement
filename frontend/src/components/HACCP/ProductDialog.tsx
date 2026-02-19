@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -13,10 +13,67 @@ import {
   Grid,
   Alert,
   CircularProgress,
+  Autocomplete,
+  Box,
+  Chip,
+  FormHelperText,
+  Typography,
+  Stack,
 } from '@mui/material';
+import GlobalStyles from '@mui/material/GlobalStyles';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
-import { createProduct, updateProduct } from '../../store/slices/haccpSlice';
+import { createProduct, updateProduct, fetchContactSurfaces } from '../../store/slices/haccpSlice';
+import { supplierAPI } from '../../services/supplierAPI';
+import { Material } from '../../types/supplier';
+import MaterialForm from '../Materials/MaterialForm';
+import ContactSurfaceDialog from './ContactSurfaceDialog';
+import { ContactSurface } from '../../types/haccp';
+import { Add as AddIcon } from '@mui/icons-material';
+
+interface MaterialOption {
+  id: number;
+  material_id: number;
+  material_code?: string;
+  name: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  category?: string;
+}
+
+interface CompositionItem {
+  material_id: number;
+  material_code?: string;
+  material_name?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  category?: string;
+  percentage?: number;
+  unit?: string;
+  notes?: string;
+  is_high_risk?: boolean;
+}
+
+interface ProductFormData {
+  product_code: string;
+  name: string;
+  description: string;
+  composition: CompositionItem[];
+  high_risk_ingredients: CompositionItem | null;
+  physical_chemical_biological_description: string;
+  main_processing_steps: string;
+  distribution_serving_methods: string;
+  consumer_groups: string;
+  storage_conditions: string;
+  shelf_life_days: string;
+  packaging_type: string;
+  inherent_hazards: string;
+  fs_acceptance_criteria: string;
+  law_regulation_requirement: string;
+  haccp_plan_approved: boolean;
+  haccp_plan_version: string;
+  contact_surface_ids: number[];
+}
 
 interface ProductDialogProps {
   open: boolean;
@@ -25,20 +82,78 @@ interface ProductDialogProps {
   onSuccess?: () => void; // Callback for successful save
 }
 
+interface MaterialQuickCreateDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (material: Material) => void;
+}
+
+const MaterialQuickCreateDialog: React.FC<MaterialQuickCreateDialogProps> = ({
+  open,
+  onClose,
+  onCreated,
+}) => {
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add('material-dialog-active');
+    } else {
+      document.body.classList.remove('material-dialog-active');
+    }
+    return () => {
+      document.body.classList.remove('material-dialog-active');
+    };
+  }, [open]);
+
+  const handleMaterialSaved = (material: Material) => {
+    onCreated(material);
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      keepMounted
+      disableEnforceFocus
+      sx={{ zIndex: (theme) => theme.zIndex.modal + 30 }}
+      BackdropProps={{ sx: { zIndex: (theme) => theme.zIndex.modal + 29 } }}
+      PaperProps={{
+        id: 'material-create-dialog',
+        sx: {
+          position: 'relative',
+          zIndex: (theme) => theme.zIndex.modal + 30,
+          '& .MuiAutocomplete-popper, & .MuiPopper-root': {
+            zIndex: (theme) => theme.zIndex.modal + 40,
+          },
+          '& .MuiPopover-root, & .MuiMenu-paper': {
+            zIndex: (theme) => theme.zIndex.modal + 40,
+          },
+        },
+      }}
+    >
+      <DialogTitle>Add Raw Material</DialogTitle>
+      <DialogContent dividers sx={{ p: 0 }}>
+        <MaterialForm mode="create" onSave={handleMaterialSaved} onCancel={onClose} />
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, onSuccess }) => {
   const dispatch = useDispatch<AppDispatch>();
-  const { loading, error } = useSelector((state: RootState) => state.haccp);
+  const { loading, error, contactSurfaces, contactSurfacesLoading } = useSelector((state: RootState) => state.haccp);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProductFormData>({
     product_code: '',
     name: '',
     description: '',
-    composition: '',
-    high_risk_ingredients: '',
+    composition: [],
+    high_risk_ingredients: null,
     physical_chemical_biological_description: '',
     main_processing_steps: '',
     distribution_serving_methods: '',
-    product_contact_surfaces: '',
     consumer_groups: '',
     storage_conditions: '',
     shelf_life_days: '',
@@ -48,22 +163,67 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
     law_regulation_requirement: '',
     haccp_plan_approved: false,
     haccp_plan_version: '',
+    contact_surface_ids: [],
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialsError, setMaterialsError] = useState<string | null>(null);
+  const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
+  const [contactSurfaceDialogOpen, setContactSurfaceDialogOpen] = useState(false);
+  const selectedContactSurfaces = useMemo(
+    () => contactSurfaces.filter((surface) => formData.contact_surface_ids.includes(surface.id)),
+    [contactSurfaces, formData.contact_surface_ids]
+  );
+
+  useEffect(() => {
+    if (open) {
+      dispatch(fetchContactSurfaces(undefined));
+    }
+  }, [dispatch, open]);
 
   useEffect(() => {
     if (product) {
+      const rawComposition = Array.isArray(product.composition) ? product.composition : [];
+      const compositionItems: CompositionItem[] = rawComposition.map((item: any) => ({
+        material_id: item.material_id,
+        material_code: item.material_code,
+        material_name: item.material_name,
+        supplier_id: item.supplier_id,
+        supplier_name: item.supplier_name,
+        category: item.category,
+        percentage: item.percentage,
+        unit: item.unit,
+        notes: item.notes,
+        is_high_risk: item.is_high_risk,
+      }));
+      const highRiskId = product.high_risk_ingredients?.material_id ?? null;
+      const compositionWithFlags = markHighRisk(compositionItems, highRiskId);
+      const highRiskItem = product.high_risk_ingredients
+        ? {
+            material_id: product.high_risk_ingredients.material_id,
+            material_code: product.high_risk_ingredients.material_code,
+            material_name: product.high_risk_ingredients.material_name,
+            supplier_id: product.high_risk_ingredients.supplier_id,
+            supplier_name: product.high_risk_ingredients.supplier_name,
+            category: product.high_risk_ingredients.category,
+            percentage: product.high_risk_ingredients.percentage,
+            unit: product.high_risk_ingredients.unit,
+            notes: product.high_risk_ingredients.notes,
+            is_high_risk: true,
+          }
+        : null;
+
       setFormData({
         product_code: product.product_code || '',
         name: product.name || '',
         description: product.description || '',
-        composition: product.composition || '',
-        high_risk_ingredients: product.high_risk_ingredients || '',
+        composition: compositionWithFlags,
+        high_risk_ingredients: highRiskItem,
         physical_chemical_biological_description: product.physical_chemical_biological_description || '',
         main_processing_steps: product.main_processing_steps || '',
         distribution_serving_methods: product.distribution_serving_methods || '',
-        product_contact_surfaces: product.product_contact_surfaces || '',
         consumer_groups: product.consumer_groups || '',
         storage_conditions: product.storage_conditions || '',
         shelf_life_days: product.shelf_life_days?.toString() || '',
@@ -73,18 +233,18 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
         law_regulation_requirement: product.law_regulation_requirement || '',
         haccp_plan_approved: product.haccp_plan_approved || false,
         haccp_plan_version: product.haccp_plan_version || '',
+        contact_surface_ids: (product.contact_surfaces || []).map((surface: any) => surface.id),
       });
     } else {
       setFormData({
         product_code: '',
         name: '',
         description: '',
-        composition: '',
-        high_risk_ingredients: '',
+        composition: [],
+        high_risk_ingredients: null,
         physical_chemical_biological_description: '',
         main_processing_steps: '',
         distribution_serving_methods: '',
-        product_contact_surfaces: '',
         consumer_groups: '',
         storage_conditions: '',
         shelf_life_days: '',
@@ -94,16 +254,51 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
         law_regulation_requirement: '',
         haccp_plan_approved: false,
         haccp_plan_version: '',
+        contact_surface_ids: [],
       });
     }
     setFormErrors({});
   }, [product, open]);
 
-  const handleInputChange = (field: string, value: any) => {
+  useEffect(() => {
+    let active = true;
+    const loadMaterials = async () => {
+      setMaterialsLoading(true);
+      setMaterialsError(null);
+      try {
+        const res: any = await supplierAPI.getMaterials({ size: 200, approval_status: 'approved' });
+        if (!active) return;
+        const items = res?.data?.items || res?.items || res?.data || [];
+        const mapped: MaterialOption[] = items.map((item: any) => ({
+          id: item.id,
+          material_id: item.id,
+          material_code: item.material_code,
+          name: item.name,
+          supplier_id: item.supplier_id,
+          supplier_name: item.supplier_name,
+          category: item.category,
+        }));
+        setMaterialOptions(mapped);
+      } catch (error) {
+        if (!active) return;
+        setMaterialOptions([]);
+        setMaterialsError('Failed to load raw materials.');
+      } finally {
+        if (active) {
+          setMaterialsLoading(false);
+        }
+      }
+    };
+
+    loadMaterials();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleInputChange = (field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (formErrors[field]) {
-      setFormErrors(prev => ({ ...prev, [field]: '' }));
-    }
+    clearFieldError(field as string);
   };
 
   const validateForm = () => {
@@ -114,6 +309,12 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
     }
     if (!formData.name.trim()) {
       errors.name = 'Product name is required';
+    }
+    if (!formData.composition.length) {
+      errors.composition = 'Select at least one raw material';
+    }
+    if (!formData.high_risk_ingredients) {
+      errors.high_risk_ingredients = 'Select a high-risk ingredient';
     }
 
     setFormErrors(errors);
@@ -126,9 +327,15 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
     }
 
     try {
+      const compositionPayload = serializeComposition(formData.composition);
+      const highRiskPayload = serializeHighRisk(formData.high_risk_ingredients);
+
       const submitData = {
         ...formData,
-        shelf_life_days: formData.shelf_life_days ? parseInt(formData.shelf_life_days) : null,
+        composition: compositionPayload,
+        high_risk_ingredients: highRiskPayload,
+        shelf_life_days: formData.shelf_life_days ? parseInt(formData.shelf_life_days, 10) : null,
+        contact_surface_ids: formData.contact_surface_ids,
       };
 
       if (product) {
@@ -157,12 +364,219 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
     }
   };
 
+  const markHighRisk = (items: CompositionItem[], highRiskId?: number | null) =>
+    items.map(item => ({ ...item, is_high_risk: !!highRiskId && item.material_id === highRiskId }));
+
+  const clearFieldError = (field: string) => {
+    if (formErrors[field]) {
+      setFormErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const handleMaterialCreated = (material: Material) => {
+    const newOption: MaterialOption = {
+      id: material.id,
+      material_id: material.id,
+      material_code: material.material_code,
+      name: material.name,
+      supplier_id: material.supplier_id,
+      supplier_name: material.supplier_name,
+      category: material.category,
+    };
+
+    setMaterialOptions((prev) => {
+      const exists = prev.some((option) => option.material_id === material.id);
+      if (exists) {
+        return prev.map((option) =>
+          option.material_id === material.id ? newOption : option
+        );
+      }
+      return [...prev, newOption];
+    });
+
+    setMaterialsError(null);
+
+    setFormData((prev) => {
+      const compositionExists = prev.composition.some(
+        (item) => item.material_id === material.id
+      );
+
+      const newCompositionItem: CompositionItem = {
+        material_id: material.id,
+        material_code: material.material_code,
+        material_name: material.name,
+        supplier_id: material.supplier_id,
+        supplier_name: material.supplier_name,
+        category: material.category,
+      };
+
+      const baseComposition = compositionExists
+        ? prev.composition
+        : [...prev.composition, newCompositionItem];
+
+      const shouldSetHighRisk = !prev.high_risk_ingredients;
+      const targetHighRiskId = shouldSetHighRisk
+        ? material.id
+        : prev.high_risk_ingredients?.material_id ?? null;
+
+      const compositionWithFlags = markHighRisk(baseComposition, targetHighRiskId);
+      const updatedHighRisk = targetHighRiskId
+        ? compositionWithFlags.find((item) => item.material_id === targetHighRiskId) || null
+        : null;
+
+      return {
+        ...prev,
+        composition: compositionWithFlags,
+        high_risk_ingredients: updatedHighRisk
+          ? { ...updatedHighRisk }
+          : prev.high_risk_ingredients,
+      };
+    });
+
+    clearFieldError('composition');
+    clearFieldError('high_risk_ingredients');
+  };
+
+  const handleContactSurfaceSelection = (value: ContactSurface[]) => {
+    setFormData((prev) => ({ ...prev, contact_surface_ids: value.map((surface) => surface.id) }));
+  };
+
+  const handleContactSurfaceCreated = (surface: ContactSurface) => {
+    setFormData((prev) => {
+      const nextIds = new Set(prev.contact_surface_ids);
+      nextIds.add(surface.id);
+      return { ...prev, contact_surface_ids: Array.from(nextIds) };
+    });
+  };
+
+  const handleCompositionChange = (_: any, selected: MaterialOption[]) => {
+    const updatedCompositionRaw: CompositionItem[] = selected.map(option => {
+      const existing = formData.composition.find(item => item.material_id === option.material_id);
+      return {
+        material_id: option.material_id,
+        material_code: option.material_code,
+        material_name: option.name,
+        supplier_id: option.supplier_id,
+        supplier_name: option.supplier_name,
+        category: option.category,
+        percentage: existing?.percentage,
+        unit: existing?.unit,
+        notes: existing?.notes,
+      };
+    });
+
+    setFormData(prev => {
+      const currentHighRiskId = prev.high_risk_ingredients?.material_id ?? null;
+      const compositionWithFlags = markHighRisk(updatedCompositionRaw, currentHighRiskId);
+      const updatedHighRisk = currentHighRiskId
+        ? compositionWithFlags.find(item => item.material_id === currentHighRiskId)
+        : null;
+      return {
+        ...prev,
+        composition: compositionWithFlags,
+        high_risk_ingredients: updatedHighRisk ? { ...updatedHighRisk } : null,
+      };
+    });
+
+    if (selected.length === 0) {
+      setFormErrors(prev => ({ ...prev, composition: 'Select at least one raw material' }));
+    } else {
+      clearFieldError('composition');
+    }
+    if (formData.high_risk_ingredients && selected.some(option => option.material_id === formData.high_risk_ingredients!.material_id)) {
+      clearFieldError('high_risk_ingredients');
+    } else if (formData.high_risk_ingredients) {
+      setFormErrors(prev => ({ ...prev, high_risk_ingredients: 'Select a high-risk ingredient from the composition' }));
+    }
+  };
+
+  const handleHighRiskSelect = (materialId: number | null) => {
+    setFormData(prev => {
+      const compositionWithFlags = markHighRisk(prev.composition, materialId);
+      const selectedItem = materialId
+        ? compositionWithFlags.find(item => item.material_id === materialId) || null
+        : null;
+      return {
+        ...prev,
+        composition: compositionWithFlags,
+        high_risk_ingredients: selectedItem ? { ...selectedItem } : null,
+      };
+    });
+
+    if (materialId) {
+      clearFieldError('high_risk_ingredients');
+    } else {
+      setFormErrors(prev => ({ ...prev, high_risk_ingredients: 'Select a high-risk ingredient' }));
+    }
+  };
+
+  const serializeComposition = (items: CompositionItem[]) =>
+    items.map(item => {
+      const payload: any = {
+        material_id: item.material_id,
+        material_code: item.material_code,
+        material_name: item.material_name,
+        supplier_id: item.supplier_id,
+        supplier_name: item.supplier_name,
+        category: item.category,
+      };
+      if (item.percentage !== undefined && item.percentage !== null) {
+        payload.percentage = item.percentage;
+      }
+      if (item.unit) {
+        payload.unit = item.unit;
+      }
+      if (item.notes) {
+        payload.notes = item.notes;
+      }
+      if (item.is_high_risk) {
+        payload.is_high_risk = true;
+      }
+      return payload;
+    });
+
+  const serializeHighRisk = (item: CompositionItem | null) => {
+    if (!item) return null;
+    const payload: any = {
+      material_id: item.material_id,
+      material_code: item.material_code,
+      material_name: item.material_name,
+      supplier_id: item.supplier_id,
+      supplier_name: item.supplier_name,
+      category: item.category,
+      is_high_risk: true,
+    };
+    if (item.percentage !== undefined && item.percentage !== null) {
+      payload.percentage = item.percentage;
+    }
+    if (item.unit) {
+      payload.unit = item.unit;
+    }
+    if (item.notes) {
+      payload.notes = item.notes;
+    }
+    return payload;
+  };
+
+  const selectedCompositionOptions = useMemo(
+    () =>
+      materialOptions.filter(option =>
+        formData.composition.some(item => item.material_id === option.material_id)
+      ),
+    [materialOptions, formData.composition]
+  );
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        {product ? 'Edit Product' : 'Add New Product'}
-      </DialogTitle>
-      <DialogContent>
+    <>
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {product ? 'Edit Product' : 'Add New Product'}
+        </DialogTitle>
+        <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -204,26 +618,88 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
             />
           </Grid>
           <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Composition"
-              value={formData.composition}
-              onChange={(e) => handleInputChange('composition', e.target.value)}
-              multiline
-              rows={3}
-              placeholder="Detailed composition of the product"
-            />
+            <FormControl fullWidth>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+              >
+                <Box flex={1}>
+                  <Autocomplete
+                    multiple
+                    options={materialOptions}
+                    value={selectedCompositionOptions}
+                    onChange={handleCompositionChange}
+                    loading={materialsLoading}
+                    disableCloseOnSelect
+                    isOptionEqualToValue={(option, value) => option.material_id === value.material_id}
+                    getOptionLabel={(option) => {
+                      if (!option) return '';
+                      const code = option.material_code ? `${option.material_code} — ` : '';
+                      return `${code}${option.name}`;
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Composition (Raw Materials)"
+                        placeholder="Select raw materials"
+                        error={!!formErrors.composition}
+                        helperText={formErrors.composition}
+                      />
+                    )}
+                  />
+                </Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={() => setMaterialDialogOpen(true)}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  Add Material
+                </Button>
+              </Stack>
+            </FormControl>
+            {materialsError && (
+              <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                {materialsError}
+              </Typography>
+            )}
+            {formData.composition.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {formData.composition.map(item => (
+                  <Chip
+                    key={item.material_id}
+                    label={`${item.material_code ? `${item.material_code} — ` : ''}${item.material_name || 'Unnamed material'}${item.is_high_risk ? ' • High Risk' : ''}`}
+                    color={item.is_high_risk ? 'warning' : 'default'}
+                    size="small"
+                    sx={{ mr: 0.75, mb: 0.75 }}
+                  />
+                ))}
+              </Box>
+            )}
           </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="High-risk Ingredients"
-              value={formData.high_risk_ingredients}
-              onChange={(e) => handleInputChange('high_risk_ingredients', e.target.value)}
-              multiline
-              rows={2}
-              placeholder="List any high-risk ingredients"
-            />
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth error={!!formErrors.high_risk_ingredients} disabled={!formData.composition.length}>
+              <InputLabel id="high-risk-ingredient-label">High-risk Ingredient</InputLabel>
+              <Select
+                labelId="high-risk-ingredient-label"
+                label="High-risk Ingredient"
+                value={formData.high_risk_ingredients?.material_id ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? null : Number(e.target.value);
+                  handleHighRiskSelect(value);
+                }}
+              >
+                {formData.composition.map(item => (
+                  <MenuItem key={item.material_id} value={item.material_id}>
+                    {item.material_code ? `${item.material_code} — ` : ''}{item.material_name || 'Unnamed material'}
+                  </MenuItem>
+                ))}
+              </Select>
+              {formErrors.high_risk_ingredients && (
+                <FormHelperText>{formErrors.high_risk_ingredients}</FormHelperText>
+              )}
+            </FormControl>
           </Grid>
           <Grid item xs={12}>
             <TextField
@@ -266,15 +742,50 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
             />
           </Grid>
           <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Product Contact Surfaces"
-              value={formData.product_contact_surfaces}
-              onChange={(e) => handleInputChange('product_contact_surfaces', e.target.value)}
-              multiline
-              rows={2}
-              placeholder="Describe materials and surfaces that come in contact with the product"
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+              Contact Surfaces
+            </Typography>
+            <Autocomplete
+              multiple
+              options={contactSurfaces}
+              loading={contactSurfacesLoading}
+              value={selectedContactSurfaces}
+              onChange={(_, value) => handleContactSurfaceSelection(value)}
+              getOptionLabel={(option) => option.name}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip key={option.id} label={option.name} {...getTagProps({ index })} />
+                ))
+              }
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="body2">{option.name}</Typography>
+                    {option.point_of_contact && (
+                      <Typography variant="caption" color="text.secondary">
+                        {option.point_of_contact}
+                      </Typography>
+                    )}
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Select contact surfaces"
+                  placeholder="Begin typing to search"
+                  helperText="Reuse existing surfaces or add a new one below."
+                />
+              )}
             />
+            <Button
+              variant="text"
+              startIcon={<AddIcon />}
+              sx={{ mt: 1 }}
+              onClick={() => setContactSurfaceDialogOpen(true)}
+            >
+              Add Contact Surface
+            </Button>
           </Grid>
           <Grid item xs={12}>
             <TextField
@@ -349,20 +860,49 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ open, onClose, product, o
           </Grid>
         </Grid>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={20} /> : null}
-        >
-          {product ? 'Update' : 'Create'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <DialogActions>
+          <Button onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained" 
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : null}
+          >
+            {product ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <MaterialQuickCreateDialog
+        open={materialDialogOpen}
+        onClose={() => setMaterialDialogOpen(false)}
+        onCreated={handleMaterialCreated}
+      />
+      <ContactSurfaceDialog
+        open={contactSurfaceDialogOpen}
+        onClose={() => setContactSurfaceDialogOpen(false)}
+        onCreated={handleContactSurfaceCreated}
+      />
+      {materialDialogOpen && (
+        <GlobalStyles
+          styles={(theme) => ({
+            '.material-dialog-active .MuiPopover-root': {
+              zIndex: theme.zIndex.modal + 40,
+            },
+            '.material-dialog-active .MuiAutocomplete-popper': {
+              zIndex: theme.zIndex.modal + 40,
+            },
+            '.material-dialog-active .MuiMenu-root, .material-dialog-active .MuiMenu-paper': {
+              zIndex: theme.zIndex.modal + 40,
+            },
+            '.material-dialog-active .MuiPickersPopper-root, .material-dialog-active .MuiPopover-paper': {
+              zIndex: theme.zIndex.modal + 40,
+            },
+          })}
+        />
+      )}
+    </>
   );
 };
 

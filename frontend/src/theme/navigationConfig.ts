@@ -36,6 +36,8 @@ export interface NavigationSection {
   readonly requiredRoles?: string[];
   readonly requiredPermissions?: string[];
   readonly order: number;
+  readonly allowAssignmentAccess?: boolean;
+  readonly assignmentAllowedItems?: readonly string[];
 }
 
 // COMPACT Navigation configuration - Reduced spacing and optimized layout
@@ -64,6 +66,8 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 3,
     requiredRoles: ['QA Manager', 'QA Specialist', 'Production Manager', 'Production Operator', 'System Administrator', 'HACCP Logger'],
     requiredPermissions: ['haccp:view'],
+    allowAssignmentAccess: true,
+    assignmentAllowedItems: ['/haccp'],
     items: [
       { text: 'HACCP Plans', path: '/haccp' },
       { text: 'Monitoring', path: '/haccp/monitoring' },
@@ -278,17 +282,32 @@ export const getNavigationForUser = (user: any): NavigationSection[] => {
   };
 
   return Object.values(NAVIGATION_CONFIG)
-    .filter(section => {
+    .map((section) => {
       if (section.requiredRoles != null && section.requiredRoles.length > 0) {
-        if (roleMatch(section)) return true;
-        if (section.requiredPermissions && section.requiredPermissions.length > 0 && permissionMatch(section)) return true;
-        return false;
+        if (roleMatch(section)) return section;
+        if (section.requiredPermissions && section.requiredPermissions.length > 0 && permissionMatch(section)) return section;
       }
       if (section.requiredPermissions && section.requiredPermissions.length > 0) {
-        return permissionMatch(section);
+        if (permissionMatch(section)) return section;
       }
-      return true;
+      if (
+        section.allowAssignmentAccess &&
+        user.has_haccp_assignment &&
+        section.assignmentAllowedItems?.length
+      ) {
+        const filteredItems = section.items.filter((item) =>
+          section.assignmentAllowedItems!.includes(item.path)
+        );
+        if (filteredItems.length) {
+          return {
+            ...section,
+            items: filteredItems,
+          };
+        }
+      }
+      return null;
     })
+    .filter((section): section is NavigationSection => Boolean(section))
     .sort((a, b) => a.order - b.order);
 };
 
@@ -310,13 +329,20 @@ export const hasAccessToPath = (user: any, path: string): boolean => {
       if (item.path === path) {
         if (section.requiredRoles != null && section.requiredRoles.length > 0) {
           if (roleMatch(section)) return true;
-          if (section.requiredPermissions && permissionMatch(section)) return true;
-          return false;
+          if (section.requiredPermissions && section.requiredPermissions.length > 0 && permissionMatch(section)) return true;
         }
         if (section.requiredPermissions && section.requiredPermissions.length > 0) {
-          return permissionMatch(section);
+          if (permissionMatch(section)) return true;
         }
-        return true;
+        if (
+          section.allowAssignmentAccess &&
+          user.has_haccp_assignment &&
+          section.assignmentAllowedItems?.includes(path)
+        ) {
+          return true;
+        }
+
+        return false;
       }
     }
   }

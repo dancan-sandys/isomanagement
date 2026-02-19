@@ -5,6 +5,7 @@ import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody
 import { Add, Edit, Visibility, Delete, Security, Save } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, haccpAPI } from '../services/api';
+import { hasRole } from '../store/slices/authSlice';
 import HACCPFlowchartBuilder from '../components/HACCP/FlowchartBuilder';
 import HazardDialog from '../components/HACCP/HazardDialog';
 import HazardViewDialog from '../components/HACCP/HazardViewDialog';
@@ -20,6 +21,14 @@ function TabPanel({ children, value, index }: { children?: React.ReactNode; valu
   );
 }
 
+const PRIVILEGED_ROLE_NAMES = [
+  'System Administrator',
+  'QA Manager',
+  'QA Specialist',
+  'Production Manager',
+  'Compliance Officer',
+] as const;
+
 const HACCPProductDetail: React.FC = () => {
   const { id } = useParams();
   const productId = Number(id);
@@ -31,8 +40,6 @@ const HACCPProductDetail: React.FC = () => {
   const canCreateVerificationLogs = !!currentUser && hasPermission(currentUser, 'haccp', 'verify');
   
   // Check if current user is assigned as monitoring_responsible or verification_responsible for any CCPs
-  // ONLY assigned users can see these tabs, not admins or managers
-  // Use useMemo to stabilize these calculations and prevent unnecessary recalculations
   const currentUserId = currentUser?.id;
   const isMonitoringResponsible = useMemo(() => {
     return !!currentUserId && ccps && ccps.length > 0 && ccps.some((ccp: any) => ccp.monitoring_responsible === currentUserId);
@@ -42,7 +49,6 @@ const HACCPProductDetail: React.FC = () => {
     return !!currentUserId && ccps && ccps.length > 0 && ccps.some((ccp: any) => ccp.verification_responsible === currentUserId);
   }, [currentUserId, ccps]);
   
-  // Filter CCPs based on user assignments for forms - only show CCPs where user is assigned
   const monitoringEligibleCCPs = useMemo(() => {
     return isMonitoringResponsible 
       ? ccps.filter((ccp: any) => ccp.monitoring_responsible === currentUserId)
@@ -55,7 +61,6 @@ const HACCPProductDetail: React.FC = () => {
       : [];
   }, [isVerificationResponsible, ccps, currentUserId]);
 
-  // Tabs 4 (Monitoring) and 5 (Verification) are only visible to assigned responsible users
   const visibleTabs = useMemo(() => {
     const base = [
       { label: 'Process Flow', logicalIndex: 0 },
@@ -291,6 +296,24 @@ const HACCPProductDetail: React.FC = () => {
 
   const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string; evidence_files?: string }>({});
   const [monitoringLogs, setMonitoringLogs] = useState<any[]>([]);
+  const [monitoringLogsTab, setMonitoringLogsTab] = useState(0);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [selectedMonitoringLog, setSelectedMonitoringLog] = useState<any | null>(null);
+  const [verificationForm, setVerificationForm] = useState<{
+    verification_method: string;
+    verification_result: string;
+    verification_notes: string;
+    verification_is_compliant: boolean;
+    verification_evidence_files: string;
+    allowOverride: boolean;
+  }>({
+    verification_method: '',
+    verification_result: '',
+    verification_notes: '',
+    verification_is_compliant: true,
+    verification_evidence_files: '',
+    allowOverride: false,
+  });
   const [batchOptions, setBatchOptions] = useState<any[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
@@ -311,9 +334,13 @@ const HACCPProductDetail: React.FC = () => {
         if (productId && Number.isInteger(productId)) params.product_id = productId;
         const resp: any = await traceabilityAPI.getBatches(params);
         const items = resp?.data?.items || resp?.items || [];
-        if (active) setBatchOptions(items);
+        if (active) {
+          setBatchOptions(items);
+        }
       } catch (e) {
-        if (active) setBatchOptions([]);
+        if (active) {
+          setBatchOptions([]);
+        }
       }
     }, 250);
     return () => { active = false; clearTimeout(t); };
@@ -670,16 +697,7 @@ const HACCPProductDetail: React.FC = () => {
                 )}
               </Paper>
             </Grid>
-          ))}
-        </Grid>
-        {oprps.length === 0 && (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography color="textSecondary">
-              No OPRPs defined yet. OPRPs are created automatically when a hazard is assigned the OPRP risk strategy.
-            </Typography>
-          </Paper>
-        )}
-      </TabPanel>
+          </TabPanel>
 
       <TabPanel value={selectedLogicalIndex} index={4}>
           <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
@@ -826,8 +844,7 @@ const HACCPProductDetail: React.FC = () => {
               </TableContainer>
             </Box>
           )}
-        </Stack>
-      </TabPanel>
+        </TabPanel>
 
       <TabPanel value={selectedLogicalIndex} index={5}>
           <Typography variant="h6" gutterBottom>Record Verification Log</Typography>
@@ -1018,19 +1035,131 @@ const HACCPProductDetail: React.FC = () => {
                   <Chip label={`High: ≥${selectedProduct.risk_config.risk_thresholds.medium_threshold + 1}`} color="error" />
                 </Stack>
               </Grid>
-            </Grid>
-          </Paper>
-        ) : (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography color="textSecondary" gutterBottom>
-              No risk configuration set for this product
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Configure risk calculation parameters to enable proper hazard risk assessment and CCP determination.
-            </Typography>
-          </Paper>
-        )}
       </TabPanel>
+        </>
+      ) : (
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
+          <Typography color="textSecondary">Select a product to view monitoring and verification.</Typography>
+        </Box>
+      )}
+
+      {/* Verification Dialog */}
+      <Dialog open={verificationDialogOpen} onClose={handleCloseVerificationDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {selectedMonitoringLog?.is_verified ? 'Verification Details' : 'Verify Monitoring Log'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">
+                Monitoring Snapshot
+              </Typography>
+              <Typography variant="body2">
+                {`${selectedMonitoringLog?.batch_number || 'Batch N/A'} • ${
+                  selectedMonitoringLog?.measured_value ?? '-'
+                } ${selectedMonitoringLog?.unit || ''}`}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {`Recorded: ${formatDateTime(
+                  selectedMonitoringLog?.monitoring_time || selectedMonitoringLog?.created_at
+                )}`}
+              </Typography>
+              <Chip
+                size="small"
+                color={selectedMonitoringLog?.is_within_limits ? 'success' : 'error'}
+                label={selectedMonitoringLog?.is_within_limits ? 'In Spec' : 'Out of Spec'}
+                sx={{ mt: 1 }}
+              />
+            </Box>
+
+            {selectedMonitoringLog?.is_verified && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={verificationForm.allowOverride}
+                    onChange={(e) =>
+                      setVerificationForm((prev) => ({ ...prev, allowOverride: e.target.checked }))
+                    }
+                  />
+                }
+                label="Override existing verification"
+              />
+            )}
+
+            <TextField
+              label="Verification Method"
+              value={verificationForm.verification_method}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({ ...prev, verification_method: e.target.value }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+            />
+
+            <TextField
+              label="Verification Result"
+              value={verificationForm.verification_result}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({ ...prev, verification_result: e.target.value }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={verificationForm.verification_is_compliant}
+                  onChange={(e) =>
+                    setVerificationForm((prev) => ({
+                      ...prev,
+                      verification_is_compliant: e.target.checked,
+                    }))
+                  }
+                  disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+                />
+              }
+              label="Compliant with verification requirements"
+            />
+
+            <TextField
+              label="Verification Notes"
+              value={verificationForm.verification_notes}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({ ...prev, verification_notes: e.target.value }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Document findings, observations, and follow-up actions..."
+            />
+
+            <TextField
+              label="Evidence (file references or URLs)"
+              value={verificationForm.verification_evidence_files}
+              onChange={(e) =>
+                setVerificationForm((prev) => ({
+                  ...prev,
+                  verification_evidence_files: e.target.value,
+                }))
+              }
+              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
+              fullWidth
+              placeholder="Enter evidence file paths or URLs separated by commas"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseVerificationDialog}>Close</Button>
+          {(!selectedMonitoringLog?.is_verified || verificationForm.allowOverride) && (
+            <Button variant="contained" onClick={handleSubmitVerification}>
+              Submit Verification
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* Dialogs */}
       <HACCPFlowchartBuilder

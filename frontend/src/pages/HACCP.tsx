@@ -13,13 +13,6 @@ import {
   ListItemIcon,
   Button,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Stack,
   Alert,
   IconButton,
@@ -284,6 +277,13 @@ const HACCP: React.FC = () => {
   const canDeleteHACCP = canManageProgram;
   const canEditPlan = canManageProgram; // Add Step, Add Hazard, Edit/Delete CCP/OPRP, etc.
 
+  const hasAssignmentAccess = Boolean(currentUser?.has_haccp_assignment);
+  const canAccessHACCP = canManageHACCP || hasAssignmentAccess;
+
+  const showDashboardTab = canManageHACCP;
+  const dashboardTabIndex = 0;
+  const productsTabIndex = showDashboardTab ? 1 : 0;
+
   useEffect(() => {
     loadDashboard();
     loadProducts();
@@ -293,14 +293,12 @@ const HACCP: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
-    if (tabParam === 'details') {
-      setSelectedTab(1);
-    } else if (tabParam === 'products') {
-      setSelectedTab(1);
-    } else if (tabParam === 'dashboard') {
-      setSelectedTab(0);
+    if (tabParam === 'details' || tabParam === 'products') {
+      setSelectedTab(productsTabIndex);
+    } else if (tabParam === 'dashboard' && showDashboardTab) {
+      setSelectedTab(dashboardTabIndex);
     }
-  }, [location.search]);
+  }, [location.search, productsTabIndex, dashboardTabIndex, showDashboardTab]);
 
   const loadDashboard = () => {
     dispatch(fetchDashboard());
@@ -897,16 +895,6 @@ const HACCP: React.FC = () => {
     </Box>
   );
 
-  const renderProductDetails = () => {
-    if (!selectedProduct) {
-      return (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="h6" color="textSecondary">
-            Select a product to view details
-          </Typography>
-        </Box>
-      );
-    }
 
     return (
       <Box>
@@ -1243,7 +1231,7 @@ const HACCP: React.FC = () => {
     );
   };
 
-  if (!canManageHACCP) {
+  if (!canAccessHACCP) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">
@@ -1265,6 +1253,12 @@ const HACCP: React.FC = () => {
         onAdd={() => setProductDialogOpen(true)}
       />
 
+      {hasAssignmentAccess && !canManageHACCP && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          You are viewing only the HACCP products assigned to you. Contact QA for broader access.
+        </Alert>
+      )}
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => dispatch(clearError())}>
           {error}
@@ -1274,25 +1268,22 @@ const HACCP: React.FC = () => {
       {loading && <CircularProgress sx={{ display: 'block', margin: '20px auto' }} />}
 
       <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 3 }}>
-        <Tab label="Dashboard" />
-        <Tab label="Products" />
+        {showDashboardTab && <Tab label="Dashboard" value={dashboardTabIndex} />}
+        <Tab
+          label={hasAssignmentAccess && !canManageHACCP ? 'Assigned Products' : 'Products'}
+          value={productsTabIndex}
+        />
       </Tabs>
 
-      <TabPanel value={selectedTab} index={0}>
-        {renderDashboard()}
-      </TabPanel>
-
-      <TabPanel value={selectedTab} index={1}>
-        {renderProducts()}
-      </TabPanel>
-
-      {selectedProduct && (
-        <TabPanel value={selectedTab} index={2}>
-          {renderProductDetails()}
+      {showDashboardTab && (
+        <TabPanel value={selectedTab} index={dashboardTabIndex}>
+          {renderDashboard()}
         </TabPanel>
       )}
 
-      
+      <TabPanel value={selectedTab} index={productsTabIndex}>
+        {renderProducts()}
+      </TabPanel>
 
       {/* Product Dialog */}
       <ProductDialog 

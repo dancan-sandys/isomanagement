@@ -38,6 +38,9 @@ export interface User {
   updated_at?: string;
   /** Permission strings from backend, e.g. ['haccp:view', 'documents:create'] */
   permissions?: string[];
+  has_haccp_assignment?: boolean;
+  haccp_assigned_product_ids?: number[];
+  haccp_assignment_roles?: string[];
 }
 
 export interface AuthState {

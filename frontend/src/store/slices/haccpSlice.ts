@@ -1,7 +1,21 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { haccpAPI } from '../../services/haccpAPI';
+import { ContactSurface } from '../../types/haccp';
 
 // Types
+export interface ProductCompositionItem {
+  material_id: number;
+  material_code?: string;
+  material_name?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  category?: string;
+  percentage?: number;
+  unit?: string;
+  notes?: string;
+  is_high_risk?: boolean;
+}
+
 export interface Product {
   id: number;
   product_code: string;
@@ -19,6 +33,9 @@ export interface Product {
   created_by: string;
   created_at: string;
   updated_at?: string;
+  composition?: ProductCompositionItem[];
+  high_risk_ingredients?: ProductCompositionItem | null;
+  contact_surfaces?: ContactSurface[];
   risk_config?: {
     calculation_method: 'multiplication' | 'addition' | 'matrix';
     likelihood_scale: number;
@@ -175,6 +192,10 @@ export interface HACCPState {
   error: string | null;
   selectedCCP: CCP | null;
   selectedHazard: Hazard | null;
+  assignedOnly: boolean;
+  contactSurfaces: ContactSurface[];
+  contactSurfacesLoading: boolean;
+  contactSurfacesError: string | null;
 }
 
 const initialState: HACCPState = {
@@ -191,6 +212,10 @@ const initialState: HACCPState = {
   error: null,
   selectedCCP: null,
   selectedHazard: null,
+  assignedOnly: false,
+  contactSurfaces: [],
+  contactSurfacesLoading: false,
+  contactSurfacesError: null,
 };
 
 // Async thunks
@@ -250,6 +275,30 @@ export const deleteProduct = createAsyncThunk(
       return { productId, response };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to delete product');
+    }
+  }
+);
+
+export const fetchContactSurfaces = createAsyncThunk(
+  'haccp/fetchContactSurfaces',
+  async (search: string | undefined = undefined, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.getContactSurfaces(search);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to load contact surfaces');
+    }
+  }
+);
+
+export const createContactSurface = createAsyncThunk(
+  'haccp/createContactSurface',
+  async (surfaceData: any, { rejectWithValue }) => {
+    try {
+      const response = await haccpAPI.createContactSurface(surfaceData);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to create contact surface');
     }
   }
 );
@@ -483,10 +532,12 @@ const haccpSlice = createSlice({
       .addCase(fetchProducts.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.assignedOnly = false;
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
         state.products = action.payload.data.items || [];
+        state.assignedOnly = Boolean(action.payload.data.assigned_only);
         state.error = null;
       })
       .addCase(fetchProducts.rejected, (state, action) => {
@@ -578,6 +629,36 @@ const haccpSlice = createSlice({
       .addCase(deleteProduct.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      });
+
+    // contact surfaces
+    builder
+      .addCase(fetchContactSurfaces.pending, (state) => {
+        state.contactSurfacesLoading = true;
+        state.contactSurfacesError = null;
+      })
+      .addCase(fetchContactSurfaces.fulfilled, (state, action) => {
+        state.contactSurfacesLoading = false;
+        const payload = action.payload?.data;
+        if (Array.isArray(payload?.items)) {
+          state.contactSurfaces = payload.items as ContactSurface[];
+        } else if (Array.isArray(payload)) {
+          state.contactSurfaces = payload as ContactSurface[];
+        }
+      })
+      .addCase(fetchContactSurfaces.rejected, (state, action) => {
+        state.contactSurfacesLoading = false;
+        state.contactSurfacesError = (action.payload as string) || 'Failed to load contact surfaces';
+      })
+      .addCase(createContactSurface.fulfilled, (state, action) => {
+        const surface = action.payload?.data as ContactSurface | undefined;
+        if (!surface) return;
+        const existingIndex = state.contactSurfaces.findIndex((item) => item.id === surface.id);
+        if (existingIndex >= 0) {
+          state.contactSurfaces[existingIndex] = surface;
+        } else {
+          state.contactSurfaces.push(surface);
+        }
       });
 
     // createProcessFlow
