@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.core.database import Base
+from app.core.database import Base, SafeJSON
 import enum
 
 
@@ -87,7 +87,7 @@ class Supplier(Base):
     
     # Certifications
     certifications = Column(Text)  # JSON array of certifications
-    certification_expiry_dates = Column(JSON)  # JSON object with certification expiry dates
+    certification_expiry_dates = Column(SafeJSON)  # JSON object with certification expiry dates (SafeJSON tolerates malformed data)
     
     # Evaluation
     overall_score = Column(Float, default=0.0)
@@ -129,9 +129,9 @@ class Material(Base):
     supplier_material_code = Column(String(50))
     
     # Specifications
-    specifications = Column(JSON)  # JSON object with material specifications
+    specifications = Column(SafeJSON)  # JSON object with material specifications
     quality_parameters = Column(Text)  # JSON array of quality parameters
-    acceptable_limits = Column(JSON)  # JSON object with acceptable limits
+    acceptable_limits = Column(SafeJSON)  # JSON object with acceptable limits
     
     # Allergen information
     allergens = Column(Text)  # JSON array of allergens
@@ -235,7 +235,7 @@ class IncomingDelivery(Base):
     inspected_by = Column(Integer, ForeignKey("users.id"))
     
     # Inspection results
-    inspection_results = Column(JSON)  # JSON object with inspection results
+    inspection_results = Column(SafeJSON)  # JSON object with inspection results
     non_conformances = Column(Text)  # JSON array of non-conformances
     corrective_actions = Column(Text)
     

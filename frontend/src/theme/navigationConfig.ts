@@ -283,6 +283,13 @@ export const getNavigationForUser = (user: any): NavigationSection[] => {
 
   return Object.values(NAVIGATION_CONFIG)
     .map((section) => {
+      // No role or permission requirements = visible to all authenticated users (e.g. Dashboard, Documents)
+      const hasNoRequirements =
+        (!section.requiredRoles || section.requiredRoles.length === 0) &&
+        (!section.requiredPermissions || section.requiredPermissions.length === 0);
+      if (hasNoRequirements && !section.allowAssignmentAccess) {
+        return section;
+      }
       if (section.requiredRoles != null && section.requiredRoles.length > 0) {
         if (roleMatch(section)) return section;
         if (section.requiredPermissions && section.requiredPermissions.length > 0 && permissionMatch(section)) return section;
@@ -327,6 +334,10 @@ export const hasAccessToPath = (user: any, path: string): boolean => {
   for (const section of Object.values(NAVIGATION_CONFIG)) {
     for (const item of section.items) {
       if (item.path === path) {
+        const hasNoRequirements =
+          (!section.requiredRoles || section.requiredRoles.length === 0) &&
+          (!section.requiredPermissions || section.requiredPermissions.length === 0);
+        if (hasNoRequirements && !section.allowAssignmentAccess) return true;
         if (section.requiredRoles != null && section.requiredRoles.length > 0) {
           if (roleMatch(section)) return true;
           if (section.requiredPermissions && section.requiredPermissions.length > 0 && permissionMatch(section)) return true;

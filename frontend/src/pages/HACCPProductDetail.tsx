@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip } from '@mui/material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch } from '@mui/material';
 import { Add, Edit, Visibility, Delete, Security, Save } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, haccpAPI } from '../services/api';
@@ -28,6 +28,12 @@ const PRIVILEGED_ROLE_NAMES = [
   'Production Manager',
   'Compliance Officer',
 ] as const;
+
+function formatDateTime(value: string | number | Date | null | undefined): string {
+  if (value == null) return '—';
+  const d = typeof value === 'string' || typeof value === 'number' ? new Date(value) : value;
+  return isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+}
 
 const HACCPProductDetail: React.FC = () => {
   const { id } = useParams();
@@ -318,7 +324,7 @@ const HACCPProductDetail: React.FC = () => {
   const [batchSearch, setBatchSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
 
-  const [verificationForm, setVerificationForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string }>({});
+  const [verificationEntryForm, setVerificationEntryForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string }>({});
   const [verificationLogs, setVerificationLogs] = useState<any[]>([]);
   const [verificationBatchSearch, setVerificationBatchSearch] = useState('');
   const [verificationBatchOpen, setVerificationBatchOpen] = useState(false);
@@ -369,7 +375,7 @@ const HACCPProductDetail: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    const ccpIdStr = verificationForm.ccp_id || '';
+    const ccpIdStr = verificationEntryForm.ccp_id || '';
     if (!ccpIdStr) { setVerificationLogs([]); return () => { active = false; }; }
     haccpAPI.getVerificationLogsStandalone(Number(ccpIdStr))
       .then((res: any) => {
@@ -380,7 +386,7 @@ const HACCPProductDetail: React.FC = () => {
       })
       .catch(() => { if (active) setVerificationLogs([]); });
     return () => { active = false; };
-  }, [verificationForm.ccp_id]);
+  }, [verificationEntryForm.ccp_id]);
 
   // Fetch verification batches when dropdown opens or search changes (scoped to current product)
   useEffect(() => {
@@ -400,6 +406,37 @@ const HACCPProductDetail: React.FC = () => {
     }, 250);
     return () => { active = false; clearTimeout(t); };
   }, [verificationBatchOpen, verificationBatchSearch, productId]);
+
+  const handleCloseVerificationDialog = () => {
+    setVerificationDialogOpen(false);
+    setSelectedMonitoringLog(null);
+    setVerificationForm({
+      verification_method: '',
+      verification_result: '',
+      verification_notes: '',
+      verification_is_compliant: true,
+      verification_evidence_files: '',
+      allowOverride: false,
+    });
+  };
+
+  const handleSubmitVerification = async () => {
+    const log = selectedMonitoringLog;
+    if (!log?.id || !log?.ccp_id) return;
+    try {
+      await haccpAPI.verifyMonitoringLog(Number(log.ccp_id), log.id, {
+        verification_method: verificationForm.verification_method,
+        verification_result: verificationForm.verification_result,
+        verification_notes: verificationForm.verification_notes,
+        verification_is_compliant: verificationForm.verification_is_compliant,
+        verification_evidence_files: verificationForm.verification_evidence_files || undefined,
+      });
+      handleCloseVerificationDialog();
+    } catch (e) {
+      console.error('Submit verification failed', e);
+      alert('Failed to submit verification');
+    }
+  };
 
   const [riskConfigDialogOpen, setRiskConfigDialogOpen] = useState(false);
   const [riskConfigForm, setRiskConfigForm] = useState({
@@ -483,6 +520,8 @@ const HACCPProductDetail: React.FC = () => {
         </Box>
       )}
 
+      {selectedProduct ? (
+        <>
       <Tabs value={selectedTab} onChange={handleTabChange}>
         {visibleTabs.map((t, i) => (
           <Tab key={t.logicalIndex} label={t.label} />
@@ -697,7 +736,9 @@ const HACCPProductDetail: React.FC = () => {
                 )}
               </Paper>
             </Grid>
-          </TabPanel>
+          ))}
+        </Grid>
+      </TabPanel>
 
       <TabPanel value={selectedLogicalIndex} index={4}>
           <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
@@ -844,6 +885,7 @@ const HACCPProductDetail: React.FC = () => {
               </TableContainer>
             </Box>
           )}
+          </Stack>
         </TabPanel>
 
       <TabPanel value={selectedLogicalIndex} index={5}>
@@ -855,8 +897,8 @@ const HACCPProductDetail: React.FC = () => {
             <Autocomplete
               options={verificationEligibleCCPs}
               getOptionLabel={(ccp: any) => `${ccp.ccp_number || ''} - ${ccp.ccp_name || ''}`.trim()}
-              value={verificationEligibleCCPs.find((c: any) => String(c.id) === (verificationForm.ccp_id || '')) || null}
-              onChange={(_, val: any) => setVerificationForm({ ...verificationForm, ccp_id: val ? String(val.id) : '' })}
+              value={verificationEligibleCCPs.find((c: any) => String(c.id) === (verificationEntryForm.ccp_id || '')) || null}
+              onChange={(_, val: any) => setVerificationEntryForm({ ...verificationEntryForm, ccp_id: val ? String(val.id) : '' })}
               isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id}
               renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP to verify" />}
             />
@@ -864,13 +906,13 @@ const HACCPProductDetail: React.FC = () => {
               freeSolo
               options={verificationBatchOptions}
               getOptionLabel={(b: any) => (b != null && typeof b === 'object' && b.batch_number != null) ? String(b.batch_number) : (typeof b === 'string' ? b : '')}
-              inputValue={verificationBatchSearch || (verificationForm.batch ?? '')}
-              onInputChange={(_, val) => { setVerificationBatchSearch(val || ''); if (!verificationBatchOptions.some((b: any) => String(b?.batch_number) === val)) setVerificationForm(f => ({ ...f, batch: val || undefined })); }}
+              inputValue={verificationBatchSearch || (verificationEntryForm.batch ?? '')}
+              onInputChange={(_, val) => { setVerificationBatchSearch(val || ''); if (!verificationBatchOptions.some((b: any) => String(b?.batch_number) === val)) setVerificationEntryForm(f => ({ ...f, batch: val || undefined })); }}
               onOpen={() => setVerificationBatchOpen(true)}
               onClose={() => setVerificationBatchOpen(false)}
-              value={verificationForm.batch != null && verificationForm.batch !== '' ? (verificationBatchOptions.find((b: any) => String(b?.batch_number) === verificationForm.batch) || { batch_number: verificationForm.batch }) : null}
-              onChange={(_, val: any) => setVerificationForm({
-                ...verificationForm,
+              value={verificationEntryForm.batch != null && verificationEntryForm.batch !== '' ? (verificationBatchOptions.find((b: any) => String(b?.batch_number) === verificationEntryForm.batch) || { batch_number: verificationEntryForm.batch }) : null}
+              onChange={(_, val: any) => setVerificationEntryForm({
+                ...verificationEntryForm,
                 batch: val ? (typeof val === 'object' && val.batch_number != null ? String(val.batch_number) : (typeof val === 'string' ? val : '')) : '',
                 batch_id: val && typeof val === 'object' && val.id != null ? String(val.id) : undefined,
               })}
@@ -879,20 +921,20 @@ const HACCPProductDetail: React.FC = () => {
             <TextField
               type="number"
               label="Measured Value"
-              value={verificationForm.value ?? ''}
-              onChange={e => setVerificationForm({ ...verificationForm, value: e.target.value })}
+value={verificationEntryForm.value ?? ''}  
+              onChange={e => setVerificationEntryForm({ ...verificationEntryForm, value: e.target.value })}
               fullWidth
             />
             <TextField
               label="Unit"
-              value={verificationForm.unit ?? ''}
-              onChange={e => setVerificationForm({ ...verificationForm, unit: e.target.value })}
+value={verificationEntryForm.unit ?? ''}   
+              onChange={e => setVerificationEntryForm({ ...verificationEntryForm, unit: e.target.value })}
               fullWidth
             />
             {(() => {
-              const selectedCcp = verificationEligibleCCPs.find((c: any) => String(c.id) === (verificationForm.ccp_id || ''));
-              const numVal = Number(verificationForm.value);
-              const hasValue = verificationForm.value != null && verificationForm.value !== '' && !isNaN(numVal);
+              const selectedCcp = verificationEligibleCCPs.find((c: any) => String(c.id) === (verificationEntryForm.ccp_id || ''));
+              const numVal = Number(verificationEntryForm.value);
+              const hasValue = verificationEntryForm.value != null && verificationEntryForm.value !== '' && !isNaN(numVal);
               let inSpec = true;
               if (hasValue && selectedCcp != null) {
                 const min = selectedCcp.critical_limit_min != null ? Number(selectedCcp.critical_limit_min) : null;
@@ -918,11 +960,11 @@ const HACCPProductDetail: React.FC = () => {
                     if (!canCreateVerificationLogs && !isVerificationResponsible) return true;
                     
                     // Check CCP is selected - ccp_id must be a non-empty string
-                    const ccpIdStr = verificationForm.ccp_id?.toString().trim() || '';
+                    const ccpIdStr = verificationEntryForm.ccp_id?.toString().trim() || '';
                     if (!ccpIdStr || ccpIdStr === '') return true;
                     
                     // Check value is provided and is a valid number (including 0)
-                    const valueStr = verificationForm.value?.toString().trim() || '';
+                    const valueStr = verificationEntryForm.value?.toString().trim() || '';
                     if (!valueStr || valueStr === '') return true;
                     const numValue = Number(valueStr);
                     if (isNaN(numValue)) return true;
@@ -933,21 +975,21 @@ const HACCPProductDetail: React.FC = () => {
                   onClick={async () => {
                     // Allow if user has permission OR is assigned as verification responsible
                     if (!canCreateVerificationLogs && !isVerificationResponsible) return;
-                    const ccpId = Number(verificationForm.ccp_id);
+                    const ccpId = Number(verificationEntryForm.ccp_id);
                     if (!ccpId) return;
-                    const numVal = Number(verificationForm.value);
+                    const numVal = Number(verificationEntryForm.value);
                     if (isNaN(numVal)) {
                       alert('Please enter a valid measured value');
                       return;
                     }
                     try {
                       const payload = {
-                        batch_number: verificationForm.batch || undefined,
-                        measured_value: numVal,
-                        unit: verificationForm.unit || undefined,
+batch_number: verificationEntryForm.batch || undefined,
+                        measured_value: numVal,     
+                        unit: verificationEntryForm.unit || undefined,
                       };
                       await haccpAPI.createVerificationLog(ccpId, payload);
-                      setVerificationForm({ ...verificationForm, value: '', unit: '', batch: '', batch_id: '' });
+                      setVerificationEntryForm({ ...verificationEntryForm, value: '', unit: '', batch: '', batch_id: '' });
                       const res = await haccpAPI.getVerificationLogsStandalone(ccpId);
                       const data = res?.data || res;
                       setVerificationLogs(data?.items || []);
@@ -963,7 +1005,7 @@ const HACCPProductDetail: React.FC = () => {
               </span>
             </Tooltip>
           </Stack>
-          {verificationForm.ccp_id && (
+          {verificationEntryForm.ccp_id && (
             <Box sx={{ mt: 3 }}>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>Recent Verification Logs (this CCP)</Typography>
               <TableContainer component={Paper} variant="outlined">
@@ -1035,6 +1077,13 @@ const HACCPProductDetail: React.FC = () => {
                   <Chip label={`High: ≥${selectedProduct.risk_config.risk_thresholds.medium_threshold + 1}`} color="error" />
                 </Stack>
               </Grid>
+            </Grid>
+          </Paper>
+        ) : (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="textSecondary">No risk configuration set for this product.</Typography>
+          </Paper>
+        )}
       </TabPanel>
         </>
       ) : (
