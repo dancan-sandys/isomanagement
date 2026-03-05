@@ -1662,6 +1662,7 @@ async def get_monitoring_logs(
             
             items.append({
                 "id": log.id,
+                "ccp_id": log.ccp_id,
                 "batch_number": log.batch_number,
                 "batch_id": log.batch_id,
                 "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
@@ -1844,10 +1845,10 @@ async def list_verification_records(
     record_type: Optional[str] = Query(None, description="Filter by type: ccp or oprp"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(require_permission_dependency("haccp:admin")),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db),
 ):
-    """List verification records (PDFs). Filter by record_type: ccp or oprp. Admin only."""
+    """List verification records (PDFs). Filter by record_type: ccp or oprp. Requires HACCP update (supervisor)."""
     q = db.query(HACCPVerificationRecord).order_by(HACCPVerificationRecord.verified_at.desc())
     if record_type and record_type.lower() in ("ccp", "oprp"):
         q = q.filter(HACCPVerificationRecord.record_type == record_type.lower())
@@ -1888,10 +1889,10 @@ async def list_verification_records(
 @router.get("/verification-records/{record_id}/pdf")
 async def download_verification_record_pdf(
     record_id: int,
-    current_user: User = Depends(require_permission_dependency("haccp:admin")),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db),
 ):
-    """Download the PDF for a verification record. Admin only."""
+    """Download the PDF for a verification record. Requires HACCP update (supervisor)."""
     record = db.query(HACCPVerificationRecord).filter(HACCPVerificationRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification record not found")
