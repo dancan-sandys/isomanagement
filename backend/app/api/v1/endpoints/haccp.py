@@ -2,7 +2,9 @@ import json
 from json import JSONDecodeError
 from typing import List, Optional, Set
 from collections import defaultdict
+import os
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_, or_, text
 from datetime import datetime, timedelta
@@ -13,6 +15,7 @@ from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
+    HACCPVerificationRecord,
     HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig, DecisionTree,
     ContactSurface, product_contact_surface_association
 )
@@ -28,7 +31,7 @@ from app.schemas.common import ResponseModel
 from app.schemas.haccp import (
     ProductCreate, ProductUpdate, ProductResponse, ProcessFlowCreate, ProcessFlowUpdate, ProcessFlowResponse,
     HazardCreate, HazardUpdate, HazardResponse, CCPCreate, CCPUpdate, CCPResponse,
-    MonitoringLogCreate, MonitoringLogVerificationUpdate, MonitoringLogResponse,
+    MonitoringLogCreate, MonitoringLogVerificationUpdate, MonitoringLogResponse, ResolveRejectedLogBody,
     VerificationLogCreate, VerificationLogResponse,
     HACCPPlanCreate, HACCPPlanUpdate, HACCPPlanResponse, HACCPPlanVersionCreate, HACCPPlanVersionResponse,
     HACCPPlanApprovalCreate, HACCPPlanApprovalResponse, ProductRiskConfigCreate, ProductRiskConfigUpdate, ProductRiskConfigResponse,
@@ -1762,6 +1765,140 @@ async def verify_monitoring_log(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to verify monitoring log: {str(e)}"
         )
+
+
+@router.get("/monitoring-logs/rejected", response_model=ResponseModel)
+async def list_rejected_monitoring_logs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List monitoring logs that were rejected, for CCPs where the current user is monitoring responsible."""
+    from sqlalchemy.orm import joinedload
+    q = (
+        db.query(CCPMonitoringLog)
+        .join(CCP, CCPMonitoringLog.ccp_id == CCP.id)
+        .options(joinedload(CCPMonitoringLog.ccp))
+        .filter(
+            CCP.monitoring_responsible == current_user.id,
+            CCPMonitoringLog.is_verified.is_(True),
+            or_(CCPMonitoringLog.verification_is_compliant.is_(False), CCPMonitoringLog.verification_result == "Rejected"),
+        )
+        .order_by(desc(CCPMonitoringLog.verified_at))
+    )
+    logs = q.all()
+    product_ids = list({log.ccp.product_id for log in logs if log.ccp and log.ccp.product_id})
+    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+    items = []
+    for log in logs:
+        ccp = log.ccp
+        product = products.get(ccp.product_id) if ccp else None
+        items.append({
+            "id": log.id,
+            "ccp_id": log.ccp_id,
+            "ccp_number": ccp.ccp_number if ccp else None,
+            "ccp_name": ccp.ccp_name if ccp else None,
+            "product_id": ccp.product_id if ccp else None,
+            "product_name": product.name if product else None,
+            "batch_number": log.batch_number,
+            "measured_value": log.measured_value,
+            "unit": log.unit,
+            "verified_at": log.verified_at.isoformat() if log.verified_at and hasattr(log.verified_at, "isoformat") else str(log.verified_at) if log.verified_at else None,
+            "verification_notes": log.verification_notes,
+        })
+    return ResponseModel(success=True, message="Rejected logs", data={"items": items, "total": len(items)})
+
+
+@router.post("/ccps/{ccp_id}/monitoring-logs/{log_id}/resolve")
+async def resolve_rejected_monitoring_log(
+    ccp_id: int,
+    log_id: int,
+    body: ResolveRejectedLogBody,
+    current_user: User = Depends(require_haccp_monitoring_dependency),
+    db: Session = Depends(get_db),
+):
+    """Resolve a rejected monitoring log: monitoring responsible enters new value; log is updated and set back to pending verification."""
+    try:
+        service = HACCPService(db)
+        resolved = service.resolve_rejected_monitoring_log(
+            ccp_id=ccp_id,
+            monitoring_log_id=log_id,
+            new_value=body.new_value,
+            unit=body.unit,
+            batch_number=body.batch_number,
+            resolved_by=current_user.id,
+        )
+        return ResponseModel(
+            success=True,
+            message="Rejected log resolved. The record has been updated with the new value and is pending re-verification.",
+            data={"id": resolved.id, "measured_value": resolved.measured_value, "is_within_limits": resolved.is_within_limits},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ========== Verification records (PDFs generated on verify) – admin access ==========
+@router.get("/verification-records", response_model=ResponseModel)
+async def list_verification_records(
+    record_type: Optional[str] = Query(None, description="Filter by type: ccp or oprp"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(require_permission_dependency("haccp:admin")),
+    db: Session = Depends(get_db),
+):
+    """List verification records (PDFs). Filter by record_type: ccp or oprp. Admin only."""
+    q = db.query(HACCPVerificationRecord).order_by(HACCPVerificationRecord.verified_at.desc())
+    if record_type and record_type.lower() in ("ccp", "oprp"):
+        q = q.filter(HACCPVerificationRecord.record_type == record_type.lower())
+    total = q.count()
+    records = q.offset(skip).limit(limit).all()
+    items = []
+    for r in records:
+        ccp_name = None
+        oprp_name = None
+        product_name = None
+        verifier_name = None
+        if r.ccp_id:
+            ccp = db.query(CCP).filter(CCP.id == r.ccp_id).first()
+            ccp_name = f"{ccp.ccp_number or ''} - {ccp.ccp_name}" if ccp else None
+        if r.product_id:
+            prod = db.query(Product).filter(Product.id == r.product_id).first()
+            product_name = prod.name if prod else None
+        verifier = db.query(User).filter(User.id == r.verified_by).first()
+        verifier_name = verifier.full_name if verifier else getattr(verifier, "username", None)
+        items.append({
+            "id": r.id,
+            "record_type": r.record_type,
+            "ccp_id": r.ccp_id,
+            "oprp_id": r.oprp_id,
+            "monitoring_log_id": r.monitoring_log_id,
+            "product_id": r.product_id,
+            "product_name": product_name,
+            "ccp_name": ccp_name,
+            "oprp_name": oprp_name,
+            "verified_at": r.verified_at.isoformat() if hasattr(r.verified_at, "isoformat") else str(r.verified_at),
+            "verified_by": r.verified_by,
+            "verifier_name": verifier_name,
+            "created_at": r.created_at.isoformat() if r.created_at and hasattr(r.created_at, "isoformat") else str(r.created_at) if r.created_at else None,
+        })
+    return ResponseModel(success=True, message="Verification records", data={"items": items, "total": total})
+
+
+@router.get("/verification-records/{record_id}/pdf")
+async def download_verification_record_pdf(
+    record_id: int,
+    current_user: User = Depends(require_permission_dependency("haccp:admin")),
+    db: Session = Depends(get_db),
+):
+    """Download the PDF for a verification record. Admin only."""
+    record = db.query(HACCPVerificationRecord).filter(HACCPVerificationRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification record not found")
+    if not os.path.isfile(record.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file not found")
+    filename = os.path.basename(record.file_path)
+    return FileResponse(record.file_path, media_type="application/pdf", filename=filename)
 
 
 # CCP Verification Logs (first matching route: allow verification_responsible or haccp:verify/update/create)

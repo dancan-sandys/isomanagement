@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch } from '@mui/material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch, Badge } from '@mui/material';
 import { Add, Edit, Visibility, Delete, Security, Save } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, haccpAPI } from '../services/api';
@@ -67,18 +67,20 @@ const HACCPProductDetail: React.FC = () => {
       : [];
   }, [isVerificationResponsible, ccps, currentUserId]);
 
-  const visibleTabs = useMemo(() => {
-    const base = [
+  const [rejectedLogsCount, setRejectedLogsCount] = useState(0);
+  const visibleTabs = useMemo((): { label: string; logicalIndex: number; badge?: number }[] => {
+    const base: { label: string; logicalIndex: number; badge?: number }[] = [
       { label: 'Process Flow', logicalIndex: 0 },
       { label: 'Hazards', logicalIndex: 1 },
       { label: 'CCPs', logicalIndex: 2 },
       { label: 'OPRPs', logicalIndex: 3 },
     ];
-    if (isMonitoringResponsible) base.push({ label: 'Monitoring', logicalIndex: 4 });
-    if (isVerificationResponsible) base.push({ label: 'Verification', logicalIndex: 5 });
-    base.push({ label: 'Risk Configuration', logicalIndex: 6 });
+    if (isMonitoringResponsible || isVerificationResponsible || canCreateVerificationLogs) base.push({ label: 'Monitoring', logicalIndex: 4 });
+    if (isMonitoringResponsible) base.push({ label: 'Rejected', logicalIndex: 5, badge: rejectedLogsCount });
+    if (isVerificationResponsible) base.push({ label: 'Verification', logicalIndex: 6 });
+    base.push({ label: 'Risk Configuration', logicalIndex: 7 });
     return base;
-  }, [isMonitoringResponsible, isVerificationResponsible]);
+  }, [isMonitoringResponsible, isVerificationResponsible, canCreateVerificationLogs, rejectedLogsCount]);
 
   const [selectedTab, setSelectedTab] = useState(0);
   const selectedLogicalIndex = visibleTabs[selectedTab]?.logicalIndex ?? 0;
@@ -306,29 +308,54 @@ const HACCPProductDetail: React.FC = () => {
   const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
   const [selectedMonitoringLog, setSelectedMonitoringLog] = useState<any | null>(null);
   const [verificationForm, setVerificationForm] = useState<{
-    verification_method: string;
-    verification_result: string;
     verification_notes: string;
-    verification_is_compliant: boolean;
-    verification_evidence_files: string;
     allowOverride: boolean;
   }>({
-    verification_method: '',
-    verification_result: '',
     verification_notes: '',
-    verification_is_compliant: true,
-    verification_evidence_files: '',
     allowOverride: false,
   });
   const [batchOptions, setBatchOptions] = useState<any[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
 
-  const [verificationEntryForm, setVerificationEntryForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string }>({});
-  const [verificationLogs, setVerificationLogs] = useState<any[]>([]);
-  const [verificationBatchSearch, setVerificationBatchSearch] = useState('');
-  const [verificationBatchOpen, setVerificationBatchOpen] = useState(false);
-  const [verificationBatchOptions, setVerificationBatchOptions] = useState<any[]>([]);
+  const [verificationTabCcpId, setVerificationTabCcpId] = useState<string>('');
+  const [verificationTabMonitoringLogs, setVerificationTabMonitoringLogs] = useState<any[]>([]);
+  const [rejectedLogs, setRejectedLogs] = useState<any[]>([]);
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+  const [selectedLogForResolve, setSelectedLogForResolve] = useState<any | null>(null);
+  const [resolveForm, setResolveForm] = useState<{ new_value: string; unit: string; batch_number: string }>({ new_value: '', unit: '', batch_number: '' });
+
+  const handleResolveRejected = async () => {
+    const log = selectedLogForResolve;
+    if (!log?.id || !log?.ccp_id) return;
+    const num = Number(resolveForm.new_value);
+    if (isNaN(num)) {
+      alert('Enter a valid number for the new value');
+      return;
+    }
+    try {
+      await haccpAPI.resolveRejectedMonitoringLog(Number(log.ccp_id), log.id, {
+        new_value: num,
+        unit: resolveForm.unit.trim() || undefined,
+        batch_number: resolveForm.batch_number.trim() || undefined,
+      });
+      setResolveDialogOpen(false);
+      setSelectedLogForResolve(null);
+      setResolveForm({ new_value: '', unit: '', batch_number: '' });
+      const api = (await import('../services/api')).api;
+      const resp = await api.get(`/haccp/ccps/${Number(log.ccp_id)}/monitoring-logs`);
+      const logsJson = resp.data;
+      const raw = logsJson?.data ?? logsJson;
+      const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : logsJson?.items ?? []);
+      setMonitoringLogs(items);
+      if (String(log.ccp_id) === verificationTabCcpId) setVerificationTabMonitoringLogs(items);
+      fetchRejectedLogs();
+      alert('Log resolved. The new value has been saved and is pending re-verification.');
+    } catch (e: any) {
+      console.error('Resolve failed', e);
+      alert(e?.response?.data?.detail || 'Failed to resolve');
+    }
+  };
 
   // Fetch batches when autocomplete opens or search text changes (scoped to current product)
   useEffect(() => {
@@ -373,68 +400,80 @@ const HACCPProductDetail: React.FC = () => {
     return () => { active = false; };
   }, [monitoringForm.ccp_id]);
 
+  // Fetch monitoring logs for Verification tab when CCP is selected
   useEffect(() => {
     let active = true;
-    const ccpIdStr = verificationEntryForm.ccp_id || '';
-    if (!ccpIdStr) { setVerificationLogs([]); return () => { active = false; }; }
-    haccpAPI.getVerificationLogsStandalone(Number(ccpIdStr))
-      .then((res: any) => {
-        const data = res?.data ?? res;
-        const raw = data?.data ?? data;
-        const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : data?.items ?? []);
-        if (active) setVerificationLogs(items);
-      })
-      .catch(() => { if (active) setVerificationLogs([]); });
-    return () => { active = false; };
-  }, [verificationEntryForm.ccp_id]);
-
-  // Fetch verification batches when dropdown opens or search changes (scoped to current product)
-  useEffect(() => {
-    let active = true;
-    if (!verificationBatchOpen) return () => { active = false; };
-    const t = setTimeout(async () => {
+    const ccpIdStr = verificationTabCcpId || '';
+    if (!ccpIdStr) { setVerificationTabMonitoringLogs([]); return () => { active = false; }; }
+    (async () => {
       try {
-        const params: any = { size: 10 };
-        if ((verificationBatchSearch || '').trim()) params.search = verificationBatchSearch;
-        if (productId && Number.isInteger(productId)) params.product_id = productId;
-        const resp: any = await traceabilityAPI.getBatches(params);
-        const items = resp?.data?.items || resp?.items || [];
-        if (active) setVerificationBatchOptions(items);
+        const api = (await import('../services/api')).api;
+        const resp = await api.get(`/haccp/ccps/${Number(ccpIdStr)}/monitoring-logs`);
+        if (!active) return;
+        const logsJson = resp.data;
+        const raw = logsJson?.data ?? logsJson;
+        const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : logsJson?.items ?? []);
+        setVerificationTabMonitoringLogs(items);
       } catch {
-        if (active) setVerificationBatchOptions([]);
+        if (active) setVerificationTabMonitoringLogs([]);
       }
-    }, 250);
-    return () => { active = false; clearTimeout(t); };
-  }, [verificationBatchOpen, verificationBatchSearch, productId]);
+    })();
+    return () => { active = false; };
+  }, [verificationTabCcpId]);
+
+  const isLogRejected = (log: any) =>
+    !!log?.is_verified && (log.verification_is_compliant === false || log.verification_result === 'Rejected');
+
+  const fetchRejectedLogs = async () => {
+    if (!isMonitoringResponsible) return;
+    try {
+      const res = await haccpAPI.getRejectedMonitoringLogs();
+      const payload = res?.data ?? res;
+      const items = payload?.items ?? [];
+      setRejectedLogs(items);
+      setRejectedLogsCount(payload?.total ?? items.length);
+    } catch {
+      setRejectedLogs([]);
+      setRejectedLogsCount(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchRejectedLogs();
+  }, [isMonitoringResponsible, productId]);
 
   const handleCloseVerificationDialog = () => {
     setVerificationDialogOpen(false);
     setSelectedMonitoringLog(null);
-    setVerificationForm({
-      verification_method: '',
-      verification_result: '',
-      verification_notes: '',
-      verification_is_compliant: true,
-      verification_evidence_files: '',
-      allowOverride: false,
-    });
+    setVerificationForm({ verification_notes: '', allowOverride: false });
   };
 
-  const handleSubmitVerification = async () => {
+  const submitVerificationAction = async (compliant: boolean) => {
     const log = selectedMonitoringLog;
     if (!log?.id || !log?.ccp_id) return;
     try {
-      await haccpAPI.verifyMonitoringLog(Number(log.ccp_id), log.id, {
-        verification_method: verificationForm.verification_method,
-        verification_result: verificationForm.verification_result,
-        verification_notes: verificationForm.verification_notes,
-        verification_is_compliant: verificationForm.verification_is_compliant,
-        verification_evidence_files: verificationForm.verification_evidence_files || undefined,
-      });
+      await haccpAPI.verifyMonitoringLog(
+        Number(log.ccp_id),
+        log.id,
+        {
+          verification_is_compliant: compliant,
+          verification_notes: verificationForm.verification_notes.trim() || undefined,
+        },
+        { allowOverride: verificationForm.allowOverride }
+      );
       handleCloseVerificationDialog();
-    } catch (e) {
-      console.error('Submit verification failed', e);
-      alert('Failed to submit verification');
+      const api = (await import('../services/api')).api;
+      const resp = await api.get(`/haccp/ccps/${Number(log.ccp_id)}/monitoring-logs`);
+      const logsJson = resp.data;
+      const raw = logsJson?.data ?? logsJson;
+      const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : logsJson?.items ?? []);
+      setMonitoringLogs(items);
+      if (String(log.ccp_id) === verificationTabCcpId) setVerificationTabMonitoringLogs(items);
+      if (!compliant) fetchRejectedLogs();
+      alert(compliant ? 'Log entry verified successfully.' : 'Log entry rejected.');
+    } catch (e: any) {
+      console.error('Verification action failed', e);
+      alert(e?.response?.data?.detail || 'Failed to submit verification');
     }
   };
 
@@ -524,7 +563,12 @@ const HACCPProductDetail: React.FC = () => {
         <>
       <Tabs value={selectedTab} onChange={handleTabChange}>
         {visibleTabs.map((t, i) => (
-          <Tab key={t.logicalIndex} label={t.label} />
+          <Tab
+            key={t.logicalIndex}
+            label={typeof t.badge === 'number' && t.badge > 0 ? (
+              <Badge badgeContent={t.badge} color="error">{t.label}</Badge>
+            ) : t.label}
+          />
         ))}
       </Tabs>
 
@@ -859,27 +903,46 @@ const HACCPProductDetail: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {monitoringLogs.map((log: any) => (
-                      <TableRow key={log.id}>
-                        <TableCell>{log.monitoring_time || log.created_at}</TableCell>
-                        <TableCell>{log.batch_number ?? log.batch ?? '—'}</TableCell>
-                        <TableCell align="right">{log.measured_value ?? log.value ?? '—'}</TableCell>
-                        <TableCell>{log.unit ?? '—'}</TableCell>
-                        <TableCell>
-                          <Chip size="small" color={log.is_within_limits ? 'success' : 'error'} label={log.is_within_limits ? 'In Spec' : 'Out of Spec'} />
-                        </TableCell>
-                        <TableCell>
-                          <Button size="small" onClick={async () => {
-                            const ccpId = Number(monitoringForm.ccp_id);
-                            const api = (await import('../services/api')).api;
-                            const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || log.batch || '')}`);
-                            const data = res.data;
-                            if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
-                            else alert('No NC linked for this reading');
-                          }}>Open NC</Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {monitoringLogs.map((log: any) => {
+                      const rejected = isLogRejected(log);
+                      return (
+                        <TableRow key={log.id}>
+                          <TableCell>{log.monitoring_time || log.created_at}</TableCell>
+                          <TableCell>{log.batch_number ?? log.batch ?? '—'}</TableCell>
+                          <TableCell align="right">{log.measured_value ?? log.value ?? '—'}</TableCell>
+                          <TableCell>{log.unit ?? '—'}</TableCell>
+                          <TableCell>
+                            {rejected ? (
+                              <Chip size="small" color="error" label="REJECTED" />
+                            ) : (
+                              <Chip size="small" color={log.is_within_limits ? 'success' : 'error'} label={log.is_within_limits ? 'In Spec' : 'Out of Spec'} />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                              {rejected && isMonitoringResponsible && (
+                                <Button size="small" color="warning" variant="contained" onClick={() => { setSelectedLogForResolve(log); setResolveForm({ new_value: String(log.measured_value ?? log.value ?? ''), unit: log.unit ?? '', batch_number: log.batch_number ?? log.batch ?? '' }); setResolveDialogOpen(true); }}>
+                                  Resolve
+                                </Button>
+                              )}
+                              {!rejected && (canCreateVerificationLogs || isVerificationResponsible) && (
+                                <Button size="small" variant={log.is_verified ? 'outlined' : 'contained'} onClick={() => { setSelectedMonitoringLog(log); setVerificationDialogOpen(true); }}>
+                                  {log.is_verified ? 'View / Re-verify' : 'Verify'}
+                                </Button>
+                              )}
+                              <Button size="small" onClick={async () => {
+                                const ccpId = Number(monitoringForm.ccp_id);
+                                const api = (await import('../services/api')).api;
+                                const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${ccpId}&batch_number=${encodeURIComponent(log.batch_number || log.batch || '')}`);
+                                const data = res.data;
+                                if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
+                                else alert('No NC linked for this reading');
+                              }}>Open NC</Button>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -889,153 +952,112 @@ const HACCPProductDetail: React.FC = () => {
         </TabPanel>
 
       <TabPanel value={selectedLogicalIndex} index={5}>
-          <Typography variant="h6" gutterBottom>Record Verification Log</Typography>
+          <Typography variant="h6" gutterBottom>Rejected logs</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter CCP, batch, measured value, and unit. Verification status (In Spec / Out of Spec) is determined from the value and the CCP&apos;s critical limits, same as monitoring.
+            Logs rejected by verification. Resolve by entering a new value.
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>CCP</TableCell>
+                  <TableCell>Product</TableCell>
+                  <TableCell>Batch</TableCell>
+                  <TableCell align="right">Value</TableCell>
+                  <TableCell>Unit</TableCell>
+                  <TableCell>Rejected at</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rejectedLogs.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} align="center"><Typography variant="body2" color="text.secondary">No rejected logs.</Typography></TableCell></TableRow>
+                ) : (
+                  rejectedLogs.map((log: any) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{log.ccp_number} – {log.ccp_name}</TableCell>
+                      <TableCell>{log.product_name ?? '—'}</TableCell>
+                      <TableCell>{log.batch_number ?? '—'}</TableCell>
+                      <TableCell align="right">{log.measured_value ?? '—'}</TableCell>
+                      <TableCell>{log.unit ?? '—'}</TableCell>
+                      <TableCell>{log.verified_at ? new Date(log.verified_at).toLocaleString() : '—'}</TableCell>
+                      <TableCell>
+                        <Button size="small" color="warning" variant="contained" onClick={() => { setSelectedLogForResolve(log); setResolveForm({ new_value: String(log.measured_value ?? ''), unit: log.unit ?? '', batch_number: log.batch_number ?? '' }); setResolveDialogOpen(true); }}>
+                          Resolve
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+
+      <TabPanel value={selectedLogicalIndex} index={6}>
+          <Typography variant="h6" gutterBottom>Verify or Reject Monitoring Logs</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select a CCP to view its monitoring logs. Use Verify or Reject on each log; no form to fill.
           </Typography>
           <Stack spacing={2} sx={{ maxWidth: 700, mt: 1 }}>
             <Autocomplete
               options={verificationEligibleCCPs}
               getOptionLabel={(ccp: any) => `${ccp.ccp_number || ''} - ${ccp.ccp_name || ''}`.trim()}
-              value={verificationEligibleCCPs.find((c: any) => String(c.id) === (verificationEntryForm.ccp_id || '')) || null}
-              onChange={(_, val: any) => setVerificationEntryForm({ ...verificationEntryForm, ccp_id: val ? String(val.id) : '' })}
+              value={verificationEligibleCCPs.find((c: any) => String(c.id) === verificationTabCcpId) || null}
+              onChange={(_, val: any) => setVerificationTabCcpId(val ? String(val.id) : '')}
               isOptionEqualToValue={(opt: any, val: any) => opt.id === val.id}
-              renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP to verify" />}
+              renderInput={(params) => <TextField {...params} label="Select CCP" placeholder="Choose CCP" />}
             />
-            <Autocomplete
-              freeSolo
-              options={verificationBatchOptions}
-              getOptionLabel={(b: any) => (b != null && typeof b === 'object' && b.batch_number != null) ? String(b.batch_number) : (typeof b === 'string' ? b : '')}
-              inputValue={verificationBatchSearch || (verificationEntryForm.batch ?? '')}
-              onInputChange={(_, val) => { setVerificationBatchSearch(val || ''); if (!verificationBatchOptions.some((b: any) => String(b?.batch_number) === val)) setVerificationEntryForm(f => ({ ...f, batch: val || undefined })); }}
-              onOpen={() => setVerificationBatchOpen(true)}
-              onClose={() => setVerificationBatchOpen(false)}
-              value={verificationEntryForm.batch != null && verificationEntryForm.batch !== '' ? (verificationBatchOptions.find((b: any) => String(b?.batch_number) === verificationEntryForm.batch) || { batch_number: verificationEntryForm.batch }) : null}
-              onChange={(_, val: any) => setVerificationEntryForm({
-                ...verificationEntryForm,
-                batch: val ? (typeof val === 'object' && val.batch_number != null ? String(val.batch_number) : (typeof val === 'string' ? val : '')) : '',
-                batch_id: val && typeof val === 'object' && val.id != null ? String(val.id) : undefined,
-              })}
-              renderInput={(params) => <TextField {...params} label="Batch" placeholder="Enter or search batch..." fullWidth />}
-            />
-            <TextField
-              type="number"
-              label="Measured Value"
-value={verificationEntryForm.value ?? ''}  
-              onChange={e => setVerificationEntryForm({ ...verificationEntryForm, value: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="Unit"
-value={verificationEntryForm.unit ?? ''}   
-              onChange={e => setVerificationEntryForm({ ...verificationEntryForm, unit: e.target.value })}
-              fullWidth
-            />
-            {(() => {
-              const selectedCcp = verificationEligibleCCPs.find((c: any) => String(c.id) === (verificationEntryForm.ccp_id || ''));
-              const numVal = Number(verificationEntryForm.value);
-              const hasValue = verificationEntryForm.value != null && verificationEntryForm.value !== '' && !isNaN(numVal);
-              let inSpec = true;
-              if (hasValue && selectedCcp != null) {
-                const min = selectedCcp.critical_limit_min != null ? Number(selectedCcp.critical_limit_min) : null;
-                const max = selectedCcp.critical_limit_max != null ? Number(selectedCcp.critical_limit_max) : null;
-                if (min != null && numVal < min) inSpec = false;
-                if (max != null && numVal > max) inSpec = false;
-              }
-              const statusLabel = !hasValue ? '—' : (inSpec ? 'In Spec' : 'Out of Spec');
-              return (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  <Typography variant="body2" color="text.secondary">Verification Status:</Typography>
-                  {hasValue ? <Chip size="small" color={inSpec ? 'success' : 'error'} label={statusLabel} /> : <Typography variant="body2">{statusLabel}</Typography>}
-                </Box>
-              );
-            })()}
-            <Tooltip title={(!canCreateVerificationLogs && !isVerificationResponsible) ? 'You need haccp:verify permission or to be assigned as verification responsible to record verification logs' : ''}>
-              <span>
-                <Button
-                  variant="contained"
-                  startIcon={<Save />}
-                  disabled={(() => {
-                    // Allow if user has permission OR is assigned as verification responsible
-                    if (!canCreateVerificationLogs && !isVerificationResponsible) return true;
-                    
-                    // Check CCP is selected - ccp_id must be a non-empty string
-                    const ccpIdStr = verificationEntryForm.ccp_id?.toString().trim() || '';
-                    if (!ccpIdStr || ccpIdStr === '') return true;
-                    
-                    // Check value is provided and is a valid number (including 0)
-                    const valueStr = verificationEntryForm.value?.toString().trim() || '';
-                    if (!valueStr || valueStr === '') return true;
-                    const numValue = Number(valueStr);
-                    if (isNaN(numValue)) return true;
-                    
-                    // All checks passed, button should be enabled
-                    return false;
-                  })()}
-                  onClick={async () => {
-                    // Allow if user has permission OR is assigned as verification responsible
-                    if (!canCreateVerificationLogs && !isVerificationResponsible) return;
-                    const ccpId = Number(verificationEntryForm.ccp_id);
-                    if (!ccpId) return;
-                    const numVal = Number(verificationEntryForm.value);
-                    if (isNaN(numVal)) {
-                      alert('Please enter a valid measured value');
-                      return;
-                    }
-                    try {
-                      const payload = {
-batch_number: verificationEntryForm.batch || undefined,
-                        measured_value: numVal,     
-                        unit: verificationEntryForm.unit || undefined,
-                      };
-                      await haccpAPI.createVerificationLog(ccpId, payload);
-                      setVerificationEntryForm({ ...verificationEntryForm, value: '', unit: '', batch: '', batch_id: '' });
-                      const res = await haccpAPI.getVerificationLogsStandalone(ccpId);
-                      const data = res?.data || res;
-                      setVerificationLogs(data?.items || []);
-                      alert('Verification log recorded successfully.');
-                    } catch (err: any) {
-                      console.error('Failed to create verification log:', err);
-                      alert(err?.response?.data?.detail || err?.message || 'Failed to create verification log');
-                    }
-                  }}
-                >
-                  Save verification log
-                </Button>
-              </span>
-            </Tooltip>
           </Stack>
-          {verificationEntryForm.ccp_id && (
+          {verificationTabCcpId && (
             <Box sx={{ mt: 3 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>Recent Verification Logs (this CCP)</Typography>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Monitoring logs</Typography>
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Date</TableCell>
+                      <TableCell>Date/Time</TableCell>
                       <TableCell>Batch</TableCell>
-                      <TableCell align="right">Measured Value</TableCell>
+                      <TableCell align="right">Value</TableCell>
                       <TableCell>Unit</TableCell>
-                      <TableCell>Verification Status</TableCell>
-                      <TableCell>Overall Spec</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {verificationLogs.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} align="center"><Typography variant="body2" color="text.secondary">No verification logs yet. Record one above.</Typography></TableCell></TableRow>
+                    {verificationTabMonitoringLogs.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} align="center"><Typography variant="body2" color="text.secondary">No monitoring logs for this CCP.</Typography></TableCell></TableRow>
                     ) : (
-                      verificationLogs.map((log: any) => {
-                        const status = (log.verification_status || log.verification_result || (log.is_compliant ? 'in_spec' : 'out_of_spec')).replace(/\s+/g, '_').toLowerCase();
-                        const inSpec = status === 'in_spec' || log.is_compliant === true;
-                        const label = inSpec ? 'In Spec' : 'Out of Spec';
+                      verificationTabMonitoringLogs.map((log: any) => {
+                        const rejected = isLogRejected(log);
                         return (
                           <TableRow key={log.id}>
-                            <TableCell>{(log.verification_date || log.created_at) ? new Date(log.verification_date || log.created_at).toLocaleString() : '—'}</TableCell>
+                            <TableCell>{log.monitoring_time || log.created_at}</TableCell>
                             <TableCell>{log.batch_number ?? log.batch ?? '—'}</TableCell>
-                            <TableCell align="right">{log.measured_value != null ? log.measured_value : (log.value != null ? log.value : '—')}</TableCell>
+                            <TableCell align="right">{log.measured_value ?? log.value ?? '—'}</TableCell>
                             <TableCell>{log.unit ?? '—'}</TableCell>
-                            <TableCell><Chip size="small" color={inSpec ? 'success' : 'error'} label={label} /></TableCell>
-                            <TableCell><Chip size="small" color={inSpec ? 'success' : 'error'} label={label} /></TableCell>
+                            <TableCell>
+                              {rejected ? <Chip size="small" color="error" label="REJECTED" /> : <Chip size="small" color={log.is_within_limits ? 'success' : 'error'} label={log.is_within_limits ? 'In Spec' : 'Out of Spec'} />}
+                            </TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1} flexWrap="wrap">
+                                {rejected && isMonitoringResponsible && (
+                                  <Button size="small" color="warning" variant="contained" onClick={() => { setSelectedLogForResolve(log); setResolveForm({ new_value: String(log.measured_value ?? log.value ?? ''), unit: log.unit ?? '', batch_number: log.batch_number ?? log.batch ?? '' }); setResolveDialogOpen(true); }}>Resolve</Button>
+                                )}
+                                {!rejected && (canCreateVerificationLogs || isVerificationResponsible) && (
+                                  <Button size="small" variant={log.is_verified ? 'outlined' : 'contained'} onClick={() => { setSelectedMonitoringLog(log); setVerificationDialogOpen(true); }}>
+                                    {log.is_verified ? 'View / Re-verify' : 'Verify'}
+                                  </Button>
+                                )}
+                                <Button size="small" onClick={async () => {
+                                  const api = (await import('../services/api')).api;
+                                  const res = await api.get(`/nonconformance/haccp/recent-nc?ccp_id=${Number(log.ccp_id)}&batch_number=${encodeURIComponent(log.batch_number || log.batch || '')}`);
+                                  const data = res.data;
+                                  if (data?.found) window.open(`/nonconformance/${data.id}`, '_blank');
+                                  else alert('No NC linked for this reading');
+                                }}>Open NC</Button>
+                              </Stack>
+                            </TableCell>
                           </TableRow>
                         );
                       })
@@ -1047,7 +1069,7 @@ batch_number: verificationEntryForm.batch || undefined,
           )}
         </TabPanel>
 
-      <TabPanel value={selectedLogicalIndex} index={6}>
+      <TabPanel value={selectedLogicalIndex} index={7}>
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">Risk Configuration</Typography>
           {canManageProgram && (
@@ -1093,10 +1115,10 @@ batch_number: verificationEntryForm.batch || undefined,
         </Box>
       )}
 
-      {/* Verification Dialog */}
+      {/* Verification Dialog: verify or reject only (no form to fill) */}
       <Dialog open={verificationDialogOpen} onClose={handleCloseVerificationDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {selectedMonitoringLog?.is_verified ? 'Verification Details' : 'Verify Monitoring Log'}
+          {selectedMonitoringLog?.is_verified ? 'Verification Details' : 'Verify or Reject Monitoring Log'}
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -1120,6 +1142,21 @@ batch_number: verificationEntryForm.batch || undefined,
                 label={selectedMonitoringLog?.is_within_limits ? 'In Spec' : 'Out of Spec'}
                 sx={{ mt: 1 }}
               />
+              {selectedMonitoringLog?.is_verified && (
+                <Box sx={{ mt: 1 }}>
+                  <Chip
+                    size="small"
+                    color={selectedMonitoringLog?.verification_is_compliant !== false ? 'success' : 'error'}
+                    label={selectedMonitoringLog?.verification_result || (selectedMonitoringLog?.verification_is_compliant !== false ? 'Verified' : 'Rejected')}
+                  />
+                  {selectedMonitoringLog?.verified_at && (
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      {formatDateTime(selectedMonitoringLog.verified_at)}
+                      {selectedMonitoringLog?.verified_by_name && ` by ${selectedMonitoringLog.verified_by_name}`}
+                    </Typography>
+                  )}
+                </Box>
+              )}
             </Box>
 
             {selectedMonitoringLog?.is_verified && (
@@ -1136,77 +1173,71 @@ batch_number: verificationEntryForm.batch || undefined,
               />
             )}
 
-            <TextField
-              label="Verification Method"
-              value={verificationForm.verification_method}
-              onChange={(e) =>
-                setVerificationForm((prev) => ({ ...prev, verification_method: e.target.value }))
-              }
-              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
-              fullWidth
-            />
-
-            <TextField
-              label="Verification Result"
-              value={verificationForm.verification_result}
-              onChange={(e) =>
-                setVerificationForm((prev) => ({ ...prev, verification_result: e.target.value }))
-              }
-              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
-              fullWidth
-            />
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={verificationForm.verification_is_compliant}
-                  onChange={(e) =>
-                    setVerificationForm((prev) => ({
-                      ...prev,
-                      verification_is_compliant: e.target.checked,
-                    }))
-                  }
-                  disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
-                />
-              }
-              label="Compliant with verification requirements"
-            />
-
-            <TextField
-              label="Verification Notes"
-              value={verificationForm.verification_notes}
-              onChange={(e) =>
-                setVerificationForm((prev) => ({ ...prev, verification_notes: e.target.value }))
-              }
-              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
-              fullWidth
-              multiline
-              rows={3}
-              placeholder="Document findings, observations, and follow-up actions..."
-            />
-
-            <TextField
-              label="Evidence (file references or URLs)"
-              value={verificationForm.verification_evidence_files}
-              onChange={(e) =>
-                setVerificationForm((prev) => ({
-                  ...prev,
-                  verification_evidence_files: e.target.value,
-                }))
-              }
-              disabled={selectedMonitoringLog?.is_verified && !verificationForm.allowOverride}
-              fullWidth
-              placeholder="Enter evidence file paths or URLs separated by commas"
-            />
+            {(!selectedMonitoringLog?.is_verified || verificationForm.allowOverride) && (
+              <TextField
+                label="Note (optional)"
+                value={verificationForm.verification_notes}
+                onChange={(e) =>
+                  setVerificationForm((prev) => ({ ...prev, verification_notes: e.target.value }))
+                }
+                fullWidth
+                multiline
+                rows={2}
+                placeholder="e.g. reason for rejection or brief comment"
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseVerificationDialog}>Close</Button>
           {(!selectedMonitoringLog?.is_verified || verificationForm.allowOverride) && (
-            <Button variant="contained" onClick={handleSubmitVerification}>
-              Submit Verification
-            </Button>
+            <>
+              <Button
+                color="error"
+                variant="outlined"
+                onClick={() => submitVerificationAction(false)}
+              >
+                Reject
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => submitVerificationAction(true)}
+              >
+                Verify
+              </Button>
+            </>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Resolve rejected log dialog */}
+      <Dialog open={resolveDialogOpen} onClose={() => { setResolveDialogOpen(false); setSelectedLogForResolve(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Resolve rejected log</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Enter the new value for this record. The log will be updated and set back to pending verification.
+          </Typography>
+          {selectedLogForResolve && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2">CCP: {selectedLogForResolve.ccp_number ?? selectedLogForResolve.ccp_name ?? selectedLogForResolve.ccp_id} – {selectedLogForResolve.ccp_name ?? '—'}</Typography>
+              <TextField
+                label="New value (required)"
+                type="number"
+                value={resolveForm.new_value}
+                onChange={(e) => setResolveForm((prev) => ({ ...prev, new_value: e.target.value }))}
+                fullWidth
+                required
+                inputProps={{ step: 'any' }}
+              />
+              <TextField label="Unit" value={resolveForm.unit} onChange={(e) => setResolveForm((prev) => ({ ...prev, unit: e.target.value }))} fullWidth />
+              <TextField label="Batch number" value={resolveForm.batch_number} onChange={(e) => setResolveForm((prev) => ({ ...prev, batch_number: e.target.value }))} fullWidth />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setResolveDialogOpen(false); setSelectedLogForResolve(null); }}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={handleResolveRejected}>Resolve</Button>
         </DialogActions>
       </Dialog>
 

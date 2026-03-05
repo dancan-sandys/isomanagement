@@ -38,6 +38,7 @@ const HACCPBreadcrumbs: React.FC<HACCPBreadcrumbsProps> = ({
       '/haccp/schedules': { title: 'Schedules', icon: <Schedule />, color: 'info' },
       '/haccp/alerts': { title: 'Alerts', icon: <Warning />, color: 'warning' },
       '/haccp/reports': { title: 'Reports', icon: <Assessment />, color: 'success' },
+      '/haccp/verification-records': { title: 'Verification Records', icon: <Assessment />, color: 'info' },
       '/haccp/dashboard': { title: 'Advanced Dashboard', icon: <Dashboard />, color: 'error' },
     };
 

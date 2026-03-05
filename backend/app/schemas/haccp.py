@@ -834,6 +834,13 @@ class MonitoringLogVerificationUpdate(BaseModel):
     verification_evidence_files: Optional[str] = None
 
 
+class ResolveRejectedLogBody(BaseModel):
+    """Body for resolving a rejected monitoring log (monitoring responsible enters new value)."""
+    new_value: float
+    unit: Optional[str] = None
+    batch_number: Optional[str] = None
+
+
 class MonitoringLogResponse(BaseModel):
     id: int
     batch_number: Optional[str] = None

@@ -10,6 +10,7 @@ from enum import Enum
 
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, CCP, CCPMonitoringLog, CCPVerificationLog,
+    HACCPVerificationRecord,
     HazardType, RiskLevel, CCPStatus,
     HACCPPlan, HACCPPlanVersion, HACCPPlanApproval, HACCPPlanStatus,
     ProductRiskConfig, DecisionTree, HazardReview, ContactSurface
@@ -1268,11 +1269,17 @@ class HACCPService:
         monitoring_log.is_verified = True
         monitoring_log.verified_by = verified_by
         monitoring_log.verified_at = datetime.utcnow()
-        monitoring_log.verification_method = verification_data.verification_method
-        monitoring_log.verification_result = verification_data.verification_result
-        
-        if verification_data.verification_is_compliant is not None:
-            monitoring_log.verification_is_compliant = verification_data.verification_is_compliant
+        # Verification responsible only approves or rejects; defaults when not provided
+        compliant = verification_data.verification_is_compliant if verification_data.verification_is_compliant is not None else True
+        monitoring_log.verification_is_compliant = compliant
+        monitoring_log.verification_result = (
+            verification_data.verification_result
+            or ("Verified" if compliant else "Rejected")
+        )
+        monitoring_log.verification_method = (
+            verification_data.verification_method
+            or "Record review by verification responsible"
+        )
         
         notes = verification_data.verification_notes or ""
         if is_supervisor and not is_verification_responsible:
@@ -1287,7 +1294,205 @@ class HACCPService:
         self.db.commit()
         self.db.refresh(monitoring_log)
         
+        if compliant:
+            # Generate verification PDF only when verified (not when rejected)
+            try:
+                self._generate_ccp_verification_pdf_and_record(monitoring_log, ccp, verified_by)
+            except Exception as e:
+                logger.warning("Verification PDF generation failed (verification still saved): %s", e)
+        else:
+            # Rejected: notify monitoring responsible to enter a new log
+            self._notify_monitoring_responsible_rejected(monitoring_log, ccp, verified_by)
+        
         return monitoring_log
+    
+    def _notify_monitoring_responsible_rejected(
+        self, monitoring_log: CCPMonitoringLog, ccp: CCP, verified_by: int
+    ) -> None:
+        """Notify the monitoring responsible that their log was rejected; prompt them to enter a new log."""
+        responsible_user_id = ccp.monitoring_responsible or ccp.created_by
+        if not responsible_user_id:
+            return
+        verifier = self.db.query(User).filter(User.id == verified_by).first()
+        verifier_name = verifier.full_name if verifier else f"User ID {verified_by}"
+        product = ccp.product if ccp.product_id else None
+        product_name = product.name if product else "N/A"
+        message = (
+            f"Your monitoring log for CCP {ccp.ccp_number or ''} ({ccp.ccp_name or ''}), "
+            f"Product: {product_name}, Batch: {monitoring_log.batch_number or 'N/A'}, "
+            f"was REJECTED by {verifier_name}. Please resolve by entering a new value (use Resolve on the log or in the Rejected tab)."
+        )
+        notification = Notification(
+            user_id=responsible_user_id,
+            title="CCP monitoring log rejected – enter a new log",
+            message=message,
+            notification_type=NotificationType.WARNING,
+            priority=NotificationPriority.HIGH,
+            category=NotificationCategory.HACCP,
+            notification_data={
+                "ccp_id": ccp.id,
+                "monitoring_log_id": monitoring_log.id,
+                "product_id": ccp.product_id,
+                "product_name": product_name,
+                "ccp_number": ccp.ccp_number,
+                "ccp_name": ccp.ccp_name,
+                "batch_number": monitoring_log.batch_number,
+                "rejected_by": verified_by,
+                "verifier_name": verifier_name,
+            },
+        )
+        self.db.add(notification)
+        self.db.commit()
+    
+    def resolve_rejected_monitoring_log(
+        self,
+        ccp_id: int,
+        monitoring_log_id: int,
+        new_value: float,
+        unit: Optional[str] = None,
+        batch_number: Optional[str] = None,
+        resolved_by: int = None,
+    ) -> CCPMonitoringLog:
+        """Resolve a rejected monitoring log: update with new value and clear verification so it can be re-verified."""
+        monitoring_log = self.db.query(CCPMonitoringLog).filter(
+            CCPMonitoringLog.id == monitoring_log_id,
+            CCPMonitoringLog.ccp_id == ccp_id,
+        ).first()
+        if not monitoring_log:
+            raise ValueError("Monitoring log not found")
+        ccp = monitoring_log.ccp or self.db.query(CCP).filter(CCP.id == ccp_id).first()
+        if not ccp:
+            raise ValueError("CCP not found")
+        if not monitoring_log.is_verified or monitoring_log.verification_is_compliant is not False:
+            raise ValueError("This log is not in rejected state; only rejected logs can be resolved.")
+        is_monitoring_responsible = ccp.monitoring_responsible == resolved_by
+        if not is_monitoring_responsible and resolved_by:
+            from app.services.rbac_service import RBACService
+            rbac = RBACService(self.db)
+            if not (rbac.has_permission(resolved_by, "haccp", "update") or rbac.has_permission(resolved_by, "haccp", "admin")):
+                raise ValueError("Only the monitoring responsible or HACCP admin/update can resolve this log.")
+        
+        min_lim = ccp.critical_limit_min
+        max_lim = ccp.critical_limit_max
+        is_within_limits = True
+        if min_lim is not None and new_value < float(min_lim):
+            is_within_limits = False
+        if max_lim is not None and new_value > float(max_lim):
+            is_within_limits = False
+        
+        monitoring_log.measured_value = new_value
+        if unit is not None:
+            monitoring_log.unit = unit
+        if batch_number is not None:
+            monitoring_log.batch_number = batch_number
+        monitoring_log.is_within_limits = is_within_limits
+        monitoring_log.is_verified = False
+        monitoring_log.verified_by = None
+        monitoring_log.verified_at = None
+        monitoring_log.verification_method = None
+        monitoring_log.verification_result = None
+        monitoring_log.verification_is_compliant = True
+        monitoring_log.verification_notes = None
+        monitoring_log.verification_evidence_files = None
+        self.db.commit()
+        self.db.refresh(monitoring_log)
+        return monitoring_log
+    
+    def _generate_ccp_verification_pdf_and_record(
+        self, monitoring_log: CCPMonitoringLog, ccp: CCP, verified_by: int
+    ) -> Optional[HACCPVerificationRecord]:
+        """Generate a PDF for the verified CCP log and store a verification record for admin access."""
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        
+        product = ccp.product if ccp.product_id else None
+        product_name = product.name if product else "N/A"
+        verified_at = monitoring_log.verified_at or datetime.utcnow()
+        verifier = self.db.query(User).filter(User.id == verified_by).first()
+        verifier_name = verifier.full_name if verifier else f"User ID {verified_by}"
+        
+        # Recent log entries for this CCP (including the one just verified)
+        recent_logs = (
+            self.db.query(CCPMonitoringLog)
+            .filter(CCPMonitoringLog.ccp_id == ccp.id)
+            .order_by(desc(CCPMonitoringLog.monitoring_time), desc(CCPMonitoringLog.created_at))
+            .limit(20)
+            .all()
+        )
+        
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        x, y = 40, height - 40
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(x, y, "CCP Monitoring Log – Verification Record")
+        y -= 20
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, f"Product: {product_name}")
+        y -= 14
+        c.drawString(x, y, f"CCP: {ccp.ccp_number or ''} – {ccp.ccp_name or 'N/A'}")
+        y -= 14
+        c.drawString(x, y, f"Verified at: {verified_at.isoformat() if hasattr(verified_at, 'isoformat') else str(verified_at)} by {verifier_name}")
+        y -= 14
+        c.drawString(x, y, f"Result: {monitoring_log.verification_result or 'Verified'}")
+        y -= 20
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(x, y, "Log entries (recent)")
+        y -= 16
+        c.setFont("Helvetica", 9)
+        for log in recent_logs:
+            if y < 80:
+                c.showPage()
+                y = height - 40
+                c.setFont("Helvetica", 9)
+            mt = log.monitoring_time or log.created_at
+            mt_str = mt.isoformat()[:19] if hasattr(mt, 'isoformat') else str(mt)
+            spec = "In spec" if log.is_within_limits else "Out of spec"
+            verified = "Yes" if log.is_verified else "No"
+            c.drawString(x, y, f"  {mt_str} | Batch: {log.batch_number or '-'} | Value: {log.measured_value} {log.unit or ''} | {spec} | Verified: {verified}")
+            y -= 12
+        c.drawString(x, y, f"  (Verified log ID: {monitoring_log.id})")
+        y -= 14
+        if monitoring_log.verification_notes:
+            if y < 100:
+                c.showPage()
+                y = height - 40
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(x, y, "Verification notes:")
+            y -= 12
+            c.setFont("Helvetica", 9)
+            for line in (monitoring_log.verification_notes or "")[:500].split("\n")[:10]:
+                c.drawString(x, y, line[:90])
+                y -= 12
+        c.showPage()
+        c.save()
+        buf.seek(0)
+        
+        # Save PDF to uploads/haccp/verification_pdfs/
+        upload_dir = os.path.join("uploads", "haccp", "verification_pdfs")
+        os.makedirs(upload_dir, exist_ok=True)
+        safe_ccp = ccp.id
+        ts = (verified_at.isoformat()[:19] if hasattr(verified_at, 'isoformat') else str(verified_at)).replace(":", "-").replace(" ", "T")
+        filename = f"ccp_{safe_ccp}_log_{monitoring_log.id}_{ts}.pdf"
+        file_path = os.path.join(upload_dir, filename)
+        with open(file_path, "wb") as f:
+            f.write(buf.getvalue())
+        
+        record = HACCPVerificationRecord(
+            record_type="ccp",
+            ccp_id=ccp.id,
+            oprp_id=None,
+            monitoring_log_id=monitoring_log.id,
+            product_id=ccp.product_id,
+            file_path=file_path,
+            verified_at=verified_at,
+            verified_by=verified_by,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
     
     def _create_out_of_spec_alert(self, ccp: CCP, monitoring_log: CCPMonitoringLog) -> bool:
         """Create an alert for out-of-spec readings"""

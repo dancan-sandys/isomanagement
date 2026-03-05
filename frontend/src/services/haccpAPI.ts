@@ -105,6 +105,16 @@ export const haccpAPI = {
     return response.data;
   },
 
+  getRejectedMonitoringLogs: async () => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring-logs/rejected');
+    return response.data;
+  },
+
+  resolveRejectedMonitoringLog: async (ccpId: number, logId: number, body: { new_value: number; unit?: string; batch_number?: string }) => {
+    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/${logId}/resolve`, body);
+    return response.data;
+  },
+
   verifyMonitoringLog: async (
     ccpId: number,
     logId: number,
@@ -134,6 +144,22 @@ export const haccpAPI = {
 
   getVerificationLogs: async (ccpId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/verification-logs`);
+    return response.data;
+  },
+
+  getVerificationLogsStandalone: async (ccpId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/verification-logs/standalone`);
+    return response.data;
+  },
+
+  // Verification records (PDFs generated when logs are verified) – admin
+  getVerificationRecords: async (params?: { record_type?: string; skip?: number; limit?: number }) => {
+    const response: AxiosResponse = await api.get('/haccp/verification-records', { params: params || {} });
+    return response.data;
+  },
+
+  downloadVerificationRecordPdf: async (recordId: number): Promise<Blob> => {
+    const response = await api.get(`/haccp/verification-records/${recordId}/pdf`, { responseType: 'blob' });
     return response.data;
   },
 

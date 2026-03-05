@@ -15,6 +15,7 @@ import HACCPVerification from './pages/HACCPVerification';
 import HACCPSchedules from './pages/HACCPSchedules';
 import HACCPAlerts from './pages/HACCPAlerts';
 import HACCPReports from './pages/HACCPReports';
+import HACCPVerificationRecords from './pages/HACCPVerificationRecords';
 import HACCPDashboard from './pages/HACCPDashboard';
 import PRP from './pages/PRP';
 import PRPProgramDetail from './pages/PRPProgramDetail';
@@ -115,6 +116,7 @@ function App() {
                       <Route path="/haccp/schedules" element={<HACCPSchedules />} />
                       <Route path="/haccp/alerts" element={<HACCPAlerts />} />
                       <Route path="/haccp/reports" element={<HACCPReports />} />
+                      <Route path="/haccp/verification-records" element={<HACCPVerificationRecords />} />
                       <Route path="/haccp/dashboard" element={<HACCPDashboard />} />
                       <Route path="/haccp/ccp" element={<Navigate to="/haccp" replace />} />
                       <Route path="/haccp/hazards" element={<Navigate to="/haccp" replace />} />

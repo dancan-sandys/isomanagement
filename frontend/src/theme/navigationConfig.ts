@@ -72,6 +72,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
       { text: 'HACCP Plans', path: '/haccp' },
       { text: 'Monitoring', path: '/haccp/monitoring' },
       { text: 'Verification', path: '/haccp/verification' },
+      { text: 'Verification Records', path: '/haccp/verification-records' },
       { text: 'Risk Thresholds', path: '/haccp/risk-thresholds' },
     ],
   },

@@ -719,6 +719,16 @@ export const haccpAPI = {
     return response.data;
   },
 
+  getRejectedMonitoringLogs: async () => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring-logs/rejected');
+    return response.data;
+  },
+
+  resolveRejectedMonitoringLog: async (ccpId: number, logId: number, body: { new_value: number; unit?: string; batch_number?: string }) => {
+    const response: AxiosResponse = await api.post(`/haccp/ccps/${ccpId}/monitoring-logs/${logId}/resolve`, body);
+    return response.data;
+  },
+
   verifyMonitoringLog: async (
     ccpId: number,
     logId: number,

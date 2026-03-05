@@ -575,7 +575,30 @@ class CCPVerificationLog(Base):
     verifier = relationship("User", foreign_keys=[created_by])
     
     def __repr__(self):
-        return f"<CCPVerificationLog(id={self.id}, ccp_id={self.ccp_id}, date='{self.verification_date}')>" 
+        return f"<CCPVerificationLog(id={self.id}, ccp_id={self.ccp_id}, date='{self.verification_date}')>"
+
+
+class HACCPVerificationRecord(Base):
+    """Stores references to PDFs generated when a CCP/OPRP monitoring log is verified. Admin-accessible records."""
+    __tablename__ = "haccp_verification_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    record_type = Column(String(20), nullable=False)  # 'ccp' or 'oprp'
+    ccp_id = Column(Integer, ForeignKey("ccps.id"), nullable=True)
+    oprp_id = Column(Integer, ForeignKey("oprps.id"), nullable=True)
+    monitoring_log_id = Column(Integer, nullable=True)  # CCP: ccp_monitoring_logs.id; OPRP: oprp_monitoring_logs.id
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    file_path = Column(String(500), nullable=False)
+    verified_at = Column(DateTime(timezone=True), nullable=False)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    ccp = relationship("CCP", foreign_keys=[ccp_id])
+    product = relationship("Product", foreign_keys=[product_id])
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+    def __repr__(self):
+        return f"<HACCPVerificationRecord(id={self.id}, type={self.record_type}, ccp_id={self.ccp_id})>"
 
 
 # HACCP Plan models (versioned with approvals, similar to Documents)
