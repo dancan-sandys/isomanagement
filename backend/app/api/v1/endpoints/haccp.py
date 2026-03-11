@@ -3,7 +3,7 @@ from json import JSONDecodeError
 from typing import List, Optional, Set
 from collections import defaultdict
 import os
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Body, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_, or_, text
@@ -14,7 +14,8 @@ from app.core.security import get_current_user
 from app.core.permissions import require_permission_dependency
 from app.models.user import User
 from app.models.haccp import (
-    Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPVerificationLog,
+    Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPMonitoringSchedule,
+    CCPVerificationLog,
     HACCPVerificationRecord,
     HazardType, RiskLevel, CCPStatus, RiskThreshold, ProductRiskConfig, DecisionTree,
     ContactSurface, product_contact_surface_association
@@ -39,7 +40,8 @@ from app.schemas.haccp import (
     RiskThresholdCreate, RiskThresholdUpdate, RiskThresholdResponse,
     HazardReviewCreate, HazardReviewUpdate, HazardReviewResponse,
     HACCPReportRequest, ValidationEvidence,
-    ContactSurfaceCreate, ContactSurfaceResponse
+    ContactSurfaceCreate, ContactSurfaceResponse,
+    OPRPUpdate,
 )
 from app.services.haccp_service import HACCPService, HACCPValidationError
 from sqlalchemy.exc import StatementError
@@ -1863,6 +1865,9 @@ async def list_verification_records(
         if r.ccp_id:
             ccp = db.query(CCP).filter(CCP.id == r.ccp_id).first()
             ccp_name = f"{ccp.ccp_number or ''} - {ccp.ccp_name}" if ccp else None
+        if r.oprp_id:
+            oprp = db.query(OPRP).filter(OPRP.id == r.oprp_id).first()
+            oprp_name = f"{oprp.oprp_number or ''} - {oprp.oprp_name}" if oprp else None
         if r.product_id:
             prod = db.query(Product).filter(Product.id == r.product_id).first()
             product_name = prod.name if prod else None
@@ -3666,7 +3671,7 @@ async def get_decision_tree_status(
 async def add_validation_evidence(
     ccp_id: int,
     evidence_data: ValidationEvidence,
-    current_user: User = Depends(require_permission_dependency("haccp:edit")),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Add validation evidence to a CCP"""
@@ -3696,7 +3701,7 @@ async def add_validation_evidence(
 async def remove_validation_evidence(
     ccp_id: int,
     evidence_id: int,
-    current_user: User = Depends(require_permission_dependency("haccp:edit")),
+    current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
     """Remove validation evidence from a CCP"""
@@ -3835,24 +3840,82 @@ async def get_due_monitoring(
     current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db)
 ):
-    """Get all CCPs that are due for monitoring"""
+    """Get CCPs that are due for monitoring.
+
+    - Monitoring operators (assigned as monitoring_responsible) see only their CCPs.
+    - HACCP admins/supervisors (admin/update/manage_program) see all CCPs.
+    """
     try:
         haccp_service = HACCPService(db)
         due_schedules = haccp_service.get_all_due_monitoring()
-        
+
+        # Determine if user is privileged (admin/supervisor) – they see all CCPs
+        rbac = RBACService(db)
+        is_admin = any(
+            [
+                rbac.has_permission(current_user.id, Module.HACCP, PermissionType.UPDATE),
+                rbac.has_permission(current_user.id, Module.HACCP, PermissionType.MANAGE_PROGRAM),
+            ]
+        )
+
         items = []
-        for status in due_schedules:
+        for sched in due_schedules:
+            # Filter by monitoring_responsible for non-admin users
+            ccp = db.query(CCP).filter(CCP.id == sched.ccp_id).first()
+            if not ccp:
+                continue
+            if not is_admin:
+                # Only show CCPs where current user is the monitoring_responsible
+                if ccp.monitoring_responsible is None or ccp.monitoring_responsible != current_user.id:
+                    continue
+
+            product = db.query(Product).filter(Product.id == ccp.product_id).first() if ccp.product_id else None
+            product_name = product.name if product else None
+
+            # Derive a simple critical limits summary (fallbacks for legacy fields)
+            cl_min = None
+            cl_max = None
+            cl_unit = None
+            if ccp.critical_limits:
+                try:
+                    # Take first numeric limit as representative
+                    first = None
+                    for lim in (ccp.critical_limits or []):
+                        if isinstance(lim, dict) and lim.get("limit_type") == "numeric":
+                            first = lim
+                            break
+                    if first:
+                        cl_min = first.get("min_value")
+                        cl_max = first.get("max_value")
+                        cl_unit = first.get("unit")
+                except Exception:
+                    cl_min = ccp.critical_limit_min
+                    cl_max = ccp.critical_limit_max
+                    cl_unit = ccp.critical_limit_unit
+            else:
+                cl_min = ccp.critical_limit_min
+                cl_max = ccp.critical_limit_max
+                cl_unit = ccp.critical_limit_unit
+
             items.append({
-                "schedule_id": status.schedule_id,
-                "ccp_id": status.ccp_id,
-                "ccp_name": status.ccp_name,
-                "is_due": status.is_due,
-                "is_overdue": status.is_overdue,
-                "next_due_time": status.next_due_time.isoformat() if status.next_due_time else None,
-                "last_monitoring_time": status.last_monitoring_time.isoformat() if status.last_monitoring_time else None,
-                "tolerance_window_minutes": status.tolerance_window_minutes,
-                "schedule_type": status.schedule_type,
-                "is_active": status.is_active
+                "schedule_id": sched.schedule_id,
+                "ccp_id": sched.ccp_id,
+                "ccp_name": sched.ccp_name,
+                "ccp_number": ccp.ccp_number,
+                "product_id": ccp.product_id,
+                "product_name": product_name,
+                "is_due": sched.is_due,
+                "is_overdue": sched.is_overdue,
+                "next_due_time": sched.next_due_time.isoformat() if sched.next_due_time else None,
+                "last_monitoring_time": sched.last_monitoring_time.isoformat() if sched.last_monitoring_time else None,
+                "tolerance_window_minutes": sched.tolerance_window_minutes,
+                "schedule_type": sched.schedule_type,
+                "is_active": sched.is_active,
+                "critical_limits": {
+                    "min": cl_min,
+                    "max": cl_max,
+                    "unit": cl_unit,
+                },
             })
         
         return ResponseModel(
@@ -3866,6 +3929,241 @@ async def get_due_monitoring(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get due monitoring schedules: {str(e)}"
         )
+
+
+@router.get("/monitoring/tasks")
+async def get_monitoring_tasks(
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get all active CCPs as monitoring tasks with status (due/overdue/completed).
+
+    - Users with only monitoring_responsible assignment see only CCPs assigned to them.
+    - Users with haccp update or manage_program see all active CCPs.
+    Status: overdue = schedule exists and next_due < now; completed = has at least one monitoring log; else due.
+    """
+    try:
+        rbac = RBACService(db)
+        is_admin = any([
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.UPDATE),
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.MANAGE_PROGRAM),
+        ])
+        q = db.query(CCP).filter(CCP.status == CCPStatus.ACTIVE)
+        if not is_admin:
+            q = q.filter(CCP.monitoring_responsible == current_user.id)
+        ccps = q.all()
+        if not ccps:
+            return ResponseModel(
+                success=True,
+                message="No CCPs available for monitoring",
+                data={
+                    "items": [],
+                    "summary": {"total": 0, "due_count": 0, "overdue_count": 0, "completed_count": 0},
+                },
+            )
+        product_ids = list({c.product_id for c in ccps if c.product_id})
+        products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+        ccp_ids = [c.id for c in ccps]
+        schedules = {
+            s.ccp_id: s
+            for s in db.query(CCPMonitoringSchedule).filter(
+                CCPMonitoringSchedule.ccp_id.in_(ccp_ids),
+                CCPMonitoringSchedule.is_active == True,
+            ).all()
+        }
+        last_logs = {}
+        for cid in ccp_ids:
+            log = (
+                db.query(CCPMonitoringLog)
+                .filter(CCPMonitoringLog.ccp_id == cid)
+                .order_by(desc(CCPMonitoringLog.monitoring_time))
+                .first()
+            )
+            if log:
+                last_logs[cid] = log
+        now = datetime.utcnow()
+        due_count = 0
+        overdue_count = 0
+        completed_count = 0
+        items = []
+        for ccp in ccps:
+            product = products.get(ccp.product_id) if ccp.product_id else None
+            product_name = product.name if product else None
+            sched = schedules.get(ccp.id)
+            next_due_time = sched.next_due_time if sched else None
+            last_log = last_logs.get(ccp.id)
+            last_monitoring_time = last_log.monitoring_time if last_log else None
+            last_measured_value = last_log.measured_value if last_log else None
+            unit = (last_log.unit if last_log else None) or ccp.critical_limit_unit
+            if next_due_time and next_due_time < now:
+                task_status = "overdue"
+                overdue_count += 1
+            elif last_monitoring_time:
+                task_status = "completed"
+                completed_count += 1
+            else:
+                task_status = "due"
+                due_count += 1
+            cl_min = ccp.critical_limit_min
+            cl_max = ccp.critical_limit_max
+            cl_unit = ccp.critical_limit_unit
+            if ccp.critical_limits:
+                try:
+                    for lim in ccp.critical_limits or []:
+                        if isinstance(lim, dict) and lim.get("limit_type") == "numeric":
+                            cl_min = lim.get("min_value")
+                            cl_max = lim.get("max_value")
+                            cl_unit = lim.get("unit")
+                            break
+                except Exception:
+                    pass
+            items.append({
+                "id": str(ccp.id),
+                "ccp_id": ccp.id,
+                "ccp_number": ccp.ccp_number,
+                "ccp_name": ccp.ccp_name,
+                "product_id": ccp.product_id,
+                "product_name": product_name,
+                "status": task_status,
+                "next_due_time": next_due_time.isoformat() if next_due_time else None,
+                "last_monitoring_time": last_monitoring_time.isoformat() if last_monitoring_time else None,
+                "last_measured_value": last_measured_value,
+                "unit": unit,
+                "frequency": ccp.monitoring_frequency or (sched.schedule_type if sched else None),
+                "critical_limits": {"min": cl_min, "max": cl_max, "unit": cl_unit or ""},
+            })
+        return ResponseModel(
+            success=True,
+            message="Monitoring tasks retrieved",
+            data={
+                "items": items,
+                "summary": {
+                    "total": len(items),
+                    "due_count": due_count,
+                    "overdue_count": overdue_count,
+                    "completed_count": completed_count,
+                },
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get monitoring tasks: {str(e)}"
+        )
+
+
+@router.get("/monitoring/trends")
+async def get_monitoring_trends(
+    ccp_id: Optional[int] = Query(None, description="Filter by CCP ID; omit for all visible CCPs"),
+    days: int = Query(30, ge=1, le=365, description="Number of days of data"),
+    limit: int = Query(500, ge=1, le=2000),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get monitoring log data for trend charts. Returns logs for CCPs the user can see (same as monitoring/due)."""
+    try:
+        rbac = RBACService(db)
+        is_admin = any([
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.UPDATE),
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.MANAGE_PROGRAM),
+        ])
+        since = datetime.utcnow() - timedelta(days=days)
+
+        # Resolve visible CCP IDs
+        q_ccp = db.query(CCP).filter(CCP.status == CCPStatus.ACTIVE)
+        if not is_admin:
+            q_ccp = q_ccp.filter(CCP.monitoring_responsible == current_user.id)
+        visible_ccps = {c.id: c for c in q_ccp.all()}
+        visible_ccp_ids = list(visible_ccps.keys())
+        if not visible_ccp_ids:
+            return ResponseModel(
+                success=True,
+                message="No CCPs available for trends",
+                data={"ccps": [], "items": [], "summary": {"total": 0, "in_spec": 0, "out_of_spec": 0, "corrective_actions": 0}}
+            )
+
+        if ccp_id is not None:
+            if ccp_id not in visible_ccp_ids:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CCP not accessible")
+            ccp_filter = [ccp_id]
+        else:
+            ccp_filter = visible_ccp_ids
+
+        logs = (
+            db.query(CCPMonitoringLog)
+            .filter(
+                CCPMonitoringLog.ccp_id.in_(ccp_filter),
+                CCPMonitoringLog.monitoring_time >= since,
+            )
+            .order_by(desc(CCPMonitoringLog.monitoring_time))
+            .limit(limit)
+            .all()
+        )
+        product_ids = list({c.product_id for c in visible_ccps.values() if c.product_id})
+        products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+
+        ccps_payload = [
+            {
+                "id": c.id,
+                "ccp_number": c.ccp_number,
+                "ccp_name": c.ccp_name,
+                "product_name": products.get(c.product_id).name if c.product_id and products.get(c.product_id) else None,
+            }
+            for c in visible_ccps.values()
+        ]
+        items = []
+        total = 0
+        in_spec = 0
+        out_of_spec = 0
+        corrective_actions = 0
+        for log in logs:
+            ccp = visible_ccps.get(log.ccp_id)
+            if not ccp:
+                continue
+            product_name = products.get(ccp.product_id).name if ccp.product_id and products.get(ccp.product_id) else None
+            items.append({
+                "id": log.id,
+                "ccp_id": log.ccp_id,
+                "ccp_number": ccp.ccp_number,
+                "ccp_name": ccp.ccp_name,
+                "product_name": product_name,
+                "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
+                "measured_value": log.measured_value,
+                "unit": log.unit,
+                "is_within_limits": bool(log.is_within_limits),
+                "corrective_action_taken": bool(log.corrective_action_taken) if hasattr(log, "corrective_action_taken") else False,
+            })
+            total += 1
+            if log.is_within_limits:
+                in_spec += 1
+            else:
+                out_of_spec += 1
+            if getattr(log, "corrective_action_taken", False):
+                corrective_actions += 1
+
+        return ResponseModel(
+            success=True,
+            message="Monitoring trends retrieved",
+            data={
+                "ccps": ccps_payload,
+                "items": items,
+                "summary": {
+                    "total": total,
+                    "in_spec": in_spec,
+                    "out_of_spec": out_of_spec,
+                    "corrective_actions": corrective_actions,
+                    "compliance_pct": round(100 * in_spec / total, 1) if total else 0,
+                },
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get monitoring trends: {str(e)}"
+        )
+
 
 # Batch Disposition Endpoints
 @router.get("/batches/quarantined")
@@ -4521,6 +4819,7 @@ async def get_oprps(
             message="OPRPs retrieved successfully",
             data=[{
                 "id": oprp.id,
+                "product_id": oprp.product_id,
                 "oprp_number": oprp.oprp_number,
                 "oprp_name": oprp.oprp_name,
                 "description": oprp.description,
@@ -4529,9 +4828,13 @@ async def get_oprps(
                 "operational_limit_min": oprp.operational_limit_min,
                 "operational_limit_max": oprp.operational_limit_max,
                 "operational_limit_unit": oprp.operational_limit_unit,
+                "operational_limits": oprp.operational_limits,
                 "monitoring_frequency": oprp.monitoring_frequency,
                 "monitoring_method": oprp.monitoring_method,
                 "corrective_actions": oprp.corrective_actions,
+                "verification_frequency": oprp.verification_frequency,
+                "verification_method": oprp.verification_method,
+                "verification_responsible": oprp.verification_responsible,
                 "justification": oprp.justification,
                 "created_at": oprp.created_at,
                 "updated_at": oprp.updated_at
@@ -4545,6 +4848,15 @@ async def get_oprps(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve OPRPs: {str(e)}"
         )
+
+
+def _serialize_value(v):
+    """Serialize a value for JSON response (e.g. datetime -> isoformat)."""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.isoformat()
+    return v
 
 
 @router.get("/oprps/{oprp_id}", response_model=ResponseModel)
@@ -4561,7 +4873,6 @@ async def get_oprp(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="OPRP not found"
             )
-        
         return ResponseModel(
             success=True,
             message="OPRP retrieved successfully",
@@ -4573,6 +4884,7 @@ async def get_oprp(
                 "oprp_name": oprp.oprp_name,
                 "description": oprp.description,
                 "status": oprp.status,
+                "operational_limits": oprp.operational_limits,
                 "operational_limit_min": oprp.operational_limit_min,
                 "operational_limit_max": oprp.operational_limit_max,
                 "operational_limit_unit": oprp.operational_limit_unit,
@@ -4587,8 +4899,8 @@ async def get_oprp(
                 "verification_responsible": oprp.verification_responsible,
                 "justification": oprp.justification,
                 "effectiveness_validation": oprp.effectiveness_validation,
-                "created_at": oprp.created_at,
-                "updated_at": oprp.updated_at,
+                "created_at": _serialize_value(oprp.created_at),
+                "updated_at": _serialize_value(oprp.updated_at),
                 "created_by": oprp.created_by
             }
         )
@@ -4605,12 +4917,37 @@ async def get_oprp(
 @router.put("/oprps/{oprp_id}", response_model=ResponseModel)
 async def update_oprp(
     oprp_id: int,
-    oprp_data: dict,
+    request: Request,
     current_user: User = Depends(require_permission_dependency("haccp:update")),
     db: Session = Depends(get_db)
 ):
-    """Update an OPRP"""
+    """Update an OPRP. Send a JSON body with fields to update (all optional)."""
     try:
+        # Parse body: accept empty, invalid JSON, or partial payload without raising
+        oprp_data = {}
+        try:
+            raw = await request.body()
+            if raw and raw.strip():
+                data = json.loads(raw)
+                if isinstance(data, dict):
+                    # Validate with Pydantic; on failure use only safe subset
+                    try:
+                        body = OPRPUpdate.model_validate(data)
+                        oprp_data = body.model_dump(exclude_unset=True, mode="json")
+                    except Exception:
+                        # Use only keys that exist on OPRPUpdate and are safe to set
+                        allowed = {
+                            "oprp_number", "oprp_name", "description", "status",
+                            "operational_limit_min", "operational_limit_max", "operational_limit_unit",
+                            "operational_limit_description", "monitoring_frequency", "monitoring_method",
+                            "monitoring_responsible", "monitoring_equipment", "corrective_actions",
+                            "verification_frequency", "verification_method", "verification_responsible",
+                            "justification", "effectiveness_validation"
+                        }
+                        oprp_data = {k: data[k] for k in allowed if k in data}
+        except (ValueError, json.JSONDecodeError):
+            pass
+
         oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
         if not oprp:
             raise HTTPException(
@@ -4618,32 +4955,38 @@ async def update_oprp(
                 detail="OPRP not found"
             )
         
-        # Update fields
-        for field in [
-            "oprp_number",
-            "oprp_name",
-            "description",
-            "status",
-            "operational_limit_min",
-            "operational_limit_max",
-            "operational_limit_unit",
-            "operational_limit_description",
-            "monitoring_frequency",
-            "monitoring_method",
-            "monitoring_responsible",
-            "monitoring_equipment",
-            "corrective_actions",
-            "verification_frequency",
-            "verification_method",
-            "verification_responsible",
-            "justification",
-            "effectiveness_validation"
-        ]:
+        for key in ("monitoring_responsible", "verification_responsible"):
+            if key in oprp_data and oprp_data[key] is not None:
+                try:
+                    v = int(oprp_data[key])
+                    oprp_data[key] = v if v >= 1 else None
+                except (TypeError, ValueError):
+                    oprp_data[key] = None
+            elif key in oprp_data:
+                oprp_data[key] = None
+
+        update_fields = [
+            "oprp_number", "oprp_name", "description", "status",
+            "operational_limits", "operational_limit_min", "operational_limit_max",
+            "operational_limit_unit", "operational_limit_description",
+            "monitoring_frequency", "monitoring_method", "monitoring_responsible",
+            "monitoring_equipment", "corrective_actions",
+            "verification_frequency", "verification_method", "verification_responsible",
+            "justification", "effectiveness_validation", "validation_evidence"
+        ]
+        for field in update_fields:
             if field in oprp_data:
-                setattr(oprp, field, oprp_data[field])
+                val = oprp_data[field]
+                # JSON columns: ensure dict/list for DB, avoid empty string
+                if field in ("operational_limits", "validation_evidence") and val == "":
+                    val = None
+                setattr(oprp, field, val)
         
         db.commit()
-        db.refresh(oprp)
+        try:
+            db.refresh(oprp)
+        except Exception:
+            pass
         
         try:
             audit_event(db, current_user.id, "haccp_oprp_updated", "haccp", str(oprp.id))
@@ -4659,9 +5002,11 @@ async def update_oprp(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update OPRP: {str(e)}"
+            detail=f"Failed to update OPRP: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -4807,4 +5152,166 @@ async def get_oprp_monitoring_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve OPRP monitoring logs: {str(e)}"
+        )
+
+
+@router.get("/oprps/{oprp_id}/verification-logs", response_model=ResponseModel)
+async def get_oprp_verification_logs(
+    oprp_id: int,
+    batch_id: Optional[int] = Query(None, description="Filter by batch ID"),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Get verification logs for an OPRP (optionally filtered by batch)."""
+    try:
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        q = db.query(OPRPVerificationLog).filter(OPRPVerificationLog.oprp_id == oprp_id)
+        if batch_id is not None:
+            q = q.filter(OPRPVerificationLog.batch_id == batch_id)
+        logs = q.order_by(OPRPVerificationLog.verification_date.desc()).all()
+        items = []
+        for log in logs:
+            verified_by_user = db.query(User).filter(User.id == log.verified_by).first()
+            batch_number = None
+            if log.batch_id:
+                from app.models.traceability import Batch
+                batch = db.query(Batch).filter(Batch.id == log.batch_id).first()
+                if batch:
+                    batch_number = getattr(batch, "batch_number", None)
+            items.append({
+                "id": log.id,
+                "oprp_id": log.oprp_id,
+                "batch_id": log.batch_id,
+                "batch_number": batch_number,
+                "verification_type": log.verification_type,
+                "verification_date": log.verification_date,
+                "verified_by": log.verified_by,
+                "verified_by_name": verified_by_user.full_name if verified_by_user else None,
+                "conducted_as_expected": log.conducted_as_expected,
+                "findings": log.findings,
+                "corrective_actions": log.corrective_actions,
+                "next_verification_date": log.next_verification_date,
+                "created_at": log.created_at,
+            })
+        return ResponseModel(
+            success=True,
+            message="OPRP verification logs retrieved successfully",
+            data=items
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve OPRP verification logs: {str(e)}"
+        )
+
+
+@router.post("/oprps/{oprp_id}/verification-logs", response_model=ResponseModel)
+async def create_oprp_verification_log(
+    oprp_id: int,
+    request: Request,
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db)
+):
+    """Create an OPRP verification log (e.g. confirm OPRP checked/done for a batch).
+    Only the assigned verification_responsible for this OPRP, or a user with haccp:verify or haccp:update, may create."""
+    try:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        oprp = db.query(OPRP).filter(OPRP.id == oprp_id).first()
+        if not oprp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="OPRP not found"
+            )
+        can_verify = (
+            (oprp.verification_responsible is not None and oprp.verification_responsible == current_user.id)
+            or RBACService(db).has_permission(current_user.id, "haccp", "verify")
+            or RBACService(db).has_permission(current_user.id, "haccp", "update")
+        )
+        if not can_verify:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned verification responsible for this OPRP or a user with haccp:verify/update may create verification records."
+            )
+        verification_type = body.get("verification_type") or "batch_check"
+        verification_date = body.get("verification_date")
+        if isinstance(verification_date, str):
+            try:
+                verification_date = datetime.fromisoformat(verification_date.replace("Z", "+00:00"))
+            except ValueError:
+                verification_date = datetime.utcnow()
+        elif verification_date is None:
+            verification_date = datetime.utcnow()
+        batch_id = body.get("batch_id")
+        # Positive/negative: True = OPRP conducted as expected, False = not as expected
+        conducted_as_expected = body.get("conducted_as_expected")
+        if conducted_as_expected is not None and not isinstance(conducted_as_expected, bool):
+            conducted_as_expected = bool(conducted_as_expected)
+        log = OPRPVerificationLog(
+            oprp_id=oprp_id,
+            batch_id=batch_id,
+            verification_type=verification_type,
+            verification_date=verification_date,
+            verified_by=current_user.id,
+            conducted_as_expected=conducted_as_expected,
+            findings=body.get("findings"),
+            corrective_actions=body.get("corrective_actions"),
+            next_verification_date=body.get("next_verification_date"),
+        )
+        db.add(log)
+        db.commit()
+        db.refresh(log)
+        try:
+            audit_event(db, current_user.id, "haccp_oprp_verification_log_created", "haccp", str(log.id))
+        except Exception:
+            pass
+        # Generate OPRP verification PDF and create HACCPVerificationRecord so it appears on Verification Records page
+        try:
+            service = HACCPService(db)
+            service._generate_oprp_verification_pdf_and_record(log, oprp, current_user.id)
+        except Exception:
+            pass  # do not fail the request if PDF generation fails
+        verified_by_user = db.query(User).filter(User.id == log.verified_by).first()
+        batch_number = None
+        if log.batch_id:
+            from app.models.traceability import Batch
+            batch = db.query(Batch).filter(Batch.id == log.batch_id).first()
+            if batch:
+                batch_number = getattr(batch, "batch_number", None)
+        return ResponseModel(
+            success=True,
+            message="OPRP verification log created successfully",
+            data={
+                "id": log.id,
+                "oprp_id": log.oprp_id,
+                "batch_id": log.batch_id,
+                "batch_number": batch_number,
+                "verification_type": log.verification_type,
+                "verification_date": log.verification_date,
+                "verified_by": log.verified_by,
+                "verified_by_name": verified_by_user.full_name if verified_by_user else None,
+                "conducted_as_expected": log.conducted_as_expected,
+                "findings": log.findings,
+                "corrective_actions": log.corrective_actions,
+                "next_verification_date": log.next_verification_date,
+                "created_at": log.created_at,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create OPRP verification log: {str(e)}"
         )

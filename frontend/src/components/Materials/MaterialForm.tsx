@@ -425,8 +425,8 @@ const MaterialForm: React.FC<MaterialFormProps> = ({
                 <Select
                   id="supplier_id"
                   name="supplier_id"
-                  value={formik.values.supplier_id}
-                  onChange={formik.handleChange}
+                  value={formik.values.supplier_id || ''}
+                  onChange={(e) => formik.setFieldValue('supplier_id', e.target.value === '' ? 0 : Number(e.target.value))}
                   onBlur={formik.handleBlur}
                   disabled={mode === 'view'}
                 >

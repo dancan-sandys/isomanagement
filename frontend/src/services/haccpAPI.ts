@@ -9,6 +9,19 @@ export const haccpAPI = {
     return response.data;
   },
 
+  // Monitoring dashboard – due CCP monitoring tasks
+  getDueMonitoring: async () => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/due');
+    return response.data;
+  },
+  getMonitoringTasks: async () => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/tasks');
+    return response.data;
+  },
+  getMonitoringTrends: async (params?: { ccp_id?: number; days?: number; limit?: number }) => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/trends', { params });
+    return response.data;
+  },
   getProduct: async (productId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/products/${productId}`);
     return response.data;
@@ -149,6 +162,12 @@ export const haccpAPI = {
 
   getVerificationLogsStandalone: async (ccpId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/verification-logs/standalone`);
+    return response.data;
+  },
+
+  // Verification tasks / programs that are due (for verification console)
+  getDueVerifications: async () => {
+    const response: AxiosResponse = await api.get('/haccp/verification/due');
     return response.data;
   },
 
@@ -314,6 +333,18 @@ export const haccpAPI = {
 
   getOPRPMonitoringLogs: async (oprpId: number) => {
     const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}/monitoring-logs`);
+    return response.data;
+  },
+
+  // OPRP Verification Logs (per-batch verification)
+  getOPRPVerificationLogs: async (oprpId: number, batchId?: number) => {
+    const params = batchId != null ? { batch_id: batchId } : undefined;
+    const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}/verification-logs`, { params });
+    return response.data;
+  },
+
+  createOPRPVerificationLog: async (oprpId: number, data: { batch_id?: number; verification_type?: string; conducted_as_expected?: boolean; findings?: string }) => {
+    const response: AxiosResponse = await api.post(`/haccp/oprps/${oprpId}/verification-logs`, data);
     return response.data;
   },
 };

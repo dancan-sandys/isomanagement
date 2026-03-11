@@ -142,30 +142,28 @@ def require_permission_dependency(permission_string: str):
         try:
             module = Module(module_str)
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Invalid permission format: {permission_string}. Unknown module: {module_str}"
-            )
+            module = module_str  # allow custom module strings not in enum
         try:
             action = PermissionType(action_str)
         except ValueError:
-            action = action_str  # allow custom action strings not in enum (e.g. "admin")
+            action = action_str  # allow custom action strings not in enum (e.g. "admin", "edit")
         
         rbac_service = RBACService(db)
         if not rbac_service.has_permission(current_user.id, module, action):
             # Get user's current permissions for better error message
             user_permissions = rbac_service.get_user_permissions(current_user.id)
             user_modules = rbac_service.get_user_modules(current_user.id)
+            module_value = module.value if isinstance(module, Module) else module
             action_value = action.value if isinstance(action, PermissionType) else action
             
             error_detail = {
                 "error": "Insufficient permissions",
                 "required_permission": permission_string,
-                "required_module": module.value,
+                "required_module": module_value,
                 "required_action": action_value,
                 "user_id": current_user.id,
                 "user_username": current_user.username,
-                "user_has_module_access": module in user_modules,
+                "user_has_module_access": module in user_modules if isinstance(module, Module) else any(m.value == module for m in user_modules),
                 "user_permissions_count": len(user_permissions),
                 "available_modules": [m.value for m in user_modules],
                 "available_permissions": [f"{p.module}:{p.action}" for p in user_permissions[:10]]  # Permission ORM: module/action are strings

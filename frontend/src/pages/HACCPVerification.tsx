@@ -69,12 +69,13 @@ import HACCPBreadcrumbs from '../components/UI/HACCPBreadcrumbs';
 
 interface VerificationTask {
   id: string;
+  programId: number;
   ccpId: number;
   ccpName: string;
   ccpNumber: string;
   productName: string;
   productId: number;
-  verificationType: 'calibration' | 'review' | 'testing' | 'audit' | 'validation';
+  verificationType: string;
   status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'failed';
   priority: 'low' | 'medium' | 'high' | 'critical';
   dueDate: string;
@@ -83,6 +84,7 @@ interface VerificationTask {
   responsible: string;
   description: string;
   requirements: string[];
+  requiredVerifierRole?: string | null;
   evidence?: string[];
 }
 
@@ -149,75 +151,53 @@ const HACCPVerification: React.FC = () => {
   const loadVerificationTasks = async () => {
     setLoading(true);
     try {
-      // Mock data - replace with actual API call
-      const mockTasks: VerificationTask[] = [
-        {
-          id: '1',
-          ccpId: 1,
-          ccpName: 'Temperature Control',
-          ccpNumber: 'CCP-1',
-          productName: 'Chicken Breast',
-          productId: 1,
-          verificationType: 'calibration',
-          status: 'pending',
-          priority: 'high',
-          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-          frequency: 'Monthly',
-          responsible: currentUser?.username || 'QA Manager',
-          description: 'Calibration of temperature monitoring equipment',
-          requirements: [
-            'Equipment calibration against certified standard',
-            'Documentation of calibration results',
-            'Verification of accuracy within ±1°C',
-            'Update calibration records'
-          ],
-        },
-        {
-          id: '2',
-          ccpId: 2,
-          ccpName: 'pH Control',
-          ccpNumber: 'CCP-2',
-          productName: 'Pickled Vegetables',
-          productId: 2,
-          verificationType: 'review',
-          status: 'overdue',
-          priority: 'critical',
-          dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-          frequency: 'Weekly',
-          responsible: currentUser?.username || 'QA Specialist',
-          description: 'Review of monitoring records and control measures',
-          requirements: [
-            'Review monitoring logs for completeness',
-            'Verify corrective actions were appropriate',
-            'Check trend analysis',
-            'Confirm training records are current'
-          ],
-        },
-        {
-          id: '3',
-          ccpId: 3,
-          ccpName: 'Water Activity',
-          ccpNumber: 'CCP-3',
-          productName: 'Dried Fruits',
-          productId: 3,
-          verificationType: 'testing',
-          status: 'in_progress',
-          priority: 'medium',
-          dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
-          frequency: 'Bi-weekly',
-          responsible: currentUser?.username || 'QA Manager',
-          description: 'Independent testing of water activity measurements',
-          requirements: [
-            'Collect representative samples',
-            'Test using calibrated aw meter',
-            'Compare results with production data',
-            'Document any deviations'
-          ],
-        },
-      ];
-      setVerificationTasks(mockTasks);
+      const res: any = await haccpAPI.getDueVerifications();
+      const payload = res?.data ?? res;
+      const items = payload?.items ?? payload ?? [];
+
+      const tasks: VerificationTask[] = items.map((item: any) => {
+        const isOverdue = Boolean(item.is_overdue);
+        const status: VerificationTask['status'] = isOverdue ? 'overdue' : 'pending';
+
+        let priority: VerificationTask['priority'] = 'medium';
+        if (status === 'overdue') priority = 'critical';
+        else priority = 'high';
+
+        const dueDate = item.next_verification_date || new Date().toISOString();
+
+        const rawCriteria = item.verification_criteria;
+        const requirements: string[] = Array.isArray(rawCriteria)
+          ? rawCriteria
+          : rawCriteria
+          ? [String(rawCriteria)]
+          : [];
+
+        return {
+          id: String(item.program_id ?? item.id ?? item.ccp_id),
+          programId: item.program_id ?? item.id,
+          ccpId: item.ccp_id,
+          ccpName: item.ccp_name ?? '',
+          ccpNumber: item.ccp_number ?? '',
+          productName: item.product_name ?? '',
+          productId: item.product_id ?? 0,
+          verificationType: item.verification_type || 'review',
+          status,
+          priority,
+          dueDate,
+          frequency: item.frequency || '',
+          lastVerified: undefined,
+          responsible: item.required_verifier_role || currentUser?.username || '',
+          description: requirements.join('; '),
+          requirements,
+          requiredVerifierRole: item.required_verifier_role ?? null,
+          evidence: [],
+        };
+      });
+
+      setVerificationTasks(tasks);
     } catch (error) {
       console.error('Error loading verification tasks:', error);
+      setVerificationTasks([]);
     } finally {
       setLoading(false);
     }
@@ -556,11 +536,18 @@ const HACCPVerification: React.FC = () => {
             ) : (
               <List>
                 {pendingTasks.map((task) => (
-                  <ListItem key={task.id} divider>
+                  <ListItem
+                    key={task.id}
+                    divider
+                    onClick={() => handleStartVerification(task)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <ListItemIcon>
                       {getVerificationTypeIcon(task.verificationType)}
                     </ListItemIcon>
                     <ListItemText
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                           <Typography variant="h6">
@@ -604,7 +591,10 @@ const HACCPVerification: React.FC = () => {
                         variant="contained"
                         startIcon={<VerifiedUser />}
                         color={task.status === 'overdue' ? 'error' : 'primary'}
-                        onClick={() => handleStartVerification(task)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartVerification(task);
+                        }}
                         sx={{ ml: 2 }}
                       >
                         Start Verification

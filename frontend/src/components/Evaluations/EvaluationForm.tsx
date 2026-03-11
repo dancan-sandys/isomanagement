@@ -387,9 +387,9 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({
           <InputLabel>Supplier</InputLabel>
           <Select
             name="supplier_id"
-            value={formik.values.supplier_id}
+            value={formik.values.supplier_id || ''}
             label="Supplier"
-            onChange={formik.handleChange}
+            onChange={(e) => formik.setFieldValue('supplier_id', e.target.value === '' ? 0 : Number(e.target.value))}
             onBlur={formik.handleBlur}
             disabled={mode === 'view'}
           >

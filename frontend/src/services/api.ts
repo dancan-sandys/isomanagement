@@ -766,6 +766,11 @@ export const haccpAPI = {
     return response.data;
   },
 
+  getDueVerifications: async () => {
+    const response: AxiosResponse = await api.get('/haccp/verification/due');
+    return response.data;
+  },
+
   // Dashboard and Reports
   getDashboard: async () => {
     const response: AxiosResponse = await api.get('/haccp/dashboard');
@@ -820,6 +825,59 @@ export const haccpAPI = {
   // Convenience alias retained for compatibility; delegate to HACCP endpoint
   getRecentNonConformance: async (ccpId: number, batchNumber: string) => {
     const response: AxiosResponse = await api.get(`/haccp/ccps/${ccpId}/nonconformance/recent`, { params: { batch_number: batchNumber } });
+    return response.data;
+  },
+
+  // OPRPs
+  getOPRPs: async (productId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/products/${productId}/oprps`);
+    return response.data;
+  },
+  getOPRP: async (oprpId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}`);
+    return response.data;
+  },
+  createOPRP: async (productId: number, oprpData: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/products/${productId}/oprps`, oprpData);
+    return response.data;
+  },
+  updateOPRP: async (oprpId: number, oprpData: any) => {
+    const response: AxiosResponse = await api.put(`/haccp/oprps/${oprpId}`, oprpData);
+    return response.data;
+  },
+  deleteOPRP: async (oprpId: number) => {
+    const response: AxiosResponse = await api.delete(`/haccp/oprps/${oprpId}`);
+    return response.data;
+  },
+
+  // Monitoring dashboard – due CCP monitoring tasks
+  getDueMonitoring: async () => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/due');
+    return response.data;
+  },
+  getMonitoringTasks: async () => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/tasks');
+    return response.data;
+  },
+  getMonitoringTrends: async (params?: { ccp_id?: number; days?: number; limit?: number }) => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/trends', { params });
+    return response.data;
+  },
+  getOPRPMonitoringLogs: async (oprpId: number) => {
+    const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}/monitoring-logs`);
+    return response.data;
+  },
+  createOPRPMonitoringLog: async (oprpId: number, logData: any) => {
+    const response: AxiosResponse = await api.post(`/haccp/oprps/${oprpId}/monitoring-logs`, logData);
+    return response.data;
+  },
+  getOPRPVerificationLogs: async (oprpId: number, batchId?: number) => {
+    const params = batchId != null ? { batch_id: batchId } : undefined;
+    const response: AxiosResponse = await api.get(`/haccp/oprps/${oprpId}/verification-logs`, { params });
+    return response.data;
+  },
+  createOPRPVerificationLog: async (oprpId: number, data: { batch_id?: number; verification_type?: string; conducted_as_expected?: boolean; findings?: string }) => {
+    const response: AxiosResponse = await api.post(`/haccp/oprps/${oprpId}/verification-logs`, data);
     return response.data;
   },
 };

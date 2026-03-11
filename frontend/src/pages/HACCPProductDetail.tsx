@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch, Badge } from '@mui/material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch, Badge, Radio, RadioGroup } from '@mui/material';
 import { Add, Edit, Visibility, Delete, Security, Save } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, haccpAPI } from '../services/api';
@@ -11,7 +11,7 @@ import HazardDialog from '../components/HACCP/HazardDialog';
 import HazardViewDialog from '../components/HACCP/HazardViewDialog';
 import { AppDispatch, RootState } from '../store';
 import { hasPermission, isSystemAdministrator } from '../store/slices/authSlice';
-import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, createOPRP, updateProduct } from '../store/slices/haccpSlice';
+import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, createOPRP, updateOPRP, updateProduct } from '../store/slices/haccpSlice';
 
 function TabPanel({ children, value, index }: { children?: React.ReactNode; value: number; index: number }) {
   return (
@@ -91,6 +91,8 @@ const HACCPProductDetail: React.FC = () => {
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [selectedHazardItem, setSelectedHazardItem] = useState<any>(null);
   const [selectedCcpItem, setSelectedCcpItem] = useState<any>(null);
+  const [selectedOprpItem, setSelectedOprpItem] = useState<any>(null);
+  const [oprpDetailDialogOpen, setOprpDetailDialogOpen] = useState(false);
   const [flowchartDialogOpen, setFlowchartDialogOpen] = useState(false);
 
   const [flowForm, setFlowForm] = useState({ step_number: '', step_name: '', description: '', equipment: '', temperature: '', time_minutes: '', ph: '', aw: '' });
@@ -104,6 +106,12 @@ const HACCPProductDetail: React.FC = () => {
   const userReqIdRef = useRef(0);
   const [monitoringUserValue, setMonitoringUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
   const [verificationUserValue, setVerificationUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  const [oprpVerificationUserValue, setOprpVerificationUserValue] = useState<{ id: number; username: string; full_name?: string } | null>(null);
+  const [oprpForm, setOprpForm] = useState({ verification_frequency: '', verification_method: '', verification_responsible: '' });
+  const [oprpVerificationLogs, setOprpVerificationLogs] = useState<any[]>([]);
+  const [oprpVerificationBatchValue, setOprpVerificationBatchValue] = useState<{ id: number; batch_number?: string } | null>(null);
+  const [oprpVerificationNotes, setOprpVerificationNotes] = useState('');
+  const [oprpVerificationConductedAsExpected, setOprpVerificationConductedAsExpected] = useState<boolean>(true);
   
   useEffect(() => {
     dispatch(fetchProduct(productId));
@@ -145,31 +153,81 @@ const HACCPProductDetail: React.FC = () => {
   useEffect(() => {
     const populateSelectedUsers = async () => {
       try {
-        if (ccpForm.monitoring_responsible) {
-          const idNum = Number(ccpForm.monitoring_responsible);
-          if (!monitoringUserValue || monitoringUserValue.id !== idNum) {
-            const res: any = await usersAPI.getUser(idNum);
+        const monId = ccpForm.monitoring_responsible ? Number(ccpForm.monitoring_responsible) : NaN;
+        if (Number.isFinite(monId) && monId >= 1 && (!monitoringUserValue || monitoringUserValue.id !== monId)) {
+          if (currentUser?.id === monId) {
+            setMonitoringUserValue({ id: currentUser.id, username: currentUser.username ?? '', full_name: currentUser.full_name ?? '' });
+          } else {
+            const res: any = await usersAPI.getUser(monId);
             const u = res?.data || res;
             if (u?.id) setMonitoringUserValue({ id: u.id, username: u.username, full_name: u.full_name });
           }
-        } else {
-          setMonitoringUserValue(null);
-        }
-        if (ccpForm.verification_responsible) {
-          const idNum = Number(ccpForm.verification_responsible);
-          if (!verificationUserValue || verificationUserValue.id !== idNum) {
-            const res: any = await usersAPI.getUser(idNum);
+        } else if (!ccpForm.monitoring_responsible || !Number.isFinite(monId)) setMonitoringUserValue(null);
+        const verId = ccpForm.verification_responsible ? Number(ccpForm.verification_responsible) : NaN;
+        if (Number.isFinite(verId) && verId >= 1 && (!verificationUserValue || verificationUserValue.id !== verId)) {
+          if (currentUser?.id === verId) {
+            setVerificationUserValue({ id: currentUser.id, username: currentUser.username ?? '', full_name: currentUser.full_name ?? '' });
+          } else {
+            const res: any = await usersAPI.getUser(verId);
             const u = res?.data || res;
             if (u?.id) setVerificationUserValue({ id: u.id, username: u.username, full_name: u.full_name });
           }
-        } else {
-          setVerificationUserValue(null);
-        }
+        } else if (!ccpForm.verification_responsible || !Number.isFinite(verId)) setVerificationUserValue(null);
       } catch {}
     };
     populateSelectedUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ccpForm.monitoring_responsible, ccpForm.verification_responsible]);
+  }, [ccpForm.monitoring_responsible, ccpForm.verification_responsible, currentUser?.id]);
+
+  // When OPRP detail is opened, fetch full OPRP and verification logs; populate OPRP form and verifier user
+  useEffect(() => {
+    if (!selectedOprpItem?.id || !oprpDetailDialogOpen) return;
+    const oprpId = selectedOprpItem.id;
+    setOprpForm({
+      verification_frequency: selectedOprpItem.verification_frequency ?? '',
+      verification_method: selectedOprpItem.verification_method ?? '',
+      verification_responsible: selectedOprpItem.verification_responsible != null ? String(selectedOprpItem.verification_responsible) : '',
+    });
+    (async () => {
+      try {
+        const res: any = await haccpAPI.getOPRP(oprpId);
+        const data = res?.data ?? res;
+        const verId = data?.verification_responsible != null ? Number(data.verification_responsible) : NaN;
+        if (Number.isFinite(verId) && verId >= 1) {
+          if (currentUser?.id === verId) {
+            setOprpVerificationUserValue({ id: currentUser.id, username: currentUser.username ?? '', full_name: currentUser.full_name ?? '' });
+          } else {
+            const u: any = await usersAPI.getUser(verId);
+            const user = u?.data ?? u;
+            if (user?.id) setOprpVerificationUserValue({ id: user.id, username: user.username, full_name: user.full_name });
+          }
+        } else {
+          setOprpVerificationUserValue(null);
+        }
+        const logsRes: any = await haccpAPI.getOPRPVerificationLogs(oprpId);
+        const logs = logsRes?.data ?? logsRes;
+        setOprpVerificationLogs(Array.isArray(logs) ? logs : []);
+      } catch {
+        setOprpVerificationLogs([]);
+        setOprpVerificationUserValue(null);
+      }
+    })();
+  }, [selectedOprpItem?.id, oprpDetailDialogOpen, currentUser?.id]);
+
+  useEffect(() => {
+    const raw = oprpForm.verification_responsible;
+    const idNum = raw !== '' && raw != null ? Number(raw) : NaN;
+    if (Number.isFinite(idNum) && idNum >= 1 && (!oprpVerificationUserValue || idNum !== oprpVerificationUserValue.id)) {
+      if (currentUser?.id === idNum) {
+        setOprpVerificationUserValue({ id: currentUser.id, username: currentUser.username ?? '', full_name: currentUser.full_name ?? '' });
+      } else {
+        usersAPI.getUser(idNum).then((res: any) => {
+          const u = res?.data ?? res;
+          if (u?.id) setOprpVerificationUserValue({ id: u.id, username: u.username, full_name: u.full_name });
+        }).catch(() => setOprpVerificationUserValue(null));
+      }
+    } else if (!raw || !Number.isFinite(idNum)) setOprpVerificationUserValue(null);
+  }, [oprpForm.verification_responsible, currentUser?.id, currentUser?.username, currentUser?.full_name]);
 
   useEffect(() => {
     if (selectedFlow) {
@@ -300,6 +358,44 @@ const HACCPProductDetail: React.FC = () => {
       else await dispatch(createCCP({ productId, ccpData: payload })).unwrap();
       setCcpDialogOpen(false); setSelectedCcpItem(null); dispatch(fetchProduct(productId));
     } catch {}
+  };
+
+  const handleSaveOPRPDetail = async () => {
+    if (!selectedOprpItem?.id) return;
+    const verId = oprpForm.verification_responsible !== '' ? Number(oprpForm.verification_responsible) : NaN;
+    const payload = {
+      verification_frequency: oprpForm.verification_frequency || undefined,
+      verification_method: oprpForm.verification_method || undefined,
+      verification_responsible: Number.isFinite(verId) && verId >= 1 ? verId : null,
+    };
+    try {
+      await dispatch(updateOPRP({ oprpId: selectedOprpItem.id, oprpData: payload })).unwrap();
+      dispatch(fetchProduct(productId));
+      setSelectedOprpItem((prev: any) => prev ? { ...prev, ...payload } : null);
+      alert('OPRP updated.');
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Failed to update OPRP');
+    }
+  };
+
+  const handleConfirmOPRPVerification = async () => {
+    if (!selectedOprpItem?.id) return;
+    try {
+      await haccpAPI.createOPRPVerificationLog(selectedOprpItem.id, {
+        batch_id: oprpVerificationBatchValue?.id,
+        verification_type: 'batch_check',
+        conducted_as_expected: oprpVerificationConductedAsExpected,
+        findings: oprpVerificationNotes.trim() || undefined,
+      });
+      const res: any = await haccpAPI.getOPRPVerificationLogs(selectedOprpItem.id);
+      setOprpVerificationLogs(Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
+      setOprpVerificationNotes('');
+      setOprpVerificationBatchValue(null);
+      setOprpVerificationConductedAsExpected(true);
+      alert('Verification recorded.');
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Failed to record verification');
+    }
   };
 
   const [monitoringForm, setMonitoringForm] = useState<{ ccp_id?: string; batch?: string; batch_id?: string; value?: string; unit?: string; evidence_files?: string }>({});
@@ -450,10 +546,14 @@ const HACCPProductDetail: React.FC = () => {
 
   const submitVerificationAction = async (compliant: boolean) => {
     const log = selectedMonitoringLog;
-    if (!log?.id || !log?.ccp_id) return;
+    const ccpId = log?.ccp_id != null ? Number(log.ccp_id) : (monitoringForm.ccp_id ? Number(monitoringForm.ccp_id) : verificationTabCcpId ? Number(verificationTabCcpId) : null);
+    if (!log?.id || ccpId == null) {
+      alert('Missing log or CCP. Please close and try again from the monitoring logs table.');
+      return;
+    }
     try {
       await haccpAPI.verifyMonitoringLog(
-        Number(log.ccp_id),
+        ccpId,
         log.id,
         {
           verification_is_compliant: compliant,
@@ -463,12 +563,12 @@ const HACCPProductDetail: React.FC = () => {
       );
       handleCloseVerificationDialog();
       const api = (await import('../services/api')).api;
-      const resp = await api.get(`/haccp/ccps/${Number(log.ccp_id)}/monitoring-logs`);
+      const resp = await api.get(`/haccp/ccps/${ccpId}/monitoring-logs`);
       const logsJson = resp.data;
       const raw = logsJson?.data ?? logsJson;
       const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : logsJson?.items ?? []);
       setMonitoringLogs(items);
-      if (String(log.ccp_id) === verificationTabCcpId) setVerificationTabMonitoringLogs(items);
+      if (String(ccpId) === verificationTabCcpId) setVerificationTabMonitoringLogs(items);
       if (!compliant) fetchRejectedLogs();
       alert(compliant ? 'Log entry verified successfully.' : 'Log entry rejected.');
     } catch (e: any) {
@@ -746,7 +846,17 @@ const HACCPProductDetail: React.FC = () => {
         <Grid container spacing={2}>
           {oprps.map((oprp: any) => (
             <Grid item xs={12} sm={6} md={4} key={oprp.id}>
-              <Paper sx={{ p: 2 }}>
+              <Paper
+                sx={{
+                  p: 2,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+                onClick={() => {
+                  setSelectedOprpItem(oprp);
+                  setOprpDetailDialogOpen(true);
+                }}
+              >
                 <Typography variant="h6">{oprp.oprp_name}</Typography>
                 <Typography color="textSecondary" variant="body2" gutterBottom>
                   {oprp.oprp_number}
@@ -755,15 +865,21 @@ const HACCPProductDetail: React.FC = () => {
                   {oprp.description}
                 </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
-                  <Chip 
-                    label={oprp.status || 'Active'} 
-                    color={oprp.status === 'active' ? 'success' : 'default'} 
-                    size="small" 
+                  <Chip
+                    label={oprp.status || 'Active'}
+                    color={oprp.status === 'active' ? 'success' : 'default'}
+                    size="small"
                   />
-                  {oprp.monitoring_frequency && (
-                    <Chip 
-                      label={`Monitor: ${oprp.monitoring_frequency}`} 
-                      size="small" 
+                  <Chip
+                    label={oprp.verification_responsible ? 'Verifier assigned' : 'Verifier not assigned'}
+                    color={oprp.verification_responsible ? 'primary' : 'default'}
+                    size="small"
+                    variant="outlined"
+                  />
+                  {oprp.verification_frequency && (
+                    <Chip
+                      label={`Verify: ${oprp.verification_frequency}`}
+                      size="small"
                       variant="outlined"
                     />
                   )}
@@ -774,10 +890,13 @@ const HACCPProductDetail: React.FC = () => {
                       Operational Limits:
                     </Typography>
                     <Typography variant="body2">
-                      {oprp.operational_limits}
+                      {typeof oprp.operational_limits === 'string' ? oprp.operational_limits : JSON.stringify(oprp.operational_limits)}
                     </Typography>
                   </Box>
                 )}
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Tap to view details and assign verifier
+                </Typography>
               </Paper>
             </Grid>
           ))}
@@ -1351,6 +1470,156 @@ const HACCPProductDetail: React.FC = () => {
         <DialogActions>
           <Button onClick={() => { setCcpDialogOpen(false); setSelectedCcpItem(null); }}>Cancel</Button>
           <Button variant="contained" onClick={handleSaveCCP}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* OPRP Detail Dialog – verification only (no monitoring); admin can assign verification person */}
+      <Dialog open={oprpDetailDialogOpen} onClose={() => { setOprpDetailDialogOpen(false); setSelectedOprpItem(null); setOprpVerificationNotes(''); setOprpVerificationBatchValue(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>OPRP: {selectedOprpItem?.oprp_name ?? selectedOprpItem?.oprp_number ?? 'Details'}</DialogTitle>
+        <DialogContent dividers>
+          {selectedOprpItem && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary">{selectedOprpItem.oprp_number} · {selectedOprpItem.description}</Typography>
+              {selectedOprpItem.justification && (
+                <Box>
+                  <Typography variant="subtitle2">Justification</Typography>
+                  <Typography variant="body2">{selectedOprpItem.justification}</Typography>
+                </Box>
+              )}
+              {(selectedOprpItem.operational_limits != null || selectedOprpItem.operational_limit_description) && (
+                <Box>
+                  <Typography variant="subtitle2">Operational limits</Typography>
+                  <Typography variant="body2">
+                    {selectedOprpItem.operational_limits != null
+                      ? (typeof selectedOprpItem.operational_limits === 'string' ? selectedOprpItem.operational_limits : JSON.stringify(selectedOprpItem.operational_limits))
+                      : selectedOprpItem.operational_limit_description ?? '—'}
+                  </Typography>
+                </Box>
+              )}
+              <Typography variant="subtitle1">Verification (no monitoring for OPRPs)</Typography>
+              {canManageProgram && (
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Verification frequency"
+                      value={oprpForm.verification_frequency}
+                      onChange={(e) => setOprpForm((f) => ({ ...f, verification_frequency: e.target.value }))}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Verification method"
+                      value={oprpForm.verification_method}
+                      onChange={(e) => setOprpForm((f) => ({ ...f, verification_method: e.target.value }))}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Autocomplete
+                      options={userOptions}
+                      getOptionLabel={(opt) => (opt.full_name ? `${opt.full_name} (${opt.username})` : opt.username)}
+                      value={oprpVerificationUserValue}
+                      onChange={(_, val) => {
+                        setOprpVerificationUserValue(val);
+                        setOprpForm((f) => ({ ...f, verification_responsible: val ? String(val.id) : '' }));
+                      }}
+                      onInputChange={(_, val) => setUserSearch(val)}
+                      onOpen={() => setUserOpen(true)}
+                      onClose={() => setUserOpen(false)}
+                      loading={userLoading}
+                      isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                      renderInput={(params) => <TextField {...params} label="Verification responsible" placeholder="Assign verifier" fullWidth />}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button variant="contained" onClick={handleSaveOPRPDetail}>Save assignment</Button>
+                  </Grid>
+                </Grid>
+              )}
+              {!canManageProgram && (
+                <Typography variant="body2">
+                  Frequency: {selectedOprpItem.verification_frequency || '—'} · Method: {selectedOprpItem.verification_method || '—'}
+                  {oprpVerificationUserValue && ` · Verifier: ${oprpVerificationUserValue.full_name || oprpVerificationUserValue.username}`}
+                </Typography>
+              )}
+              <Typography variant="subtitle2">Verification records (per batch)</Typography>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Batch</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Verified by</TableCell>
+                      <TableCell>Result</TableCell>
+                      <TableCell>Findings</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {oprpVerificationLogs.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="body2" color="text.secondary">No verification records yet.</Typography></TableCell></TableRow>
+                    ) : (
+                      oprpVerificationLogs.map((log: any) => (
+                        <TableRow key={log.id}>
+                          <TableCell>{log.batch_number ?? log.batch_id ?? '—'}</TableCell>
+                          <TableCell>{formatDateTime(log.verification_date || log.created_at)}</TableCell>
+                          <TableCell>{log.verified_by_name ?? log.verified_by ?? '—'}</TableCell>
+                          <TableCell>
+                            {log.conducted_as_expected === true ? 'Yes' : log.conducted_as_expected === false ? 'No' : '—'}
+                          </TableCell>
+                          <TableCell>{log.findings || '—'}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Typography variant="subtitle2">Confirm verified for a batch</Typography>
+              <FormControl component="fieldset" sx={{ mb: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  OPRP conducted as expected?
+                </Typography>
+                <RadioGroup
+                  row
+                  value={oprpVerificationConductedAsExpected ? 'yes' : 'no'}
+                  onChange={(_, v) => setOprpVerificationConductedAsExpected(v === 'yes')}
+                >
+                  <FormControlLabel value="yes" control={<Radio size="small" />} label="Yes – conducted as expected" />
+                  <FormControlLabel value="no" control={<Radio size="small" />} label="No – not conducted as expected" />
+                </RadioGroup>
+              </FormControl>
+              <Stack direction="row" flexWrap="wrap" spacing={2} alignItems="center">
+                <Autocomplete
+                  sx={{ minWidth: 220 }}
+                  options={batchOptions}
+                  open={batchOpen}
+                  onOpen={() => setBatchOpen(true)}
+                  onClose={() => setBatchOpen(false)}
+                  getOptionLabel={(b: any) => b?.batch_number ?? String(b?.id ?? '')}
+                  value={oprpVerificationBatchValue}
+                  onChange={(_, val: any) => setOprpVerificationBatchValue(val)}
+                  inputValue={batchSearch}
+                  onInputChange={(_, val) => setBatchSearch(val)}
+                  isOptionEqualToValue={(a: any, b: any) => a?.id === b?.id}
+                  renderInput={(params) => <TextField {...params} label="Batch (optional)" size="small" />}
+                />
+                <TextField
+                  size="small"
+                  label="Notes"
+                  value={oprpVerificationNotes}
+                  onChange={(e) => setOprpVerificationNotes(e.target.value)}
+                  placeholder="e.g. OPRP checked / done"
+                  sx={{ minWidth: 200 }}
+                />
+                <Button variant="contained" onClick={handleConfirmOPRPVerification}>
+                  Confirm verified
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOprpDetailDialogOpen(false); setSelectedOprpItem(null); }}>Close</Button>
         </DialogActions>
       </Dialog>
 

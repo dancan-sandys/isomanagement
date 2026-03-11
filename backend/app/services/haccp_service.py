@@ -1493,6 +1493,99 @@ class HACCPService:
         self.db.commit()
         self.db.refresh(record)
         return record
+
+    def _generate_oprp_verification_pdf_and_record(
+        self, verification_log: "OPRPVerificationLog", oprp: "OPRP", verified_by: int
+    ) -> Optional[HACCPVerificationRecord]:
+        """Generate a PDF for the OPRP verification log and store a verification record for admin access."""
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+
+        product = self.db.query(Product).filter(Product.id == oprp.product_id).first()
+        product_name = product.name if product else "N/A"
+        verified_at = verification_log.verification_date or datetime.utcnow()
+        verifier = self.db.query(User).filter(User.id == verified_by).first()
+        verifier_name = verifier.full_name if verifier else f"User ID {verified_by}"
+
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        x, y = 40, height - 40
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(x, y, "OPRP Verification Record")
+        y -= 20
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, f"Product: {product_name}")
+        y -= 14
+        c.drawString(x, y, f"OPRP: {oprp.oprp_number or ''} – {oprp.oprp_name or 'N/A'}")
+        y -= 14
+        c.drawString(x, y, f"Verified at: {verified_at.isoformat() if hasattr(verified_at, 'isoformat') else str(verified_at)} by {verifier_name}")
+        y -= 14
+        c.drawString(x, y, f"Verification type: {verification_log.verification_type or 'N/A'}")
+        y -= 14
+        result_text = "Yes – OPRP conducted as expected" if verification_log.conducted_as_expected is True else ("No – OPRP not conducted as expected" if verification_log.conducted_as_expected is False else "Result: not specified")
+        c.drawString(x, y, f"Result: {result_text}")
+        y -= 20
+        if verification_log.findings:
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(x, y, "Findings")
+            y -= 14
+            c.setFont("Helvetica", 9)
+            for line in (verification_log.findings or "")[:500].split("\n")[:15]:
+                c.drawString(x, y, line[:90])
+                y -= 12
+            y -= 8
+        if verification_log.corrective_actions:
+            if y < 100:
+                c.showPage()
+                y = height - 40
+                c.setFont("Helvetica", 9)
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(x, y, "Corrective actions")
+            y -= 14
+            c.setFont("Helvetica", 9)
+            for line in (verification_log.corrective_actions or "")[:500].split("\n")[:10]:
+                c.drawString(x, y, line[:90])
+                y -= 12
+            y -= 8
+        if verification_log.next_verification_date:
+            if y < 80:
+                c.showPage()
+                y = height - 40
+            c.setFont("Helvetica", 9)
+            nvd = verification_log.next_verification_date
+            nvd_str = nvd.isoformat()[:19] if hasattr(nvd, "isoformat") else str(nvd)
+            c.drawString(x, y, f"Next verification date: {nvd_str}")
+            y -= 14
+        c.drawString(x, y, f"(Verification log ID: {verification_log.id})")
+        y -= 14
+        c.showPage()
+        c.save()
+        buf.seek(0)
+
+        upload_dir = os.path.join("uploads", "haccp", "verification_pdfs")
+        os.makedirs(upload_dir, exist_ok=True)
+        ts = (verified_at.isoformat()[:19] if hasattr(verified_at, "isoformat") else str(verified_at)).replace(":", "-").replace(" ", "T")
+        filename = f"oprp_{oprp.id}_log_{verification_log.id}_{ts}.pdf"
+        file_path = os.path.join(upload_dir, filename)
+        with open(file_path, "wb") as f:
+            f.write(buf.getvalue())
+
+        record = HACCPVerificationRecord(
+            record_type="oprp",
+            ccp_id=None,
+            oprp_id=oprp.id,
+            monitoring_log_id=verification_log.id,
+            product_id=oprp.product_id,
+            file_path=file_path,
+            verified_at=verified_at,
+            verified_by=verified_by,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
     
     def _create_out_of_spec_alert(self, ccp: CCP, monitoring_log: CCPMonitoringLog) -> bool:
         """Create an alert for out-of-spec readings"""
@@ -2307,16 +2400,34 @@ class HACCPService:
         programs = self.db.query(CCPVerificationProgram).filter(
             CCPVerificationProgram.is_active == True
         ).all()
-        
+
         due_programs = []
         current_time = datetime.utcnow()
-        
+
         for program in programs:
             if program.is_due(current_time) or program.is_overdue(current_time):
+                # Resolve CCP and product context for richer console display
+                ccp = program.ccp
+                ccp_number = None
+                product_id = None
+                product_name = None
+
+                if ccp:
+                    ccp_number = getattr(ccp, "ccp_number", None)
+                    product_id = getattr(ccp, "product_id", None)
+
+                if product_id:
+                    product = self.db.query(Product).filter(Product.id == product_id).first()
+                    if product:
+                        product_name = product.name
+
                 due_programs.append({
                     "program_id": program.id,
                     "ccp_id": program.ccp_id,
                     "ccp_name": program.ccp.ccp_name,
+                    "ccp_number": ccp_number,
+                    "product_id": product_id,
+                    "product_name": product_name,
                     "verification_type": program.verification_type,
                     "frequency": program.frequency,
                     "next_verification_date": program.next_verification_date,

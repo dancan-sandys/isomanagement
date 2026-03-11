@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 
-from app.core.database import Base
+from app.core.database import Base, SafeJSON
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class OPRP(Base):
     status = Column(String(20), nullable=False, default=OPRPStatus.ACTIVE, index=True)
     
     # Operational limits - similar to CCP but for operational control
-    operational_limits = Column(JSON)  # JSON array of limit objects
+    operational_limits = Column(SafeJSON)  # JSON array of limit objects; SafeJSON tolerates empty string in DB
     # Example structure:
     # [
     #   {
@@ -92,7 +92,7 @@ class OPRP(Base):
     objective = Column(Text)  # Objective of the OPRP
     sop_reference = Column(Text)  # Reference to Standard Operating Procedure document
     effectiveness_validation = Column(Text)  # Evidence of effectiveness
-    validation_evidence = Column(JSON)  # JSON array of evidence references
+    validation_evidence = Column(SafeJSON)  # JSON array of evidence references; SafeJSON tolerates empty string in DB
     
     # Risk integration fields
     risk_register_item_id = Column(Integer, ForeignKey("risk_register.id"), nullable=True)
@@ -209,15 +209,18 @@ class OPRPMonitoringLog(Base):
 
 class OPRPVerificationLog(Base):
     """
-    OPRP Verification Log - Records of OPRP verification activities
+    OPRP Verification Log - Records of OPRP verification activities (e.g. per-batch verification)
     """
     __tablename__ = "oprp_verification_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     oprp_id = Column(Integer, ForeignKey("oprps.id", ondelete="CASCADE"), nullable=False)
-    verification_type = Column(String(50), nullable=False)  # calibration, review, audit, etc.
+    batch_id = Column(Integer, ForeignKey("batches.id", ondelete="SET NULL"), nullable=True)  # optional: verification for a specific batch
+    verification_type = Column(String(50), nullable=False)  # calibration, review, audit, batch_check, etc.
     verification_date = Column(DateTime(timezone=True), nullable=False)
     verified_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # Positive/negative: True = OPRP conducted as expected, False = not conducted as expected
+    conducted_as_expected = Column(Boolean, nullable=True)
     findings = Column(Text)
     corrective_actions = Column(Text)
     next_verification_date = Column(DateTime(timezone=True), nullable=True)
@@ -232,6 +235,7 @@ class OPRPVerificationLog(Base):
     # Indexes
     __table_args__ = (
         Index('ix_oprp_verification_logs_oprp_date', 'oprp_id', 'verification_date'),
+        Index('ix_oprp_verification_logs_oprp_batch', 'oprp_id', 'batch_id'),
     )
 
 

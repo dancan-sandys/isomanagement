@@ -18,8 +18,12 @@ import {
   CircularProgress,
   Alert,
   Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
 } from '@mui/material';
-import { Refresh, PictureAsPdf } from '@mui/icons-material';
+import { Refresh, PictureAsPdf, Visibility, Close } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { hasPermission } from '../store/slices/authSlice';
@@ -47,9 +51,12 @@ const HACCPVerificationRecords: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [recordTypeFilter, setRecordTypeFilter] = useState<string>('');
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [viewerRecordId, setViewerRecordId] = useState<number | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [loadingViewer, setLoadingViewer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentUser = useSelector((s: RootState) => s.auth.user);
-  const canAdmin = !!currentUser && hasPermission(currentUser, 'haccp', 'admin');
+  const canAdmin = !!currentUser && (hasPermission(currentUser, 'haccp', 'admin') || hasPermission(currentUser, 'haccp', 'update'));
 
   const loadRecords = async () => {
     setLoading(true);
@@ -92,6 +99,28 @@ const HACCPVerificationRecords: React.FC = () => {
     } finally {
       setDownloadingId(null);
     }
+  };
+
+  const handleViewPdf = async (record: VerificationRecordItem) => {
+    setLoadingViewer(true);
+    setViewerRecordId(null);
+    setViewerUrl(null);
+    try {
+      const blob = await haccpAPI.downloadVerificationRecordPdf(record.id);
+      const url = window.URL.createObjectURL(blob);
+      setViewerUrl(url);
+      setViewerRecordId(record.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Failed to load PDF');
+    } finally {
+      setLoadingViewer(false);
+    }
+  };
+
+  const handleCloseViewer = () => {
+    if (viewerUrl) window.URL.revokeObjectURL(viewerUrl);
+    setViewerUrl(null);
+    setViewerRecordId(null);
   };
 
   if (!canAdmin) {
@@ -177,14 +206,24 @@ const HACCPVerificationRecords: React.FC = () => {
                     <TableCell>{r.verified_at ? new Date(r.verified_at).toLocaleString() : '—'}</TableCell>
                     <TableCell>{r.verifier_name ?? `User ${r.verified_by}`}</TableCell>
                     <TableCell align="right">
-                      <Button
-                        size="small"
-                        startIcon={downloadingId === r.id ? <CircularProgress size={16} /> : <PictureAsPdf />}
-                        onClick={() => handleDownloadPdf(r.id)}
-                        disabled={downloadingId !== null}
-                      >
-                        Download PDF
-                      </Button>
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Button
+                          size="small"
+                          startIcon={loadingViewer && viewerRecordId === r.id ? <CircularProgress size={16} /> : <Visibility />}
+                          onClick={() => handleViewPdf(r)}
+                          disabled={loadingViewer}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="small"
+                          startIcon={downloadingId === r.id ? <CircularProgress size={16} /> : <PictureAsPdf />}
+                          onClick={() => handleDownloadPdf(r.id)}
+                          disabled={downloadingId !== null}
+                        >
+                          Download
+                        </Button>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))
@@ -198,6 +237,35 @@ const HACCPVerificationRecords: React.FC = () => {
           Showing {records.length} of {total} record(s).
         </Typography>
       )}
+
+      <Dialog open={!!viewerUrl} onClose={handleCloseViewer} maxWidth="md" fullWidth PaperProps={{ sx: { height: '85vh' } }}>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6">
+              {viewerRecordId != null
+                ? (() => {
+                    const rec = records.find((r) => r.id === viewerRecordId);
+                    return rec
+                      ? `Verification record: ${rec.ccp_name ?? rec.oprp_name ?? rec.record_type}${rec.verified_at ? ` (${new Date(rec.verified_at).toLocaleString()})` : ''}`
+                      : `Verification record #${viewerRecordId}`;
+                  })()
+                : 'Verification record'}
+            </Typography>
+            <IconButton onClick={handleCloseViewer} size="small">
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {viewerUrl && (
+            <iframe
+              src={viewerUrl}
+              style={{ width: '100%', height: '100%', minHeight: 480, border: 'none' }}
+              title="Verification record PDF"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

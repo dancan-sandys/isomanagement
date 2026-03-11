@@ -148,56 +148,41 @@ const HACCPMonitoring: React.FC = () => {
   const loadMonitoringTasks = async () => {
     setLoading(true);
     try {
-      // Mock data - replace with actual API call
-      const mockTasks: MonitoringTask[] = [
-        {
-          id: '1',
-          ccpId: 1,
-          ccpName: 'Temperature Control',
-          ccpNumber: 'CCP-1',
-          productName: 'Chicken Breast',
-          productId: 1,
-          status: 'due',
-          priority: 'high',
-          dueTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes from now
-          frequency: 'Every 2 hours',
-          criticalLimits: { min: 70, max: 75, unit: '°C' },
+      const res: any = await haccpAPI.getMonitoringTasks();
+      const payload = res?.data ?? res;
+      const items = payload?.items ?? payload ?? [];
+
+      const tasks: MonitoringTask[] = items.map((item: any) => {
+        const status = (item.status === 'overdue' || item.status === 'due' || item.status === 'completed'
+          ? item.status
+          : 'due') as MonitoringTask['status'];
+        let priority: MonitoringTask['priority'] = 'medium';
+        if (status === 'overdue') priority = 'critical';
+        else if (status === 'due') priority = 'high';
+        return {
+          id: String(item.id ?? item.ccp_id),
+          ccpId: item.ccp_id,
+          ccpName: item.ccp_name,
+          ccpNumber: item.ccp_number ?? '',
+          productName: item.product_name ?? '',
+          productId: item.product_id ?? 0,
+          status,
+          priority,
+          dueTime: item.next_due_time || new Date().toISOString(),
+          frequency: item.frequency || '',
+          lastMonitored: item.last_monitoring_time || undefined,
+          measuredValue: item.last_measured_value,
+          unit: item.unit || item.critical_limits?.unit || '',
+          criticalLimits: {
+            min: item.critical_limits?.min,
+            max: item.critical_limits?.max,
+            unit: item.critical_limits?.unit || '',
+          },
           responsible: currentUser?.username,
-        },
-        {
-          id: '2',
-          ccpId: 2,
-          ccpName: 'pH Control',
-          ccpNumber: 'CCP-2',
-          productName: 'Pickled Vegetables',
-          productId: 2,
-          status: 'overdue',
-          priority: 'critical',
-          dueTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(), // 15 minutes ago
-          frequency: 'Every hour',
-          lastMonitored: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
-          criticalLimits: { min: 3.8, max: 4.2, unit: 'pH' },
-          responsible: currentUser?.username,
-        },
-        {
-          id: '3',
-          ccpId: 3,
-          ccpName: 'Water Activity',
-          ccpNumber: 'CCP-3',
-          productName: 'Dried Fruits',
-          productId: 3,
-          status: 'completed',
-          priority: 'medium',
-          dueTime: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-          frequency: 'Every 4 hours',
-          lastMonitored: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-          measuredValue: 0.65,
-          unit: 'aw',
-          criticalLimits: { max: 0.7, unit: 'aw' },
-          responsible: currentUser?.username,
-        },
-      ];
-      setMonitoringTasks(mockTasks);
+        };
+      });
+
+      setMonitoringTasks(tasks);
     } catch (error) {
       console.error('Error loading monitoring tasks:', error);
     } finally {
@@ -219,7 +204,7 @@ const HACCPMonitoring: React.FC = () => {
     setSelectedTask(task);
     setMonitoringForm({
       batchNumber: '',
-      measuredValue: '',
+      measuredValue: task.measuredValue != null ? String(task.measuredValue) : '',
       unit: task.criticalLimits.unit || '',
       notes: '',
       conditions: '',
@@ -348,9 +333,9 @@ const HACCPMonitoring: React.FC = () => {
     }
   };
 
-  const dueTasks = monitoringTasks.filter(task => task.status === 'due' || task.status === 'overdue');
-  const completedTasks = monitoringTasks.filter(task => task.status === 'completed');
+  const dueTasks = monitoringTasks.filter(task => task.status === 'due');
   const overdueTasks = monitoringTasks.filter(task => task.status === 'overdue');
+  const completedTasks = monitoringTasks.filter(task => task.status === 'completed');
 
   return (
     <Box sx={{ p: 3 }}>
@@ -407,7 +392,7 @@ const HACCPMonitoring: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Completed Today
+                    Completed
                   </Typography>
                   <Typography variant="h4" color="success.main">
                     {completedTasks.length}
@@ -441,7 +426,7 @@ const HACCPMonitoring: React.FC = () => {
       <Tabs value={selectedTab} onChange={(_, newValue) => setSelectedTab(newValue)} sx={{ mb: 3 }}>
         <Tab 
           icon={<Assignment />} 
-          label={`Tasks (${dueTasks.length})`} 
+          label={`Tasks (${monitoringTasks.length})`} 
           iconPosition="start"
         />
         <Tab 
@@ -475,18 +460,25 @@ const HACCPMonitoring: React.FC = () => {
             }
           />
           <CardContent>
-            {dueTasks.length === 0 ? (
+            {monitoringTasks.length === 0 ? (
               <Alert severity="success">
-                No monitoring tasks due at this time. All systems are up to date.
+                No monitoring tasks. Assign CCPs with monitoring responsibility or add active CCPs to products.
               </Alert>
             ) : (
               <List>
-                {dueTasks.map((task) => (
-                  <ListItem key={task.id} divider>
+                {monitoringTasks.map((task) => (
+                  <ListItem
+                    key={task.id}
+                    divider
+                    onClick={() => handleStartMonitoring(task)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <ListItemIcon>
                       {getStatusIcon(task.status)}
                     </ListItemIcon>
                     <ListItemText
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                           <Typography variant="h6">
@@ -525,7 +517,10 @@ const HACCPMonitoring: React.FC = () => {
                         variant="contained"
                         startIcon={<Science />}
                         color={task.status === 'overdue' ? 'error' : 'primary'}
-                        onClick={() => handleStartMonitoring(task)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartMonitoring(task);
+                        }}
                         sx={{ ml: 2 }}
                       >
                         Start Monitoring
@@ -593,7 +588,7 @@ const HACCPMonitoring: React.FC = () => {
         </Card>
       </TabPanel>
 
-      {/* Monitoring Dialog */}
+      {/* Monitoring Dialog - viewable by anyone who sees tasks; only users with create permission can submit */}
       <Dialog 
         open={monitoringDialogOpen} 
         onClose={() => setMonitoringDialogOpen(false)}
@@ -601,10 +596,19 @@ const HACCPMonitoring: React.FC = () => {
         fullWidth
       >
         <DialogTitle>
-          Record Monitoring - {selectedTask?.ccpNumber}: {selectedTask?.ccpName}
+          {canCreateLogs ? 'Record Monitoring' : 'Monitoring Details'} - {selectedTask?.ccpNumber}: {selectedTask?.ccpName}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {!canCreateLogs && selectedTask?.lastMonitored && (
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Last recorded: {new Date(selectedTask.lastMonitored).toLocaleString()} — Value: {selectedTask.measuredValue ?? '-'} {selectedTask.unit ?? ''}
+                  </Typography>
+                </Alert>
+              </Grid>
+            )}
             <Grid item xs={12}>
               <Alert severity="info" sx={{ mb: 2 }}>
                 <Typography variant="body2">
@@ -629,8 +633,10 @@ const HACCPMonitoring: React.FC = () => {
                     label="Batch Number" 
                     placeholder="Enter or search batch..."
                     fullWidth
+                    disabled={!canCreateLogs}
                   />
                 )}
+                disabled={!canCreateLogs}
               />
             </Grid>
             <Grid item xs={12} md={3}>
@@ -640,7 +646,8 @@ const HACCPMonitoring: React.FC = () => {
                 label="Measured Value"
                 value={monitoringForm.measuredValue}
                 onChange={(e) => setMonitoringForm(prev => ({ ...prev, measuredValue: e.target.value }))}
-                required
+                required={canCreateLogs}
+                disabled={!canCreateLogs}
               />
             </Grid>
             <Grid item xs={12} md={3}>
@@ -659,6 +666,7 @@ const HACCPMonitoring: React.FC = () => {
                 value={monitoringForm.conditions}
                 onChange={(e) => setMonitoringForm(prev => ({ ...prev, conditions: e.target.value }))}
                 placeholder="Temperature, humidity, equipment used, etc."
+                disabled={!canCreateLogs}
               />
             </Grid>
             <Grid item xs={12}>
@@ -670,21 +678,24 @@ const HACCPMonitoring: React.FC = () => {
                 value={monitoringForm.notes}
                 onChange={(e) => setMonitoringForm(prev => ({ ...prev, notes: e.target.value }))}
                 placeholder="Any observations or comments..."
+                disabled={!canCreateLogs}
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setMonitoringDialogOpen(false)}>
-            Cancel
+            {canCreateLogs ? 'Cancel' : 'Close'}
           </Button>
-          <Button 
-            variant="contained" 
-            onClick={handleSubmitMonitoring}
-            disabled={!monitoringForm.measuredValue}
-          >
-            Submit Monitoring
-          </Button>
+          {canCreateLogs && (
+            <Button 
+              variant="contained" 
+              onClick={handleSubmitMonitoring}
+              disabled={!monitoringForm.measuredValue}
+            >
+              Submit Monitoring
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
