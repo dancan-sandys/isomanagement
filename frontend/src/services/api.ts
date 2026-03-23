@@ -771,6 +771,21 @@ export const haccpAPI = {
     return response.data;
   },
 
+  getVerificationTasks: async () => {
+    const response: AxiosResponse = await api.get('/haccp/verification/tasks');
+    return response.data;
+  },
+
+  getVerificationRecords: async (params?: { record_type?: string; skip?: number; limit?: number }) => {
+    const response: AxiosResponse = await api.get('/haccp/verification-records', { params: params || {} });
+    return response.data;
+  },
+
+  downloadVerificationRecordPdf: async (recordId: number): Promise<Blob> => {
+    const response = await api.get(`/haccp/verification-records/${recordId}/pdf`, { responseType: 'blob' });
+    return response.data;
+  },
+
   // Dashboard and Reports
   getDashboard: async () => {
     const response: AxiosResponse = await api.get('/haccp/dashboard');
@@ -857,6 +872,10 @@ export const haccpAPI = {
   },
   getMonitoringTasks: async () => {
     const response: AxiosResponse = await api.get('/haccp/monitoring/tasks');
+    return response.data;
+  },
+  getMonitoringHistory: async (params?: { limit?: number }) => {
+    const response: AxiosResponse = await api.get('/haccp/monitoring/history', { params: params || {} });
     return response.data;
   },
   getMonitoringTrends: async (params?: { ccp_id?: number; days?: number; limit?: number }) => {

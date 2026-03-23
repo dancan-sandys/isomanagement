@@ -8,10 +8,22 @@ import sys
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import your models here
+# Load Base then import every model module so autogenerate sees full metadata (single baseline).
 from app.core.database import Base
 from app.core.config import settings
-from app.models import user, document, haccp, prp, supplier, traceability
+import importlib
+
+_backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_models_dir = os.path.join(_backend_root, "app", "models")
+if os.path.isdir(_models_dir):
+    for _fn in sorted(os.listdir(_models_dir)):
+        if not _fn.endswith(".py") or _fn.startswith("_"):
+            continue
+        _mod = f"app.models.{_fn[:-3]}"
+        try:
+            importlib.import_module(_mod)
+        except Exception as _exc:
+            print(f"WARN: alembic env could not import {_mod}: {_exc}", file=sys.stderr)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

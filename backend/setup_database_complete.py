@@ -584,9 +584,9 @@ def create_professional_suppliers(conn):
         ('SUP-012', 'FoodLab Testing', 'active', 'testing', 'Maria Lopez', 'maria@foodlab.com', '+1-555-1012', 'www.foodlab.com', '9630 Lab Lane', 'Lab City', 'CA', '90211', 'USA', 'CA852963741', '85-2963741', 'Corporation', 1995, '["ISO 17025", "FDA Registered"]', '2025-10-15', 95, '2025-02-25', '2025-08-25', 'low', '[]', 'Comprehensive food safety testing laboratory', 1),
         ('SUP-013', 'MicroTest Labs', 'active', 'testing', 'James White', 'james@microtest.com', '+1-555-1013', 'www.microtest.com', '1470 Micro Blvd', 'Micro City', 'NY', '10001', 'USA', 'NY963741852', '96-3741852', 'Corporation', 1988, '["A2LA Accredited", "Rapid Testing"]', '2025-09-30', 92, '2025-03-01', '2025-09-01', 'low', '[]', 'Microbiological testing and analysis', 1),
         
-        # Transportation
-        ('SUP-014', 'FreshLogistics', 'active', 'transportation', 'Patricia Clark', 'patricia@freshlogistics.com', '+1-555-1014', 'www.freshlogistics.com', '2580 Logistics Way', 'Log City', 'GA', '30301', 'USA', 'GA741963852', '74-1963852', 'Corporation', 2000, '["FDA Registered", "Temperature Controlled"]', '2025-12-15', 89, '2025-03-05', '2025-09-05', 'medium', '[]', 'Temperature-controlled food transportation', 1),
-        ('SUP-015', 'SafeHaul Transport', 'active', 'transportation', 'Christopher Hall', 'chris@safehaul.com', '+1-555-1015', 'www.safehaul.com', '3690 Haul Street', 'Haul City', 'TN', '37201', 'USA', 'TN852741963', '85-2741963', 'Corporation', 1995, '["HACCP Certified", "GPS Tracking"]', '2025-11-15', 87, '2025-03-10', '2025-09-10', 'medium', '[]', 'Specialized food transportation services', 1)
+        # Transportation services (mapped to supported SupplierCategory enum)
+        ('SUP-014', 'FreshLogistics', 'active', 'services', 'Patricia Clark', 'patricia@freshlogistics.com', '+1-555-1014', 'www.freshlogistics.com', '2580 Logistics Way', 'Log City', 'GA', '30301', 'USA', 'GA741963852', '74-1963852', 'Corporation', 2000, '["FDA Registered", "Temperature Controlled"]', '2025-12-15', 89, '2025-03-05', '2025-09-05', 'medium', '[]', 'Temperature-controlled food transportation', 1),
+        ('SUP-015', 'SafeHaul Transport', 'active', 'services', 'Christopher Hall', 'chris@safehaul.com', '+1-555-1015', 'www.safehaul.com', '3690 Haul Street', 'Haul City', 'TN', '37201', 'USA', 'TN852741963', '85-2741963', 'Corporation', 1995, '["HACCP Certified", "GPS Tracking"]', '2025-11-15', 87, '2025-03-10', '2025-09-10', 'medium', '[]', 'Specialized food transportation services', 1)
     ]
     
     for (supplier_code, name, status, category, contact_person, email, phone, website, 
@@ -1244,8 +1244,8 @@ def create_professional_equipment_data(conn):
             'serial_number': serial_number,
             'location': location,
             'notes': notes,
-            'is_active': 1,
-            'critical_to_food_safety': 1,
+            'is_active': True,
+            'critical_to_food_safety': True,
             'created_at': datetime.now().isoformat(),
             'created_by': created_by
         })
@@ -1506,7 +1506,7 @@ def create_professional_materials(conn):
             "quality_parameters": json.dumps(material.get("quality_parameters", [])),
             "acceptable_limits": json.dumps(material.get("acceptable_limits", {})),
             "allergen_statement": material.get("allergen_statement"),
-            "is_active": 1,
+            "is_active": True,
             "approval_status": "approved",
             "created_at": datetime.now().isoformat(),
             "created_by": material.get("created_by", 1),
@@ -1833,8 +1833,12 @@ def assign_contact_surfaces_to_products(conn):
             conn.execute(
                 text(
                     """
-                    INSERT OR IGNORE INTO product_contact_surfaces (product_id, contact_surface_id, created_at)
-                    VALUES (:product_id, :surface_id, :created_at)
+                    INSERT INTO product_contact_surfaces (product_id, contact_surface_id, created_at)
+                    SELECT :product_id, :surface_id, :created_at
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM product_contact_surfaces pcs
+                        WHERE pcs.product_id = :product_id AND pcs.contact_surface_id = :surface_id
+                    )
                     """
                 ),
                 {

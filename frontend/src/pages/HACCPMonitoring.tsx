@@ -124,14 +124,21 @@ const HACCPMonitoring: React.FC = () => {
 
   const [batchOptions, setBatchOptions] = useState<any[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
+  const [batchOpen, setBatchOpen] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [monitoringHistory, setMonitoringHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     dispatch(fetchProducts());
     loadMonitoringTasks();
+    loadMonitoringHistory();
     
     // Set up auto-refresh every 30 seconds
-    const interval = setInterval(loadMonitoringTasks, 30000);
+    const interval = setInterval(() => {
+      loadMonitoringTasks();
+      loadMonitoringHistory();
+    }, 30000);
     setRefreshInterval(interval);
     
     return () => {
@@ -139,11 +146,23 @@ const HACCPMonitoring: React.FC = () => {
     };
   }, [dispatch]);
 
+  // Fetch batches when dropdown opens or search text changes (scoped to selected task's product when available)
   useEffect(() => {
-    if (batchSearch.length > 2) {
-      loadBatches();
-    }
-  }, [batchSearch]);
+    let active = true;
+    if (!batchOpen) return () => { active = false; };
+    const t = setTimeout(async () => {
+      try {
+        const params: any = { search: batchSearch, size: 10 };
+        if (selectedTask?.productId && Number.isInteger(selectedTask.productId)) params.product_id = selectedTask.productId;
+        const resp: any = await traceabilityAPI.getBatches(params);
+        const items = resp?.data?.items || resp?.items || [];
+        if (active) setBatchOptions(items);
+      } catch (e) {
+        if (active) setBatchOptions([]);
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(t); };
+  }, [batchOpen, batchSearch, selectedTask?.productId]);
 
   const loadMonitoringTasks = async () => {
     setLoading(true);
@@ -190,13 +209,18 @@ const HACCPMonitoring: React.FC = () => {
     }
   };
 
-  const loadBatches = async () => {
+  const loadMonitoringHistory = async () => {
+    setHistoryLoading(true);
     try {
-      const response = await traceabilityAPI.getBatches({ search: batchSearch, size: 10 });
-      setBatchOptions(response.data?.items || []);
+      const res: any = await haccpAPI.getMonitoringHistory({ limit: 100 });
+      const data = res?.data ?? res;
+      const items = data?.items ?? [];
+      setMonitoringHistory(Array.isArray(items) ? items : []);
     } catch (error) {
-      console.error('Error loading batches:', error);
-      setBatchOptions([]);
+      console.error('Error loading monitoring history:', error);
+      setMonitoringHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -209,6 +233,8 @@ const HACCPMonitoring: React.FC = () => {
       notes: '',
       conditions: '',
     });
+    setBatchSearch('');
+    setBatchOpen(false);
     setMonitoringDialogOpen(true);
   };
 
@@ -540,9 +566,21 @@ const HACCPMonitoring: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={selectedTab} index={2}>
-        {/* Monitoring History */}
+        {/* Monitoring History – actual monitoring logs (verification logs) */}
         <Card>
-          <CardHeader title="Recent Monitoring History" />
+          <CardHeader
+            title="Recent Monitoring History"
+            action={
+              <Button
+                variant="outlined"
+                startIcon={<Refresh />}
+                onClick={() => loadMonitoringHistory()}
+                disabled={historyLoading}
+              >
+                Refresh
+              </Button>
+            }
+          />
           <CardContent>
             <TableContainer component={Paper} variant="outlined">
               <Table>
@@ -554,33 +592,64 @@ const HACCPMonitoring: React.FC = () => {
                     <TableCell>Batch</TableCell>
                     <TableCell align="right">Value</TableCell>
                     <TableCell>Unit</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Spec</TableCell>
+                    <TableCell>Verification</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {completedTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell>{task.lastMonitored ? new Date(task.lastMonitored).toLocaleString() : '-'}</TableCell>
-                      <TableCell>{task.ccpNumber}</TableCell>
-                      <TableCell>{task.productName}</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell align="right">{task.measuredValue || '-'}</TableCell>
-                      <TableCell>{task.unit || '-'}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          size="small" 
-                          color="success" 
-                          label="In Spec" 
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <IconButton size="small">
-                          <Visibility />
-                        </IconButton>
+                  {historyLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center">
+                        Loading…
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : monitoringHistory.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center">
+                        No monitoring records yet. Records appear here after you submit monitoring from the Tasks tab.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    monitoringHistory.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          {log.monitoring_time ? new Date(log.monitoring_time).toLocaleString() : log.created_at ? new Date(log.created_at).toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {log.ccp_number ? `${log.ccp_number}: ${log.ccp_name || ''}`.trim() : log.ccp_name || '—'}
+                        </TableCell>
+                        <TableCell>{log.product_name ?? '—'}</TableCell>
+                        <TableCell>{log.batch_number ?? '—'}</TableCell>
+                        <TableCell align="right">{log.measured_value ?? '—'}</TableCell>
+                        <TableCell>{log.unit ?? '—'}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            color={log.is_within_limits ? 'success' : 'error'}
+                            label={log.is_within_limits ? 'In Spec' : 'Out of Spec'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {log.is_verified ? (
+                            <Chip
+                              size="small"
+                              color={log.verification_is_compliant !== false ? 'success' : 'error'}
+                              label={log.verification_is_compliant !== false ? 'Verified' : 'Rejected'}
+                              variant="outlined"
+                            />
+                          ) : (
+                            <Chip size="small" label="Pending" variant="outlined" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <IconButton size="small" aria-label="View">
+                            <Visibility />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -591,7 +660,11 @@ const HACCPMonitoring: React.FC = () => {
       {/* Monitoring Dialog - viewable by anyone who sees tasks; only users with create permission can submit */}
       <Dialog 
         open={monitoringDialogOpen} 
-        onClose={() => setMonitoringDialogOpen(false)}
+        onClose={() => {
+          setMonitoringDialogOpen(false);
+          setBatchOpen(false);
+          setBatchSearch('');
+        }}
         maxWidth="md"
         fullWidth
       >
@@ -619,19 +692,20 @@ const HACCPMonitoring: React.FC = () => {
             </Grid>
             <Grid item xs={12} md={6}>
               <Autocomplete
-                freeSolo
                 options={batchOptions}
-                getOptionLabel={(option: any) => option?.batch_number || option}
-                value={monitoringForm.batchNumber}
-                onInputChange={(_, value) => {
-                  setMonitoringForm(prev => ({ ...prev, batchNumber: value || '' }));
-                  setBatchSearch(value || '');
-                }}
+                open={batchOpen}
+                onOpen={() => setBatchOpen(true)}
+                onClose={() => setBatchOpen(false)}
+                getOptionLabel={(b: any) => b?.batch_number ?? ''}
+                value={batchOptions.find((b: any) => (b?.batch_number || '') === monitoringForm.batchNumber) || null}
+                onChange={(_, val: any) => setMonitoringForm(prev => ({ ...prev, batchNumber: val ? (val.batch_number || '') : '' }))}
+                inputValue={batchSearch}
+                onInputChange={(_, val) => setBatchSearch(val)}
                 renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Batch Number" 
-                    placeholder="Enter or search batch..."
+                  <TextField
+                    {...params}
+                    label="Batch Number"
+                    placeholder="Search batches..."
                     fullWidth
                     disabled={!canCreateLogs}
                   />

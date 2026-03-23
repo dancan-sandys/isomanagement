@@ -42,6 +42,7 @@ interface VerificationRecordItem {
   verified_at: string;
   verified_by: number;
   verifier_name: string | null;
+  result?: string | null;
   created_at: string | null;
 }
 
@@ -56,7 +57,7 @@ const HACCPVerificationRecords: React.FC = () => {
   const [loadingViewer, setLoadingViewer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentUser = useSelector((s: RootState) => s.auth.user);
-  const canAdmin = !!currentUser && (hasPermission(currentUser, 'haccp', 'admin') || hasPermission(currentUser, 'haccp', 'update'));
+  const canViewRecords = !!currentUser && hasPermission(currentUser, 'haccp', 'view');
 
   const loadRecords = async () => {
     setLoading(true);
@@ -79,8 +80,8 @@ const HACCPVerificationRecords: React.FC = () => {
   };
 
   useEffect(() => {
-    if (canAdmin) loadRecords();
-  }, [canAdmin, recordTypeFilter]);
+    if (canViewRecords) loadRecords();
+  }, [canViewRecords, recordTypeFilter]);
 
   const handleDownloadPdf = async (recordId: number) => {
     setDownloadingId(recordId);
@@ -123,10 +124,10 @@ const HACCPVerificationRecords: React.FC = () => {
     setViewerRecordId(null);
   };
 
-  if (!canAdmin) {
+  if (!canViewRecords) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="warning">You need HACCP admin permission to view verification records.</Alert>
+        <Alert severity="warning">You need HACCP view permission to view verification records.</Alert>
       </Box>
     );
   }
@@ -178,13 +179,14 @@ const HACCPVerificationRecords: React.FC = () => {
                 <TableCell>CCP / OPRP</TableCell>
                 <TableCell>Verified at</TableCell>
                 <TableCell>Verified by</TableCell>
+                <TableCell>Result</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary">
                       No verification records yet. Records are created when a monitoring log is verified.
                     </Typography>
@@ -205,6 +207,16 @@ const HACCPVerificationRecords: React.FC = () => {
                     <TableCell>{r.ccp_name ?? r.oprp_name ?? '—'}</TableCell>
                     <TableCell>{r.verified_at ? new Date(r.verified_at).toLocaleString() : '—'}</TableCell>
                     <TableCell>{r.verifier_name ?? `User ${r.verified_by}`}</TableCell>
+                    <TableCell>
+                      {r.result ? (
+                        <Chip
+                          size="small"
+                          label={r.result.toUpperCase()}
+                          color={r.result === 'pass' ? 'success' : r.result === 'conditional' ? 'warning' : 'error'}
+                          variant="outlined"
+                        />
+                      ) : '—'}
+                    </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
                         <Button

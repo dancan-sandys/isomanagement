@@ -1,11 +1,45 @@
 #!/usr/bin/env python3
 """
-Comprehensive script to initialize the database with all required roles, permissions, and users
+Canonical RBAC + admin seed for ISO 22000 FSMS.
+
+This script is the reference for how permissions and default roles must align with:
+  - app.models.rbac — Module and PermissionType enums (string values stored in DB)
+  - app.models.user — User fields used for the default admin account
+
+Rules:
+  - Permission rows MUST use module.value / action.value (strings), never raw Enum objects,
+    so PostgreSQL (psycopg2) and SQLite both work.
+  - Role permission tuples MUST use members of Module and PermissionType only; lookup keys are
+    (module.value, action.value).
+  - Schema: prefer `alembic upgrade head` (or `heads`) first; `Base.metadata.create_all` below
+    is a dev convenience and may not match Alembic history if models drift—run migrations first.
+
+When changing RBAC behaviour, update this file and keep app.models.rbac enums in sync (or vice
+versa, using this file as the behavioural contract for seeds).
+
+Demo content (~12 users including admin, suppliers, 8 products, HACCP, batches, documents,
+equipment) comes from seed_presentation_demo (same data builders as setup_database_complete).
+Set ISO_SEED_DEMO=0 to skip demo seeding.
 """
 
 import sys
 import os
+import importlib
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Register all model modules on Base.metadata so create_all() sees every table (matches ORM).
+_backend_root = os.path.dirname(os.path.abspath(__file__))
+_models_dir = os.path.join(_backend_root, "app", "models")
+if os.path.isdir(_models_dir):
+    for _fn in sorted(os.listdir(_models_dir)):
+        if not _fn.endswith(".py") or _fn.startswith("_"):
+            continue
+        _mod = f"app.models.{_fn[:-3]}"
+        try:
+            importlib.import_module(_mod)
+        except Exception as _exc:
+            print(f"WARN: could not import {_mod} (skipped for metadata): {_exc}", file=sys.stderr)
 
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
@@ -32,9 +66,9 @@ def create_permissions():
         for module in Module:
             for action in PermissionType:
                 permission = Permission(
-                    module=module,
-                    action=action,
-                    description=f"{action.value.title()} permission for {module.value}"
+                    module=module.value,
+                    action=action.value,
+                    description=f"{action.value.title()} permission for {module.value}",
                 )
                 permissions.append(permission)
         
@@ -93,9 +127,9 @@ def create_default_roles():
                     (Module.COMPLAINTS, PermissionType.VIEW),
                     (Module.COMPLAINTS, PermissionType.CREATE),
                     (Module.COMPLAINTS, PermissionType.UPDATE),
-                    (Module.NONCONFORMANCE, PermissionType.VIEW),
-                    (Module.NONCONFORMANCE, PermissionType.CREATE),
-                    (Module.NONCONFORMANCE, PermissionType.UPDATE),
+                    (Module.NC_CAPA, PermissionType.VIEW),
+                    (Module.NC_CAPA, PermissionType.CREATE),
+                    (Module.NC_CAPA, PermissionType.UPDATE),
                     (Module.EQUIPMENT, PermissionType.VIEW),
                     (Module.EQUIPMENT, PermissionType.CREATE),
                     (Module.EQUIPMENT, PermissionType.UPDATE),
@@ -105,9 +139,9 @@ def create_default_roles():
                     (Module.MANAGEMENT_REVIEW, PermissionType.VIEW),
                     (Module.MANAGEMENT_REVIEW, PermissionType.CREATE),
                     (Module.MANAGEMENT_REVIEW, PermissionType.UPDATE),
-                    (Module.RISK, PermissionType.VIEW),
-                    (Module.RISK, PermissionType.CREATE),
-                    (Module.RISK, PermissionType.UPDATE),
+                    (Module.RISK_OPPORTUNITY, PermissionType.VIEW),
+                    (Module.RISK_OPPORTUNITY, PermissionType.CREATE),
+                    (Module.RISK_OPPORTUNITY, PermissionType.UPDATE),
                     (Module.TRACEABILITY, PermissionType.VIEW),
                     (Module.TRACEABILITY, PermissionType.CREATE),
                     (Module.TRACEABILITY, PermissionType.UPDATE),
@@ -164,7 +198,7 @@ def create_default_roles():
             # Add permissions
             role_permissions = []
             for module, action in role_data["permissions"]:
-                permission = permissions_dict.get((module, action))
+                permission = permissions_dict.get((module.value, action.value))
                 if permission:
                     role_permissions.append(permission)
             
@@ -208,10 +242,10 @@ def create_admin_user():
             hashed_password=get_password_hash("admin123"),
             role_id=admin_role.id,
             status=UserStatus.ACTIVE,
-            department="Quality Assurance",
+            department_name="Quality Assurance",
             position="System Administrator",
             is_active=True,
-            is_verified=True
+            is_verified=True,
         )
         
         db.add(admin_user)
@@ -247,6 +281,11 @@ def main():
         
         # Create admin user
         create_admin_user()
+
+        # Suppliers, products, HACCP, batches, equipment (same family as iso22000_fsms.db / setup_database_complete)
+        from seed_presentation_demo import run_presentation_demo
+
+        run_presentation_demo(engine)
         
         print("\n🎉 Database initialization completed successfully!")
         print("\n📋 Summary:")
@@ -254,6 +293,7 @@ def main():
         print("  - Permissions created")
         print("  - Default roles created")
         print("  - Admin user created")
+        print("  - Optional presentation demo data (unless skipped or already present)")
         print("\n🔑 Login credentials:")
         print("  Username: admin")
         print("  Password: admin123")

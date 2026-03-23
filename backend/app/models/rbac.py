@@ -4,7 +4,8 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
 
-# Permission types enum
+# Permission types enum (values are persisted in permissions.action — keep in sync with
+# backend/initialize_database_complete.py and frontend hasPermission(module, action).)
 class PermissionType(enum.Enum):
     VIEW = "view"
     CREATE = "create"
@@ -16,7 +17,8 @@ class PermissionType(enum.Enum):
     IMPORT = "import"
     MANAGE_PROGRAM = "manage_program"
 
-# Module enum
+# Module enum (values are persisted in permissions.module — canonical seed reference:
+# backend/initialize_database_complete.py)
 class Module(enum.Enum):
     DASHBOARD = "dashboard"
     DOCUMENTS = "documents"

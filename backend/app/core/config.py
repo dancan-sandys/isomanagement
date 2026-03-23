@@ -6,8 +6,8 @@ import os
 
 class Settings(BaseSettings):
     # Database Configuration
-    DATABASE_URL: str = "sqlite:///./iso22000_fsms.db"  # Default to SQLite for development
-    DATABASE_TYPE: str = "sqlite"  # sqlite or postgresql
+    DATABASE_URL: str = "postgresql://neondb_owner:npg_8T9OeACSIiWR@ep-muddy-flower-ak7c7xbo-pooler.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"  # Default to SQLite for development
+    DATABASE_TYPE: str = "postgresql"  # sqlite or postgresql
     
     # Security Configuration
     SECRET_KEY: str = "your-super-secret-key-change-this-in-production"

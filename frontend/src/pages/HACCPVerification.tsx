@@ -40,6 +40,10 @@ import {
   FormControlLabel,
   Checkbox,
   Divider,
+  Autocomplete,
+  Radio,
+  RadioGroup,
+  CircularProgress,
 } from '@mui/material';
 import {
   Security,
@@ -58,46 +62,60 @@ import {
   Assessment,
   TrendingUp,
   NotificationImportant,
+  Close,
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppDispatch, RootState } from '../store';
 import { hasPermission } from '../store/slices/authSlice';
 import { fetchProducts } from '../store/slices/haccpSlice';
-import { haccpAPI } from '../services/api';
+import { haccpAPI, traceabilityAPI } from '../services/api';
+import { haccpAPI as haccpRecordsAPI } from '../services/haccpAPI';
 import PageHeader from '../components/UI/PageHeader';
 import HACCPBreadcrumbs from '../components/UI/HACCPBreadcrumbs';
 
-interface VerificationTask {
+interface CCPSVerificationTaskItem {
+  task_type: 'ccp';
   id: string;
-  programId: number;
-  ccpId: number;
-  ccpName: string;
-  ccpNumber: string;
-  productName: string;
-  productId: number;
-  verificationType: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'failed';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  dueDate: string;
-  frequency: string;
-  lastVerified?: string;
-  responsible: string;
-  description: string;
-  requirements: string[];
-  requiredVerifierRole?: string | null;
-  evidence?: string[];
+  log_id: number;
+  ccp_id: number;
+  ccp_number: string | null;
+  ccp_name: string | null;
+  product_id: number | null;
+  product_name: string | null;
+  batch_number: string | null;
+  monitoring_time: string | null;
+  measured_value: number | null;
+  unit: string | null;
+  is_within_limits: boolean | null;
+  observations: string | null;
+  created_at: string | null;
 }
 
-interface VerificationRecord {
+interface OPRPVerificationTaskItem {
+  task_type: 'oprp';
   id: string;
-  taskId: string;
-  verifiedBy: string;
-  verificationDate: string;
-  result: 'pass' | 'fail' | 'conditional';
-  findings: string;
-  correctiveActions?: string;
-  evidence: string[];
-  nextDueDate: string;
+  oprp_id: number;
+  oprp_number: string;
+  oprp_name: string;
+  product_id: number;
+  product_name: string | null;
+  verification_frequency: string | null;
+  description: string | null;
+}
+
+type VerificationTaskItem = CCPSVerificationTaskItem | OPRPVerificationTaskItem;
+
+interface VerificationRecordItem {
+  id: number;
+  record_type: string;
+  ccp_id: number | null;
+  oprp_id: number | null;
+  ccp_name: string | null;
+  oprp_name: string | null;
+  verified_at: string;
+  verified_by: number;
+  verifier_name: string | null;
+  result?: string | null;
 }
 
 interface TabPanelProps {
@@ -125,76 +143,95 @@ const HACCPVerification: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { products } = useSelector((state: RootState) => state.haccp);
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
-  const canCreateLogs = !!currentUser && hasPermission(currentUser, 'haccp', 'create');
+  const canVerify = !!currentUser && (hasPermission(currentUser, 'haccp', 'verify') || hasPermission(currentUser, 'haccp', 'update') || hasPermission(currentUser, 'haccp', 'create'));
+  const canViewRecords = !!currentUser && hasPermission(currentUser, 'haccp', 'view');
 
   const [selectedTab, setSelectedTab] = useState(0);
-  const [verificationTasks, setVerificationTasks] = useState<VerificationTask[]>([]);
-  const [verificationRecords, setVerificationRecords] = useState<VerificationRecord[]>([]);
-  const [selectedTask, setSelectedTask] = useState<VerificationTask | null>(null);
-  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [verificationTasks, setVerificationTasks] = useState<VerificationTaskItem[]>([]);
+  const [verificationRecords, setVerificationRecords] = useState<VerificationRecordItem[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  const [verificationForm, setVerificationForm] = useState({
-    result: 'pass' as 'pass' | 'fail' | 'conditional',
-    findings: '',
-    correctiveActions: '',
-    evidence: [] as string[],
-    requirements: [] as { id: string; description: string; met: boolean }[],
+  const [viewerRecordId, setViewerRecordId] = useState<number | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [loadingViewer, setLoadingViewer] = useState(false);
+
+  // CCP verify dialog: pending monitoring log to verify/reject
+  const [ccpVerifyDialogOpen, setCcpVerifyDialogOpen] = useState(false);
+  const [selectedCcpTask, setSelectedCcpTask] = useState<CCPSVerificationTaskItem | null>(null);
+  const [ccpVerifyForm, setCcpVerifyForm] = useState({ verification_notes: '', allowOverride: false });
+
+  // OPRP verify dialog: record OPRP verification (batch, conducted as expected, notes)
+  const [oprpVerifyDialogOpen, setOprpVerifyDialogOpen] = useState(false);
+  const [selectedOprpTask, setSelectedOprpTask] = useState<OPRPVerificationTaskItem | null>(null);
+  const [oprpVerifyForm, setOprpVerifyForm] = useState({
+    conductedAsExpected: true,
+    notes: '',
   });
+  const [oprpBatchValue, setOprpBatchValue] = useState<{ id: number; batch_number?: string } | null>(null);
+  const [batchOptions, setBatchOptions] = useState<any[]>([]);
+  const [batchSearch, setBatchSearch] = useState('');
+  const [batchOpen, setBatchOpen] = useState(false);
 
   useEffect(() => {
     dispatch(fetchProducts());
     loadVerificationTasks();
-    loadVerificationRecords();
   }, [dispatch]);
+
+  useEffect(() => {
+    if (selectedTab === 1 && canViewRecords) loadVerificationRecords();
+  }, [selectedTab, canViewRecords]);
+
+  useEffect(() => {
+    let active = true;
+    if (!batchOpen) return () => { active = false; };
+    const t = setTimeout(async () => {
+      try {
+        const params: any = { search: batchSearch, size: 10 };
+        if (selectedOprpTask?.product_id) params.product_id = selectedOprpTask.product_id;
+        const resp: any = await traceabilityAPI.getBatches(params);
+        const items = resp?.data?.items || resp?.items || [];
+        if (active) setBatchOptions(items);
+      } catch (e) {
+        if (active) setBatchOptions([]);
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(t); };
+  }, [batchOpen, batchSearch, selectedOprpTask?.product_id]);
 
   const loadVerificationTasks = async () => {
     setLoading(true);
     try {
-      const res: any = await haccpAPI.getDueVerifications();
-      const payload = res?.data ?? res;
-      const items = payload?.items ?? payload ?? [];
-
-      const tasks: VerificationTask[] = items.map((item: any) => {
-        const isOverdue = Boolean(item.is_overdue);
-        const status: VerificationTask['status'] = isOverdue ? 'overdue' : 'pending';
-
-        let priority: VerificationTask['priority'] = 'medium';
-        if (status === 'overdue') priority = 'critical';
-        else priority = 'high';
-
-        const dueDate = item.next_verification_date || new Date().toISOString();
-
-        const rawCriteria = item.verification_criteria;
-        const requirements: string[] = Array.isArray(rawCriteria)
-          ? rawCriteria
-          : rawCriteria
-          ? [String(rawCriteria)]
-          : [];
-
-        return {
-          id: String(item.program_id ?? item.id ?? item.ccp_id),
-          programId: item.program_id ?? item.id,
-          ccpId: item.ccp_id,
-          ccpName: item.ccp_name ?? '',
-          ccpNumber: item.ccp_number ?? '',
-          productName: item.product_name ?? '',
-          productId: item.product_id ?? 0,
-          verificationType: item.verification_type || 'review',
-          status,
-          priority,
-          dueDate,
-          frequency: item.frequency || '',
-          lastVerified: undefined,
-          responsible: item.required_verifier_role || currentUser?.username || '',
-          description: requirements.join('; '),
-          requirements,
-          requiredVerifierRole: item.required_verifier_role ?? null,
-          evidence: [],
-        };
-      });
-
-      setVerificationTasks(tasks);
+      const res: any = await haccpAPI.getVerificationTasks();
+      const data = res?.data ?? res;
+      const ccpTasks: CCPSVerificationTaskItem[] = (data.ccp_tasks ?? []).map((t: any) => ({
+        task_type: 'ccp' as const,
+        id: t.id,
+        log_id: t.log_id,
+        ccp_id: t.ccp_id,
+        ccp_number: t.ccp_number ?? null,
+        ccp_name: t.ccp_name ?? null,
+        product_id: t.product_id ?? null,
+        product_name: t.product_name ?? null,
+        batch_number: t.batch_number ?? null,
+        monitoring_time: t.monitoring_time ?? null,
+        measured_value: t.measured_value ?? null,
+        unit: t.unit ?? null,
+        is_within_limits: t.is_within_limits ?? null,
+        observations: t.observations ?? null,
+        created_at: t.created_at ?? null,
+      }));
+      const oprpTasks: OPRPVerificationTaskItem[] = (data.oprp_tasks ?? []).map((t: any) => ({
+        task_type: 'oprp' as const,
+        id: t.id,
+        oprp_id: t.oprp_id,
+        oprp_number: t.oprp_number ?? '',
+        oprp_name: t.oprp_name ?? '',
+        product_id: t.product_id ?? 0,
+        product_name: t.product_name ?? null,
+        verification_frequency: t.verification_frequency ?? null,
+        description: t.description ?? null,
+      }));
+      setVerificationTasks([...ccpTasks, ...oprpTasks]);
     } catch (error) {
       console.error('Error loading verification tasks:', error);
       setVerificationTasks([]);
@@ -204,143 +241,79 @@ const HACCPVerification: React.FC = () => {
   };
 
   const loadVerificationRecords = async () => {
+    if (!canViewRecords) return;
+    setRecordsLoading(true);
     try {
-      // Mock data - replace with actual API call
-      const mockRecords: VerificationRecord[] = [
-        {
-          id: '1',
-          taskId: '1',
-          verifiedBy: currentUser?.username || 'QA Manager',
-          verificationDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          result: 'pass',
-          findings: 'Temperature monitoring equipment calibrated successfully. All readings within acceptable range.',
-          evidence: ['calibration_cert_001.pdf', 'verification_log_temp.xlsx'],
-          nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: '2',
-          taskId: '2',
-          verifiedBy: currentUser?.username || 'QA Specialist',
-          verificationDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-          result: 'conditional',
-          findings: 'Monitoring records complete but noted 2 instances of delayed corrective actions.',
-          correctiveActions: 'Training reminder sent to production staff on timely corrective action implementation.',
-          evidence: ['monitoring_review_ph.pdf', 'training_record.pdf'],
-          nextDueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-      setVerificationRecords(mockRecords);
+      const res: any = await haccpRecordsAPI.getVerificationRecords({ skip: 0, limit: 100 });
+      const payload = res?.data ?? res;
+      const items: VerificationRecordItem[] = payload?.items ?? [];
+      setVerificationRecords(items);
     } catch (error) {
       console.error('Error loading verification records:', error);
+      setVerificationRecords([]);
+    } finally {
+      setRecordsLoading(false);
     }
   };
 
-  const handleStartVerification = (task: VerificationTask) => {
-    setSelectedTask(task);
-    setVerificationForm({
-      result: 'pass',
-      findings: '',
-      correctiveActions: '',
-      evidence: [],
-      requirements: task.requirements.map((req, index) => ({
-        id: `req_${index}`,
-        description: req,
-        met: false,
-      })),
-    });
-    setVerificationDialogOpen(true);
+  const handleOpenTask = (task: VerificationTaskItem) => {
+    if (task.task_type === 'ccp') {
+      setSelectedCcpTask(task);
+      setCcpVerifyForm({ verification_notes: '', allowOverride: false });
+      setCcpVerifyDialogOpen(true);
+    } else {
+      setSelectedOprpTask(task);
+      setOprpVerifyForm({ conductedAsExpected: true, notes: '' });
+      setOprpBatchValue(null);
+      setBatchSearch('');
+      setOprpVerifyDialogOpen(true);
+    }
   };
 
-  const handleSubmitVerification = async () => {
-    if (!selectedTask || !verificationForm.findings.trim()) {
-      alert('Please enter verification findings');
-      return;
-    }
-
+  const handleSubmitCcpVerify = async (compliant: boolean) => {
+    if (!selectedCcpTask) return;
     try {
-      const payload = {
-        task_id: selectedTask.id,
-        result: verificationForm.result,
-        findings: verificationForm.findings,
-        corrective_actions: verificationForm.correctiveActions,
-        evidence: verificationForm.evidence,
-        requirements_met: verificationForm.requirements.map(req => ({
-          description: req.description,
-          met: req.met,
-        })),
-      };
-
-      // Submit verification record
-      await haccpAPI.createVerificationLog(selectedTask.ccpId, payload);
-
-      // Update task status
-      setVerificationTasks(prev => 
-        prev.map(task => 
-          task.id === selectedTask.id 
-            ? { 
-                ...task, 
-                status: 'completed',
-                lastVerified: new Date().toISOString()
-              }
-            : task
-        )
+      await haccpAPI.verifyMonitoringLog(
+        selectedCcpTask.ccp_id,
+        selectedCcpTask.log_id,
+        {
+          verification_is_compliant: compliant,
+          verification_notes: ccpVerifyForm.verification_notes.trim() || undefined,
+        },
+        { allowOverride: ccpVerifyForm.allowOverride }
       );
-
-      // Add to records
-      const newRecord: VerificationRecord = {
-        id: Date.now().toString(),
-        taskId: selectedTask.id,
-        verifiedBy: currentUser?.username || 'Current User',
-        verificationDate: new Date().toISOString(),
-        result: verificationForm.result,
-        findings: verificationForm.findings,
-        correctiveActions: verificationForm.correctiveActions,
-        evidence: verificationForm.evidence,
-        nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-      };
-      setVerificationRecords(prev => [newRecord, ...prev]);
-
-      setVerificationDialogOpen(false);
-      setSelectedTask(null);
-    } catch (error) {
-      console.error('Error submitting verification:', error);
-      alert('Failed to submit verification record');
+      setCcpVerifyDialogOpen(false);
+      setSelectedCcpTask(null);
+      loadVerificationTasks();
+      alert(compliant ? 'Log verified successfully.' : 'Log rejected.');
+    } catch (e: any) {
+      console.error('CCP verify failed', e);
+      alert(e?.response?.data?.detail || 'Failed to submit verification');
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Schedule color="info" />;
-      case 'overdue':
-        return <Warning color="error" />;
-      case 'completed':
-        return <CheckCircle color="success" />;
-      case 'in_progress':
-        return <VerifiedUser color="primary" />;
-      case 'failed':
-        return <Error color="error" />;
-      default:
-        return <Schedule />;
+  const handleSubmitOprpVerify = async () => {
+    if (!selectedOprpTask) return;
+    try {
+      await haccpAPI.createOPRPVerificationLog(selectedOprpTask.oprp_id, {
+        batch_id: oprpBatchValue?.id,
+        verification_type: 'batch_check',
+        conducted_as_expected: oprpVerifyForm.conductedAsExpected,
+        findings: oprpVerifyForm.notes.trim() || undefined,
+      });
+      setOprpVerifyDialogOpen(false);
+      setSelectedOprpTask(null);
+      setOprpBatchValue(null);
+      loadVerificationTasks();
+      alert('OPRP verification recorded.');
+    } catch (e: any) {
+      console.error('OPRP verify failed', e);
+      alert(e?.response?.data?.detail || 'Failed to record OPRP verification');
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'info';
-      case 'overdue':
-        return 'error';
-      case 'completed':
-        return 'success';
-      case 'in_progress':
-        return 'primary';
-      case 'failed':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
+  const formatDateTime = (iso: string | null | undefined) =>
+    iso ? new Date(iso).toLocaleString() : '—';
 
   const getResultColor = (result: string) => {
     switch (result) {
@@ -355,56 +328,31 @@ const HACCPVerification: React.FC = () => {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'critical':
-        return 'error';
-      case 'high':
-        return 'warning';
-      case 'medium':
-        return 'info';
-      case 'low':
-        return 'success';
-      default:
-        return 'default';
+  const handleViewPdf = async (record: VerificationRecordItem) => {
+    setLoadingViewer(true);
+    setViewerRecordId(null);
+    setViewerUrl(null);
+    try {
+      const blob = await haccpRecordsAPI.downloadVerificationRecordPdf(record.id);
+      const url = window.URL.createObjectURL(blob);
+      setViewerUrl(url);
+      setViewerRecordId(record.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Failed to load PDF');
+    } finally {
+      setLoadingViewer(false);
     }
   };
 
-  const getVerificationTypeIcon = (type: string) => {
-    switch (type) {
-      case 'calibration':
-        return <Assessment />;
-      case 'review':
-        return <Visibility />;
-      case 'testing':
-        return <Security />;
-      case 'audit':
-        return <Assignment />;
-      case 'validation':
-        return <VerifiedUser />;
-      default:
-        return <Assignment />;
-    }
+  const handleClosePdfViewer = () => {
+    if (viewerUrl) window.URL.revokeObjectURL(viewerUrl);
+    setViewerUrl(null);
+    setViewerRecordId(null);
   };
 
-  const formatTimeRemaining = (dueDate: string) => {
-    const now = new Date();
-    const due = new Date(dueDate);
-    const diffMs = due.getTime() - now.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) {
-      return `${Math.abs(diffDays)} days overdue`;
-    } else if (diffDays === 0) {
-      return 'Due today';
-    } else {
-      return `${diffDays} days remaining`;
-    }
-  };
-
-  const pendingTasks = verificationTasks.filter(task => task.status === 'pending' || task.status === 'overdue' || task.status === 'in_progress');
-  const completedTasks = verificationTasks.filter(task => task.status === 'completed');
-  const overdueTasks = verificationTasks.filter(task => task.status === 'overdue');
+  const ccpTasks = verificationTasks.filter((t): t is CCPSVerificationTaskItem => t.task_type === 'ccp');
+  const oprpTasks = verificationTasks.filter((t): t is OPRPVerificationTaskItem => t.task_type === 'oprp');
+  const totalPending = verificationTasks.length;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -423,13 +371,13 @@ const HACCPVerification: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Pending Tasks
+                    Total Pending
                   </Typography>
                   <Typography variant="h4">
-                    {pendingTasks.length}
+                    {totalPending}
                   </Typography>
                 </Box>
-                <Badge badgeContent={pendingTasks.length} color="primary">
+                <Badge badgeContent={totalPending} color="primary">
                   <Assignment color="primary" />
                 </Badge>
               </Box>
@@ -442,15 +390,13 @@ const HACCPVerification: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Overdue
+                    CCP (logs to verify)
                   </Typography>
-                  <Typography variant="h4" color="error">
-                    {overdueTasks.length}
+                  <Typography variant="h4">
+                    {ccpTasks.length}
                   </Typography>
                 </Box>
-                <Badge badgeContent={overdueTasks.length} color="error">
-                  <NotificationImportant color="error" />
-                </Badge>
+                <Security color="info" />
               </Box>
             </CardContent>
           </Card>
@@ -461,13 +407,13 @@ const HACCPVerification: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Completed
+                    OPRP verification
                   </Typography>
                   <Typography variant="h4" color="success.main">
-                    {completedTasks.length}
+                    {oprpTasks.length}
                   </Typography>
                 </Box>
-                <CheckCircle color="success" />
+                <VerifiedUser color="success" />
               </Box>
             </CardContent>
           </Card>
@@ -478,10 +424,10 @@ const HACCPVerification: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Compliance Rate
+                    Compliance
                   </Typography>
                   <Typography variant="h4" color="info.main">
-                    {pendingTasks.length > 0 ? Math.round((completedTasks.length / (completedTasks.length + pendingTasks.length)) * 100) : 100}%
+                    {totalPending === 0 ? '100' : '0'}%
                   </Typography>
                 </Box>
                 <TrendingUp color="info" />
@@ -495,7 +441,7 @@ const HACCPVerification: React.FC = () => {
       <Tabs value={selectedTab} onChange={(_, newValue) => setSelectedTab(newValue)} sx={{ mb: 3 }}>
         <Tab 
           icon={<Assignment />} 
-          label={`Tasks (${pendingTasks.length})`} 
+          label={`Tasks (${totalPending})`} 
           iconPosition="start"
         />
         <Tab 
@@ -529,75 +475,72 @@ const HACCPVerification: React.FC = () => {
             }
           />
           <CardContent>
-            {pendingTasks.length === 0 ? (
+            {verificationTasks.length === 0 ? (
               <Alert severity="success">
-                No verification tasks pending. All systems are verified and up to date.
+                No verification tasks. CCP monitoring logs that are not yet verified and OPRPs you are responsible for will appear here.
               </Alert>
             ) : (
               <List>
-                {pendingTasks.map((task) => (
+                {verificationTasks.map((task) => (
                   <ListItem
                     key={task.id}
                     divider
-                    onClick={() => handleStartVerification(task)}
+                    onClick={() => handleOpenTask(task)}
                     sx={{ cursor: 'pointer' }}
                   >
                     <ListItemIcon>
-                      {getVerificationTypeIcon(task.verificationType)}
+                      {task.task_type === 'ccp' ? (
+                        <Security color="primary" />
+                      ) : (
+                        <VerifiedUser color="secondary" />
+                      )}
                     </ListItemIcon>
                     <ListItemText
                       primaryTypographyProps={{ component: 'div' }}
                       secondaryTypographyProps={{ component: 'div' }}
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                          <Chip
+                            label={task.task_type === 'ccp' ? 'CCP' : 'OPRP'}
+                            color={task.task_type === 'ccp' ? 'primary' : 'secondary'}
+                            size="small"
+                            variant="outlined"
+                          />
                           <Typography variant="h6">
-                            {task.ccpNumber}: {task.ccpName}
+                            {task.task_type === 'ccp'
+                              ? `${task.ccp_number || ''}: ${task.ccp_name || ''}`
+                              : `${task.oprp_number}: ${task.oprp_name}`}
                           </Typography>
-                          <Chip
-                            label={task.verificationType.toUpperCase()}
-                            color="primary"
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Chip
-                            label={task.status.toUpperCase()}
-                            color={getStatusColor(task.status) as any}
-                            size="small"
-                          />
-                          <Chip
-                            label={task.priority.toUpperCase()}
-                            color={getPriorityColor(task.priority) as any}
-                            size="small"
-                            variant="outlined"
-                          />
+                          {task.task_type === 'ccp' && (
+                            <Typography variant="body2" color="textSecondary">
+                              Batch: {task.batch_number || '—'} • {task.measured_value ?? '—'} {task.unit ?? ''}
+                            </Typography>
+                          )}
                         </Box>
                       }
                       secondary={
                         <Box sx={{ mt: 1 }}>
                           <Typography variant="body2" color="textSecondary">
-                            Product: {task.productName} • Frequency: {task.frequency}
-                          </Typography>
-                          <Typography variant="body2" color={task.status === 'overdue' ? 'error' : 'textSecondary'}>
-                            {formatTimeRemaining(task.dueDate)} • Responsible: {task.responsible}
-                          </Typography>
-                          <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
-                            {task.description}
+                            Product: {task.task_type === 'ccp' ? task.product_name : task.product_name} •{' '}
+                            {task.task_type === 'ccp'
+                              ? `Recorded: ${formatDateTime(task.monitoring_time)}`
+                              : task.verification_frequency ? `Frequency: ${task.verification_frequency}` : ''}
                           </Typography>
                         </Box>
                       }
                     />
-                    {canCreateLogs && (
+                    {canVerify && (
                       <Button
                         variant="contained"
                         startIcon={<VerifiedUser />}
-                        color={task.status === 'overdue' ? 'error' : 'primary'}
+                        color="primary"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleStartVerification(task);
+                          handleOpenTask(task);
                         }}
                         sx={{ ml: 2 }}
                       >
-                        Start Verification
+                        {task.task_type === 'ccp' ? 'Verify / Reject' : 'Record verification'}
                       </Button>
                     )}
                   </ListItem>
@@ -614,58 +557,87 @@ const HACCPVerification: React.FC = () => {
           <CardHeader 
             title="Verification Records"
             action={
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Download />}
-                  size="small"
-                >
-                  Export
-                </Button>
-              </Stack>
+              canViewRecords && (
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    startIcon={recordsLoading ? <CircularProgress size={18} /> : <Refresh />}
+                    size="small"
+                    onClick={loadVerificationRecords}
+                    disabled={recordsLoading}
+                  >
+                    Refresh
+                  </Button>
+                </Stack>
+              )
             }
           />
           <CardContent>
-            <TableContainer component={Paper} variant="outlined">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Date</TableCell>
-                    <TableCell>CCP</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Result</TableCell>
-                    <TableCell>Verified By</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {verificationRecords.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell>{new Date(record.verificationDate).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        {verificationTasks.find(t => t.id === record.taskId)?.ccpNumber || 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        {verificationTasks.find(t => t.id === record.taskId)?.verificationType || 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          size="small" 
-                          color={getResultColor(record.result) as any}
-                          label={record.result.toUpperCase()} 
-                        />
-                      </TableCell>
-                      <TableCell>{record.verifiedBy}</TableCell>
-                      <TableCell>
-                        <IconButton size="small">
-                          <Visibility />
-                        </IconButton>
-                      </TableCell>
+            {!canViewRecords ? (
+              <Alert severity="info">You need HACCP view permission to see verification records.</Alert>
+            ) : recordsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer component={Paper} variant="outlined">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>CCP/OPRP</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Result</TableCell>
+                      <TableCell>Verified By</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {verificationRecords.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          <Typography variant="body2" color="text.secondary">
+                            No verification records. Records are created when a monitoring log or OPRP is verified.
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      verificationRecords.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell>{record.verified_at ? new Date(record.verified_at).toLocaleDateString() : '—'}</TableCell>
+                          <TableCell>{record.ccp_name ?? record.oprp_name ?? '—'}</TableCell>
+                          <TableCell>{record.record_type ? record.record_type.toUpperCase() : '—'}</TableCell>
+                          <TableCell>
+                            {record.result ? (
+                              <Chip 
+                                size="small" 
+                                color={getResultColor(record.result) as any}
+                                label={record.result.toUpperCase()} 
+                              />
+                            ) : '—'}
+                          </TableCell>
+                          <TableCell>{record.verifier_name ?? `User ${record.verified_by}`}</TableCell>
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleViewPdf(record)}
+                              disabled={loadingViewer}
+                              title="View PDF"
+                            >
+                              {loadingViewer && viewerRecordId === record.id ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                <Visibility />
+                              )}
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardContent>
         </Card>
       </TabPanel>
@@ -709,153 +681,127 @@ const HACCPVerification: React.FC = () => {
         </Grid>
       </TabPanel>
 
-      {/* Verification Dialog */}
-      <Dialog 
-        open={verificationDialogOpen} 
-        onClose={() => setVerificationDialogOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
+      {/* PDF Viewer for verification record */}
+      <Dialog open={!!viewerUrl} onClose={handleClosePdfViewer} maxWidth="md" fullWidth PaperProps={{ sx: { height: '85vh' } }}>
         <DialogTitle>
-          Verify {selectedTask?.ccpNumber}: {selectedTask?.ccpName}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6">
+              {viewerRecordId != null
+                ? (() => {
+                    const rec = verificationRecords.find((r) => r.id === viewerRecordId);
+                    return rec
+                      ? `Verification record: ${rec.ccp_name ?? rec.oprp_name ?? rec.record_type}${rec.verified_at ? ` (${new Date(rec.verified_at).toLocaleString()})` : ''}`
+                      : `Verification record #${viewerRecordId}`;
+                  })()
+                : 'Verification record'}
+            </Typography>
+            <IconButton onClick={handleClosePdfViewer} size="small">
+              <Close />
+            </IconButton>
+          </Box>
         </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={3} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <Alert severity="info" sx={{ mb: 2 }}>
+        <DialogContent dividers sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {viewerUrl && (
+            <iframe
+              src={viewerUrl}
+              style={{ width: '100%', height: '100%', minHeight: 480, border: 'none' }}
+              title="Verification record PDF"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* CCP Verify Dialog – verify or reject a monitoring log */}
+      <Dialog open={ccpVerifyDialogOpen} onClose={() => { setCcpVerifyDialogOpen(false); setSelectedCcpTask(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Verify or Reject Monitoring Log</DialogTitle>
+        <DialogContent dividers>
+          {selectedCcpTask && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Monitoring snapshot</Typography>
                 <Typography variant="body2">
-                  <strong>Verification Type:</strong> {selectedTask?.verificationType} • 
-                  <strong> Frequency:</strong> {selectedTask?.frequency} • 
-                  <strong> Responsible:</strong> {selectedTask?.responsible}
+                  {selectedCcpTask.batch_number || 'Batch N/A'} • {selectedCcpTask.measured_value ?? '—'} {selectedCcpTask.unit ?? ''}
                 </Typography>
-              </Alert>
-            </Grid>
-            
-            {/* Requirements Checklist */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>Requirements Checklist</Typography>
-              {verificationForm.requirements.map((req, index) => (
-                <FormControlLabel
-                  key={req.id}
-                  control={
-                    <Checkbox
-                      checked={req.met}
-                      onChange={(e) => {
-                        const updatedReqs = [...verificationForm.requirements];
-                        updatedReqs[index].met = e.target.checked;
-                        setVerificationForm(prev => ({ ...prev, requirements: updatedReqs }));
-                      }}
-                    />
-                  }
-                  label={req.description}
-                  sx={{ display: 'block', mb: 1 }}
+                <Typography variant="body2" color="text.secondary">
+                  Recorded: {formatDateTime(selectedCcpTask.monitoring_time)}
+                </Typography>
+                <Chip
+                  size="small"
+                  color={selectedCcpTask.is_within_limits ? 'success' : 'error'}
+                  label={selectedCcpTask.is_within_limits ? 'In Spec' : 'Out of Spec'}
+                  sx={{ mt: 1 }}
                 />
-              ))}
-            </Grid>
-
-            <Grid item xs={12}>
-              <Divider sx={{ my: 2 }} />
-            </Grid>
-
-            {/* Verification Result */}
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Verification Result</InputLabel>
-                <Select
-                  value={verificationForm.result}
-                  onChange={(e) => setVerificationForm(prev => ({ ...prev, result: e.target.value as any }))}
-                  label="Verification Result"
-                >
-                  <MenuItem value="pass">Pass</MenuItem>
-                  <MenuItem value="conditional">Conditional Pass</MenuItem>
-                  <MenuItem value="fail">Fail</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* Findings */}
-            <Grid item xs={12}>
+              </Box>
               <TextField
+                label="Note (optional)"
+                value={ccpVerifyForm.verification_notes}
+                onChange={(e) => setCcpVerifyForm(prev => ({ ...prev, verification_notes: e.target.value }))}
                 fullWidth
                 multiline
-                rows={4}
-                label="Verification Findings"
-                value={verificationForm.findings}
-                onChange={(e) => setVerificationForm(prev => ({ ...prev, findings: e.target.value }))}
-                placeholder="Document your verification findings, observations, and any issues identified..."
-                required
+                rows={2}
+                placeholder="e.g. reason for rejection or brief comment"
               />
-            </Grid>
-
-            {/* Corrective Actions (if needed) */}
-            {(verificationForm.result === 'fail' || verificationForm.result === 'conditional') && (
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="Corrective Actions Required"
-                  value={verificationForm.correctiveActions}
-                  onChange={(e) => setVerificationForm(prev => ({ ...prev, correctiveActions: e.target.value }))}
-                  placeholder="Detail the corrective actions required to address identified issues..."
-                />
-              </Grid>
-            )}
-
-            {/* Evidence Upload */}
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>Evidence and Documentation</Typography>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Button
-                  variant="outlined"
-                  startIcon={<Upload />}
-                  onClick={() => {
-                    // Simulate file upload
-                    const fileName = `verification_evidence_${Date.now()}.pdf`;
-                    setVerificationForm(prev => ({
-                      ...prev,
-                      evidence: [...prev.evidence, fileName]
-                    }));
-                  }}
-                >
-                  Upload Evidence
-                </Button>
-                <Typography variant="body2" color="textSecondary">
-                  Upload calibration certificates, test results, photos, etc.
-                </Typography>
-              </Stack>
-              {verificationForm.evidence.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  {verificationForm.evidence.map((file, index) => (
-                    <Chip
-                      key={index}
-                      label={file}
-                      onDelete={() => {
-                        setVerificationForm(prev => ({
-                          ...prev,
-                          evidence: prev.evidence.filter((_, i) => i !== index)
-                        }));
-                      }}
-                      sx={{ mr: 1, mb: 1 }}
-                    />
-                  ))}
-                </Box>
-              )}
-            </Grid>
-          </Grid>
+            </Stack>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setVerificationDialogOpen(false)}>
-            Cancel
-          </Button>
-          <Button 
-            variant="contained" 
-            onClick={handleSubmitVerification}
-            disabled={!verificationForm.findings.trim()}
-            color={verificationForm.result === 'fail' ? 'error' : 'primary'}
-          >
-            Submit Verification
-          </Button>
+          <Button onClick={() => { setCcpVerifyDialogOpen(false); setSelectedCcpTask(null); }}>Cancel</Button>
+          <Button color="error" variant="outlined" onClick={() => handleSubmitCcpVerify(false)}>Reject</Button>
+          <Button variant="contained" color="success" onClick={() => handleSubmitCcpVerify(true)}>Verify</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* OPRP Verify Dialog – record OPRP verification */}
+      <Dialog open={oprpVerifyDialogOpen} onClose={() => { setOprpVerifyDialogOpen(false); setSelectedOprpTask(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Record OPRP verification</DialogTitle>
+        <DialogContent dividers>
+          {selectedOprpTask && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {selectedOprpTask.oprp_number}: {selectedOprpTask.oprp_name} • Product: {selectedOprpTask.product_name ?? '—'}
+              </Typography>
+              <FormControl component="fieldset">
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  OPRP conducted as expected?
+                </Typography>
+                <RadioGroup
+                  row
+                  value={oprpVerifyForm.conductedAsExpected ? 'yes' : 'no'}
+                  onChange={(_, v) => setOprpVerifyForm(prev => ({ ...prev, conductedAsExpected: v === 'yes' }))}
+                >
+                  <FormControlLabel value="yes" control={<Radio size="small" />} label="Yes" />
+                  <FormControlLabel value="no" control={<Radio size="small" />} label="No" />
+                </RadioGroup>
+              </FormControl>
+              <Autocomplete
+                options={batchOptions}
+                open={batchOpen}
+                onOpen={() => setBatchOpen(true)}
+                onClose={() => setBatchOpen(false)}
+                getOptionLabel={(b: any) => b?.batch_number ?? String(b?.id ?? '')}
+                value={oprpBatchValue}
+                onChange={(_, val: any) => setOprpBatchValue(val)}
+                inputValue={batchSearch}
+                onInputChange={(_, val) => setBatchSearch(val)}
+                isOptionEqualToValue={(a: any, b: any) => a?.id === b?.id}
+                renderInput={(params) => <TextField {...params} label="Batch (optional)" size="small" />}
+              />
+              <TextField
+                size="small"
+                label="Notes"
+                value={oprpVerifyForm.notes}
+                onChange={(e) => setOprpVerifyForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="e.g. OPRP checked / findings"
+                fullWidth
+                multiline
+                rows={2}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOprpVerifyDialogOpen(false); setSelectedOprpTask(null); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSubmitOprpVerify}>Confirm verification</Button>
         </DialogActions>
       </Dialog>
     </Box>

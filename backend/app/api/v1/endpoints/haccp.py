@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import require_permission_dependency
+from app.core.permissions import require_permission_dependency, check_any_permission
 from app.models.user import User
 from app.models.haccp import (
     Product, ProcessFlow, Hazard, HazardReview, CCP, CCPMonitoringLog, CCPMonitoringSchedule,
@@ -1841,19 +1841,39 @@ async def resolve_rejected_monitoring_log(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-# ========== Verification records (PDFs generated on verify) – admin access ==========
+# ========== Verification records (PDFs generated on verify) – permission-based ==========
 @router.get("/verification-records", response_model=ResponseModel)
 async def list_verification_records(
     record_type: Optional[str] = Query(None, description="Filter by type: ccp or oprp"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(require_permission_dependency("haccp:update")),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db),
 ):
-    """List verification records (PDFs). Filter by record_type: ccp or oprp. Requires HACCP update (supervisor)."""
+    """List verification records (PDFs). Users with haccp:update or haccp:manage_program see all; others see only records for CCPs/OPRPs where they are verification_responsible."""
     q = db.query(HACCPVerificationRecord).order_by(HACCPVerificationRecord.verified_at.desc())
     if record_type and record_type.lower() in ("ccp", "oprp"):
         q = q.filter(HACCPVerificationRecord.record_type == record_type.lower())
+
+    can_see_all = check_any_permission(
+        current_user.id, Module.HACCP,
+        [PermissionType.UPDATE, PermissionType.MANAGE_PROGRAM],
+        db
+    )
+    if not can_see_all:
+        assignments = get_user_haccp_assignments(db, current_user.id)
+        verification_ccp_ids = list(assignments["verification_ccp_ids"]) if assignments["verification_ccp_ids"] else []
+        oprp_ids = [row.id for row in db.query(OPRP.id).filter(OPRP.verification_responsible == current_user.id).all()]
+        if not verification_ccp_ids and not oprp_ids:
+            q = q.filter(HACCPVerificationRecord.id == -1)
+        else:
+            conds = []
+            if verification_ccp_ids:
+                conds.append(HACCPVerificationRecord.ccp_id.in_(verification_ccp_ids))
+            if oprp_ids:
+                conds.append(HACCPVerificationRecord.oprp_id.in_(oprp_ids))
+            q = q.filter(or_(*conds))
+
     total = q.count()
     records = q.offset(skip).limit(limit).all()
     items = []
@@ -1862,6 +1882,7 @@ async def list_verification_records(
         oprp_name = None
         product_name = None
         verifier_name = None
+        result = None
         if r.ccp_id:
             ccp = db.query(CCP).filter(CCP.id == r.ccp_id).first()
             ccp_name = f"{ccp.ccp_number or ''} - {ccp.ccp_name}" if ccp else None
@@ -1873,6 +1894,16 @@ async def list_verification_records(
             product_name = prod.name if prod else None
         verifier = db.query(User).filter(User.id == r.verified_by).first()
         verifier_name = verifier.full_name if verifier else getattr(verifier, "username", None)
+        if r.record_type == "ccp" and r.monitoring_log_id:
+            log = db.query(CCPMonitoringLog).filter(CCPMonitoringLog.id == r.monitoring_log_id).first()
+            if log:
+                vr = (log.verification_result or "").lower()
+                if "conditional" in vr:
+                    result = "conditional"
+                elif log.verification_is_compliant is True:
+                    result = "pass"
+                else:
+                    result = "fail"
         items.append({
             "id": r.id,
             "record_type": r.record_type,
@@ -1886,6 +1917,7 @@ async def list_verification_records(
             "verified_at": r.verified_at.isoformat() if hasattr(r.verified_at, "isoformat") else str(r.verified_at),
             "verified_by": r.verified_by,
             "verifier_name": verifier_name,
+            "result": result,
             "created_at": r.created_at.isoformat() if r.created_at and hasattr(r.created_at, "isoformat") else str(r.created_at) if r.created_at else None,
         })
     return ResponseModel(success=True, message="Verification records", data={"items": items, "total": total})
@@ -1894,13 +1926,28 @@ async def list_verification_records(
 @router.get("/verification-records/{record_id}/pdf")
 async def download_verification_record_pdf(
     record_id: int,
-    current_user: User = Depends(require_permission_dependency("haccp:update")),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
     db: Session = Depends(get_db),
 ):
-    """Download the PDF for a verification record. Requires HACCP update (supervisor)."""
+    """Download the PDF for a verification record. Allowed if user has haccp:update/manage_program or is verification_responsible for the record's CCP/OPRP."""
     record = db.query(HACCPVerificationRecord).filter(HACCPVerificationRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification record not found")
+    can_see_all = check_any_permission(
+        current_user.id, Module.HACCP,
+        [PermissionType.UPDATE, PermissionType.MANAGE_PROGRAM],
+        db
+    )
+    if not can_see_all:
+        allowed = False
+        if record.ccp_id and is_ccp_verification_responsible(db, current_user.id, record.ccp_id):
+            allowed = True
+        elif record.oprp_id:
+            oprp = db.query(OPRP).filter(OPRP.id == record.oprp_id).first()
+            if oprp and oprp.verification_responsible == current_user.id:
+                allowed = True
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to access this verification record")
     if not os.path.isfile(record.file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file not found")
     filename = os.path.basename(record.file_path)
@@ -4049,6 +4096,176 @@ async def get_monitoring_tasks(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get monitoring tasks: {str(e)}"
+        )
+
+
+@router.get("/monitoring/history", response_model=ResponseModel)
+async def get_monitoring_history(
+    limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db),
+):
+    """Get recent monitoring logs for the Monitoring Console History tab.
+    Same visibility as monitoring tasks: update/manage_program see all; others see only CCPs where they are monitoring_responsible.
+    """
+    try:
+        rbac = RBACService(db)
+        is_admin = any([
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.UPDATE),
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.MANAGE_PROGRAM),
+        ])
+        q = (
+            db.query(CCPMonitoringLog)
+            .join(CCP, CCPMonitoringLog.ccp_id == CCP.id)
+            .filter(CCP.status == CCPStatus.ACTIVE)
+        )
+        if not is_admin:
+            q = q.filter(CCP.monitoring_responsible == current_user.id)
+        logs = q.order_by(desc(CCPMonitoringLog.monitoring_time)).limit(limit).all()
+        product_ids = list({log.ccp.product_id for log in logs if log.ccp and log.ccp.product_id})
+        products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+        items = []
+        for log in logs:
+            ccp = log.ccp
+            product = products.get(ccp.product_id) if ccp else None
+            creator = db.query(User).filter(User.id == log.created_by).first()
+            creator_name = creator.full_name if creator else "Unknown"
+            verifier = db.query(User).filter(User.id == log.verified_by).first() if log.verified_by else None
+            verifier_name = verifier.full_name if verifier else None
+            items.append({
+                "id": log.id,
+                "ccp_id": log.ccp_id,
+                "ccp_number": ccp.ccp_number if ccp else None,
+                "ccp_name": ccp.ccp_name if ccp else None,
+                "product_id": ccp.product_id if ccp else None,
+                "product_name": product.name if product else None,
+                "batch_number": log.batch_number,
+                "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
+                "measured_value": log.measured_value,
+                "unit": log.unit,
+                "is_within_limits": log.is_within_limits,
+                "observations": log.observations,
+                "created_by": creator_name,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "is_verified": bool(log.is_verified),
+                "verified_by": verifier_name,
+                "verified_at": log.verified_at.isoformat() if log.verified_at else None,
+                "verification_result": log.verification_result,
+                "verification_is_compliant": log.verification_is_compliant,
+            })
+        return ResponseModel(
+            success=True,
+            message="Monitoring history retrieved",
+            data={"items": items, "total": len(items)},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get monitoring history: {str(e)}"
+        )
+
+
+@router.get("/verification/tasks", response_model=ResponseModel)
+async def get_verification_tasks(
+    current_user: User = Depends(require_permission_dependency("haccp:view")),
+    db: Session = Depends(get_db),
+):
+    """Get verification tasks for the Verification Console.
+
+    - CCP tasks: monitoring logs that are not yet verified (is_verified=False).
+    - OPRP tasks: OPRPs that have a verification_responsible assigned (for recording OPRP verification).
+
+    Visibility:
+    - Users with haccp:update or haccp:manage_program see all CCP pending logs and all OPRPs with a verifier.
+    - Others see only CCP tasks for CCPs where they are verification_responsible, and only OPRPs where they are verification_responsible.
+    """
+    try:
+        rbac = RBACService(db)
+        is_admin = any([
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.UPDATE),
+            rbac.has_permission(current_user.id, Module.HACCP, PermissionType.MANAGE_PROGRAM),
+        ])
+        assignments = get_user_haccp_assignments(db, current_user.id)
+        verification_ccp_ids = assignments["verification_ccp_ids"]
+
+        # CCP tasks: unverified monitoring logs
+        q_ccp = (
+            db.query(CCPMonitoringLog)
+            .join(CCP, CCPMonitoringLog.ccp_id == CCP.id)
+            .filter(
+                CCPMonitoringLog.is_verified.is_(False),
+                CCP.status == CCPStatus.ACTIVE,
+            )
+        )
+        if not is_admin:
+            q_ccp = q_ccp.filter(CCP.id.in_(list(verification_ccp_ids)) if verification_ccp_ids else CCP.id == -1)
+        ccp_logs = q_ccp.order_by(desc(CCPMonitoringLog.monitoring_time)).all()
+
+        product_ids_ccp = list({log.ccp.product_id for log in ccp_logs if log.ccp and log.ccp.product_id})
+        products_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids_ccp)).all()} if product_ids_ccp else {}
+
+        ccp_tasks = []
+        for log in ccp_logs:
+            ccp = log.ccp
+            product = products_map.get(ccp.product_id) if ccp else None
+            ccp_tasks.append({
+                "task_type": "ccp",
+                "id": f"ccp_log_{log.id}",
+                "log_id": log.id,
+                "ccp_id": log.ccp_id,
+                "ccp_number": ccp.ccp_number if ccp else None,
+                "ccp_name": ccp.ccp_name if ccp else None,
+                "product_id": ccp.product_id if ccp else None,
+                "product_name": product.name if product else None,
+                "batch_number": log.batch_number,
+                "monitoring_time": log.monitoring_time.isoformat() if log.monitoring_time else None,
+                "measured_value": log.measured_value,
+                "unit": log.unit,
+                "is_within_limits": log.is_within_limits,
+                "observations": log.observations,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            })
+
+        # OPRP tasks: OPRPs with verification_responsible set (user can record verification)
+        q_oprp = db.query(OPRP).filter(OPRP.verification_responsible.isnot(None))
+        if not is_admin:
+            q_oprp = q_oprp.filter(OPRP.verification_responsible == current_user.id)
+        oprps = q_oprp.all()
+        product_ids_oprp = list({o.product_id for o in oprps})
+        products_oprp = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids_oprp)).all()} if product_ids_oprp else {}
+
+        oprp_tasks = []
+        for oprp in oprps:
+            product = products_oprp.get(oprp.product_id)
+            oprp_tasks.append({
+                "task_type": "oprp",
+                "id": f"oprp_{oprp.id}",
+                "oprp_id": oprp.id,
+                "oprp_number": oprp.oprp_number,
+                "oprp_name": oprp.oprp_name,
+                "product_id": oprp.product_id,
+                "product_name": product.name if product else None,
+                "verification_frequency": oprp.verification_frequency,
+                "description": oprp.description,
+            })
+
+        return ResponseModel(
+            success=True,
+            message="Verification tasks retrieved",
+            data={
+                "ccp_tasks": ccp_tasks,
+                "oprp_tasks": oprp_tasks,
+                "summary": {
+                    "ccp_pending": len(ccp_tasks),
+                    "oprp_count": len(oprp_tasks),
+                    "total": len(ccp_tasks) + len(oprp_tasks),
+                },
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get verification tasks: {str(e)}"
         )
 
 
