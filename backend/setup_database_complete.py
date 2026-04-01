@@ -665,9 +665,9 @@ def create_professional_documents(conn):
         ('FRM-004', 'Supplier Evaluation Form', 'Supplier performance evaluation form', 'form', 'records', 'approved', '1.2', 'Quality Assurance', 'Suppliers', '[]', 'Supplier, Evaluation, Performance', 1),
         
         # Training Materials
-        ('TRN-001', 'Food Safety Awareness Training', 'Basic food safety awareness training material', 'training_material', 'training', 'approved', '1.1', 'Human Resources', 'All Employees', '[]', 'Training, Food Safety, Awareness', 1),
-        ('TRN-002', 'HACCP Team Training', 'HACCP team member training material', 'training_material', 'training', 'approved', '1.0', 'Quality Assurance', 'HACCP Team', '[]', 'Training, HACCP, Team', 1),
-        ('TRN-003', 'Allergen Management Training', 'Allergen control and management training', 'training_material', 'training', 'approved', '1.1', 'Quality Assurance', 'Production Staff', '[]', 'Training, Allergens, Management', 1),
+        ('TRN-001', 'Food Safety Awareness Training', 'Basic food safety awareness training material', 'manual', 'training', 'approved', '1.1', 'Human Resources', 'All Employees', '[]', 'Training, Food Safety, Awareness', 1),
+        ('TRN-002', 'HACCP Team Training', 'HACCP team member training material', 'manual', 'training', 'approved', '1.0', 'Quality Assurance', 'HACCP Team', '[]', 'Training, HACCP, Team', 1),
+        ('TRN-003', 'Allergen Management Training', 'Allergen control and management training', 'manual', 'training', 'approved', '1.1', 'Quality Assurance', 'Production Staff', '[]', 'Training, Allergens, Management', 1),
         
         # Policies
         ('POL-001', 'Food Safety Policy', 'Company food safety policy statement', 'policy', 'management', 'approved', '1.0', 'Management', 'All Operations', '[]', 'Policy, Food Safety, Management', 1),
@@ -737,7 +737,7 @@ def create_professional_batches(conn):
                 quantity = random.uniform(500, 2000)
                 unit = 'L'
             elif 'beef' in product_name.lower() or 'chicken' in product_name.lower():
-                batch_type = 'raw_material'
+                batch_type = 'raw_milk'
                 quantity = random.uniform(200, 1000)
                 unit = 'kg'
             else:
@@ -746,7 +746,7 @@ def create_professional_batches(conn):
                 unit = 'units'
             
             # Determine status
-            statuses = ['completed', 'in_production', 'pending']
+            statuses = ['completed', 'in_production', 'quarantined']
             weights = [0.6, 0.3, 0.1]  # More completed batches
             status = random.choices(statuses, weights=weights)[0]
             
@@ -796,12 +796,22 @@ def create_professional_haccp_data(conn):
     if verification_user_id is None:
         print("  ⚠️  Verification responsible user not assigned; verification records will be created without ownership.")
     
+    # Resolve product IDs dynamically so FK inserts work even when product IDs aren't 1..N.
+    fresh_milk_pid = get_product_id(conn, "DAI-001")  # Fresh Whole Milk
+    greek_yogurt_pid = get_product_id(conn, "DAI-002")  # Greek Yogurt
+    cheddar_pid = get_product_id(conn, "DAI-003")  # Cheddar Cheese
+    ground_beef_pid = get_product_id(conn, "MEA-001")  # Ground Beef 80/20
+
+    if not all([fresh_milk_pid, greek_yogurt_pid, cheddar_pid, ground_beef_pid]):
+        print("  ⚠️  Could not resolve required product IDs for HACCP seed; skipping HACCP data.")
+        return
+
     # Create HACCP Plans
     haccp_plans = [
-        ('Fresh Milk HACCP Plan', 'HACCP plan for fresh milk production', 1, 1),  # Fresh Whole Milk
-        ('Greek Yogurt HACCP Plan', 'HACCP plan for Greek yogurt production', 2, 1),  # Greek Yogurt
-        ('Cheddar Cheese HACCP Plan', 'HACCP plan for cheddar cheese production', 3, 1),  # Cheddar Cheese
-        ('Ground Beef HACCP Plan', 'HACCP plan for ground beef processing', 5, 1),  # Ground Beef
+        ('Fresh Milk HACCP Plan', 'HACCP plan for fresh milk production', fresh_milk_pid, 1),  # Fresh Whole Milk
+        ('Greek Yogurt HACCP Plan', 'HACCP plan for Greek yogurt production', greek_yogurt_pid, 1),  # Greek Yogurt
+        ('Cheddar Cheese HACCP Plan', 'HACCP plan for cheddar cheese production', cheddar_pid, 1),  # Cheddar Cheese
+        ('Ground Beef HACCP Plan', 'HACCP plan for ground beef processing', ground_beef_pid, 1),  # Ground Beef
     ]
     
     for title, description, product_id, created_by in haccp_plans:
@@ -820,15 +830,15 @@ def create_professional_haccp_data(conn):
     
     print("  ✓ Created HACCP plans")
     
-    # Create Process Flows for Fresh Milk (Product ID 1)
+    # Create Process Flows for Fresh Milk
     process_flows_milk = [
-        (1, 1, 'Raw Milk Reception', 'Receipt and inspection of raw milk from suppliers', 'Receiving tank', '4', '', '', '', 1),
-        (1, 2, 'Filtration', 'Remove physical contaminants from raw milk', 'Inline filter', '', '', '', '', 1),
-        (1, 3, 'Standardization', 'Adjust milk fat content to 3.25%', 'Separator', '4', '', '', '', 1),
-        (1, 4, 'Pasteurization', 'Heat treatment to destroy pathogens', 'HTST Pasteurizer', '72', '15', '6.6-6.8', '', 1),
-        (1, 5, 'Cooling', 'Rapid cooling to refrigeration temperature', 'Plate cooler', '4', '', '', '', 1),
-        (1, 6, 'Packaging', 'Aseptic filling into clean containers', 'Filling machine', '4', '', '', '', 1),
-        (1, 7, 'Cold Storage', 'Store finished product at refrigeration temperature', 'Cold room', '2-4', '', '', '', 1),
+        (fresh_milk_pid, 1, 'Raw Milk Reception', 'Receipt and inspection of raw milk from suppliers', 'Receiving tank', 4.0, None, None, None, 1),
+        (fresh_milk_pid, 2, 'Filtration', 'Remove physical contaminants from raw milk', 'Inline filter', None, None, None, None, 1),
+        (fresh_milk_pid, 3, 'Standardization', 'Adjust milk fat content to 3.25%', 'Separator', 4.0, None, None, None, 1),
+        (fresh_milk_pid, 4, 'Pasteurization', 'Heat treatment to destroy pathogens', 'HTST Pasteurizer', 72.0, 15.0, 6.7, None, 1),
+        (fresh_milk_pid, 5, 'Cooling', 'Rapid cooling to refrigeration temperature', 'Plate cooler', 4.0, None, None, None, 1),
+        (fresh_milk_pid, 6, 'Packaging', 'Aseptic filling into clean containers', 'Filling machine', 4.0, None, None, None, 1),
+        (fresh_milk_pid, 7, 'Cold Storage', 'Store finished product at refrigeration temperature', 'Cold room', 3.0, None, None, None, 1),
     ]
     
     for product_id, step_number, step_name, description, equipment, temp, time_min, ph, aw, created_by in process_flows_milk:
@@ -860,7 +870,7 @@ def create_professional_haccp_data(conn):
     
     hazards_data = [
         # Fresh Milk - Raw Milk Reception (Step 1)
-        (1, 1, 'biological', 'Pathogenic bacteria in raw milk',
+        (fresh_milk_pid, 1, 'biological', 'Pathogenic bacteria in raw milk',
          'Presence of Listeria, Salmonella, E.coli O157:H7 in raw milk',
          'Consumer illness, foodborne disease outbreak, product recall',
          4, 5, 20, 'critical',
@@ -870,7 +880,7 @@ def create_professional_haccp_data(conn):
          'Pasteurization',
          1),
         
-        (1, 1, 'chemical', 'Antibiotic residues',
+        (fresh_milk_pid, 1, 'chemical', 'Antibiotic residues',
          'Antibiotic residues in raw milk from treated cows',
          'Allergic reactions, antimicrobial resistance, regulatory violation',
          2, 4, 8, 'medium',
@@ -881,7 +891,7 @@ def create_professional_haccp_data(conn):
          1),
         
         # Fresh Milk - Pasteurization (Step 4) - THIS IS A CCP
-        (1, 4, 'biological', 'Survival of pathogenic bacteria',
+        (fresh_milk_pid, 4, 'biological', 'Survival of pathogenic bacteria',
          'Inadequate pasteurization allowing pathogen survival',
          'Consumer illness, severe foodborne disease outbreak, fatalities, massive product recall',
          3, 5, 15, 'high',
@@ -892,7 +902,7 @@ def create_professional_haccp_data(conn):
          1),
         
         # Fresh Milk - Packaging (Step 6) - THIS IS AN OPRP
-        (1, 6, 'biological', 'Post-pasteurization contamination',
+        (fresh_milk_pid, 6, 'biological', 'Post-pasteurization contamination',
          'Recontamination during packaging from equipment or environment',
          'Consumer illness, product spoilage, limited outbreak',
          3, 4, 12, 'high',
@@ -902,7 +912,7 @@ def create_professional_haccp_data(conn):
          '',
          1),
         
-        (1, 6, 'physical', 'Foreign material in package',
+        (fresh_milk_pid, 6, 'physical', 'Foreign material in package',
          'Metal, glass, or plastic fragments in finished product',
          'Consumer injury (choking, cuts), product recall, liability',
          2, 3, 6, 'medium',
@@ -912,7 +922,7 @@ def create_professional_haccp_data(conn):
          '',
          1),
         
-        (1, 6, 'allergen', 'Allergen cross-contact',
+        (fresh_milk_pid, 6, 'allergen', 'Allergen cross-contact',
          'Cross-contact with milk allergens on shared equipment',
          'Allergic reactions in sensitive consumers, product recall',
          2, 4, 8, 'medium',
@@ -923,7 +933,7 @@ def create_professional_haccp_data(conn):
          1),
         
         # Ground Beef Hazards (Product 5)
-        (5, 1, 'biological', 'E.coli O157:H7 contamination',
+        (ground_beef_pid, 1, 'biological', 'E.coli O157:H7 contamination',
          'E.coli O157:H7 present in raw beef trim',
          'Severe consumer illness (HUS), fatalities, major product recall, regulatory action',
          4, 5, 20, 'critical',
@@ -933,7 +943,7 @@ def create_professional_haccp_data(conn):
          'Consumer cooking',
          1),
         
-        (5, 2, 'biological', 'Temperature abuse during processing',
+        (ground_beef_pid, 2, 'biological', 'Temperature abuse during processing',
          'Bacterial growth due to temperature rise during grinding',
          'Increased pathogen levels, reduced shelf life, potential illness',
          3, 4, 12, 'high',
@@ -973,12 +983,12 @@ def create_professional_haccp_data(conn):
             'risk_score': risk_score,
             'risk_level': risk_level,
             'control_measures': control_measures,
-            'is_controlled': 1,
+            'is_controlled': True,
             'control_effectiveness': 90 if risk_strategy == 'ccp' else 80,
             'risk_strategy': risk_strategy,
             'risk_strategy_justification': risk_strategy_justification,
             'subsequent_step': subsequent_step,
-            'is_ccp': 1 if risk_strategy == 'ccp' else 0,
+            'is_ccp': True if risk_strategy == 'ccp' else False,
             'created_at': datetime.now().isoformat(),
             'created_by': created_by,
             'reference_documents': '[]',

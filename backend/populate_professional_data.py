@@ -316,9 +316,9 @@ def create_professional_documents(conn):
         ('FRM-004', 'Supplier Evaluation Form', 'Supplier performance evaluation form', 'form', 'records', 'APPROVED', '1.2', 'Quality Assurance', 'Suppliers', '[]', 'Supplier, Evaluation, Performance', 1),
         
         # Training Materials
-        ('TRN-001', 'Food Safety Awareness Training', 'Basic food safety awareness training material', 'training_material', 'training', 'APPROVED', '1.1', 'Human Resources', 'All Employees', '[]', 'Training, Food Safety, Awareness', 1),
-        ('TRN-002', 'HACCP Team Training', 'HACCP team member training material', 'training_material', 'training', 'APPROVED', '1.0', 'Quality Assurance', 'HACCP Team', '[]', 'Training, HACCP, Team', 1),
-        ('TRN-003', 'Allergen Management Training', 'Allergen control and management training', 'training_material', 'training', 'APPROVED', '1.1', 'Quality Assurance', 'Production Staff', '[]', 'Training, Allergens, Management', 1),
+        ('TRN-001', 'Food Safety Awareness Training', 'Basic food safety awareness training material', 'manual', 'training', 'APPROVED', '1.1', 'Human Resources', 'All Employees', '[]', 'Training, Food Safety, Awareness', 1),
+        ('TRN-002', 'HACCP Team Training', 'HACCP team member training material', 'manual', 'training', 'APPROVED', '1.0', 'Quality Assurance', 'HACCP Team', '[]', 'Training, HACCP, Team', 1),
+        ('TRN-003', 'Allergen Management Training', 'Allergen control and management training', 'manual', 'training', 'APPROVED', '1.1', 'Quality Assurance', 'Production Staff', '[]', 'Training, Allergens, Management', 1),
         
         # Policies
         ('POL-001', 'Food Safety Policy', 'Company food safety policy statement', 'policy', 'management', 'APPROVED', '1.0', 'Management', 'All Operations', '[]', 'Policy, Food Safety, Management', 1),
@@ -388,7 +388,7 @@ def create_professional_batches(conn):
                 quantity = random.uniform(500, 2000)
                 unit = 'L'
             elif 'beef' in product_name.lower() or 'chicken' in product_name.lower():
-                batch_type = 'raw_material'
+                batch_type = 'raw_milk'
                 quantity = random.uniform(200, 1000)
                 unit = 'kg'
             else:
@@ -397,7 +397,7 @@ def create_professional_batches(conn):
                 unit = 'units'
             
             # Determine status
-            statuses = ['completed', 'in_production', 'pending']
+            statuses = ['completed', 'in_production', 'quarantined']
             weights = [0.6, 0.3, 0.1]  # More completed batches
             status = random.choices(statuses, weights=weights)[0]
             
