@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch, Badge, Radio, RadioGroup } from '@mui/material';
+import { Box, Grid, Typography, Chip, Tabs, Tab, Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, FormControl, InputLabel, Select, MenuItem, Tooltip, FormControlLabel, Switch, Badge, Radio, RadioGroup, Alert, CircularProgress } from '@mui/material';
 import { Add, Edit, Visibility, Delete, Security, Save } from '@mui/icons-material';
 import { Autocomplete } from '@mui/material';
 import { traceabilityAPI, usersAPI, haccpAPI } from '../services/api';
@@ -11,7 +11,7 @@ import HazardDialog from '../components/HACCP/HazardDialog';
 import HazardViewDialog from '../components/HACCP/HazardViewDialog';
 import { AppDispatch, RootState } from '../store';
 import { hasPermission, isSystemAdministrator } from '../store/slices/authSlice';
-import { fetchProduct, setSelectedProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, createOPRP, updateOPRP, updateProduct } from '../store/slices/haccpSlice';
+import { fetchProduct, createProcessFlow, updateProcessFlow, deleteProcessFlow, createHazard, updateHazard, deleteHazard, createCCP, updateCCP, createOPRP, updateOPRP, updateProduct } from '../store/slices/haccpSlice';
 
 function TabPanel({ children, value, index }: { children?: React.ReactNode; value: number; index: number }) {
   return (
@@ -39,7 +39,8 @@ const HACCPProductDetail: React.FC = () => {
   const { id } = useParams();
   const productId = Number(id);
   const dispatch = useDispatch<AppDispatch>();
-  const { selectedProduct, processFlows, hazards, ccps, oprps } = useSelector((s: RootState) => s.haccp);
+  const { selectedProduct, processFlows, hazards, ccps, oprps, loading, error } = useSelector((s: RootState) => s.haccp);
+  const productIdValid = Number.isFinite(productId) && productId >= 1;
   const currentUser = useSelector((s: RootState) => s.auth.user);
   const canManageProgram = !!currentUser && (hasPermission(currentUser, 'haccp', 'manage_program') || isSystemAdministrator(currentUser));
   const canCreateLogs = !!currentUser && hasPermission(currentUser, 'haccp', 'create');
@@ -114,12 +115,9 @@ const HACCPProductDetail: React.FC = () => {
   const [oprpVerificationConductedAsExpected, setOprpVerificationConductedAsExpected] = useState<boolean>(true);
   
   useEffect(() => {
+    if (!productIdValid) return;
     dispatch(fetchProduct(productId));
-  }, [dispatch, productId]);
-
-  useEffect(() => {
-    dispatch(setSelectedProduct({ id: productId } as any));
-  }, [dispatch, productId]);
+  }, [dispatch, productId, productIdValid]);
 
   // Clamp selectedTab when visible tabs shrink (e.g. user no longer has Monitoring/Verification access)
   useEffect(() => {
@@ -657,6 +655,18 @@ const HACCPProductDetail: React.FC = () => {
             <Chip label={`${oprps.length} OPRPs`} color="warning" />
           </Stack>
         </Box>
+      )}
+
+      {!productIdValid && (
+        <Alert severity="error" sx={{ mb: 2 }}>Invalid product link.</Alert>
+      )}
+      {productIdValid && !selectedProduct && (loading || !error) && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      )}
+      {productIdValid && !selectedProduct && !loading && error && (
+        <Alert severity="error" sx={{ mb: 2 }}>{typeof error === 'string' ? error : 'Failed to load product.'}</Alert>
       )}
 
       {selectedProduct ? (
@@ -1227,12 +1237,7 @@ const HACCPProductDetail: React.FC = () => {
         )}
       </TabPanel>
         </>
-      ) : (
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="h6" gutterBottom>Monitoring & Verification</Typography>
-          <Typography color="textSecondary">Select a product to view monitoring and verification.</Typography>
-        </Box>
-      )}
+      ) : null}
 
       {/* Verification Dialog: verify or reject only (no form to fill) */}
       <Dialog open={verificationDialogOpen} onClose={handleCloseVerificationDialog} maxWidth="sm" fullWidth>

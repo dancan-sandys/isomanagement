@@ -76,6 +76,7 @@ from app.models.complaint import Complaint, ComplaintCommunication, ComplaintInv
 from app.models.allergen_label import ProductAllergenAssessment, LabelTemplate, LabelTemplateVersion, LabelTemplateApproval
 from app.models.nonconformance import NonConformance, RootCauseAnalysis, CAPAAction, CAPAVerification, NonConformanceAttachment
 
+
 def handle_existing_tables():
     """Handle cases where tables already exist by checking and reporting status"""
     print("🔍 Checking existing database state...")
@@ -208,13 +209,16 @@ def create_permissions():
             
             # Create permissions for all combinations
             permission_counter = 1
+            # ON CONFLICT works on PostgreSQL and SQLite 3.24+ (replaces SQLite-only INSERT OR IGNORE)
+            perm_sql = """
+                        INSERT INTO permissions (id, module, action, description, created_at)
+                        VALUES (:permission_id, :module, :action, :description, :created_at)
+                        ON CONFLICT (id) DO NOTHING
+            """
             for module in modules:
                 for action in permission_types:
                     description = f"{action.title()} permission for {module}"
-                    conn.execute(text("""
-                        INSERT OR IGNORE INTO permissions (id, module, action, description, created_at)
-                        VALUES (:permission_id, :module, :action, :description, :created_at)
-                    """), {
+                    conn.execute(text(perm_sql), {
                         'permission_id': permission_counter,
                         'module': module,
                         'action': action,
@@ -263,11 +267,20 @@ def create_default_roles():
                 (10, 'Auditor', 'Auditor', 'Audit operations', True, True, True)
             ]
             
-            for role_id, role_name, display_name, description, is_default, is_editable, is_active in roles_data:
-                conn.execute(text("""
-                    INSERT OR REPLACE INTO roles (id, name, display_name, description, is_default, is_editable, is_active, created_at)
+            role_sql = """
+                    INSERT INTO roles (id, name, display_name, description, is_default, is_editable, is_active, created_at)
                     VALUES (:role_id, :role_name, :display_name, :description, :is_default, :is_editable, :is_active, :created_at)
-                """), {
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        display_name = EXCLUDED.display_name,
+                        description = EXCLUDED.description,
+                        is_default = EXCLUDED.is_default,
+                        is_editable = EXCLUDED.is_editable,
+                        is_active = EXCLUDED.is_active,
+                        created_at = EXCLUDED.created_at
+            """
+            for role_id, role_name, display_name, description, is_default, is_editable, is_active in roles_data:
+                conn.execute(text(role_sql), {
                     'role_id': role_id,
                     'role_name': role_name,
                     'display_name': display_name,
@@ -305,13 +318,15 @@ def assign_role_permissions(conn):
         
         print(f"    📊 Found {len(all_permission_ids)} permissions to assign")
         
+        rp_sql = """
+                INSERT INTO role_permissions (role_id, permission_id)
+                VALUES (:role_id, :permission_id)
+                ON CONFLICT (role_id, permission_id) DO NOTHING
+        """
         # System Administrator gets all permissions
         admin_role_id = 1
         for perm_id in all_permission_ids:
-            conn.execute(text("""
-                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
-                VALUES (:role_id, :permission_id)
-            """), {
+            conn.execute(text(rp_sql), {
                 'role_id': admin_role_id,
                 'permission_id': perm_id
             })
@@ -324,10 +339,7 @@ def assign_role_permissions(conn):
         # QA Manager gets most permissions except user management
         qa_manager_permissions = [p for p in all_permission_ids if not (55 <= p <= 72)]  # Exclude users/roles modules
         for perm_id in qa_manager_permissions:
-            conn.execute(text("""
-                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
-                VALUES (:role_id, :permission_id)
-            """), {
+            conn.execute(text(rp_sql), {
                 'role_id': 2,  # QA Manager
                 'permission_id': perm_id
             })
@@ -338,10 +350,7 @@ def assign_role_permissions(conn):
             # Get view permissions for each module (every 9th permission starting from 1)
             view_permissions = [i for i in all_permission_ids if (i - 1) % 9 == 0]  # view permissions
             for perm_id in view_permissions:
-                conn.execute(text("""
-                    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
-                    VALUES (:role_id, :permission_id)
-                """), {
+                conn.execute(text(rp_sql), {
                     'role_id': role_id,
                     'permission_id': perm_id
                 })
@@ -410,6 +419,23 @@ def get_user_id(conn, username: str) -> Optional[int]:
     return None
 
 
+def get_seed_actor_id(conn) -> int:
+    """
+    FK columns like suppliers.created_by must reference a real users.id.
+    Demo scripts must not assume user id == 1 (Postgres SERIAL order / upserts).
+    """
+    uid = get_user_id(conn, "admin")
+    if uid is not None:
+        return uid
+    row = conn.execute(text("SELECT MIN(id) FROM users")).fetchone()
+    if row and row[0] is not None:
+        return int(row[0])
+    raise RuntimeError(
+        "No users in database; cannot satisfy created_by foreign keys. "
+        "Run create_professional_users before other seed steps."
+    )
+
+
 def get_product_id(conn, product_code: str) -> Optional[int]:
     """Helper to fetch a product ID by product code."""
     try:
@@ -436,17 +462,27 @@ def get_contact_surface_id(conn, name: str) -> Optional[int]:
     return None
 
 
+def get_process_flow_id(conn, product_id: int, step_number: int) -> Optional[int]:
+    """Resolve process_flows.id for a product step (hazards.process_step_id FK — not step_number)."""
+    try:
+        result = conn.execute(
+            text(
+                "SELECT id FROM process_flows WHERE product_id = :pid AND step_number = :sn"
+            ),
+            {"pid": product_id, "sn": step_number},
+        )
+        row = result.fetchone()
+        if row:
+            return row[0]
+        print(f"  ⚠️  No process_flow for product_id={product_id} step_number={step_number}.")
+    except Exception as exc:
+        print(f"  ⚠️  Could not fetch process flow: {exc}")
+    return None
+
+
 def create_professional_users(conn):
-    """Create professional food safety users with correct role assignments"""
+    """Create or update demo users by username (PostgreSQL + SQLite); does not remove other accounts."""
     print("\n👥 Creating professional users with role assignments...")
-    
-    # Check if users already exist (skip if they do)
-    result = conn.execute(text("SELECT COUNT(*) FROM users"))
-    existing_count = result.scalar()
-    
-    if existing_count > 0:
-        print(f"  ⏭️  Found {existing_count} existing users. Skipping user creation.")
-        return
     
     # Define user data with role mappings (updated to match frontend role names)
     users_data = [
@@ -492,8 +528,23 @@ def create_professional_users(conn):
                              department_name, position, phone, employee_id, is_active, is_verified, 
                              failed_login_attempts, locked_until, created_at, created_by)
             VALUES (:username, :email, :full_name, :hashed_password, :role_id, 'ACTIVE', 
-                   :department, :position, :phone, :employee_id, 1, 1, 
-                   0, NULL, :created_at, 1)
+                   :department, :position, :phone, :employee_id, :is_active, :is_verified, 
+                   0, NULL, :created_at, :created_by)
+            ON CONFLICT (username) DO UPDATE SET
+                email = EXCLUDED.email,
+                full_name = EXCLUDED.full_name,
+                hashed_password = EXCLUDED.hashed_password,
+                role_id = EXCLUDED.role_id,
+                status = EXCLUDED.status,
+                department_name = EXCLUDED.department_name,
+                position = EXCLUDED.position,
+                phone = EXCLUDED.phone,
+                employee_id = EXCLUDED.employee_id,
+                is_active = EXCLUDED.is_active,
+                is_verified = EXCLUDED.is_verified,
+                failed_login_attempts = EXCLUDED.failed_login_attempts,
+                locked_until = EXCLUDED.locked_until,
+                created_by = EXCLUDED.created_by
         """), {
             'username': username,
             'email': email,
@@ -504,10 +555,13 @@ def create_professional_users(conn):
             'position': position,
             'phone': phone,
             'employee_id': employee_id,
-            'created_at': datetime.now().isoformat()
+            'is_active': True,
+            'is_verified': True,
+            'created_at': datetime.now().isoformat(),
+            'created_by': None,
         })
     
-    print(f"  ✓ Created {len(users_data)} professional users with proper role assignments")
+    print(f"  ✓ Created or updated {len(users_data)} professional users with proper role assignments")
 
 def create_user_permissions(conn):
     """Create individual user permissions for advanced scenarios"""
@@ -536,10 +590,14 @@ def create_user_permissions(conn):
             if perm_row:
                 permission_id = perm_row[0]
                 
-                # Insert user permission
+                # Portable upsert: SQLite + PostgreSQL (no INSERT OR IGNORE)
                 conn.execute(text("""
-                    INSERT OR IGNORE INTO user_permissions (user_id, permission_id, granted, granted_by, granted_at)
-                    VALUES (:user_id, :permission_id, :granted, :granted_by, :granted_at)
+                    INSERT INTO user_permissions (user_id, permission_id, granted, granted_by, granted_at)
+                    SELECT :user_id, :permission_id, :granted, :granted_by, :granted_at
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM user_permissions up
+                        WHERE up.user_id = :user_id AND up.permission_id = :permission_id
+                    )
                 """), {
                     'user_id': admin_user_id,
                     'permission_id': permission_id,
@@ -556,6 +614,7 @@ def create_user_permissions(conn):
 def create_professional_suppliers(conn):
     """Create professional food industry suppliers"""
     print("\n🚚 Creating professional food suppliers...")
+    seed_uid = get_seed_actor_id(conn)
     
     suppliers_data = [
         # Raw Materials
@@ -592,7 +651,7 @@ def create_professional_suppliers(conn):
     for (supplier_code, name, status, category, contact_person, email, phone, website, 
          address1, city, state, postal, country, business_reg, tax_id, company_type, 
          year_established, certifications, cert_expiry, overall_score, last_eval, 
-         next_eval, risk_level, risk_factors, notes, created_by) in suppliers_data:
+         next_eval, risk_level, risk_factors, notes, _ignored_created_by) in suppliers_data:
         
         conn.execute(text("""
             INSERT INTO suppliers (supplier_code, name, status, category, contact_person, email, phone, website,
@@ -631,7 +690,7 @@ def create_professional_suppliers(conn):
             'risk_factors': risk_factors,
             'notes': notes,
             'created_at': datetime.now().isoformat(),
-            'created_by': created_by
+            'created_by': seed_uid
         })
     
     print(f"  ✓ Created {len(suppliers_data)} professional food industry suppliers")
@@ -639,6 +698,7 @@ def create_professional_suppliers(conn):
 def create_professional_documents(conn):
     """Create professional food safety documents"""
     print("\n📋 Creating professional documents...")
+    seed_uid = get_seed_actor_id(conn)
     
     documents_data = [
         # Food Safety Manuals
@@ -681,7 +741,7 @@ def create_professional_documents(conn):
     ]
     
     for (doc_number, title, description, doc_type, category, status, version, 
-         department, product_line, applicable_products, keywords, created_by) in documents_data:
+         department, product_line, applicable_products, keywords, _ignored_cb) in documents_data:
         
         conn.execute(text("""
             INSERT INTO documents (document_number, title, description, document_type, category, status, version,
@@ -701,7 +761,7 @@ def create_professional_documents(conn):
             'applicable_products': applicable_products,
             'keywords': keywords,
             'created_at': datetime.now().isoformat(),
-            'created_by': created_by
+            'created_by': seed_uid
         })
     
     print(f"  ✓ Created {len(documents_data)} professional documents")
@@ -709,6 +769,7 @@ def create_professional_documents(conn):
 def create_professional_batches(conn):
     """Create professional production batches"""
     print("\n📦 Creating professional production batches...")
+    seed_uid = get_seed_actor_id(conn)
     
     # Get product IDs
     result = conn.execute(text("SELECT id, product_code, name FROM products"))
@@ -752,7 +813,7 @@ def create_professional_batches(conn):
             
             batch_data.append((
                 batch_number, batch_type, status, product_id, product_name,
-                quantity, unit, production_date, 1
+                quantity, unit, production_date, seed_uid
             ))
             batch_counter += 1
     
@@ -796,6 +857,16 @@ def create_professional_haccp_data(conn):
     if verification_user_id is None:
         print("  ⚠️  Verification responsible user not assigned; verification records will be created without ownership.")
     
+    seed_uid = get_seed_actor_id(conn)
+    
+    # OPRP/CCP columns monitoring_responsible / verification_responsible are user IDs (FK), not role titles.
+    qa_supervisor_uid = get_user_id(conn, "qa_supervisor")
+    qa_director_uid = get_user_id(conn, "qa_director")
+    fs_manager_uid = get_user_id(conn, "fs_manager")
+    admin_uid = get_user_id(conn, "admin")
+    oprp_monitoring_uid = qa_supervisor_uid or haccp_coordinator_id or admin_uid or seed_uid
+    oprp_verification_uid = qa_director_uid or fs_manager_uid or verification_user_id or admin_uid or seed_uid
+    
     # Resolve product IDs dynamically so FK inserts work even when product IDs aren't 1..N.
     fresh_milk_pid = get_product_id(conn, "DAI-001")  # Fresh Whole Milk
     greek_yogurt_pid = get_product_id(conn, "DAI-002")  # Greek Yogurt
@@ -808,10 +879,10 @@ def create_professional_haccp_data(conn):
 
     # Create HACCP Plans
     haccp_plans = [
-        ('Fresh Milk HACCP Plan', 'HACCP plan for fresh milk production', fresh_milk_pid, 1),  # Fresh Whole Milk
-        ('Greek Yogurt HACCP Plan', 'HACCP plan for Greek yogurt production', greek_yogurt_pid, 1),  # Greek Yogurt
-        ('Cheddar Cheese HACCP Plan', 'HACCP plan for cheddar cheese production', cheddar_pid, 1),  # Cheddar Cheese
-        ('Ground Beef HACCP Plan', 'HACCP plan for ground beef processing', ground_beef_pid, 1),  # Ground Beef
+        ('Fresh Milk HACCP Plan', 'HACCP plan for fresh milk production', fresh_milk_pid, seed_uid),  # Fresh Whole Milk
+        ('Greek Yogurt HACCP Plan', 'HACCP plan for Greek yogurt production', greek_yogurt_pid, seed_uid),  # Greek Yogurt
+        ('Cheddar Cheese HACCP Plan', 'HACCP plan for cheddar cheese production', cheddar_pid, seed_uid),  # Cheddar Cheese
+        ('Ground Beef HACCP Plan', 'HACCP plan for ground beef processing', ground_beef_pid, seed_uid),  # Ground Beef
     ]
     
     for title, description, product_id, created_by in haccp_plans:
@@ -832,13 +903,13 @@ def create_professional_haccp_data(conn):
     
     # Create Process Flows for Fresh Milk
     process_flows_milk = [
-        (fresh_milk_pid, 1, 'Raw Milk Reception', 'Receipt and inspection of raw milk from suppliers', 'Receiving tank', 4.0, None, None, None, 1),
-        (fresh_milk_pid, 2, 'Filtration', 'Remove physical contaminants from raw milk', 'Inline filter', None, None, None, None, 1),
-        (fresh_milk_pid, 3, 'Standardization', 'Adjust milk fat content to 3.25%', 'Separator', 4.0, None, None, None, 1),
-        (fresh_milk_pid, 4, 'Pasteurization', 'Heat treatment to destroy pathogens', 'HTST Pasteurizer', 72.0, 15.0, 6.7, None, 1),
-        (fresh_milk_pid, 5, 'Cooling', 'Rapid cooling to refrigeration temperature', 'Plate cooler', 4.0, None, None, None, 1),
-        (fresh_milk_pid, 6, 'Packaging', 'Aseptic filling into clean containers', 'Filling machine', 4.0, None, None, None, 1),
-        (fresh_milk_pid, 7, 'Cold Storage', 'Store finished product at refrigeration temperature', 'Cold room', 3.0, None, None, None, 1),
+        (fresh_milk_pid, 1, 'Raw Milk Reception', 'Receipt and inspection of raw milk from suppliers', 'Receiving tank', 4.0, None, None, None, seed_uid),
+        (fresh_milk_pid, 2, 'Filtration', 'Remove physical contaminants from raw milk', 'Inline filter', None, None, None, None, seed_uid),
+        (fresh_milk_pid, 3, 'Standardization', 'Adjust milk fat content to 3.25%', 'Separator', 4.0, None, None, None, seed_uid),
+        (fresh_milk_pid, 4, 'Pasteurization', 'Heat treatment to destroy pathogens', 'HTST Pasteurizer', 72.0, 15.0, 6.7, None, seed_uid),
+        (fresh_milk_pid, 5, 'Cooling', 'Rapid cooling to refrigeration temperature', 'Plate cooler', 4.0, None, None, None, seed_uid),
+        (fresh_milk_pid, 6, 'Packaging', 'Aseptic filling into clean containers', 'Filling machine', 4.0, None, None, None, seed_uid),
+        (fresh_milk_pid, 7, 'Cold Storage', 'Store finished product at refrigeration temperature', 'Cold room', 3.0, None, None, None, seed_uid),
     ]
     
     for product_id, step_number, step_name, description, equipment, temp, time_min, ph, aw, created_by in process_flows_milk:
@@ -863,14 +934,50 @@ def create_professional_haccp_data(conn):
     
     print("  ✓ Created process flows for Fresh Milk")
     
+    # Minimal process flow for ground beef (hazards reference steps 1–2)
+    process_flows_beef = [
+        (ground_beef_pid, 1, 'Trim Receiving', 'Receipt and inspection of chilled beef trim', 'Receiving dock', 2.0, None, None, None, seed_uid),
+        (ground_beef_pid, 2, 'Grinding', 'Grinding and blending to 80/20', 'Grinder line', 2.0, None, None, None, seed_uid),
+    ]
+    for product_id, step_number, step_name, description, equipment, temp, time_min, ph, aw, created_by in process_flows_beef:
+        conn.execute(text("""
+            INSERT INTO process_flows (product_id, step_number, step_name, description, equipment,
+                                     temperature, time_minutes, ph, aw, created_at, created_by)
+            VALUES (:product_id, :step_number, :step_name, :description, :equipment,
+                   :temperature, :time_minutes, :ph, :aw, :created_at, :created_by)
+        """), {
+            'product_id': product_id,
+            'step_number': step_number,
+            'step_name': step_name,
+            'description': description,
+            'equipment': equipment,
+            'temperature': temp,
+            'time_minutes': time_min,
+            'ph': ph,
+            'aw': aw,
+            'created_at': datetime.now().isoformat(),
+            'created_by': created_by
+        })
+    print("  ✓ Created process flows for Ground Beef")
+    
+    milk_pf_1 = get_process_flow_id(conn, fresh_milk_pid, 1)
+    milk_pf_4 = get_process_flow_id(conn, fresh_milk_pid, 4)
+    milk_pf_6 = get_process_flow_id(conn, fresh_milk_pid, 6)
+    beef_pf_1 = get_process_flow_id(conn, ground_beef_pid, 1)
+    beef_pf_2 = get_process_flow_id(conn, ground_beef_pid, 2)
+    if not all([milk_pf_1, milk_pf_4, milk_pf_6, beef_pf_1, beef_pf_2]):
+        print("  ⚠️  Could not resolve process_flow ids for hazards; skipping hazard/CCP/OPRP seed.")
+        return
+    
     # Create Hazards with ISO 22000 Risk Strategy Implementation
     # Format: (product_id, process_step_id, hazard_type, hazard_name, description, consequences,
     #          likelihood, severity, risk_score, risk_level, control_measures,
     #          risk_strategy, risk_strategy_justification, subsequent_step, created_by)
+    # process_step_id must be process_flows.id (lookup by product + step_number above).
     
     hazards_data = [
         # Fresh Milk - Raw Milk Reception (Step 1)
-        (fresh_milk_pid, 1, 'biological', 'Pathogenic bacteria in raw milk',
+        (fresh_milk_pid, milk_pf_1, 'biological', 'Pathogenic bacteria in raw milk',
          'Presence of Listeria, Salmonella, E.coli O157:H7 in raw milk',
          'Consumer illness, foodborne disease outbreak, product recall',
          4, 5, 20, 'critical',
@@ -878,9 +985,9 @@ def create_professional_haccp_data(conn):
          'use_existing_prps', 
          'Subsequent step (Pasteurization) will effectively control this hazard through validated thermal process',
          'Pasteurization',
-         1),
+         seed_uid),
         
-        (fresh_milk_pid, 1, 'chemical', 'Antibiotic residues',
+        (fresh_milk_pid, milk_pf_1, 'chemical', 'Antibiotic residues',
          'Antibiotic residues in raw milk from treated cows',
          'Allergic reactions, antimicrobial resistance, regulatory violation',
          2, 4, 8, 'medium',
@@ -888,10 +995,10 @@ def create_professional_haccp_data(conn):
          'use_existing_prps',
          'Supplier management program and testing protocols adequately control this hazard',
          '',
-         1),
+         seed_uid),
         
         # Fresh Milk - Pasteurization (Step 4) - THIS IS A CCP
-        (fresh_milk_pid, 4, 'biological', 'Survival of pathogenic bacteria',
+        (fresh_milk_pid, milk_pf_4, 'biological', 'Survival of pathogenic bacteria',
          'Inadequate pasteurization allowing pathogen survival',
          'Consumer illness, severe foodborne disease outbreak, fatalities, massive product recall',
          3, 5, 15, 'high',
@@ -899,10 +1006,10 @@ def create_professional_haccp_data(conn):
          'ccp',
          'No subsequent step will control this hazard. Critical limits (72°C for 15 seconds) must be met to ensure pathogen destruction. Monitoring and corrective actions are essential.',
          '',
-         1),
+         seed_uid),
         
         # Fresh Milk - Packaging (Step 6) - THIS IS AN OPRP
-        (fresh_milk_pid, 6, 'biological', 'Post-pasteurization contamination',
+        (fresh_milk_pid, milk_pf_6, 'biological', 'Post-pasteurization contamination',
          'Recontamination during packaging from equipment or environment',
          'Consumer illness, product spoilage, limited outbreak',
          3, 4, 12, 'high',
@@ -910,9 +1017,9 @@ def create_professional_haccp_data(conn):
          'opprp',
          'While subsequent storage will not eliminate contamination, operational limits on environmental monitoring and sanitation can control this hazard. Requires specific monitoring but less critical than pasteurization.',
          '',
-         1),
+         seed_uid),
         
-        (fresh_milk_pid, 6, 'physical', 'Foreign material in package',
+        (fresh_milk_pid, milk_pf_6, 'physical', 'Foreign material in package',
          'Metal, glass, or plastic fragments in finished product',
          'Consumer injury (choking, cuts), product recall, liability',
          2, 3, 6, 'medium',
@@ -920,9 +1027,9 @@ def create_professional_haccp_data(conn):
          'opprp',
          'Operational prerequisite with specific limits on metal detector sensitivity and visual inspection frequency can adequately control this physical hazard.',
          '',
-         1),
+         seed_uid),
         
-        (fresh_milk_pid, 6, 'allergen', 'Allergen cross-contact',
+        (fresh_milk_pid, milk_pf_6, 'allergen', 'Allergen cross-contact',
          'Cross-contact with milk allergens on shared equipment',
          'Allergic reactions in sensitive consumers, product recall',
          2, 4, 8, 'medium',
@@ -930,10 +1037,10 @@ def create_professional_haccp_data(conn):
          'use_existing_prps',
          'Existing allergen management program and cleaning procedures adequately control this hazard for milk products.',
          '',
-         1),
+         seed_uid),
         
         # Ground Beef Hazards (Product 5)
-        (ground_beef_pid, 1, 'biological', 'E.coli O157:H7 contamination',
+        (ground_beef_pid, beef_pf_1, 'biological', 'E.coli O157:H7 contamination',
          'E.coli O157:H7 present in raw beef trim',
          'Severe consumer illness (HUS), fatalities, major product recall, regulatory action',
          4, 5, 20, 'critical',
@@ -941,9 +1048,9 @@ def create_professional_haccp_data(conn):
          'use_existing_prps',
          'No subsequent step eliminates this hazard as product is sold raw. However, validated Supplier HACCP programs, testing, and proper cooking by consumer controls the risk.',
          'Consumer cooking',
-         1),
+         seed_uid),
         
-        (ground_beef_pid, 2, 'biological', 'Temperature abuse during processing',
+        (ground_beef_pid, beef_pf_2, 'biological', 'Temperature abuse during processing',
          'Bacterial growth due to temperature rise during grinding',
          'Increased pathogen levels, reduced shelf life, potential illness',
          3, 4, 12, 'high',
@@ -951,7 +1058,7 @@ def create_professional_haccp_data(conn):
          'opprp',
          'Operational limits on processing temperature (keep below 4°C) and processing time can control bacterial growth. Requires specific monitoring.',
          '',
-         1),
+         seed_uid),
     ]
     
     hazard_ids = []
@@ -1033,7 +1140,7 @@ def create_professional_haccp_data(conn):
                 'ver_method': 'Review temperature charts, verify critical limits met, check calibration',
                 'ver_resp': verification_user_id,
                 'created_at': datetime.now().isoformat(),
-                'created_by': 1
+                'created_by': seed_uid
             })
             ccp_counter += 1
     
@@ -1070,17 +1177,17 @@ def create_professional_haccp_data(conn):
                 'op_desc': 'Maximum acceptable level for environmental monitoring' if 'contamination' in hazard_name.lower() else 'Maximum processing temperature to control bacterial growth',
                 'mon_freq': 'Daily' if 'contamination' in hazard_name.lower() else 'Every batch',
                 'mon_method': 'ATP swab testing and environmental sampling' if 'contamination' in hazard_name.lower() else 'Continuous temperature monitoring with data logging',
-                'mon_resp': 'QA Specialist',
+                'mon_resp': oprp_monitoring_uid,
                 'mon_equip': 'ATP meter and environmental swabs' if 'contamination' in hazard_name.lower() else 'Calibrated temperature sensors',
                 'corr_actions': 'Re-clean and sanitize area, investigate source, hold product pending retest' if 'contamination' in hazard_name.lower() else 'Stop processing, cool product, investigate cause, adjust equipment',
                 'ver_freq': 'Weekly',
                 'ver_method': 'Review monitoring records, trend analysis, periodic microbiological testing',
-                'ver_resp': 'QA Manager',
+                'ver_resp': oprp_verification_uid,
                 'justification': f'OPRP required to control {hazard_name} through operational limits',
                 'objective': 'Maintain hygienic processing environment' if 'contamination' in hazard_name.lower() else 'Control bacterial growth during processing',
                 'sop_reference': 'SOP-003 Cleaning and Sanitization Procedure' if 'contamination' in hazard_name.lower() else 'SOP-002 Temperature Control Procedure',
                 'created_at': datetime.now().isoformat(),
-                'created_by': 1
+                'created_by': seed_uid
             })
             oprp_counter += 1
     
@@ -1111,6 +1218,7 @@ def create_monitoring_and_verification_logs(conn):
         print("  ⏭️  No CCPs found; skipping monitoring log creation.")
         return
     
+    seed_uid = get_seed_actor_id(conn)
     batch_rows = conn.execute(text("SELECT id, batch_number, product_id FROM batches")).fetchall()
     batches_by_product: Dict[int, List[Dict[str, Any]]] = {}
     for row in batch_rows:
@@ -1168,7 +1276,7 @@ def create_monitoring_and_verification_logs(conn):
                 if not is_within_limits:
                     unverified_count += 1
             
-            created_by = monitoring_id or verification_id or 1
+            created_by = monitoring_id or verification_id or seed_uid
             
             try:
                 conn.execute(text("""
@@ -1235,13 +1343,14 @@ def create_monitoring_and_verification_logs(conn):
 def create_professional_equipment_data(conn):
     """Create professional equipment data"""
     print("\n🔧 Creating professional equipment data...")
+    seed_uid = get_seed_actor_id(conn)
     
     equipment_data = [
-        ('Pasteurizer HTST-001', 'pasteurizer', 'HTST-001', 'Production Floor A', 'High Temperature Short Time pasteurizer for milk processing', 1),
-        ('Cheese Vat CV-001', 'processing_equipment', 'CV-001', 'Production Floor B', 'Stainless steel cheese making vat with temperature control', 1),
-        ('Refrigeration Unit RF-001', 'refrigeration', 'RF-001', 'Cold Storage Room', 'Walk-in refrigeration unit for product storage', 1),
-        ('Temperature Logger TL-001', 'monitoring_equipment', 'TL-001', 'Quality Lab', 'Digital temperature monitoring system with data logging', 1),
-        ('Cleaning System CS-001', 'cleaning_equipment', 'CS-001', 'Sanitation Area', 'Automated cleaning-in-place system for equipment sanitization', 1),
+        ('Pasteurizer HTST-001', 'pasteurizer', 'HTST-001', 'Production Floor A', 'High Temperature Short Time pasteurizer for milk processing', seed_uid),
+        ('Cheese Vat CV-001', 'processing_equipment', 'CV-001', 'Production Floor B', 'Stainless steel cheese making vat with temperature control', seed_uid),
+        ('Refrigeration Unit RF-001', 'refrigeration', 'RF-001', 'Cold Storage Room', 'Walk-in refrigeration unit for product storage', seed_uid),
+        ('Temperature Logger TL-001', 'monitoring_equipment', 'TL-001', 'Quality Lab', 'Digital temperature monitoring system with data logging', seed_uid),
+        ('Cleaning System CS-001', 'cleaning_equipment', 'CS-001', 'Sanitation Area', 'Automated cleaning-in-place system for equipment sanitization', seed_uid),
     ]
     
     for name, equipment_type, serial_number, location, notes, created_by in equipment_data:
@@ -1276,6 +1385,7 @@ def create_professional_materials(conn):
         row[1]: {"id": row[0], "name": row[2]}
         for row in supplier_rows
     }
+    seed_uid = get_seed_actor_id(conn)
 
     materials_data = [
         {
@@ -1519,7 +1629,7 @@ def create_professional_materials(conn):
             "is_active": True,
             "approval_status": "approved",
             "created_at": datetime.now().isoformat(),
-            "created_by": material.get("created_by", 1),
+            "created_by": material.get("created_by", seed_uid),
         }
 
         conn.execute(text("""
@@ -1653,11 +1763,12 @@ def create_professional_contact_surfaces(conn):
     ]
 
     created_count = 0
+    seed_uid = get_seed_actor_id(conn)
     for surface in surfaces_data:
         payload = {
             **surface,
             "created_at": datetime.now().isoformat(),
-            "created_by": 1,
+            "created_by": seed_uid,
         }
         conn.execute(text("""
             INSERT INTO contact_surfaces (
@@ -1781,6 +1892,7 @@ def create_professional_products(conn):
         },
     ]
 
+    seed_uid = get_seed_actor_id(conn)
     for product in products_data:
         payload = {
             "product_code": product["product_code"],
@@ -1795,7 +1907,7 @@ def create_professional_products(conn):
             "fs_acceptance_criteria": product["fs_acceptance_criteria"],
             "haccp_plan_approved": True,
             "created_at": datetime.now().isoformat(),
-            "created_by": 1,
+            "created_by": seed_uid,
             "risk_assessment_required": True,
         }
 

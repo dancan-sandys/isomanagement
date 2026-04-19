@@ -12,13 +12,33 @@ from app.models.haccp import Product, Hazard
 from app.models.prp import PRPProgram, PRPChecklist
 from app.models.supplier import Supplier, SupplierEvaluation, SupplierDocument, IncomingDelivery
 from app.models.training import TrainingAttendance, TrainingProgram, TrainingSession
-from app.models.nonconformance import NonConformance, CAPAAction
+from app.models.nonconformance import NonConformance, CAPAAction, CAPAStatus, NonConformanceStatus
 from app.models.audit_mgmt import Audit, AuditFinding
 from app.models.equipment import MaintenancePlan, CalibrationPlan
 from app.schemas.common import ResponseModel
 from app.models.food_safety_objectives import ObjectiveProgress, ObjectiveTarget, FoodSafetyObjective
 
 router = APIRouter()
+
+# CAPA rows that count as "open" for KPIs (PostgreSQL native enum must match model values)
+_OPEN_CAPA_STATUSES = (
+    CAPAStatus.PENDING,
+    CAPAStatus.ASSIGNED,
+    CAPAStatus.IN_PROGRESS,
+    CAPAStatus.OVERDUE,
+)
+
+
+def _period_bucket(db: Session, column, strftime_fmt: str):
+    """Group-by month/day: SQLite uses strftime(); PostgreSQL uses to_char()."""
+    if db.get_bind().dialect.name == "postgresql":
+        pg_fmt = (
+            strftime_fmt.replace("%Y", "YYYY")
+            .replace("%m", "MM")
+            .replace("%d", "DD")
+        )
+        return func.to_char(column, pg_fmt)
+    return func.strftime(strftime_fmt, column)
 
 
 @router.get("/stats")
@@ -250,14 +270,16 @@ async def get_iso_executive_summary(
         months = [(now - timedelta(days=30*i)).strftime(month_fmt) for i in reversed(range(6))]
 
         # NC per month
+        nc_bucket = _period_bucket(db, NonConformance.reported_date, month_fmt)
         nc_per_month = dict(
-            db.query(func.strftime(month_fmt, NonConformance.reported_date), func.count(NonConformance.id))
-              .group_by(func.strftime(month_fmt, NonConformance.reported_date)).all()
+            db.query(nc_bucket, func.count(NonConformance.id))
+              .group_by(nc_bucket).all()
         )
         # Training attendance per month
+        tr_bucket = _period_bucket(db, TrainingAttendance.created_at, month_fmt)
         tr_per_month = dict(
-            db.query(func.strftime(month_fmt, TrainingAttendance.created_at), func.count(TrainingAttendance.id))
-              .group_by(func.strftime(month_fmt, TrainingAttendance.created_at)).all()
+            db.query(tr_bucket, func.count(TrainingAttendance.id))
+              .group_by(tr_bucket).all()
         )
 
         trend_data = []
@@ -352,8 +374,12 @@ async def get_overview(
         findings_by_severity = dict(db.query(cast(AuditFinding.severity, String), func.count(AuditFinding.id)).group_by(cast(AuditFinding.severity, String)).all())
 
         # NC/CAPA
-        nc_open = db.query(func.count(NonConformance.id)).filter(NonConformance.status.in_(["open", "in_progress"])) .scalar() or 0
-        capa_open = db.query(func.count(CAPAAction.id)).filter(CAPAAction.status.in_(["open", "in_progress"])) .scalar() or 0
+        nc_open = db.query(func.count(NonConformance.id)).filter(
+            NonConformance.status.in_([NonConformanceStatus.OPEN, NonConformanceStatus.IN_PROGRESS])
+        ).scalar() or 0
+        capa_open = db.query(func.count(CAPAAction.id)).filter(
+            CAPAAction.status.in_(_OPEN_CAPA_STATUSES)
+        ).scalar() or 0
 
         # Equipment
         maintenance_due = db.query(func.count(MaintenancePlan.id)).filter(MaintenancePlan.next_due_at != None, MaintenancePlan.next_due_at <= in_30).scalar() or 0
@@ -362,9 +388,12 @@ async def get_overview(
         # Trends (6 months) for NC and training
         month_fmt = "%Y-%m"
         months = [(now - timedelta(days=30*i)).strftime(month_fmt) for i in reversed(range(6))]
-        nc_per_month = dict(db.query(func.strftime(month_fmt, NonConformance.reported_date), func.count(NonConformance.id)).group_by(func.strftime(month_fmt, NonConformance.reported_date)).all())
-        capa_per_month = dict(db.query(func.strftime(month_fmt, CAPAAction.created_at), func.count(CAPAAction.id)).group_by(func.strftime(month_fmt, CAPAAction.created_at)).all())
-        tr_per_month = dict(db.query(func.strftime(month_fmt, TrainingAttendance.created_at), func.count(TrainingAttendance.id)).group_by(func.strftime(month_fmt, TrainingAttendance.created_at)).all())
+        nc_b = _period_bucket(db, NonConformance.reported_date, month_fmt)
+        capa_b = _period_bucket(db, CAPAAction.created_at, month_fmt)
+        tr_b = _period_bucket(db, TrainingAttendance.created_at, month_fmt)
+        nc_per_month = dict(db.query(nc_b, func.count(NonConformance.id)).group_by(nc_b).all())
+        capa_per_month = dict(db.query(capa_b, func.count(CAPAAction.id)).group_by(capa_b).all())
+        tr_per_month = dict(db.query(tr_b, func.count(TrainingAttendance.id)).group_by(tr_b).all())
         trend = [{
             "month": m,
             "nc": int(nc_per_month.get(m, 0) or 0),
@@ -1062,8 +1091,12 @@ async def get_dashboard_kpis(
         # NC/CAPA KPIs
         nc_last_30 = db.query(func.count(NonConformance.id)).filter(NonConformance.reported_date >= last_30_days).scalar() or 0
         capa_last_30 = db.query(func.count(CAPAAction.id)).filter(CAPAAction.created_at >= last_30_days).scalar() or 0
-        open_nc = db.query(func.count(NonConformance.id)).filter(NonConformance.status.in_(["open", "in_progress"])).scalar() or 0
-        open_capa = db.query(func.count(CAPAAction.id)).filter(CAPAAction.status.in_(["open", "in_progress"])).scalar() or 0
+        open_nc = db.query(func.count(NonConformance.id)).filter(
+            NonConformance.status.in_([NonConformanceStatus.OPEN, NonConformanceStatus.IN_PROGRESS])
+        ).scalar() or 0
+        open_capa = db.query(func.count(CAPAAction.id)).filter(
+            CAPAAction.status.in_(_OPEN_CAPA_STATUSES)
+        ).scalar() or 0
         
         # Audit KPIs
         total_audits = db.query(func.count(Audit.id)).scalar() or 0
@@ -1150,13 +1183,14 @@ async def get_dashboard_charts(
         
         if chart_type == "nc_trend":
             # Non-conformance trend over time
+            period_expr = _period_bucket(db, NonConformance.reported_date, group_by)
             data = db.query(
-                func.strftime(group_by, NonConformance.reported_date).label("period"),
+                period_expr.label("period"),
                 func.count(NonConformance.id).label("count")
             ).filter(
                 NonConformance.reported_date >= start_date
             ).group_by(
-                func.strftime(group_by, NonConformance.reported_date)
+                period_expr
             ).order_by("period").all()
             
             chart_data = [{"period": row.period, "count": row.count} for row in data]
@@ -1197,14 +1231,15 @@ async def get_dashboard_charts(
             
         elif chart_type == "training_completion":
             # Training completion over time
+            tr_period = _period_bucket(db, TrainingAttendance.created_at, group_by)
             data = db.query(
-                func.strftime(group_by, TrainingAttendance.created_at).label("period"),
+                tr_period.label("period"),
                 func.count(TrainingAttendance.id).label("total"),
                 func.sum(func.case((TrainingAttendance.attended == True, 1), else_=0)).label("attended")
             ).filter(
                 TrainingAttendance.created_at >= start_date
             ).group_by(
-                func.strftime(group_by, TrainingAttendance.created_at)
+                tr_period
             ).order_by("period").all()
             
             chart_data = []

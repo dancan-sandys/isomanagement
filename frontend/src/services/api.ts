@@ -23,6 +23,10 @@ function resolveBaseURL(): string {
   return fallbackUrl;
 }
 
+const DEFAULT_HTTP_TIMEOUT_MS = 15000;
+/** HACCP endpoints can be heavy (large plans, remote DB); avoid false client timeouts. */
+const HACCP_HTTP_TIMEOUT_MS = 60000;
+
 // Create axios instance
 export const api = axios.create({
   // Prefer env; otherwise dynamic resolution for dev/prod
@@ -30,7 +34,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: DEFAULT_HTTP_TIMEOUT_MS,
 });
 
 // Request interceptor to add auth token
@@ -39,6 +43,10 @@ api.interceptors.request.use(
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    const rel = (config.url || '').toLowerCase();
+    if (rel.includes('/haccp')) {
+      config.timeout = HACCP_HTTP_TIMEOUT_MS;
     }
     return config;
   },

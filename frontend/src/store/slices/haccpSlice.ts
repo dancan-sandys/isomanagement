@@ -218,6 +218,22 @@ const initialState: HACCPState = {
   contactSurfacesError: null,
 };
 
+/** Normalize FastAPI `detail` (string or object) and surface network errors. */
+function messageFromAxiosError(error: unknown, fallback: string): string {
+  const err = error as {
+    response?: { data?: { detail?: unknown } };
+    message?: string;
+  };
+  const detail = err.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object' && 'error' in detail) {
+    const e = (detail as { error?: string }).error;
+    if (typeof e === 'string') return e;
+  }
+  if (!err.response && err.message) return err.message;
+  return fallback;
+}
+
 // Async thunks
 export const fetchProducts = createAsyncThunk(
   'haccp/fetchProducts',
@@ -225,8 +241,8 @@ export const fetchProducts = createAsyncThunk(
     try {
       const response = await haccpAPI.getProducts();
       return response;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch products');
+    } catch (error: unknown) {
+      return rejectWithValue(messageFromAxiosError(error, 'Failed to fetch products'));
     }
   }
 );
@@ -536,8 +552,9 @@ const haccpSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
-        state.products = action.payload.data.items || [];
-        state.assignedOnly = Boolean(action.payload.data.assigned_only);
+        const items = action.payload?.data?.items;
+        state.products = Array.isArray(items) ? items : [];
+        state.assignedOnly = Boolean(action.payload?.data?.assigned_only);
         state.error = null;
       })
       .addCase(fetchProducts.rejected, (state, action) => {
@@ -550,14 +567,24 @@ const haccpSlice = createSlice({
       .addCase(fetchProduct.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.selectedProduct = null;
+        state.processFlows = [];
+        state.hazards = [];
+        state.ccps = [];
+        state.oprps = [];
       })
       .addCase(fetchProduct.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedProduct = action.payload.data;
-        state.processFlows = action.payload.data.process_flows || [];
-        state.hazards = action.payload.data.hazards || [];
-        state.ccps = action.payload.data.ccps || [];
-        state.oprps = action.payload.data.oprps || [];
+        const d = action.payload?.data;
+        if (!d || typeof d !== 'object') {
+          state.error = 'Invalid product response';
+          return;
+        }
+        state.selectedProduct = d as typeof state.selectedProduct;
+        state.processFlows = (d as any).process_flows || [];
+        state.hazards = (d as any).hazards || [];
+        state.ccps = (d as any).ccps || [];
+        state.oprps = (d as any).oprps || [];
         state.error = null;
       })
       .addCase(fetchProduct.rejected, (state, action) => {

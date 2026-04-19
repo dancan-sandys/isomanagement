@@ -410,6 +410,36 @@ async def get_products(
             for product_id, surface in surface_rows:
                 contact_surface_map[product_id].append(serialize_contact_surface(surface))
 
+        creator_id_set: Set[int] = set()
+        for row in product_rows:
+            cb = row.get("created_by")
+            if isinstance(cb, str) and cb.isdigit():
+                creator_id_set.add(int(cb))
+            elif cb is not None:
+                try:
+                    creator_id_set.add(int(cb))
+                except (TypeError, ValueError):
+                    pass
+
+        creator_map: dict[int, str] = {}
+        if creator_id_set:
+            for uid, full_name in (
+                db.query(User.id, User.full_name)
+                .filter(User.id.in_(creator_id_set))
+                .all()
+            ):
+                creator_map[int(uid)] = (full_name or "").strip() or "Unknown"
+
+        ccp_count_map: dict[int, int] = {}
+        if product_ids:
+            for pid, cnt in (
+                db.query(CCP.product_id, func.count(CCP.id))
+                .filter(CCP.product_id.in_(product_ids))
+                .group_by(CCP.product_id)
+                .all()
+            ):
+                ccp_count_map[int(pid)] = int(cnt)
+
         items = []
         for product in product_rows:
             product_id = product["id"]
@@ -453,11 +483,13 @@ async def get_products(
             else:
                 created_by_lookup = created_by
 
-            creator = db.query(User).filter(User.id == created_by_lookup).first()
-            creator_name = creator.full_name if creator else "Unknown"
-            
-            # Get CCP count
-            ccp_count = db.query(CCP).filter(CCP.product_id == product_id).count()
+            try:
+                creator_id_key = int(created_by_lookup) if created_by_lookup is not None else None
+            except (TypeError, ValueError):
+                creator_id_key = None
+            creator_name = creator_map.get(creator_id_key, "Unknown") if creator_id_key is not None else "Unknown"
+
+            ccp_count = ccp_count_map.get(product_id, 0)
 
             created_at_value = product["created_at"]
             if isinstance(created_at_value, datetime):
