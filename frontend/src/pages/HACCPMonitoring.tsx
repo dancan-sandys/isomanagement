@@ -107,6 +107,16 @@ const HACCPMonitoring: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { products } = useSelector((state: RootState) => state.haccp);
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
+  const assignmentRoles = new Set(
+    (currentUser?.haccp_assignment_roles || []).map((role) => role.toLowerCase())
+  );
+  const hasMonitoringAssignment = assignmentRoles.has('monitoring');
+  const canViewMonitoring = !!currentUser && (
+    hasPermission(currentUser, 'haccp', 'view') ||
+    hasPermission(currentUser, 'haccp', 'update') ||
+    hasPermission(currentUser, 'haccp', 'manage_program') ||
+    hasMonitoringAssignment
+  );
   const canCreateLogs = !!currentUser && hasPermission(currentUser, 'haccp', 'create');
 
   const [selectedTab, setSelectedTab] = useState(0);
@@ -291,9 +301,14 @@ const HACCPMonitoring: React.FC = () => {
           console.error('Error checking for NC:', error);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting monitoring:', error);
-      alert('Failed to submit monitoring log');
+      const detail = error?.response?.data?.detail;
+      const message =
+        (Array.isArray(detail) ? detail.map((d: any) => d?.msg || d).join(', ') : detail) ||
+        error?.message ||
+        'Failed to submit monitoring log';
+      alert(message);
     }
   };
 
@@ -362,6 +377,16 @@ const HACCPMonitoring: React.FC = () => {
   const dueTasks = monitoringTasks.filter(task => task.status === 'due');
   const overdueTasks = monitoringTasks.filter(task => task.status === 'overdue');
   const completedTasks = monitoringTasks.filter(task => task.status === 'completed');
+
+  if (!canViewMonitoring) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          You are not authorized to access HACCP Monitoring.
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3 }}>

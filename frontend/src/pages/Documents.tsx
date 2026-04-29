@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
@@ -145,6 +145,10 @@ const Documents: React.FC = () => {
   const [selectedDistributionUserIds, setSelectedDistributionUserIds] = useState<number[]>([]);
   const [searchText, setSearchText] = useState<string>(filters?.search || '');
   const location = useLocation();
+  const scopedGroup = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('group');
+  }, [location.search]);
 
   // Permission-based visibility (fallback to role when permissions not loaded)
   const hasDocPerm = (action: string) => hasPermission(currentUser, 'documents', action);
@@ -168,6 +172,7 @@ const Documents: React.FC = () => {
   // Initialize filters from query params once
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const group = params.get('group');
     const category = params.get('category');
     const status = params.get('status');
     const document_type = params.get('type') || params.get('document_type');
@@ -181,6 +186,10 @@ const Documents: React.FC = () => {
     if (department) nextFilters.department = department;
     if (search) nextFilters.search = search;
 
+    if (group === 'prps') {
+      nextFilters.category = 'prp';
+    }
+
     if (Object.keys(nextFilters).length > 0) {
       dispatch(setFilters(nextFilters));
       if (search) setSearchText(search);
@@ -188,6 +197,10 @@ const Documents: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setSelectedDocuments([]);
+  }, [scopedGroup]);
 
   // Debounce search to reduce churn and make UX fluid
   useEffect(() => {
@@ -213,6 +226,21 @@ const Documents: React.FC = () => {
   const loadStats = () => {
     dispatch(fetchDocumentStats());
   };
+
+  const scopedDocuments = useMemo(() => {
+    if (scopedGroup === 'prps') {
+      return documents.filter((doc: any) => (doc?.category || '').toLowerCase() === 'prp');
+    }
+    if (scopedGroup === 'technical') {
+      const technicalTypes = new Set(['procedure', 'work_instruction', 'specification', 'plan', 'checklist', 'record']);
+      return documents.filter((doc: any) => technicalTypes.has((doc?.document_type || '').toLowerCase()));
+    }
+    if (scopedGroup === 'manuals_policies') {
+      const policyTypes = new Set(['manual', 'policy']);
+      return documents.filter((doc: any) => policyTypes.has((doc?.document_type || '').toLowerCase()));
+    }
+    return documents;
+  }, [documents, scopedGroup]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
@@ -575,11 +603,11 @@ const Documents: React.FC = () => {
             <TableRow>
               <TableCell padding="checkbox">
                 <Checkbox
-                  checked={selectedDocuments.length === documents.length && documents.length > 0}
-                  indeterminate={selectedDocuments.length > 0 && selectedDocuments.length < documents.length}
+                  checked={selectedDocuments.length === scopedDocuments.length && scopedDocuments.length > 0}
+                  indeterminate={selectedDocuments.length > 0 && selectedDocuments.length < scopedDocuments.length}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedDocuments(documents.map(doc => doc.id));
+                      setSelectedDocuments(scopedDocuments.map(doc => doc.id));
                     } else {
                       setSelectedDocuments([]);
                     }
@@ -596,7 +624,7 @@ const Documents: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {documents.map((document) => (
+            {scopedDocuments.map((document) => (
               <TableRow key={document.id} hover onClick={() => handleDocumentSelect(document)} sx={{ cursor: 'pointer' }}>
                 <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -927,7 +955,7 @@ const Documents: React.FC = () => {
           />
           <CardContent>
             <List>
-              {documents.map((doc) => (
+              {scopedDocuments.map((doc) => (
                 <ListItem key={doc.id} divider>
                   <ListItemIcon>
                     {getDocumentTypeIcon(doc.document_type)}
@@ -991,7 +1019,15 @@ const Documents: React.FC = () => {
     <Box>
       <PageHeader
         title="Document Control"
-                      subtitle="Compli FSMS Document Management System"
+        subtitle={
+          scopedGroup === 'prps'
+            ? 'PRP Document Register'
+            : scopedGroup === 'technical'
+            ? 'Technical Documents Register'
+            : scopedGroup === 'manuals_policies'
+            ? 'Manuals & Policies Register'
+            : 'Compli FSMS Document Management System'
+        }
         breadcrumbs={[
           { label: 'Dashboard', path: '/' },
           { label: 'Document Control', path: '/documents' }
@@ -1158,6 +1194,20 @@ const Documents: React.FC = () => {
 
       {/* Loading */}
       {loading && <LinearProgress sx={{ mb: 3 }} />}
+
+      {scopedGroup && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Showing scoped register: {
+            scopedGroup === 'prps'
+              ? 'PRPs'
+              : scopedGroup === 'technical'
+              ? 'Technical Documents'
+              : scopedGroup === 'manuals_policies'
+              ? 'Manuals & Policies'
+              : 'Documents'
+          }
+        </Alert>
+      )}
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>

@@ -171,6 +171,11 @@ export const haccpAPI = {
     return response.data;
   },
 
+  getVerificationTasks: async () => {
+    const response: AxiosResponse = await api.get('/haccp/verification/tasks');
+    return response.data;
+  },
+
   // Verification records (PDFs generated when logs are verified) – admin
   getVerificationRecords: async (params?: { record_type?: string; skip?: number; limit?: number }) => {
     const response: AxiosResponse = await api.get('/haccp/verification-records', { params: params || {} });

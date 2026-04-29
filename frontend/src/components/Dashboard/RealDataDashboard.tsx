@@ -44,6 +44,8 @@ import {
 } from 'recharts';
 import { RootState } from '../../store';
 import { dashboardAPI } from '../../services/api';
+import { haccpAPI } from '../../services/haccpAPI';
+import objectivesAPI from '../../services/objectivesAPI';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
@@ -58,6 +60,11 @@ interface ChartDataPoint {
 
 interface ChartData {
   data: ChartDataPoint[];
+}
+
+interface PieSlice {
+  name: string;
+  value: number;
 }
 
 interface KPIData {
@@ -104,6 +111,10 @@ const RealDataDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [kpiData, setKpiData] = useState<KPIData | null>(null);
   const [chartData, setChartData] = useState<ChartData | null>(null);
+  const [ccpPieData, setCcpPieData] = useState<PieSlice[]>([]);
+  const [oprpPieData, setOprpPieData] = useState<PieSlice[]>([]);
+  const [objectivesPieData, setObjectivesPieData] = useState<PieSlice[]>([]);
+  const [tasksPieData, setTasksPieData] = useState<PieSlice[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState('6m');
   const [selectedChart, setSelectedChart] = useState('nc_trend');
 
@@ -114,9 +125,14 @@ const RealDataDashboard: React.FC = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [kpiResponse, chartResponse] = await Promise.all([
+      const [kpiResponse, chartResponse, statsResponse, haccpDashboardResponse, monitoringTasksResponse, verificationTasksResponse, objectivesResponse] = await Promise.all([
         dashboardAPI.getKPIs(),
         dashboardAPI.getChartData(selectedChart, selectedPeriod),
+        dashboardAPI.getStats(),
+        haccpAPI.getDashboard(),
+        haccpAPI.getMonitoringTasks(),
+        haccpAPI.getVerificationTasks(),
+        objectivesAPI.listObjectives(),
       ]);
 
       if (kpiResponse?.data) {
@@ -125,12 +141,99 @@ const RealDataDashboard: React.FC = () => {
       if (chartResponse?.data) {
         setChartData(chartResponse.data);
       }
+
+      const statsData = statsResponse?.data || statsResponse || {};
+      const haccpData = haccpDashboardResponse?.data || haccpDashboardResponse || {};
+      const monitoringData = monitoringTasksResponse?.data || monitoringTasksResponse || {};
+      const verificationData = verificationTasksResponse?.data || verificationTasksResponse || {};
+      const objectivesData = objectivesResponse?.data || objectivesResponse || {};
+
+      const monitoringSummary = monitoringData?.summary || {};
+      const verificationSummary = verificationData?.summary || {};
+      const objectivesItems = objectivesData?.items || objectivesData?.data?.items || objectivesData || [];
+      const objectivesKpi = Array.isArray(statsData?.objectivesKPI) ? statsData.objectivesKPI : [];
+
+      const totalCCPs = Number(haccpData?.total_ccps || 0);
+      const activeCCPs = Number(haccpData?.active_ccps || 0);
+      const outOfSpec = Number(haccpData?.out_of_spec_count || 0);
+      const inactiveCCPs = Math.max(totalCCPs - activeCCPs, 0);
+
+      const targetedObjectives = Array.isArray(objectivesItems)
+        ? objectivesItems.filter((o: any) => o?.target_value !== null && o?.target_value !== undefined).length
+        : 0;
+      const totalObjectives = Array.isArray(objectivesItems) ? objectivesItems.length : 0;
+      const nonTargetedObjectives = Math.max(totalObjectives - targetedObjectives, 0);
+      const onTrackObjectives = objectivesKpi.filter((o: any) => ['on_track', 'achieved'].includes((o?.status || '').toLowerCase())).length;
+      const offTrackObjectives = Math.max(objectivesKpi.length - onTrackObjectives, 0);
+
+      setCcpPieData(
+        [
+          { name: 'Active CCPs', value: activeCCPs },
+          { name: 'Inactive CCPs', value: inactiveCCPs },
+          { name: 'Out-of-Spec Logs', value: outOfSpec },
+        ].filter((s) => s.value > 0)
+      );
+
+      setOprpPieData(
+        [
+          { name: 'OPRP Tasks', value: Number(verificationSummary?.oprp_count || 0) },
+          { name: 'CCP Verification Pending', value: Number(verificationSummary?.ccp_pending || 0) },
+        ].filter((s) => s.value > 0)
+      );
+
+      setObjectivesPieData(
+        [
+          { name: 'Targeted Objectives', value: targetedObjectives },
+          { name: 'Not Targeted', value: nonTargetedObjectives },
+          { name: 'On Track (Latest KPI)', value: onTrackObjectives },
+          { name: 'At Risk / Off Track', value: offTrackObjectives },
+        ].filter((s) => s.value > 0)
+      );
+
+      setTasksPieData(
+        [
+          { name: 'Monitoring Due', value: Number(monitoringSummary?.due_count || 0) },
+          { name: 'Monitoring Overdue', value: Number(monitoringSummary?.overdue_count || 0) },
+          { name: 'Monitoring Completed', value: Number(monitoringSummary?.completed_count || 0) },
+          { name: 'Verification Pending', value: Number(verificationSummary?.total || 0) },
+        ].filter((s) => s.value > 0)
+      );
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const renderPieCard = (title: string, data: PieSlice[]) => (
+    <Card sx={{ height: '100%' }}>
+      <CardContent>
+        <Typography variant="h6" mb={2}>{title}</Typography>
+        {data.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No data available</Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                outerRadius={85}
+                dataKey="value"
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`${title}-${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <RechartsTooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   const renderKPICard = (title: string, value: number, subtitle: string, icon: React.ReactNode, color: string) => (
     <Card sx={{ height: '100%' }}>
@@ -293,6 +396,22 @@ const RealDataDashboard: React.FC = () => {
           </Grid>
         </Grid>
       )}
+
+      {/* Core Operational Pie Charts */}
+      <Grid container spacing={3} mb={4}>
+        <Grid item xs={12} md={6}>
+          {renderPieCard('CCP Status', ccpPieData)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderPieCard('OPRP / Verification Workload', oprpPieData)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderPieCard('Objectives Targeting & Status', objectivesPieData)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderPieCard('Tasks Overview', tasksPieData)}
+        </Grid>
+      </Grid>
 
       {/* Chart Controls */}
       <Card sx={{ mb: 3 }}>

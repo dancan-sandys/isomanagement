@@ -57,6 +57,9 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
     order: 2,
     items: [
       { text: 'Document Register', path: '/documents' },
+      { text: 'PRPs', path: '/documents?group=prps' },
+      { text: 'Technical Documents', path: '/documents?group=technical' },
+      { text: 'Manuals & Policies', path: '/documents?group=manuals_policies' },
     ],
   },
   
@@ -72,7 +75,7 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
       { text: 'HACCP Plans', path: '/haccp' },
       { text: 'Monitoring', path: '/haccp/monitoring' },
       { text: 'Verification', path: '/haccp/verification' },
-      { text: 'Verification Records', path: '/haccp/verification-records' },
+      { text: 'Records', path: '/haccp/verification-records' },
       { text: 'Risk Thresholds', path: '/haccp/risk-thresholds' },
     ],
   },
@@ -272,6 +275,9 @@ export const NAVIGATION_CONFIG: Record<string, NavigationSection> = {
 // Helper function to get navigation sections for a user
 export const getNavigationForUser = (user: any): NavigationSection[] => {
   if (!user) return [];
+  const assignmentRoles = new Set<string>(
+    ((user.haccp_assignment_roles as string[] | undefined) ?? []).map((r) => (r || '').toLowerCase())
+  );
 
   const roleMatch = (section: NavigationSection) =>
     section.requiredRoles != null && section.requiredRoles.length > 0 && section.requiredRoles.includes(user.role_name);
@@ -303,8 +309,19 @@ export const getNavigationForUser = (user: any): NavigationSection[] => {
         user.has_haccp_assignment &&
         section.assignmentAllowedItems?.length
       ) {
+        // Build assignment-allowed HACCP items by responsibility role.
+        // All assigned users can access HACCP plans; monitoring/verification are role-specific.
+        const roleAllowedItems = new Set<string>(section.assignmentAllowedItems as string[]);
+        roleAllowedItems.add('/haccp');
+        if (assignmentRoles.has('monitoring')) {
+          roleAllowedItems.add('/haccp/monitoring');
+        }
+        if (assignmentRoles.has('verification')) {
+          roleAllowedItems.add('/haccp/verification');
+          roleAllowedItems.add('/haccp/verification-records');
+        }
         const filteredItems = section.items.filter((item) =>
-          section.assignmentAllowedItems!.includes(item.path)
+          roleAllowedItems.has(item.path)
         );
         if (filteredItems.length) {
           return {
@@ -322,6 +339,9 @@ export const getNavigationForUser = (user: any): NavigationSection[] => {
 // Helper function to check if user has access to a specific path
 export const hasAccessToPath = (user: any, path: string): boolean => {
   if (!user) return false;
+  const assignmentRoles = new Set<string>(
+    ((user.haccp_assignment_roles as string[] | undefined) ?? []).map((r) => (r || '').toLowerCase())
+  );
 
   const roleMatch = (section: NavigationSection) =>
     section.requiredRoles != null && section.requiredRoles.length > 0 && section.requiredRoles.includes(user.role_name);
@@ -349,7 +369,16 @@ export const hasAccessToPath = (user: any, path: string): boolean => {
         if (
           section.allowAssignmentAccess &&
           user.has_haccp_assignment &&
-          section.assignmentAllowedItems?.includes(path)
+          (() => {
+            const roleAllowedItems = new Set<string>((section.assignmentAllowedItems as string[] | undefined) ?? []);
+            roleAllowedItems.add('/haccp');
+            if (assignmentRoles.has('monitoring')) roleAllowedItems.add('/haccp/monitoring');
+            if (assignmentRoles.has('verification')) {
+              roleAllowedItems.add('/haccp/verification');
+              roleAllowedItems.add('/haccp/verification-records');
+            }
+            return roleAllowedItems.has(path);
+          })()
         ) {
           return true;
         }

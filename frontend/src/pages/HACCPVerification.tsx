@@ -143,6 +143,16 @@ const HACCPVerification: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { products } = useSelector((state: RootState) => state.haccp);
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
+  const assignmentRoles = new Set(
+    (currentUser?.haccp_assignment_roles || []).map((role) => role.toLowerCase())
+  );
+  const hasVerificationAssignment = assignmentRoles.has('verification');
+  const canViewVerification = !!currentUser && (
+    hasPermission(currentUser, 'haccp', 'view') ||
+    hasPermission(currentUser, 'haccp', 'update') ||
+    hasPermission(currentUser, 'haccp', 'manage_program') ||
+    hasVerificationAssignment
+  );
   const canVerify = !!currentUser && (hasPermission(currentUser, 'haccp', 'verify') || hasPermission(currentUser, 'haccp', 'update') || hasPermission(currentUser, 'haccp', 'create'));
   const canViewRecords = !!currentUser && hasPermission(currentUser, 'haccp', 'view');
 
@@ -353,6 +363,16 @@ const HACCPVerification: React.FC = () => {
   const ccpTasks = verificationTasks.filter((t): t is CCPSVerificationTaskItem => t.task_type === 'ccp');
   const oprpTasks = verificationTasks.filter((t): t is OPRPVerificationTaskItem => t.task_type === 'oprp');
   const totalPending = verificationTasks.length;
+
+  if (!canViewVerification) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          You are not authorized to access HACCP Verification.
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3 }}>

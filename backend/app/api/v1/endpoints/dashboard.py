@@ -60,11 +60,28 @@ async def get_dashboard_stats(
         total_prp_programs = db.query(func.count(PRPProgram.id)).scalar() or 0
         total_suppliers = db.query(func.count(Supplier.id)).scalar() or 0
         
-        # Calculate compliance metrics (mock data for now)
-        # In a real implementation, these would be calculated from actual data
-        compliance_score = 98  # Percentage
-        open_issues = 2
-        pending_approvals = 0  # Will be implemented when approval system is added
+        # Calculate real compliance metrics from current system data
+        approved_docs = db.query(func.count(Document.id)).filter(cast(Document.status, String) == "approved").scalar() or 0
+        doc_compliance = round((approved_docs / total_documents) * 100, 2) if total_documents else 0.0
+        total_hazards = db.query(func.count(Hazard.id)).scalar() or 0
+        controlled_hazards = db.query(func.count(Hazard.id)).filter(Hazard.is_controlled == True).scalar() or 0
+        haccp_compliance = round((controlled_hazards / total_hazards) * 100, 2) if total_hazards else 0.0
+        total_prp_checklists = db.query(func.count(PRPChecklist.id)).scalar() or 0
+        completed_prp_checklists = db.query(func.count(PRPChecklist.id)).filter(cast(PRPChecklist.status, String) == "completed").scalar() or 0
+        prp_compliance = round((completed_prp_checklists / total_prp_checklists) * 100, 2) if total_prp_checklists else 0.0
+        compliance_score = round((doc_compliance + haccp_compliance + prp_compliance) / 3.0, 2)
+
+        # Open issue buckets: NC open/in-progress + open CAPA
+        open_nc = db.query(func.count(NonConformance.id)).filter(
+            NonConformance.status.in_([NonConformanceStatus.OPEN, NonConformanceStatus.IN_PROGRESS])
+        ).scalar() or 0
+        open_capa = db.query(func.count(CAPAAction.id)).filter(
+            CAPAAction.status.in_(_OPEN_CAPA_STATUSES)
+        ).scalar() or 0
+        open_issues = int(open_nc + open_capa)
+
+        # Pending approvals proxy from document lifecycle
+        pending_approvals = db.query(func.count(Document.id)).filter(cast(Document.status, String) == "under_review").scalar() or 0
         
         # Get recent document activity using a projection to avoid enum coercion
         recent_documents = (
