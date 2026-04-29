@@ -6,7 +6,9 @@ import os
 
 class Settings(BaseSettings):
     # Database Configuration
-    DATABASE_URL: str = "postgresql://neondb_owner:npg_8T9OeACSIiWR@ep-red-shape-akqkmxg1-pooler.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"  # Default to SQLite for development
+    # DATABASE_URL: str = "postgresql://neondb_owner:npg_8T9OeACSIiWR@ep-red-shape-akqkmxg1-pooler.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"  
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/iso22000_fsms"
+    # Default to SQLite for development
     DATABASE_TYPE: str = "postgresql"  # sqlite or postgresql
     
     # Security Configuration
