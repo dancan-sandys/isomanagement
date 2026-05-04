@@ -611,6 +611,9 @@ def _export_rows_xlsx(sheet_name: str, headers: list, rows: list) -> bytes:
     return stream.read()
 
 
+# Register both paths so GET /documents does not 307-redirect to /documents/ (redirect
+# Location would use the request Host, e.g. http://iso-backend:8000 behind Docker).
+@router.get("", include_in_schema=False)
 @router.get("/")
 async def get_documents(
     page: int = Query(1, ge=1),
