@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:15
+    container_name: iso-db
+    environment:
+      POSTGRES_DB: iso22000_fsms
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  iso-backend:
+    build: ./backend
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/iso22000_fsms
+    ports:
+      - "8000:8000"
+
+  
+  iso-frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - iso-backend
+    environment:
+    - DANGEROUSLY_DISABLE_HOST_CHECK=true
+
+# 👇 THIS MUST BE AT ROOT LEVEL (same level as services)
+volumes:
+  postgres_data:
