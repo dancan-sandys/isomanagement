@@ -40,7 +40,7 @@ module.exports = function(app) {
   app.use(
     '/api/v1',
     createProxyMiddleware({
-      target: 'http://iso-backend:8000', // 🔥 Docker service name
+      target: 'http://iso-backend:8000/api/v1/', // 🔥 Docker service name
       changeOrigin: true,
       logLevel: 'debug',
     })
